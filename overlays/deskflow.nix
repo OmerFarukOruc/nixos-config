@@ -7,7 +7,9 @@
 # libportal 0.10.0 or newer, which adds the clipboard API. Without it the
 # client never sends what you copy to the server. Only Deskflow gets the newer
 # libportal, so nothing else rebuilds. Once nixpkgs' libportal reaches 0.10.0
-# the override passes it through; then delete it.
+# the override passes it through; then delete it. The build drops the
+# clipboard code without an error when libportal lacks that API, so the install
+# check fails the build instead.
 final: prev:
 let
   libportal =
@@ -25,14 +27,12 @@ let
         # 0.10.0 already contains nixpkgs' Qt 6.9 patch.
         patches = [ ];
       });
-  deskflow = prev.deskflow.override { inherit libportal; };
-in
-{
+  withLibportal = prev.deskflow.override { inherit libportal; };
   deskflow =
-    if final.lib.versionAtLeast deskflow.version "1.27.0" then
-      deskflow
+    if final.lib.versionAtLeast withLibportal.version "1.27.0" then
+      withLibportal
     else
-      deskflow.overrideAttrs (_old: {
+      withLibportal.overrideAttrs (_old: {
         version = "1.27.0";
         src = final.fetchFromGitHub {
           owner = "deskflow";
@@ -57,4 +57,17 @@ in
         '';
         postInstall = "";
       });
+in
+{
+  deskflow = deskflow.overrideAttrs {
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      grep -rqa xdp_session_request_clipboard "$out/bin" || {
+        echo "deskflow was built without Wayland clipboard support" >&2
+        exit 1
+      }
+      runHook postInstallCheck
+    '';
+  };
 }
