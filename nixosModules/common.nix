@@ -139,6 +139,13 @@
     # Wi-Fi and other cards, such as the MT7925 in nixos-rog, need linux-firmware.
     hardware.enableAllFirmware = true;
     services.fwupd.enable = true;
+    # Every switch writes /etc/localtime again, and systemd then picks a new
+    # random delay for calendar timers. The hourly fwupd-refresh timer, with up
+    # to an hour of delay, so fired during most switches. It ran the old
+    # fwupdmgr against the new daemon after an fwupd update, which fails with
+    # "Unsupported daemon version" and fails the switch. A fixed delay keeps
+    # the next run where it was.
+    systemd.timers.fwupd-refresh.timerConfig.FixedRandomDelay = true;
 
     environment.variables.DO_NOT_TRACK = "1";
 
