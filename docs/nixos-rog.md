@@ -77,7 +77,9 @@ Every hour, the [host-packages-cache](../.github/workflows/host-packages-cache.y
 workflow moves the inputs with the same `move-inputs.sh`, builds the packages
 that the caches lack and pushes them to the `omerfarukoruc` Cachix cache. It
 also builds them for every push to `main`, so a later deploy of nixos-latitude
-downloads them. GitHub emails a failed scheduled run of that workflow.
+downloads them. On a pull request it builds them and runs the closure check
+without pushing, so a change that would keep a package out of the cache fails
+there. GitHub emails a failed scheduled run of that workflow.
 
 The updater moves the inputs those packages come from only once the cache
 holds every package this host uses. So nixpkgs updates can lag nixos-unstable
