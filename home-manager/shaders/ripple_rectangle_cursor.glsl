@@ -19,7 +19,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// Changed here: the ripple takes the terminal's cursor color instead of a fixed one.
+// Changed here: the ripple takes the terminal's cursor color instead of a fixed one,
+// and it skips unfocused surfaces. The bar cursor turns into a hollow block on
+// unfocus, and Ghostty stops animating an unfocused surface, so the ripple would
+// otherwise freeze on screen.
 
 // CONFIGURATION
 const float DURATION = 0.15;               // How long the ripple animates (seconds)
@@ -123,7 +126,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
     // don't clamp yet; we need to know if it's > 1.0 (finished)
      float isAnimating = 1.0 - step(1.0, rippleProgress); // progress < 1.0 ? 1.0: 0.0
 
-     if (isModeChange > 0.0 && isAnimating > 0.0) {
+     if (iFocus > 0 && isModeChange > 0.0 && isAnimating > 0.0) {
         // Apply easing to progress
         // float easedProgress = rippleProgress;
         // float easedProgress = easeOutQuad(rippleProgress);

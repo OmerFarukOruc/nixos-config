@@ -152,10 +152,6 @@ in
         "shaders/cursor_smear.glsl"
         "shaders/ripple_rectangle_cursor.glsl"
       ];
-      # The bar cursor turns into a hollow block when a window loses focus, which
-      # starts the ripple. With the default `true` the animation stops on
-      # unfocus and leaves the ripple frozen on screen.
-      custom-shader-animation = "always";
       # Only binds that differ from Ghostty's defaults. ctrl+equal and ctrl+minus
       # are separate triggers from the default ctrl+= and ctrl+-, so they stay.
       keybind = [
