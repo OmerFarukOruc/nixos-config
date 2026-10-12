@@ -19,7 +19,10 @@ let
   # asusd writes these limits on every platform profile change, also one that
   # power-profiles-daemon makes. Each value stays inside the GA605W range of the
   # kernel's asus-armoury table; the battery range has no GPU limits. Quiet
-  # takes the lowest value of each range.
+  # takes the lowest value of each range. The other profiles trade speed for
+  # heat and fan noise. In a 4-minute all-thread stress-ng run on AC, the CPU
+  # peaked at 62 °C in quiet (boost off), 75 °C in balanced and 81 °C in
+  # performance. cpu-limits.nix caps each profile's CPU temperature.
   tunings =
     profiles:
     "{${
@@ -36,11 +39,11 @@ let
     }}";
   # The firmware takes the power limits above only while every fan follows a
   # custom curve. Points are (°C, PWM 0-255); both rise left to right.
-  # Performance keeps the factory curve. Quiet is the factory curve with its
-  # repeated top point traded for a first point that stops the fans below 50 °C.
-  # The factory curve reaches its top speed at 76 °C, which four busy threads
-  # pass; balanced reaches the same top speed at 94 °C, so light work stays
-  # quieter, and it idles at the quiet curve's floor.
+  # Quiet is the factory performance curve with its repeated top point traded
+  # for a first point that stops the fans below 50 °C. The factory curve
+  # reaches its top speed at 76 °C, which four busy threads pass; balanced
+  # reaches the same top speed at 94 °C and performance at 86 °C, so light work
+  # stays quieter, and both idle at the quiet curve's floor.
   fanCurveTable = lib.importJSON ./fan-curves.json;
   fanCurves =
     profiles:
@@ -104,23 +107,21 @@ in
                 NvDynamicBoost = 5;
                 NvTempTarget = 75;
               };
-              # Balanced keeps a 4-minute all-thread stress-ng run at 80 °C
-              # with an 86 °C peak. 50/70/70 W held it at the 95 °C limit.
               Balanced = {
-                PptPl1Spl = 40;
-                PptPl2Sppt = 50;
-                PptPl3Fppt = 65;
-                DgpuTgp = 70;
-                NvDynamicBoost = 10;
-                NvTempTarget = 83;
+                PptPl1Spl = 25;
+                PptPl2Sppt = 35;
+                PptPl3Fppt = 45;
+                DgpuTgp = 55;
+                NvDynamicBoost = 5;
+                NvTempTarget = 75;
               };
               Performance = {
-                PptPl1Spl = 80;
-                PptPl2Sppt = 80;
-                PptPl3Fppt = 80;
-                DgpuTgp = 85;
-                NvDynamicBoost = 20;
-                NvTempTarget = 87;
+                PptPl1Spl = 35;
+                PptPl2Sppt = 45;
+                PptPl3Fppt = 60;
+                DgpuTgp = 70;
+                NvDynamicBoost = 10;
+                NvTempTarget = 80;
               };
             }
           },
@@ -133,16 +134,16 @@ in
                 NvTempTarget = 75;
               };
               Balanced = {
-                PptPl1Spl = 30;
-                PptPl2Sppt = 40;
-                PptPl3Fppt = 55;
-                NvTempTarget = 80;
+                PptPl1Spl = 25;
+                PptPl2Sppt = 35;
+                PptPl3Fppt = 45;
+                NvTempTarget = 75;
               };
               Performance = {
                 PptPl1Spl = 35;
                 PptPl2Sppt = 44;
-                PptPl3Fppt = 65;
-                NvTempTarget = 87;
+                PptPl3Fppt = 60;
+                NvTempTarget = 80;
               };
             }
           },

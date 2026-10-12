@@ -9,7 +9,7 @@ Usage: scripts/verify-nixos-rog.sh [--suspend] [--lan-ip ADDRESS] [--report FILE
 
 --suspend      also run three 20-second s2idle cycles with rtcwake and check
                that the kernel counts three successful suspends and that
-               Wi-Fi and the RTX 4070 come back. The SSH session drops
+               Wi-Fi, the RTX 4070 and the CPU limits come back. The SSH session drops
                while the laptop sleeps.
 --lan-ip       the laptop's Wi-Fi address, to check that SSH does not answer
                on the LAN; tailscale0 is the only way in.
@@ -88,11 +88,29 @@ if [[ ! -r $facts ]]; then
   exit 66
 fi
 . "$facts"
-for fact in low_battery_percent nvidia_version wifi; do
+for fact in low_battery_percent nvidia_version wifi \
+  cpu_temp_limit_power_saver cpu_temp_limit_balanced \
+  cpu_max_khz_power_saver cpu_max_khz_balanced; do
   if [[ -z ${!fact:-} ]]; then
     exit 66
   fi
 done
+# The CPU temperature limit in the SMU and the top clock of policy0, a full
+# Zen 5 core, as TEMP/KHZ.
+cpu_limits() {
+  local temp
+  temp=$(sudo ryzenadj -i | awk -F'|' '/THM LIMIT CORE/ {printf "%d", $3}')
+  printf '%s/%s\n' "$temp" "$(</sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq)"
+}
+# The TEMP/KHZ that machines/nixos-rog/cpu-limits.nix sets for PROFILE.
+expected_cpu_limits() {
+  local temp=cpu_temp_limit_${1//-/_} max=cpu_max_khz_${1//-/_}
+  max=${!max}
+  if [[ $max == top ]]; then
+    max=$(</sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq)
+  fi
+  printf '%s/%s\n' "${!temp}" "$max"
+}
 # The NVIDIA display controller, found through sysfs because pciutils is not installed.
 find_nvidia() {
   local dev
@@ -184,9 +202,20 @@ restore_profile() {
 }
 trap restore_profile EXIT HUP
 platform=()
+cpu=()
+cpu_ok=true
 for target in power-saver balanced; do
   sudo powerprofilesctl set "$target" && sleep 1
   platform+=("$target=$(</sys/firmware/acpi/platform_profile)")
+  # oruc-cpu-limits applies the limits after the profile change signal.
+  want=$(expected_cpu_limits "$target")
+  for _ in {1..5}; do
+    got=$(cpu_limits)
+    [[ $got == "$want" ]] && break
+    sleep 1
+  done
+  [[ $got == "$want" ]] || cpu_ok=false
+  cpu+=("$target=$got/want=$want")
 done
 if restore_profile; then
   trap - EXIT HUP
@@ -196,6 +225,7 @@ else
 fi
 check platform-profile-follows "${platform[*]}" \
   test "${platform[*]}" = "power-saver=quiet balanced=balanced"
+check cpu-limits-follow-profile "${cpu[*]}" test "$cpu_ok" = true
 check asusd-profile-switching-off "asusd.ron" \
   grep -q 'change_platform_profile_on_ac: false' /etc/asusd/asusd.ron
 check slash-off-on-battery "asusctl slash get" \
@@ -328,6 +358,7 @@ set -euo pipefail
 test "$(( $(cat /sys/power/suspend_stats/success) - before ))" -ge 3
 test "$(cat "/sys/class/net/$wifi/operstate")" = up
 test -n "$(find_nvidia)"
+test "$(cpu_limits)" = "$(expected_cpu_limits "$(powerprofilesctl get)")"
 REMOTE
   )
   # Three cycles take 120 s; poll until the success counter has grown by 3.
@@ -340,9 +371,9 @@ REMOTE
     fi
   done
   if [[ $resumed == true ]]; then
-    record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present"
+    record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present, CPU limits of the profile"
   else
-    record suspend-three-cycles fail "fewer than 3 successful suspends, or Wi-Fi or the RTX 4070 missing afterwards"
+    record suspend-three-cycles fail "fewer than 3 successful suspends, or Wi-Fi, the RTX 4070 or the CPU limits missing afterwards"
   fi
 fi
 
