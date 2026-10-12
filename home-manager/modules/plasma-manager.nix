@@ -46,10 +46,16 @@ in
         };
         iconTheme = theme.icons;
         splashScreen.theme = "org.kde.breeze.desktop";
+        # The Glass decoration comes with the Glass Qt style; theme.nix turns
+        # the style on.
+        windowDecorations = {
+          library = "org.kde.glass";
+          theme = "Glass";
+        };
       };
 
-      # Better Blur DX replaces the built-in blur, and KWin names the effect after
-      # its plugin file, better_blur_dx.so. The package comes from nixosModules/desktop.nix.
+      # Glass replaces the built-in blur, and KWin names the effect after its
+      # plugin file, glass.so. The package comes from nixosModules/desktop.nix.
       kwin = {
         effects = {
           blur.enable = false;
@@ -75,7 +81,38 @@ in
           Number = 4;
           Rows = 1;
         };
-        Plugins.better_blur_dxEnabled = true;
+        Plugins.glassEnabled = true;
+        # On KWin 6.7 the only blur global is ext_background_effect_manager_v1,
+        # and Ghostty 1.3.1 asks only through org_kde_kwin_blur_manager. Glass
+        # forces blur behind the see-through pixels of every window only when
+        # BlurDecorations is on. Its window class list stays a blacklist,
+        # because a whitelist also drops the blur that panels ask for.
+        Effect-blurplus = {
+          BlurDecorations = true;
+          # In blacklist mode these window classes get no blur. The ChatGPT
+          # app draws its pet in a clear window 1460x3080 px in size, and the
+          # forced blur turned that whole window into a dark pane. Its main
+          # window is opaque, so it loses nothing.
+          WindowClasses = "Chatgpt";
+          # The values of the dark-glass mode in 4v3ngR/glassOS switcher/theme,
+          # with the glow taken from the scheme's blue.
+          Brightness = 0.9;
+          Contrast = 1.1;
+          BlurStrength = 3;
+          EdgeLighting = true;
+          # Glass reads #AARRGGBB, so 10 is the alpha.
+          GlowColor = "#10${osConfig.scheme.base0D}";
+          # Light bends at the window edges for the liquid look. Glass divides
+          # RefractionStrength by 20 and multiplies RefractionEdgeSize by 10 px.
+          RefractionStrength = 10;
+          RefractionEdgeSize = 3;
+          RefractionRGBFringing = 1;
+          # Square window and menu corners, written out because plasma-manager
+          # never removes a key it wrote before.
+          TopCornerRadius = 0;
+          BottomCornerRadius = 0;
+          MenuCornerRadius = 0;
+        };
         # 9 is no screen edge, so the top-left corner no longer opens Overview.
         Effect-overview.BorderActivate = 9;
         Effect-slide.SlideBackground = false;
@@ -137,6 +174,9 @@ in
             imageFilenameTemplate = "Screenshot_<yyyy><MM><dd>_<HH><mm><ss>";
           };
         };
+        # The Glass style and decoration share this radius, so buttons and
+        # menus are square too.
+        glassrc.Common.CornerRadius = 0;
         kscreenlockerrc.Daemon = {
           Autolock = false;
           Lock = false;

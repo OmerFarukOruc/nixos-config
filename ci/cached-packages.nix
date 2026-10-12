@@ -15,7 +15,8 @@ let
   pnames = [
     "deskflow"
     "dms-shell"
-    "kwin-better-blur"
+    "glass-qt6"
+    "kwin-glass"
     # The SilentSDDM theme.
     "silent"
     "sops-install-secrets"

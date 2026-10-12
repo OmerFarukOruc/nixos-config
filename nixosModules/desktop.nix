@@ -154,7 +154,9 @@ in
       environment.systemPackages = [
         # The effect loads only into the exact KWin it was built for. The flake
         # follows our nixpkgs, so both come from the same revision.
-        inputs.kwin-effects-better-blur-dx.packages.${pkgs.stdenv.hostPlatform.system}.default
+        inputs.kwin-effects-glass.packages.${pkgs.stdenv.hostPlatform.system}.default
+        # The Glass Qt 6 style and window decoration, built the same way.
+        inputs.glass-style.packages.${pkgs.stdenv.hostPlatform.system}.glass-qt6
         # Video and Wallpaper Engine wallpapers. Wallpaper Engine scenes need
         # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
