@@ -1,7 +1,7 @@
 # Host rules
 
 - Manage `nixos-latitude` and `nixos-rog` through this repository, not by editing `/etc/nixos` directly on a host.
-- Deploy changes per README.md.
+- Deploy changes per docs/deploy.md.
 - Install only tools Omer types by hand on this host. Do not install scanners on the host. Use per-project toolchains via direnv.
 
 # Nixpkgs
