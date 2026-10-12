@@ -21,7 +21,7 @@ in
   # names still go to MagicDNS by their longer suffix. Without the secret this
   # file does not exist and resolved uses the DHCP servers.
   #
-  # The profile must allowlist risoluto.dev; README.md (nixos-rog) says why.
+  # The profile must allowlist risoluto.dev; docs/nixos-rog.md (DNS) says why.
   sops.secrets.nextdns-profile = { };
   sops.templates."nextdns.conf" = {
     # resolved reads its configuration as systemd-resolve.
