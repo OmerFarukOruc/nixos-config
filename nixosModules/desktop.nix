@@ -161,6 +161,22 @@ in
         # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
       ];
+
+      # scripts/verify-nixos-rog.sh checks that each panel widget and each
+      # KWin effect that plasma-manager turns on is installed and loaded.
+      oruc.verifyFacts =
+        let
+          plasma = config.home-manager.users.oruc.programs.plasma;
+          effects = lib.filterAttrs (key: setting: lib.hasSuffix "Enabled" key && setting.value == true) (
+            plasma.configFile.kwinrc.Plugins or { }
+          );
+          widgets = lib.concatMap (panel: map (widget: widget.name) panel.widgets) plasma.panels;
+          list = names: lib.concatStringsSep "," (lib.unique names);
+        in
+        lib.optionalAttrs (widgets != [ ]) { plasma_widgets = list widgets; }
+        // lib.optionalAttrs (effects != { }) {
+          kwin_effects = list (map (lib.removeSuffix "Enabled") (lib.attrNames effects));
+        };
     })
   ];
 }

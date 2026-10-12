@@ -15,9 +15,10 @@ in
 
   config = lib.mkIf (facts != { }) {
     # The script sources the file, so only plain names and values may appear.
+    # A comma separates the items of a list.
     assertions = lib.mapAttrsToList (name: value: {
       assertion =
-        builtins.match "[a-z_][a-z0-9_]*" name != null && builtins.match "[A-Za-z0-9._-]+" value != null;
+        builtins.match "[a-z_][a-z0-9_]*" name != null && builtins.match "[A-Za-z0-9._,-]+" value != null;
       message = "oruc.verifyFacts.${name} = \"${value}\" is not a plain shell name and value.";
     }) facts;
 
