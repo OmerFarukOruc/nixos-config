@@ -2,6 +2,8 @@
 # variables, on top of the workstation profile.
 {
   agents,
+  config,
+  lib,
   osConfig,
   pkgs,
   ...
@@ -27,15 +29,36 @@
 
   # Deskflow runs here as the client of fedora-desktop's server. A client on
   # Wayland types through the remote desktop portal, which Plasma has and niri
-  # does not, so it starts at a Plasma login only.
-  xdg.configFile."autostart/org.deskflow.deskflow.desktop".text = ''
-    [Desktop Entry]
-    Type=Application
-    Name=Deskflow
-    Exec=deskflow
-    Icon=org.deskflow.deskflow
-    OnlyShowIn=KDE;
-  '';
+  # does not, so it starts at a Plasma login only. As a service, a switch that
+  # changes Deskflow restarts it, so the running client is never the old build.
+  systemd.user.services.deskflow = {
+    Unit = {
+      Description = "Deskflow client of fedora-desktop";
+      # Only a Plasma session reaches plasma-workspace.target.
+      After = [ "plasma-workspace.target" ];
+      PartOf = [ "plasma-workspace.target" ];
+    };
+    Service = {
+      ExecStart = lib.getExe pkgs.deskflow;
+      Restart = "on-failure";
+      RestartSec = 5;
+      # Deskflow exits 5 when another instance runs, such as one started from
+      # the menu. A restart would only raise that instance's window again.
+      SuccessExitStatus = 5;
+    };
+    Install.WantedBy = [ "plasma-workspace.target" ];
+  };
+
+  # The client's log otherwise shows only in its window. Deskflow writes it to
+  # ~/deskflow.log, as on fedora-desktop, and rotates it at 1 MiB. Deskflow
+  # also saves its own settings in this file, so the switch sets one key.
+  home.activation.deskflowLogToFile =
+    lib.hm.dag.entryBetween [ "reloadSystemd" ] [ "writeBoundary" ]
+      ''
+        run mkdir -p ${config.xdg.configHome}/Deskflow
+        run ${lib.getExe pkgs.crudini} --ini-options=nospace --set \
+          ${config.xdg.configHome}/Deskflow/Deskflow.conf log toFile true
+      '';
 
   # The Ryzen AI 9 HX 370 has 24 threads.
   oruc.htop.cpuColumns = 4;
