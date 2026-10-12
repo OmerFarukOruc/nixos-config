@@ -28,8 +28,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };
-    kwin-effects-better-blur-dx = {
-      url = "github:xarblu/kwin-effects-better-blur-dx/v2.5.1";
+    # Most Glass fixes land on main after its latest tag, so this pins a commit.
+    kwin-effects-glass = {
+      url = "github:4v3ngR/kwin-effects-glass/32f1e79f517eef992563856aa06963f6ee8455b9";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # The Qt style and window decoration that match the Glass effect. The
+    # repository has no tags, so this pins a commit.
+    glass-style = {
+      url = "github:4v3ngR/Glass/81edfa7f7f0d74997ab730598fa32805b20e4040";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     sops-nix = {

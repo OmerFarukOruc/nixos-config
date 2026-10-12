@@ -212,6 +212,27 @@
         "type": "github"
       }
     },
+    "glass-style": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791454309,
+        "narHash": "sha256-lmPXpICzrCqkQopOrq6ok+hvpWt1GEDq9LPdoFkM824=",
+        "owner": "4v3ngR",
+        "repo": "Glass",
+        "rev": "81edfa7f7f0d74997ab730598fa32805b20e4040",
+        "type": "github"
+      },
+      "original": {
+        "owner": "4v3ngR",
+        "repo": "Glass",
+        "rev": "81edfa7f7f0d74997ab730598fa32805b20e4040",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -232,7 +253,7 @@
         "type": "github"
       }
     },
-    "kwin-effects-better-blur-dx": {
+    "kwin-effects-glass": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
@@ -240,17 +261,17 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1782253263,
-        "narHash": "sha256-QpGYFI5dPLNTqeaV73LaMuR11IzjMwnJcy4MAmKmFxY=",
-        "owner": "xarblu",
-        "repo": "kwin-effects-better-blur-dx",
-        "rev": "e8475d0a7045e1ef035d54cff9cf2c0b02f0aff0",
+        "lastModified": 1790734645,
+        "narHash": "sha256-QMIscGqrEv8X5JbOkHk2SZw+OuyQOFdFzYYsiYgs1MI=",
+        "owner": "4v3ngR",
+        "repo": "kwin-effects-glass",
+        "rev": "32f1e79f517eef992563856aa06963f6ee8455b9",
         "type": "github"
       },
       "original": {
-        "owner": "xarblu",
-        "ref": "v2.5.1",
-        "repo": "kwin-effects-better-blur-dx",
+        "owner": "4v3ngR",
+        "repo": "kwin-effects-glass",
+        "rev": "32f1e79f517eef992563856aa06963f6ee8455b9",
         "type": "github"
       }
     },
@@ -445,8 +466,9 @@
         "base16": "base16",
         "base16-schemes": "base16-schemes",
         "dms": "dms",
+        "glass-style": "glass-style",
         "home-manager": "home-manager",
-        "kwin-effects-better-blur-dx": "kwin-effects-better-blur-dx",
+        "kwin-effects-glass": "kwin-effects-glass",
         "llm-agents": "llm-agents",
         "nix-cachyos-kernel": "nix-cachyos-kernel",
         "nix-index-database": "nix-index-database",
@@ -554,11 +576,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1726560853,
-        "narHash": "sha256-X6rJYSESBVr3hBoH0WbKE5KvhPU5bloyZ2L4K60/fPQ=",
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "c1dfcf08411b08f6b8615f7d8971a2bfa81d5e8a",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
         "type": "github"
       },
       "original": {

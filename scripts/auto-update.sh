@@ -121,8 +121,9 @@ packages_cached() {
 }
 
 # The inputs the packages of ci/cached-packages.nix come from. They move below,
-# once the cache holds those packages.
-cached_from=(nixpkgs dms kwin-effects-better-blur-dx silent-sddm sops-nix)
+# once the cache holds those packages. The Glass inputs are pinned to a
+# commit, so they never move here.
+cached_from=(nixpkgs dms silent-sddm sops-nix)
 tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
 # The kernel input moves only through update-kernel.sh, which first checks
 # that the kernel cache holds the new build.

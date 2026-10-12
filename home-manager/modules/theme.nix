@@ -32,15 +32,20 @@ let
       rawScheme."${name}-rgb-g"
       rawScheme."${name}-rgb-b"
     ];
+  # KDE reads a fourth number as the alpha, from 0 (clear) to 255 (opaque).
+  # The Glass Qt style draws windows with these backgrounds, and the Glass
+  # KWin effect blurs what shows through.
+  rgba = name: alpha: "${rgb name},${toString alpha}";
   kdeColorGroup =
     {
       backgroundNormal,
       backgroundAlternate,
       foregroundNormal,
+      translucent ? false,
     }:
     ''
-      BackgroundAlternate=${rgb backgroundAlternate}
-      BackgroundNormal=${rgb backgroundNormal}
+      BackgroundAlternate=${if translucent then rgba backgroundAlternate 80 else rgb backgroundAlternate}
+      BackgroundNormal=${if translucent then rgba backgroundNormal 140 else rgb backgroundNormal}
       DecorationFocus=${rgb "base0D"}
       DecorationHover=${rgb "base0D"}
       ForegroundActive=${rgb "base0D"}
@@ -52,7 +57,15 @@ let
       ForegroundPositive=${rgb "base0B"}
       ForegroundVisited=${rgb "base0E"}
     '';
-  kdeColorScheme = ''
+  opaqueScheme = kdeColorScheme false;
+  glassScheme = kdeColorScheme true;
+  applyColorScheme = lib.getExe' pkgs.kdePackages.plasma-workspace "plasma-apply-colorscheme";
+  kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
+  setWidgetStyle = style: "${kwriteconfig} --file kdeglobals --group KDE --key widgetStyle ${style}";
+  iconTheme = "${kwriteconfig} --file kdeglobals --group Icons --key Theme ${theme.icons}";
+
+  # The glass scheme makes the window and view backgrounds translucent.
+  kdeColorScheme = glass: ''
     [ColorEffects:Disabled]
     Color=${rgb "base03"}
     ColorAmount=0
@@ -114,16 +127,18 @@ let
       backgroundNormal = "base00";
       backgroundAlternate = "base01";
       foregroundNormal = "base05";
+      translucent = glass;
     }}
     [Colors:Window]
     ${kdeColorGroup {
       backgroundNormal = "base00";
       backgroundAlternate = "base01";
       foregroundNormal = "base05";
+      translucent = glass;
     }}
     [General]
-    ColorScheme=OrucBase16
-    Name=Oruc Base16
+    ColorScheme=OrucBase16${lib.optionalString glass "Glass"}
+    Name=Oruc Base16${lib.optionalString glass " Glass"}
     shadeSortColumn=true
 
     [KDE]
@@ -224,7 +239,10 @@ in
     }
     // {
       "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
-        text = kdeColorScheme;
+        text = opaqueScheme;
+      };
+      "color-schemes/OrucBase16Glass.colors" = lib.mkIf isPlasma {
+        text = glassScheme;
       };
 
       # Plasma's translucent desktop theme has no colors file of its own, and
@@ -240,12 +258,14 @@ in
   # writes kdeglobals itself, so a machine with a Plasma session gets the
   # scheme and icons through oruc-plasma-colors instead.
   xdg.configFile."kdeglobals" = lib.mkIf (isNiri && !isPlasma) {
-    text = kdeColorScheme + "\n[Icons]\nTheme=${theme.icons}\n";
+    text = opaqueScheme + "\n[Icons]\nTheme=${theme.icons}\n";
   };
 
+  # Each session applies its own scheme and Qt style at login, because both
+  # sessions read the same kdeglobals.
   systemd.user.services.oruc-plasma-colors = lib.mkIf isPlasma {
     Unit = {
-      Description = "Apply the selected Base16 Plasma color scheme";
+      Description = "Apply the translucent Base16 Plasma color scheme and the Glass style";
       # Only a Plasma session reaches plasma-workspace.target.
       After = [
         "plasma-workspace.target"
@@ -258,12 +278,28 @@ in
     };
     Service = {
       Type = "oneshot";
-      ExecStart = "${lib.getExe' pkgs.kdePackages.plasma-workspace "plasma-apply-colorscheme"} OrucBase16";
+      ExecStart = "${applyColorScheme} OrucBase16Glass";
       # The niri session reads the same kdeglobals, so it needs the icon theme too.
-      ExecStartPost = lib.mkIf isNiri "${lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6"} --file kdeglobals --group Icons --key Theme ${theme.icons}";
+      ExecStartPost = [ (setWidgetStyle "Glass") ] ++ lib.optional isNiri iconTheme;
       Restart = "on-failure";
       RestartSec = 5;
     };
     Install.WantedBy = [ "plasma-workspace.target" ];
+  };
+
+  # niri blurs only the windows that niri/config.kdl lists, so its sessions
+  # put back the opaque scheme and Breeze.
+  systemd.user.services.oruc-niri-colors = lib.mkIf (isPlasma && isNiri) {
+    Unit = {
+      Description = "Apply the opaque Base16 color scheme and the Breeze style";
+      After = [ "niri.service" ];
+      PartOf = [ "niri.service" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${applyColorScheme} OrucBase16";
+      ExecStartPost = setWidgetStyle "Breeze";
+    };
+    Install.WantedBy = [ "niri.service" ];
   };
 }

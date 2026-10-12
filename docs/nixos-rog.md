@@ -41,7 +41,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | --- | --- |
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| nixpkgs, dms, kwin-effects-better-blur-dx, silent-sddm and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
+| nixpkgs, dms, silent-sddm and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -68,9 +68,9 @@ ssh nixos-rog 'sudo systemctl start oruc-auto-update; journalctl -u oruc-auto-up
 
 cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
-each host: DankMaterialShell (DMS), Deskflow, the KWin blur effect, the
-SilentSDDM theme and `sops-install-secrets`. It reads them from the host's own
-configuration, so they are the exact builds the host would compile.
+each host: DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
+style, the SilentSDDM theme and `sops-install-secrets`. It reads them from the
+host's own configuration, so they are the exact builds the host would compile.
 
 Every hour, the [host-packages-cache](../.github/workflows/host-packages-cache.yml)
 workflow moves the inputs with the same `move-inputs.sh`, builds the packages
