@@ -5,10 +5,13 @@
 #
 # The temperature limit lives in the SMU (the chip's power controller) and is
 # lost at reboot; ryzenadj writes it through ryzen_smu (apps.nix). It survives
-# a profile switch and an asusd restart. power-profiles-daemon turns boost off
-# in power-saver, so quiet needs no clock cap. One busy thread at 5.1 GHz held
-# the CPU at 74 °C and spun the fans up; at 4.0 GHz it stayed at 56 °C with
-# the fans at their floor.
+# a profile switch and an asusd restart, but an s2idle resume resets it to
+# 95 °C. A sleep that bypasses systemd, such as rtcwake, runs no resume
+# command, so the unit also checks both limits every 30 s.
+#
+# power-profiles-daemon turns boost off in power-saver, so quiet needs no clock
+# cap. One busy thread at 5.1 GHz held the CPU at 74 °C and spun the fans up;
+# at 4.0 GHz it stayed at 56 °C with the fans at their floor.
 {
   config,
   lib,
@@ -79,16 +82,34 @@ in
         echo "$1: $temp °C, top clock $max"
       }
 
-      apply "$(powerprofilesctl get)"
+      # Applies the limits again when the SMU or policy0 lost them.
+      check() {
+        local temp max=''${tops[$1]}
+        temp=$(ryzenadj -i | awk -F'|' '/THM LIMIT CORE/ {printf "%d", $3}')
+        [[ $max == top ]] && max=$(</sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq)
+        if [[ $temp != "''${temps[$1]}" || $(</sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq) != "$max" ]]; then
+          apply "$1"
+        fi
+      }
+
+      profile=$(powerprofilesctl get)
+      apply "$profile"
       # One line per property change; only ActiveProfile changes matter.
       active="'ActiveProfile': <'([a-z-]+)'>"
-      gdbus monitor --system --dest org.freedesktop.UPower.PowerProfiles \
-        --object-path /org/freedesktop/UPower/PowerProfiles |
-        while read -r line; do
+      while true; do
+        if read -r -t 30 line; then
           if [[ $line =~ $active ]]; then
-            apply "''${BASH_REMATCH[1]}"
+            profile=''${BASH_REMATCH[1]}
+            apply "$profile"
           fi
-        done
+        elif (($? > 128)); then
+          check "$profile"
+        else
+          echo "gdbus monitor ended" >&2
+          exit 1
+        fi
+      done < <(gdbus monitor --system --dest org.freedesktop.UPower.PowerProfiles \
+        --object-path /org/freedesktop/UPower/PowerProfiles)
     '';
   };
 
