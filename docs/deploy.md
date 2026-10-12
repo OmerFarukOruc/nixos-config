@@ -50,11 +50,15 @@ activation.
 CI runs the formatter check, `nix flake check --no-build` and the evaluation of
 every host on every pull request and on every push to `main`.
 
-To format from fedora-desktop, which has no Nix, run `scripts/fmt-remote.sh`.
-It copies the checkout to a temporary Git repository on nixos-rog, runs
-`nix fmt` there and copies the changed files back. `scripts/fmt-remote.sh --ci`
-checks without writing, as CI does. Outside a Git checkout, `nix fmt` stops
-with an error.
+fedora-desktop has no Nix, so `scripts/check-on-rog.sh` runs the formatter
+check and `nix flake check --no-build` on a copy of this checkout on nixos-rog.
+With `--fix` it formats first, copies the changed files back, and then checks.
+CI also evaluates each host's system; the flake check covers most of that:
+
+```sh
+scripts/check-on-rog.sh
+scripts/check-on-rog.sh --fix
+```
 
 ## Deploy
 
