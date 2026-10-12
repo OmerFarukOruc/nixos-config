@@ -1,0 +1,70 @@
+name: host-packages-cache
+
+on:
+  # main's own lock, so a host that deploys main later downloads the packages.
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # The newest inputs. The hourly host update moves the inputs these packages
+  # come from only once the cache holds them.
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+# One group per event, because a newer pending run replaces the pending one in
+# its group, and a push run does not move the inputs.
+concurrency:
+  group: host-packages-cache-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Repository variable CACHIX_CACHE names the Cachix cache; the
+    # CACHIX_AUTH_TOKEN secret may push to it.
+    if: vars.CACHIX_CACHE != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CACHE: ${{ vars.CACHIX_CACHE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      # The same script the host update runs. Nothing is committed; each run
+      # starts again from the lock on main.
+      - name: Move the inputs the way the host update does
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/move-inputs.sh
+
+      # Prints only the outputs that passed the closure check, so the push
+      # also runs after one package failed.
+      - name: Build what the caches lack
+        run: ci/host-packages.sh build "$CACHE" "$RUNNER_TEMP/outputs" >"$RUNNER_TEMP/paths"
+
+      # Only now, so upstream code that the steps above evaluate cannot read
+      # the push token.
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        if: ${{ !cancelled() }}
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      - name: Push to Cachix
+        if: ${{ !cancelled() }}
+        run: |
+          if [[ -s $RUNNER_TEMP/paths ]]; then
+            cachix push "$CACHE" <"$RUNNER_TEMP/paths"
+          fi
+
+      # The free Cachix plan holds 5 GB and then removes the least recently
+      # used paths, kernels included (https://www.cachix.org/pricing).
+      - name: Report the cached sizes
+        if: ${{ !cancelled() }}
+        run: ci/host-packages.sh report "$CACHE" "$RUNNER_TEMP/outputs" >>"$GITHUB_STEP_SUMMARY"

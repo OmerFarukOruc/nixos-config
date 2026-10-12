@@ -32,8 +32,15 @@ timed out, build the revision on fedora-desktop instead:
 
 ## Other inputs
 
-`nix flake update` moves the kernel input too. For the other inputs, use
-`nix flake update <input>`.
+`scripts/move-inputs.sh` moves flake inputs to their newest upstream. It moves
+an input pinned to a release tag with `update-release-tags.sh`, and any other
+to the head of its branch with `nix flake update`. It never moves the kernel or
+llm-agents, because each of them moves only once a cache holds its builds. It
+takes the same arguments as `update-release-tags.sh`. The updater on nixos-rog
+and the host-packages-cache workflow both run it.
+
+A plain `nix flake update` moves the kernel input too. To move one input by
+hand, use `nix flake update <input>`.
 
 ## Release tags
 

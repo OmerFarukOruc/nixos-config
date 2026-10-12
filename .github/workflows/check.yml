@@ -39,3 +39,8 @@ jobs:
             nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath"
             echo
           done
+      # Not a flake output, so the steps above do not evaluate it.
+      - name: Evaluate the cached host packages
+        run: |
+          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
+            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
