@@ -13,6 +13,8 @@ lib.mkIf (cfg.kind == "workstation") {
     enable = true;
     powerOnBoot = false;
   };
+  # Paired devices.
+  oruc.keptPaths = [ "/var/lib/bluetooth" ];
   services.blueman.enable = isNiri;
 
   services.udisks2.enable = true;

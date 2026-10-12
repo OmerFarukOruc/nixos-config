@@ -43,6 +43,8 @@ in
         ProtectSystem = "strict";
       };
     };
+    oruc.keptPaths = [ "/var/lib/usque" ];
+
     users.users.usque = {
       isSystemUser = true;
       group = "usque";

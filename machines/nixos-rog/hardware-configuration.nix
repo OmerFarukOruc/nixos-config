@@ -34,6 +34,10 @@ in
   fileSystems."/var/log" = subvolume "@nixos-log" // {
     neededForBoot = true;
   };
+  # The state that root-reset.nix keeps across the reset of /.
+  fileSystems."/keep" = subvolume "@nixos-keep" // {
+    neededForBoot = true;
+  };
 
   # Shared with Windows Boot Manager.
   fileSystems."/boot" = {

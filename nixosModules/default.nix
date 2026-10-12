@@ -8,6 +8,7 @@
     ./memory.nix
     ./theme.nix
     ./verify-facts.nix
+    ./kept-paths.nix
     ./home-manager.nix
     ./intel-graphics.nix
     ./workstation.nix

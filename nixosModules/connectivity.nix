@@ -51,6 +51,16 @@ lib.mkIf (cfg.kind == "workstation") {
 
   users.users.oruc.extraGroups = [ "networkmanager" ];
 
+  oruc.keptPaths = [
+    # Wi-Fi profiles are made by hand.
+    "/etc/NetworkManager/system-connections"
+    "/var/lib/NetworkManager"
+    # The node key keeps the machine in the tailnet.
+    "/var/lib/tailscale"
+  ]
+  # The SSH host key is also the sops age key, and deploy.sh checks it.
+  ++ lib.optional cfg.features.remoteAccess "/etc/ssh";
+
   # Outside tailscale0 the only open port is Tailscale's own UDP port. The
   # check covers the port lists and trusted interfaces only: allowPing,
   # extraInputRules and extraCommands pass unchecked, and Docker and zapret2
