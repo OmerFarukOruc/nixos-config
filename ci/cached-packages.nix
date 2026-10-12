@@ -35,5 +35,11 @@ let
       picked = lib.filter (p: lib.elem (p.pname or null) pnames) candidates;
     in
     lib.listToAttrs (map (p: lib.nameValuePair p.pname (free p)) picked);
+
+  hosts = lib.mapAttrs (_: host: hostPackages host.config) flake.nixosConfigurations;
+  # A renamed package would otherwise drop out of the cache without a sign.
+  lost = lib.subtractLists (lib.concatMap lib.attrNames (lib.attrValues hosts)) pnames;
 in
-lib.mapAttrs (_: host: hostPackages host.config) flake.nixosConfigurations
+lib.throwIf (lost != [ ])
+  "No host has a package named ${lib.concatStringsSep ", " lost}; update ci/cached-packages.nix."
+  hosts

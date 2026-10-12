@@ -43,8 +43,9 @@ builds them from the hosts' own configuration;
 
 Nothing unfree is pushed. The NVIDIA module builds from
 [open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules).
-The host-packages-cache workflow fails before the push when a closure holds a
-path that cache.nixos.org lacks and that is not a listed package.
+The host-packages-cache workflow does not push a package whose closure holds a
+path that cache.nixos.org lacks and that is not a listed package, and that run
+fails.
 
 ## Setup
 

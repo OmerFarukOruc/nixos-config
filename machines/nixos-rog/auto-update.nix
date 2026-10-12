@@ -46,7 +46,7 @@
       # Without a limit one hung network call keeps the unit active, and the
       # timer never starts it again. The longest run in the journal (24 runs
       # from 2026-10-10 to 2026-10-12) took 3 min 13 s; the rest is room for
-      # compiling DMS or a coding agent. A kill sends the script SIGTERM, and its
+      # compiling the packages of ci/cached-packages.nix or a coding agent. A kill sends the script SIGTERM, and its
       # trap notifies. A kill during deploy.sh leaves the rollback timer to
       # restore the previous system.
       TimeoutStartSec = "2h";

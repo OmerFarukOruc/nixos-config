@@ -2,9 +2,11 @@
 # usage: ci/host-packages.sh build|report CACHE
 # build: builds the packages of ci/cached-packages.nix, for every host, that
 # neither the Cachix cache CACHE nor cache.nixos.org holds, and prints their
-# output paths for cachix push. It fails when a closure holds a path that
-# cache.nixos.org lacks and that is not one of those packages' outputs, because
-# CACHE is public and cachix push uploads whole closures.
+# output paths for cachix push. A package whose closure holds a path that
+# cache.nixos.org lacks and that is not one of those packages' outputs is not
+# printed, because CACHE is public and cachix push uploads whole closures. Each
+# package is built and checked on its own; the script fails at the end when one
+# of them failed, after printing the others.
 # report: prints a Markdown table of every output with its compressed size in
 # CACHE, and their sum.
 set -euo pipefail
@@ -36,35 +38,39 @@ allowed=$(jq -r '.[].outs[]' <<<"$packages")
 
 case $mode in
   build)
-    drvs=() outs=()
+    failed=()
     while read -r package; do
       name=$(jq -r .name <<<"$package")
+      mapfile -t outs < <(jq -r '.outs[]' <<<"$package")
       missing=false
-      while read -r out; do
+      for out in "${outs[@]}"; do
         holds "https://$cache.cachix.org" "$out" || holds https://cache.nixos.org "$out" || missing=true
-      done < <(jq -r '.outs[]' <<<"$package")
+      done
       if [[ $missing == false ]]; then
         echo "Already cached: $name" >&2
         continue
       fi
-      echo "To build: $name" >&2
-      drvs+=("$(jq -r '.drv' <<<"$package")^*")
-      mapfile -t -O "${#outs[@]}" outs < <(jq -r '.outs[]' <<<"$package")
+      echo "Building $name" >&2
+      if ! nix build --print-build-logs --no-link "$(jq -r '.drv' <<<"$package")^*" >&2; then
+        failed+=("$name")
+        continue
+      fi
+      # A path that cache.nixos.org lacks would go to the public cache.
+      # shellcheck disable=SC2016 # the inner sh expands $1, not this shell
+      unexpected=$(nix path-info --recursive "${outs[@]}" | { grep -vxF -f <(echo "$allowed") || true; } |
+        xargs -r -P 16 -I {} sh -c 'h=${1#/nix/store/}; curl -fsS --max-time 20 --retry 2 -o /dev/null "https://cache.nixos.org/${h%%-*}.narinfo" 2>/dev/null || echo "$1"' _ {})
+      if [[ -n $unexpected ]]; then
+        echo "$name stays out of the cache. Its closure holds paths that cache.nixos.org lacks and ci/cached-packages.nix does not list:" >&2
+        echo "$unexpected" >&2
+        failed+=("$name")
+        continue
+      fi
+      printf '%s\n' "${outs[@]}"
     done < <(jq -c '.[]' <<<"$packages")
-    ((${#drvs[@]})) || exit 0
-
-    nix build --print-build-logs --no-link "${drvs[@]}" >&2
-
-    # A path that cache.nixos.org lacks would go to the public cache.
-    # shellcheck disable=SC2016 # the inner sh expands $1, not this shell
-    unexpected=$(nix path-info --recursive "${outs[@]}" | { grep -vxF -f <(echo "$allowed") || true; } |
-      xargs -r -P 16 -I {} sh -c 'h=${1#/nix/store/}; curl -fsS --max-time 20 --retry 2 -o /dev/null "https://cache.nixos.org/${h%%-*}.narinfo" 2>/dev/null || echo "$1"' _ {})
-    if [[ -n $unexpected ]]; then
-      echo "These paths are in the closure, cache.nixos.org lacks them, and ci/cached-packages.nix does not list them:" >&2
-      echo "$unexpected" >&2
+    if ((${#failed[@]})); then
+      echo "Not pushed: ${failed[*]}" >&2
       exit 1
     fi
-    printf '%s\n' "${outs[@]}"
     ;;
   report)
     echo "| Output | Compressed size in $cache |"

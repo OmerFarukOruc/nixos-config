@@ -106,7 +106,11 @@ packages_cached() {
   local paths path
   paths=$(nix eval --impure --raw --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
     --apply "hosts: builtins.concatStringsSep \"\\n\" (builtins.concatMap
-      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.attrValues hosts.$host))") || return 1
+      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.attrValues hosts.$host))") ||
+    {
+      echo "ci/cached-packages.nix does not evaluate at this lock."
+      return 1
+    }
   while read -r path; do
     [[ -n $path ]] || continue
     path=${path#/nix/store/}

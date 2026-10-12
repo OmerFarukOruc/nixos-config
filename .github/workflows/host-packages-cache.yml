@@ -13,8 +13,10 @@ on:
 permissions:
   contents: read
 
+# One group per event, because a newer pending run replaces the pending one in
+# its group, and a push run does not move the inputs.
 concurrency:
-  group: host-packages-cache
+  group: host-packages-cache-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -32,12 +34,6 @@ jobs:
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
-        with:
-          name: ${{ vars.CACHIX_CACHE }}
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          skipPush: true
-
       # The same script the host update runs. Nothing is committed; each run
       # starts again from the lock on main.
       - name: Move the inputs the way the host update does
@@ -46,10 +42,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/move-inputs.sh
 
+      # Prints only the outputs that passed the closure check, so the push
+      # also runs after one package failed.
       - name: Build what the caches lack
         run: ci/host-packages.sh build "$CACHE" >"$RUNNER_TEMP/paths"
 
+      # Only now, so upstream code that the steps above evaluate cannot read
+      # the push token.
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        if: ${{ !cancelled() }}
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
       - name: Push to Cachix
+        if: ${{ !cancelled() }}
         run: |
           if [[ -s $RUNNER_TEMP/paths ]]; then
             cachix push "$CACHE" <"$RUNNER_TEMP/paths"
@@ -58,4 +66,5 @@ jobs:
       # The free Cachix plan holds 5 GB and then removes the least recently
       # used paths, kernels included (https://www.cachix.org/pricing).
       - name: Report the cached sizes
+        if: ${{ !cancelled() }}
         run: ci/host-packages.sh report "$CACHE" >>"$GITHUB_STEP_SUMMARY"
