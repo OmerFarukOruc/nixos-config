@@ -75,11 +75,18 @@ in
         "sudo"
       ];
     };
-    # Up and Down stay with Atuin; Ctrl-P and Ctrl-N are bound below.
+    # Up and Down search the history for the text typed so far, as on
+    # fedora-desktop. Ctrl-P and Ctrl-N are bound below; Atuin keeps Ctrl-R.
     historySubstringSearch = {
       enable = true;
-      searchUpKey = [ ];
-      searchDownKey = [ ];
+      searchUpKey = [
+        "^[[A"
+        "^[OA"
+      ];
+      searchDownKey = [
+        "^[[B"
+        "^[OB"
+      ];
     };
     plugins = [
       {
@@ -116,11 +123,11 @@ in
            && -z "''${OPENCODE_DB:-}" \
            && -z "''${CURSOR_AGENT:-}" \
            && -z "''${GROK_SESSION_ID:-}" ]]; then
-          eval "$(${lib.getExe config.programs.atuin.package} init zsh)"
+          eval "$(${lib.getExe config.programs.atuin.package} init zsh --disable-up-arrow)"
         fi
 
-        # Atuin keeps Up and Ctrl-R. Ctrl-P and Ctrl-N search the history for
-        # the text typed so far, and step through it when the line is empty.
+        # Ctrl-P and Ctrl-N search the history like Up and Down, and step
+        # through it when the line is empty.
         # Oh My Zsh makes emacs the main keymap; viins covers a switch to vi mode.
         for keymap in emacs viins; do
           bindkey -M "$keymap" '^P' history-substring-search-up
@@ -146,8 +153,6 @@ in
       workspaces = true;
       search_mode = lib.mkDefault "fuzzy";
       filter_mode = "workspace";
-      search_mode_shell_up_key_binding = lib.mkDefault "fuzzy";
-      filter_mode_shell_up_key_binding = "workspace";
       search.filters = [
         "workspace"
         "directory"

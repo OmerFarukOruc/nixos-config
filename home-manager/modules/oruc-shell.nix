@@ -22,7 +22,6 @@
     daemon.enable = true;
     settings = {
       search_mode = "daemon-fuzzy";
-      search_mode_shell_up_key_binding = "daemon-fuzzy";
     };
   };
 
