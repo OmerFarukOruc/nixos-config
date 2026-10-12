@@ -184,3 +184,18 @@ scripts/verify-nixos-rog.sh
 
 The script writes a JSON report under `~/.local/state/nixos-config-verify/`.
 It exits 1 when a check fails. `--suspend` adds three s2idle cycles.
+
+## Check a visual change
+
+Glass draws only behind see-through pixels and at window edges, so a shot of a
+maximized, opaque window shows none of it. To see the blur, the edge lighting
+and the edges of a window, take the screenshot around a Ghostty window, whose
+background is see-through:
+
+```sh
+scripts/screenshot-nixos-rog.sh --window /tmp/nixos-rog.png
+```
+
+The script opens the Ghostty window on the running session, takes the shot and
+closes the window. Without `--window` it takes the screen as it is. Crop the
+window's edges at full size before you judge them.
