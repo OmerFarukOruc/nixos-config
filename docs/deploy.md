@@ -52,7 +52,8 @@ every host on every pull request and on every push to `main`.
 
 fedora-desktop has no Nix, so `scripts/check-on-rog.sh` runs the formatter
 check and `nix flake check --no-build` on a copy of this checkout on nixos-rog.
-With `--fix` it formats instead of checking and copies the changed files back:
+With `--fix` it formats first, copies the changed files back, and then checks.
+CI also evaluates each host's system; the flake check covers most of that:
 
 ```sh
 scripts/check-on-rog.sh
