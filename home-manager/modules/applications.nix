@@ -147,7 +147,11 @@ in
       confirm-close-surface = true;
       resize-overlay = "always";
       # Relative paths resolve against the directory of the Ghostty config file.
-      custom-shader = "shaders/cursor_smear.glsl";
+      # Ghostty runs the shaders in this order.
+      custom-shader = [
+        "shaders/cursor_smear.glsl"
+        "shaders/ripple_rectangle_cursor.glsl"
+      ];
       # Only binds that differ from Ghostty's defaults. ctrl+equal and ctrl+minus
       # are separate triggers from the default ctrl+= and ctrl+-, so they stay.
       keybind = [
@@ -168,7 +172,12 @@ in
   };
 
   xdg.configFile = {
-    "ghostty/shaders/cursor_smear.glsl".source = ../shaders/cursor_smear.glsl;
+    # Without recursive, Home Manager links the whole directory, and that link
+    # collides with a ~/.config/ghostty/shaders directory that already exists.
+    "ghostty/shaders" = {
+      source = ../shaders;
+      recursive = true;
+    };
     # pnpm reads this setting only from its global config.yaml, not from rc.
     "pnpm/config.yaml".text = ''
       minimumReleaseAge: ${toString (releaseAgeDays * 1440)}
