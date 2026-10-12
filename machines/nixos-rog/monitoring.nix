@@ -13,6 +13,7 @@ let
     "nix-gc"
     "nix-optimise"
     "nixpkgs-clone"
+    "oruc-cpu-limits"
     "oruc-low-battery"
     "smartd"
     "usque"

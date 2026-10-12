@@ -13,6 +13,7 @@
     ./apps.nix
     ./asus.nix
     ./auto-update.nix
+    ./cpu-limits.nix
     ./graphics.nix
     ./low-battery.nix
     ./media.nix
