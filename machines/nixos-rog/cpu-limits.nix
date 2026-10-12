@@ -59,6 +59,7 @@ in
     after = [ "power-profiles-daemon.service" ];
     path = [
       config.services.power-profiles-daemon.package
+      pkgs.gawk
       pkgs.glib.bin
       pkgs.ryzenadj
     ];
