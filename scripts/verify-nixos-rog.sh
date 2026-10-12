@@ -1,0 +1,324 @@
+#!/usr/bin/env bash
+# Checks a running nixos-rog from fedora-desktop and writes a JSON report.
+# Rerun it after any deploy to the laptop and compare the reports.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: scripts/verify-nixos-rog.sh [--suspend] [--lan-ip ADDRESS] [--report FILE]
+
+--suspend      also run three 20-second s2idle cycles with rtcwake and check
+               that the kernel counts three successful suspends and that
+               Wi-Fi and the RTX 4070 come back. The SSH session drops
+               while the laptop sleeps.
+--lan-ip       the laptop's Wi-Fi address, to check that SSH does not answer
+               on the LAN; tailscale0 is the only way in.
+--report FILE  where to write the JSON report (default: a timestamped file
+               under ~/.local/state/nixos-config-verify/).
+
+The checks that need a person at the laptop (booting Windows, the recovery
+entry and an older generation from the Limine menu, the HDMI picture) are
+listed in the report as manual.
+
+The facts the checks expect (the NVIDIA driver version, the Wi-Fi interface,
+the low-battery threshold) come from /etc/oruc/verify-facts, which the
+deployed system writes.
+
+Exit status: 0 when no check fails (the manual checks are for a person to
+do), 1 when one fails, 64 for a usage error.
+EOF
+}
+
+host=nixos-rog
+octet='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
+suspend=false
+lan_ip=
+report=
+while (($# > 0)); do
+  case $1 in
+    --suspend) suspend=true ;;
+    --lan-ip | --report)
+      if (($# < 2)); then
+        usage
+        exit 64
+      fi
+      if [[ $1 == --lan-ip ]]; then
+        if [[ ! $2 =~ ^$octet(\.$octet){3}$ ]]; then
+          usage
+          exit 64
+        fi
+        lan_ip=$2
+      else
+        report=$2
+      fi
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+repo_dir=$(cd "$(dirname "$0")/.." && pwd)
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+if [[ -z $report ]]; then
+  report=$HOME/.local/state/nixos-config-verify/nixos-rog-$stamp.json
+fi
+mkdir -p -- "$(dirname "$report")"
+ssh_opts=(-o ConnectTimeout=15 -o BatchMode=yes)
+results=$(mktemp)
+trap 'rm -f -- "$results"' EXIT
+
+# One line per check: name<TAB>pass|fail|manual<TAB>detail
+record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
+
+# Facts the remote checks expect, from the configuration the host runs.
+remote_prelude=$(
+  cat <<'PRELUDE'
+facts=/etc/oruc/verify-facts
+if [[ ! -r $facts ]]; then
+  exit 66
+fi
+. "$facts"
+for fact in low_battery_percent nvidia_version wifi; do
+  if [[ -z ${!fact:-} ]]; then
+    exit 66
+  fi
+done
+# The NVIDIA display controller, found through sysfs because pciutils is not installed.
+find_nvidia() {
+  local dev
+  for dev in /sys/bus/pci/devices/*; do
+    if [[ $(<"$dev/vendor") == 0x10de && $(<"$dev/class") == 0x030* ]]; then
+      printf '%s\n' "${dev##*/}"
+      return
+    fi
+  done
+}
+PRELUDE
+)
+
+# Runs a remote script after the shared facts and helpers.
+remote() {
+  {
+    printf '%s\n' "$remote_prelude"
+    cat
+  } | ssh "${ssh_opts[@]}" "$host" bash -s
+}
+
+remote_checks() {
+  remote <<'REMOTE'
+set -uo pipefail
+check() { # check NAME DETAIL CONDITION...
+  local name=$1 detail=$2; shift 2
+  if "$@" >/dev/null 2>&1; then
+    printf '%s\tpass\t%s\n' "$name" "$detail"
+  else
+    printf '%s\tfail\t%s\n' "$name" "$detail"
+  fi
+}
+armoury=/sys/class/firmware-attributes/asus-armoury/attributes
+nvidia_dev=$(find_nvidia)
+
+check hostname "$(hostname)" test "$(hostname)" = nixos-rog
+check sudo-without-password "sudo -n true" sudo -n true
+check wifi-interface "$wifi is up" test "$(cat "/sys/class/net/$wifi/operstate" 2>/dev/null)" = up
+
+limine_conf=$(sudo cat /boot/limine/limine.conf 2>/dev/null)
+entries=$(grep -E '^ *//?[^ ]' <<<"$limine_conf" | sed 's/^ *//' | tr '\n' ';')
+check limine-windows-entry "$entries" grep -q '^/Windows$' <<<"$limine_conf"
+check limine-nixos-entries "NixOS generations in limine.conf" grep -q 'Generation' <<<"$limine_conf"
+free_mib=$(( $(df -B1 --output=avail /boot | tail -n 1) / 1048576 ))
+check esp-free-1gib "${free_mib} MiB free on /boot" test "$free_mib" -ge 1024
+
+scx_ops=$(cat /sys/kernel/sched_ext/root/ops 2>/dev/null)
+check sched-ext-lavd "$scx_ops" test "${scx_ops%%_*}" = lavd
+dgpu_disable=$(<"$armoury/dgpu_disable/current_value")
+gpu_mux=$(<"$armoury/gpu_mux_mode/current_value")
+check gpu-mode-hybrid "dgpu_disable=$dgpu_disable gpu_mux_mode=$gpu_mux" test "$dgpu_disable$gpu_mux" = 01
+check rtx4070-on-pci "${nvidia_dev:-absent}" test -n "$nvidia_dev"
+loaded_version=$(cat /sys/module/nvidia/version 2>/dev/null)
+check nvidia-driver "${loaded_version:-not loaded}" test "$loaded_version" = "$nvidia_version"
+
+# The daemon sets balanced in ExecStartPost, and a failure there fails its
+# start, so an active daemon shows that the boot default was applied.
+check ppd-boot-balanced "power-profiles-daemon is $(systemctl is-active power-profiles-daemon)" \
+  systemctl is-active --quiet power-profiles-daemon
+# After boot the shell's power menu may pick any profile. Only low battery on
+# battery requires one.
+profile=$(powerprofilesctl get)
+online=$(cat /sys/class/power_supply/ACAD/online)
+capacity=$(cat /sys/class/power_supply/BAT1/capacity)
+if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
+  check ppd-profile "$profile on low battery (battery=$capacity%)" test "$profile" = power-saver
+else
+  check ppd-profile "$profile as chosen (AC=$online, battery=$capacity%)" test -n "$profile"
+fi
+# On AC the low-battery service undoes its own drop as soon as udev sees the
+# charger, and removes its marker.
+if [[ $online == 1 ]]; then
+  check low-battery-undone "/run/oruc-low-battery/active absent on AC" test ! -e /run/oruc-low-battery/active
+fi
+# power-profiles-daemon turns boost off only in power-saver. It writes each
+# CPU policy's boost file; the global cpufreq/boost stays 1.
+expected_boost=1
+[[ $profile == power-saver ]] && expected_boost=0
+boost=$(sort -u /sys/devices/system/cpu/cpufreq/policy*/boost | tr '\n' ' ')
+boost=${boost% }
+check boost-per-profile "boost=$boost in $profile" test "$boost" = "$expected_boost"
+# The firmware sets its package power limits from the platform profile (under
+# stress-ng on CachyOS: quiet 45 W, balanced and performance 60 W), while the
+# asus-armoury ppt_* values only echo what was last written. So the check is
+# that each daemon profile reaches the platform profile.
+restore_profile() {
+  sudo powerprofilesctl set "$profile" && [[ $(powerprofilesctl get) == "$profile" ]]
+}
+trap restore_profile EXIT HUP
+platform=()
+for target in power-saver balanced; do
+  sudo powerprofilesctl set "$target" && sleep 1
+  platform+=("$target=$(</sys/firmware/acpi/platform_profile)")
+done
+if restore_profile; then
+  trap - EXIT HUP
+  printf 'power-profile-restored\tpass\t%s\n' "$profile"
+else
+  printf 'power-profile-restored\tfail\t%s\n' "could not set $profile again; the laptop may stay in another profile"
+fi
+check platform-profile-follows "${platform[*]}" \
+  test "${platform[*]}" = "power-saver=quiet balanced=balanced"
+check asusd-profile-switching-off "asusd.ron" \
+  grep -q 'change_platform_profile_on_ac: false' /etc/asusd/asusd.ron
+check slash-off-on-battery "asusctl slash get" \
+  bash -c 'asusctl slash get | grep -qx "Show on battery: false"'
+# Dynamic Boost: nvidia-powerd runs on AC only.
+powerd=$(systemctl is-active nvidia-powerd)
+expected_powerd=inactive
+[[ $online == 1 ]] && expected_powerd=active
+check nvidia-powerd-on-ac "$powerd (AC=$online)" test "$powerd" = "$expected_powerd"
+
+check captive-dns-off "$(captive-dns status)" test "$(captive-dns status)" = off
+check nextdns-secret "/run/secrets/nextdns-profile" sudo test -s /run/secrets/nextdns-profile
+check resolved-dot-nextdns "global DNS uses DoT to NextDNS" \
+  bash -c 'resolvectl status | sed -n "/^Global/,/^Link/p" | grep -q "+DNSOverTLS" && resolvectl dns | grep -q "^Global:.*dns\.nextdns\.io"'
+check public-name-resolves "resolvectl query nixos.org" resolvectl query nixos.org
+risoluto_answer=$(resolvectl query --cache=no --legend=no openchamber.risoluto.dev 2>/dev/null | awk 'NR == 1 { print $2 }')
+check risoluto-dev-allowlisted "openchamber.risoluto.dev -> ${risoluto_answer:-no answer}" \
+  bash -c '[[ $1 == 100.* ]]' _ "$risoluto_answer"
+tailnet_name=$(tailscale status --json --peers=false 2>/dev/null |
+  sed -n 's/^ *"DNSName": "\(.*\)\.",$/\1/p')
+check tailscale-running "${tailnet_name:-not logged in}" test -n "$tailnet_name"
+check magicdns-resolves "$tailnet_name" resolvectl query "$tailnet_name"
+
+check easyeffects-installed "$(command -v easyeffects || echo absent)" command -v easyeffects
+easyeffects_unit=$(systemctl --user is-enabled easyeffects.service 2>&1)
+check easyeffects-user-unit "easyeffects.service is ${easyeffects_unit}" test "$easyeffects_unit" = enabled
+units=$HOME/.config/systemd/user
+for unit in noctalia dms gnome-keyring blueman-applet; do
+  # The install links exist whichever session is running. A link from a
+  # target every session reaches would start the unit under Plasma too.
+  check "session-scope-$unit" "wanted by niri.service only" \
+    bash -c "test -L '$units/niri.service.wants/$unit.service' &&
+      test ! -e '$units/graphical-session.target.wants/$unit.service' &&
+      test ! -e '$units/graphical-session-pre.target.wants/$unit.service'"
+done
+# Both niri sessions start niri.service, so each shell also checks the
+# variable that its session's launcher sets.
+for shell in noctalia dms; do
+  check "shell-scope-$shell" "ConditionEnvironment=ORUC_SHELL=$shell" \
+    grep -qx "ConditionEnvironment=ORUC_SHELL=$shell" "$units/$shell.service"
+done
+
+# Last, so the checks above give the idle dGPU time to power off.
+if [[ -n $nvidia_dev ]]; then
+  for _ in {1..30}; do
+    status=$(<"/sys/bus/pci/devices/$nvidia_dev/power/runtime_status")
+    [[ $status == suspended ]] && break
+    sleep 1
+  done
+  check dgpu-runtime-suspended "$status" test "$status" = suspended
+fi
+REMOTE
+}
+
+status=0
+remote_checks >>"$results" || status=$?
+case $status in
+  0) ;;
+  66) record verify-facts fail "/etc/oruc/verify-facts is missing on $host or lacks a fact the checks need; deploy a system that writes it" ;;
+  *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
+esac
+
+if [[ -n $lan_ip ]]; then
+  # Only a refusal or a timeout shows that nothing answers; any other error
+  # says nothing about the port.
+  probe=0
+  # shellcheck disable=SC2016 # the inner shell expands $1
+  probe_error=$(LC_ALL=C timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/22"' _ "$lan_ip" 2>&1) || probe=$?
+  probe_error=${probe_error//$'\n'/ }
+  if ((probe == 0)); then
+    record lan-ssh-port fail "TCP 22 answers on $lan_ip"
+  elif ((probe == 124)); then
+    record lan-ssh-port pass "TCP 22 on $lan_ip times out"
+  elif [[ $probe_error == *'Connection refused'* ]]; then
+    record lan-ssh-port pass "TCP 22 on $lan_ip refuses connections"
+  else
+    record lan-ssh-port fail "probe of $lan_ip:22 failed (exit $probe): $probe_error"
+  fi
+fi
+
+if [[ $suspend == true ]]; then
+  # The kernel counts a suspend as successful only when the system really
+  # slept and woke; the journal's "PM: suspend exit" also appears for a failed
+  # one. The loop stops at the first failed rtcwake.
+  before=$(ssh "${ssh_opts[@]}" "$host" \
+    'cat /sys/power/suspend_stats/success; sudo systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"')
+  after_resume=$(
+    cat <<'REMOTE'
+set -euo pipefail
+test "$(( $(cat /sys/power/suspend_stats/success) - before ))" -ge 3
+test "$(cat "/sys/class/net/$wifi/operstate")" = up
+test -n "$(find_nvidia)"
+REMOTE
+  )
+  # Three cycles take 120 s; poll until the success counter has grown by 3.
+  resumed=false
+  for _ in {1..30}; do
+    sleep 10
+    if printf 'before=%s\n%s\n' "$before" "$after_resume" | remote 2>/dev/null; then
+      resumed=true
+      break
+    fi
+  done
+  if [[ $resumed == true ]]; then
+    record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present"
+  else
+    record suspend-three-cycles fail "fewer than 3 successful suspends, or Wi-Fi or the RTX 4070 missing afterwards"
+  fi
+fi
+
+for manual in \
+  "boot-windows-from-limine:Boot the Limine /Windows entry and reach the Windows login" \
+  "boot-recovery-entry:Boot the recovery entry, reach a console, Wi-Fi and SSH, then boot the default again" \
+  "boot-previous-generation:Boot the previous NixOS generation from Limine, then the newest again" \
+  "hdmi-picture:Plug in an HDMI display and check the picture"; do
+  record "${manual%%:*}" manual "${manual#*:}"
+done
+
+jq -Rn --arg host "$host" --arg time "$stamp" \
+  --arg revision "$(git -C "$repo_dir" rev-parse --short=12 HEAD)" '
+  [inputs | split("\t") | {name: .[0], status: .[1], detail: .[2]}] as $checks
+  | {host: $host, time: $time, revision: $revision, checks: $checks,
+     failed: [$checks[] | select(.status == "fail") | .name]}' <"$results" >"$report"
+
+jq -r '.checks[] | "\(.status)\t\(.name)\t\(.detail)"' "$report"
+printf 'Report: %s\n' "$report"
+if jq -e '.failed | length > 0' "$report" >/dev/null; then
+  exit 1
+fi

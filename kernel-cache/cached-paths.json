@@ -1,0 +1,16 @@
+{
+  "rev": "b1332396df6e880d7e3b6b451c6a74132ce8cf66",
+  "paths": [
+    "/nix/store/kxs8qcaf100xpklda6qwrsv0yvbqsp0g-linux-cachyos-latest-lto-x86_64-v3-7.2.8",
+    "/nix/store/z2wks294x06bmd6lfa69hcsk0qc13x0n-linux-cachyos-latest-lto-x86_64-v3-7.2.8-dev",
+    "/nix/store/vn1lzz4blxwsj26l0byl36cjyw2g4gkw-linux-cachyos-latest-lto-x86_64-v3-7.2.8-modules",
+    "/nix/store/hj7g9kqll85wsrl6x9icl5sbrcc09dac-linux-cachyos-latest-lto-zen4-7.2.8",
+    "/nix/store/k1mrdra5hc6cfm0ll7m2nj883w1s9fx0-linux-cachyos-latest-lto-zen4-7.2.8-dev",
+    "/nix/store/z3433q37sc6sdq54bdk7mfak04c0y25g-linux-cachyos-latest-lto-zen4-7.2.8-modules",
+    "/nix/store/qlal1xs2blj7z2smpwqdmfx61bj4hg6b-nvidia-open-615.78.08-7.2.8",
+    "/nix/store/ykirzrcjbyvdbk993ffa6md333wi6wyv-nvidia-open-615.78.08-7.2.8",
+    "/nix/store/a0xby4l4462xkcvp1mrfxkv5lmmls27n-ryzen-smu-7.2.8-0.1.7-unstable-2026-08-15",
+    "/nix/store/jrslmarlgand7bnxhniamwhi6wkryp18-turbostat-7.2.8"
+  ],
+  "version": "7.2.8"
+}

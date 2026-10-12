@@ -1,0 +1,159 @@
+name: kernel-cache
+
+on:
+  # The hourly host updates merge to main too; only builder changes start a build.
+  push:
+    branches: [main]
+    paths:
+      - kernel-cache/flake.*
+      - kernel-cache/patches/**
+      - .github/workflows/kernel-cache.yml
+  workflow_dispatch:
+    inputs:
+      rev:
+        description: nix-cachyos-kernel revision to build and record (default the locked one)
+        required: false
+        default: ""
+  # Follows the nix-cachyos-kernel release branch once a day.
+  schedule:
+    - cron: "23 3 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kernel-cache
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: kernel-cache
+
+jobs:
+  # The release branch can move while the jobs run, so this job picks the
+  # revision and every later job locks exactly that one.
+  lock:
+    # Repository variable CACHIX_CACHE names the Cachix cache; the
+    # CACHIX_AUTH_TOKEN secret may push to it.
+    if: vars.CACHIX_CACHE != ''
+    runs-on: ubuntu-latest
+    outputs:
+      rev: ${{ steps.rev.outputs.rev }}
+      sha: ${{ steps.rev.outputs.sha }}
+      variants: ${{ steps.rev.outputs.variants }}
+    steps:
+      # The tip of main, not the commit that queued this run. A run that waited
+      # behind another one would otherwise build its older lock and record it
+      # over the newer one.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: Follow the release branch
+        if: github.event_name == 'schedule'
+        run: nix flake update nix-cachyos-kernel
+      - name: Use the requested revision
+        if: inputs.rev != ''
+        env:
+          REV: ${{ inputs.rev }}
+        run: |
+          [[ $REV =~ ^[0-9a-f]{40}$ ]] || { echo "rev must be a full commit SHA" >&2; exit 1; }
+          nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/$REV"
+      - id: rev
+        run: |
+          {
+            echo "rev=$(jq -r '.nodes["nix-cachyos-kernel"].locked.rev' flake.lock)"
+            echo "sha=$(git rev-parse HEAD)"
+            echo "variants=$(nix eval --json .#variants)"
+          } >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: lock
+    runs-on: ubuntu-latest
+    # GitHub's limit for a job on a hosted runner.
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.lock.outputs.variants) }}
+    steps:
+      # The same flake.nix that the lock job read.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.lock.outputs.sha }}
+
+      # An LTO kernel build needs more than the runner's free disk.
+      - uses: wimpysworld/nothing-but-nix@687c797a730352432950c707ab493fcc951818d7 # v10
+
+      # nix-cachyos-kernel's own Hydra cache. A kernel it already built is
+      # downloaded instead of compiled; it keeps outputs for a few days only.
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            extra-substituters = https://attic.xuyh0120.win/lantian
+            extra-trusted-public-keys = lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # Pushed explicitly below, so the push finishes before the record job.
+          skipPush: true
+
+      - name: Lock the chosen revision
+        run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
+
+      # Build times differ by about 2x between runs of the same work, so record
+      # the runner's CPU next to them.
+      - name: Show the runner's CPU
+        run: |
+          echo "$(nproc) CPUs: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)"
+          free -g | head -2
+
+      - name: Build the kernel, its modules and its tools
+        run: |
+          installables=$(nix eval --raw '.#installables.${{ matrix.variant }}')
+          read -ra targets <<<"$installables"
+          nix build --print-build-logs --no-link --print-out-paths "${targets[@]}" >"$RUNNER_TEMP/paths"
+
+      # Pushes each output with its closure; Cachix skips paths that
+      # cache.nixos.org already serves.
+      - name: Push to Cachix
+        run: cachix push "${{ vars.CACHIX_CACHE }}" <"$RUNNER_TEMP/paths"
+
+  record:
+    needs: [lock, build]
+    runs-on: ubuntu-latest
+    steps:
+      # The tip of main, so a record commit from an earlier run does not make
+      # the push below a non-fast-forward.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: Lock the chosen revision
+        run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
+
+      # Hosts read this file to check the cache before they lock this revision.
+      - name: Record the cached paths
+        run: |
+          # shellcheck disable=SC2016 # a Nix expression, not shell
+          nix eval --json .#packages.x86_64-linux --apply \
+            'ps: { inherit (ps."kernel-x86_64-v3") version; paths = builtins.concatMap (p: map (o: p.${o}.outPath) p.outputs) (builtins.attrValues ps); }' \
+            | jq --arg rev "${{ needs.lock.outputs.rev }}" '{ rev: $rev } + .' >cached-paths.json
+
+      # Runs only after every variant was built and pushed, so the lock on main
+      # names a revision whose paths are all in the cache.
+      - name: Commit the lock and the cached paths
+        run: |
+          if git diff --quiet -- flake.lock cached-paths.json && git ls-files --error-unmatch cached-paths.json >/dev/null 2>&1; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flake.lock cached-paths.json
+          git commit -m "chore: record the cached nix-cachyos-kernel build"
+          # Host updates merge to main while the build runs.
+          git pull --rebase origin main
+          git push

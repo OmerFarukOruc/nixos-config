@@ -1,0 +1,129 @@
+<script>
+/* Pandoc Markdown Viewer — runtime enhancements (included via pandoc -A).
+   Progressive: every block degrades gracefully if a feature is unused. */
+(function () {
+  'use strict';
+
+  function schemeNow() {
+    return document.documentElement.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  }
+  function mermaidThemeFor(scheme) { return scheme === 'light' ? 'default' : 'dark'; }
+
+  /* ── 1. Mermaid diagrams: convert ```mermaid fences, lazy-load renderer.
+     Each node keeps its source in data-src so the theme toggle can re-render. ── */
+  var mermaidWraps = [], seen = new Set();
+  document.querySelectorAll('pre.mermaid, code.mermaid, code.language-mermaid').forEach(function (el) {
+    var wrapper = el.closest('div.sourceCode') || (el.tagName === 'PRE' ? el : el.closest('pre'));
+    if (!wrapper || seen.has(wrapper)) return;
+    seen.add(wrapper);
+    var pre = document.createElement('pre');
+    pre.className = 'mermaid';
+    pre.textContent = el.textContent;
+    pre.dataset.src = el.textContent;
+    wrapper.replaceWith(pre);
+    mermaidWraps.push(pre);
+  });
+  if (mermaidWraps.length) {
+    var m = document.createElement('script');
+    m.type = 'module';
+    m.textContent =
+      "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';\n" +
+      "window.__mermaidRender = function (theme) {\n" +
+      "  var nodes = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));\n" +
+      "  nodes.forEach(function (n) { n.removeAttribute('data-processed'); n.textContent = n.dataset.src; });\n" +
+      "  try {\n" +
+      "    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });\n" +
+      "    mermaid.run({ nodes: nodes });\n" +
+      "  } catch (e) {}\n" +
+      "};\n" +
+      "window.__mermaidRender('" + mermaidThemeFor(schemeNow()) + "');";
+    document.body.appendChild(m);
+  }
+
+  /* ── 2. Heading anchor links ── */
+  document.querySelectorAll('h1[id], h2[id], h3[id], h4[id]').forEach(function (h) {
+    var a = document.createElement('a');
+    a.className = 'header-anchor';
+    a.href = '#' + h.id;
+    a.setAttribute('aria-hidden', 'true');
+    a.textContent = '#';
+    h.appendChild(a);
+  });
+
+  /* ── 3. Code blocks: language badge + copy button ── */
+  function copyText(text, btn) {
+    function flash(t, cls) {
+      btn.textContent = t;
+      if (cls) btn.classList.add(cls);
+      setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        flash('Copied', 'copied');
+      } catch (e) { flash('Failed', ''); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flash('Copied', 'copied'); }, fallback);
+    } else { fallback(); }
+  }
+  document.querySelectorAll('div.sourceCode').forEach(function (block) {
+    var pre = block.querySelector('pre'), code = block.querySelector('code');
+    if (!pre || !code) return;
+    var lang = pre.className.split(/\s+/).filter(function (c) { return c && c !== 'sourceCode'; })[0] || '';
+    var wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    block.replaceWith(wrap);
+    wrap.appendChild(block);
+    var meta = document.createElement('div');
+    meta.className = 'code-meta';
+    if (lang) {
+      var badge = document.createElement('span');
+      badge.className = 'code-lang';
+      badge.textContent = lang;
+      meta.appendChild(badge);
+    }
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () { copyText(code.textContent, btn); });
+    meta.appendChild(btn);
+    wrap.appendChild(meta);
+  });
+  /* GitHub-style alerts (> [!NOTE] etc.) are rendered natively by pandoc's
+     gfm reader into div.note/.tip/.important/.warning/.caution and styled in CSS. */
+
+  /* ── 5. Theme toggle: override OS light/dark, remembered per browser ── */
+  (function () {
+    var root = document.documentElement, KEY = 'pandoc-md-theme', saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+    function current() {
+      return root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    }
+    var tbtn = document.createElement('button');
+    tbtn.className = 'theme-toggle';
+    tbtn.type = 'button';
+    function paint() {
+      var c = current();
+      tbtn.textContent = c === 'light' ? '☾' : '☀';
+      tbtn.setAttribute('aria-label', 'Switch to ' + (c === 'light' ? 'dark' : 'light') + ' theme');
+    }
+    paint();
+    tbtn.addEventListener('click', function () {
+      var next = current() === 'light' ? 'dark' : 'light';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+      paint();
+      if (window.__mermaidRender) window.__mermaidRender(mermaidThemeFor(next));
+    });
+    document.body.appendChild(tbtn);
+  })();
+})();
+</script>

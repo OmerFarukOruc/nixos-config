@@ -1,0 +1,41 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            allow-import-from-derivation = false
+      - name: Check formatting
+        run: nix fmt -- --ci
+      - name: Check flake outputs
+        run: nix flake check --no-build --no-write-lock-file
+      - name: Evaluate host systems
+        shell: bash
+        run: |
+          hosts=$(nix eval --json --no-write-lock-file .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]')
+          if [[ -z $hosts ]]; then
+            echo "The flake defines no host." >&2
+            exit 1
+          fi
+          for host in $hosts; do
+            nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath"
+            echo
+          done

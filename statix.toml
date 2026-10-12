@@ -1,0 +1,3 @@
+# Grouping related options under one attribute path in several places reads
+# better in NixOS modules than merging them into one block.
+disabled = ["repeated_keys"]

@@ -1,0 +1,360 @@
+/* ═══════════════════════════════════════════════════════════════
+   Typewriter — Pandoc Markdown Viewer
+   Based on Obsidian Typewriter theme by crashmoney
+   Warm sepia dark palette, clean typographic aesthetic
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Fonts resolved locally (ttf-jetbrains-mono + inter packages) — no network needed. */
+
+@font-face {
+  font-family: "iA Writer Quattro S";
+  src: local("iA Writer Quattro S"),
+       local("iAWriterQuattroS-Regular"),
+       local("Inter");
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: "iA Writer Quattro S";
+  src: local("iA Writer Quattro S Bold"),
+       local("iAWriterQuattroS-Bold"),
+       local("Inter");
+  font-weight: bold;
+}
+
+:root {
+  --bg:           #1e1e1e;
+  --bg-secondary: #171717;
+  --bg-code:      #151515;
+  --border:       #333;
+  --border-hover: #5e5e5e;
+  --fg:           rgb(197, 184, 161);
+  --fg-muted:     #7d7567;
+  --fg-faint:     #5c5549;
+  --yellow:       #e5b567;
+  --green:        #b4d273;
+  --orange:       #e87d3e;
+  --purple:       #9e86c8;
+  --pink:         #b05279;
+  --blue:         #6c99bb;
+  --row-even:     rgba(255, 255, 255, 0.02);
+  --row-hover:    rgba(255, 255, 255, 0.04);
+  --select:       rgba(23, 48, 77, 0.99);
+  --mark-bg:      rgba(229, 181, 103, 0.30);
+  color-scheme:   dark;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+
+body {
+  font-family: 'iA Writer Quattro S', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.65;
+  font-weight: 500;
+  font-feature-settings: "kern" 1, "liga" 1;
+  padding: 3rem 2rem 5rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--fg);
+  line-height: 1.3;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 1.8em; font-weight: 600; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); margin-top: 0; }
+h2 { font-size: 1.55em; font-weight: 600; }
+h3 { font-size: 1.35em; font-weight: 550; }
+h4 { font-size: 1.15em; font-weight: 550; }
+h5 { font-size: 1em; font-weight: 550; }
+h6 { font-size: 0.95em; font-weight: 550; color: var(--fg-muted); }
+
+p { margin-bottom: 1.25rem; }
+strong { font-weight: 620; }
+em { font-style: italic; }
+a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border-hover); }
+a:hover { text-decoration-color: var(--blue); }
+mark { background: var(--mark-bg); color: var(--fg); padding: 0.1em 0.3em; border-radius: 2px; }
+hr { border: none; height: 1px; background: var(--border); margin: 2rem 0; }
+
+ul, ol { padding-left: 1.5rem; margin-bottom: 1.25rem; }
+li { margin-bottom: 0.35rem; }
+li::marker { color: var(--fg-muted); }
+li > ul, li > ol { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+
+ul li input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 1em; height: 1em;
+  border: 1px solid var(--border-hover); border-radius: 2px;
+  background: transparent; vertical-align: middle;
+  margin-right: 0.4em; position: relative; top: -1px;
+}
+ul li input[type="checkbox"]:checked { background: var(--green); border-color: var(--green); }
+ul li input[type="checkbox"]:checked::after {
+  content: "✓"; color: var(--bg); font-size: 0.7em; font-weight: 700;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+}
+
+blockquote {
+  border-left: 3px solid var(--fg-muted);
+  padding: 0.75rem 1.25rem; margin: 1.25rem 0;
+  color: var(--fg); font-style: italic;
+}
+blockquote p:last-child { margin-bottom: 0; }
+blockquote blockquote { margin-top: 0.5rem; }
+
+code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9em; }
+:not(pre) > code { background: var(--bg-secondary); color: var(--blue); padding: 0.15em 0.4em; border-radius: 2px; border: 1px solid var(--border); }
+
+pre {
+  background: var(--bg-code) !important;
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 1rem 1.25rem !important; margin: 1.25rem 0 !important;
+  overflow-x: auto !important; overflow-y: visible; line-height: 1.5;
+}
+pre code { background: none; border: none; padding: 0; color: var(--fg); font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.sourceCode { overflow: auto !important; }
+div.sourceCode { overflow: auto !important; margin: 1.25rem 0 !important; }
+pre.sourceCode { margin: 0 !important; }
+pre > code.sourceCode { white-space: pre-wrap !important; overflow-wrap: anywhere; }
+pre > code.sourceCode > span { text-indent: 0 !important; padding-left: 0 !important; display: inline-block; line-height: 1.5; }
+
+pre::-webkit-scrollbar { height: 4px; }
+pre::-webkit-scrollbar-track { background: transparent; }
+pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.9rem; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+th { color: var(--fg); font-weight: 600; text-align: left; padding: 0.75rem 1rem; border-bottom: 2px solid var(--border-hover); background: var(--bg-secondary); white-space: nowrap; }
+td { padding: 0.65rem 1rem; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.5; }
+td code { font-size: 0.85em; }
+tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--row-even); }
+tbody tr:hover { background: var(--row-hover); }
+
+img { max-width: 100%; height: auto; border-radius: 5px; margin: 1.25rem 0; display: block; }
+figure { margin: 1.25rem 0; text-align: center; }
+figcaption { color: var(--fg-muted); font-size: 0.85rem; margin-top: 0.5rem; font-style: italic; }
+
+dl { margin: 1.25rem 0; }
+dt { font-weight: 600; margin-top: 0.75rem; }
+dd { margin-left: 1.5rem; margin-bottom: 0.5rem; color: var(--fg-muted); }
+
+.footnotes { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--fg-muted); }
+sup a { color: var(--purple); }
+
+nav#TOC { border: 1px solid var(--border); border-radius: 5px; padding: 1rem 1.25rem; margin-bottom: 2rem; }
+nav#TOC > ul { margin-bottom: 0; }
+nav#TOC a { color: var(--fg-muted); text-decoration: none; }
+nav#TOC a:hover { color: var(--fg); }
+
+kbd { background: var(--bg-secondary); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0.1em 0.4em; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
+
+code span.kw { color: var(--purple); }
+code span.bu { color: var(--purple); }
+code span.ex { color: var(--green); }
+code span.fu { color: var(--blue); }
+code span.co { color: var(--fg-muted); font-style: italic; }
+code span.st { color: var(--yellow); }
+code span.dv { color: var(--orange); }
+code span.bn { color: var(--orange); }
+code span.fl { color: var(--orange); }
+code span.ch { color: var(--yellow); }
+code span.sc { color: var(--yellow); }
+code span.vs { color: var(--yellow); }
+code span.ss { color: var(--yellow); }
+code span.va { color: var(--fg); }
+code span.cf { color: var(--purple); }
+code span.op { color: var(--fg); }
+code span.dt { color: var(--blue); }
+code span.at { color: var(--green); }
+code span.pp { color: var(--orange); }
+code span.do { color: var(--fg-muted); font-style: italic; }
+code span.an { color: var(--fg-muted); font-style: italic; }
+code span.in { color: var(--fg-muted); font-style: italic; }
+code span.wa { color: var(--orange); }
+code span.er { color: #e06c75; }
+code span.al { color: #e06c75; }
+
+::selection { background: var(--select); }
+
+@media print {
+  body { background: white; color: #222; max-width: none; padding: 1cm; }
+  h1, h2, h3 { color: #222; }
+  pre, blockquote { background: #f5f5f5; border-color: #ddd; }
+  a { color: #0066cc; }
+  .copy-btn, .header-anchor { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Enhancements
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Smooth scroll & anchor landing flash ─────────────────────── */
+html { scroll-behavior: smooth; }
+:target { scroll-margin-top: 2rem; animation: target-flash 1.3s ease-out; }
+@keyframes target-flash {
+  0%   { background: rgba(229, 181, 103, 0.22); }
+  100% { background: transparent; }
+}
+
+/* ─── Heading anchor links (revealed on hover) ─────────────────── */
+h1, h2, h3, h4 { position: relative; }
+.header-anchor {
+  position: absolute; left: -1.1em; top: 0;
+  color: var(--fg-muted); text-decoration: none; font-weight: 400;
+  opacity: 0; transition: opacity 0.12s;
+}
+h1:hover .header-anchor, h2:hover .header-anchor,
+h3:hover .header-anchor, h4:hover .header-anchor { opacity: 1; }
+.header-anchor:hover { color: var(--blue); }
+
+/* ─── External-link affordance ─────────────────────────────────── */
+a[href^="http"]::after {
+  content: "↗"; font-size: 0.7em; margin-left: 0.12em;
+  vertical-align: super; color: var(--fg-faint);
+}
+a[href^="http"]:hover::after { color: var(--blue); }
+
+/* ─── Code block: language badge + copy button ─────────────────── */
+.code-wrap { position: relative; }
+.code-meta {
+  position: absolute; top: 0.5rem; right: 0.6rem;
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.code-lang {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  text-transform: lowercase; letter-spacing: 0.03em;
+  color: var(--fg-muted); pointer-events: none; user-select: none;
+}
+.copy-btn {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  min-width: 4.4em; text-align: center;
+  color: var(--fg-muted); background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 0.18em 0.55em; cursor: pointer;
+  opacity: 0; transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.code-wrap:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
+.copy-btn:hover { color: var(--fg); border-color: var(--border-hover); }
+.copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+/* ─── GitHub-style alerts ──────────────────────────────────────────
+   pandoc's gfm reader renders `> [!NOTE]` etc. natively as
+   div.note / div.tip / div.important / div.warning / div.caution,
+   each with a child div.title. Selectors are scoped so the generic
+   `.title` class never touches the document's own title block. */
+:is(div.note, div.tip, div.important, div.warning, div.caution) {
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.8rem 1.1rem; margin: 1.25rem 0;
+}
+:is(.note, .tip, .important, .warning, .caution) > p:last-child { margin-bottom: 0; }
+:is(.note, .tip, .important, .warning, .caution) .title {
+  display: flex; align-items: center; gap: 0.45em;
+  font-weight: 650; letter-spacing: 0.01em; margin-bottom: 0.3rem;
+}
+:is(.note, .tip, .important, .warning, .caution) .title p { margin: 0; }
+:is(.note, .tip, .important, .warning, .caution) .title::before { font-size: 1.05em; }
+div.note      { border-color: color-mix(in oklab, var(--blue) 32%, transparent);
+                background: color-mix(in oklab, var(--blue) 8%, var(--bg)); }
+.note      .title { color: var(--blue); }
+.note      .title::before { content: "ℹ"; }
+div.tip       { border-color: color-mix(in oklab, var(--green) 32%, transparent);
+                background: color-mix(in oklab, var(--green) 8%, var(--bg)); }
+.tip       .title { color: var(--green); }
+.tip       .title::before { content: "✦"; }
+div.important { border-color: color-mix(in oklab, var(--purple) 32%, transparent);
+                background: color-mix(in oklab, var(--purple) 8%, var(--bg)); }
+.important .title { color: var(--purple); }
+.important .title::before { content: "❖"; }
+div.warning   { border-color: color-mix(in oklab, var(--yellow) 32%, transparent);
+                background: color-mix(in oklab, var(--yellow) 8%, var(--bg)); }
+.warning   .title { color: var(--yellow); }
+.warning   .title::before { content: "⚠"; }
+div.caution   { border-color: color-mix(in oklab, var(--orange) 32%, transparent);
+                background: color-mix(in oklab, var(--orange) 8%, var(--bg)); }
+.caution   .title { color: var(--orange); }
+.caution   .title::before { content: "⛔"; }
+
+/* ─── Mermaid diagrams ─────────────────────────────────────────── */
+pre.mermaid {
+  background: transparent !important; border: none !important;
+  text-align: center; padding: 0.5rem 0 !important; overflow-x: auto;
+}
+
+/* ─── TOC as a sticky sidebar on wide screens ──────────────────── */
+@media (min-width: 1800px) {
+  nav#TOC {
+    position: fixed; top: 3rem; left: 2.5rem;
+    width: 14rem; max-height: calc(100vh - 6rem);
+    overflow-y: auto; margin: 0; font-size: 0.85rem;
+  }
+  nav#TOC ul { list-style: none; }
+  nav#TOC > ul { padding-left: 0; }
+  nav#TOC ul ul { padding-left: 0.85rem; }
+}
+
+/* ─── Theme toggle (manual override of OS preference) ──────────── */
+.theme-toggle {
+  position: fixed; top: 1rem; right: 1rem; z-index: 50;
+  width: 2.3rem; height: 2.3rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  color: var(--fg-muted); font-size: 1rem; line-height: 1; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.theme-toggle:hover { color: var(--fg); border-color: var(--border-hover); }
+@media print { .theme-toggle { display: none; } }
+
+/* ─── Light theme — auto via OS preference, or forced by the toggle.
+   Dark stays the default in :root; both light selectors carry the same
+   tokens (incl. row/select/mark, so no per-property theme overrides). */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:           #faf8f3;
+    --bg-secondary: #f1ece1;
+    --bg-code:      #f3eee3;
+    --border:       #e3dccc;
+    --border-hover: #c0b49c;
+    --fg:           #403a2e;
+    --fg-muted:     #8a8170;
+    --fg-faint:     #b0a690;
+    --yellow:       #b07d1a;
+    --green:        #6f8c2a;
+    --orange:       #c0561f;
+    --purple:       #6b4ea0;
+    --pink:         #a83563;
+    --blue:         #356b9c;
+    --row-even:     rgba(0, 0, 0, 0.025);
+    --row-hover:    rgba(0, 0, 0, 0.05);
+    --select:       rgba(53, 107, 156, 0.25);
+    --mark-bg:      rgba(176, 125, 26, 0.25);
+    color-scheme:   light;
+  }
+}
+:root[data-theme="light"] {
+  --bg:           #faf8f3;
+  --bg-secondary: #f1ece1;
+  --bg-code:      #f3eee3;
+  --border:       #e3dccc;
+  --border-hover: #c0b49c;
+  --fg:           #403a2e;
+  --fg-muted:     #8a8170;
+  --fg-faint:     #b0a690;
+  --yellow:       #b07d1a;
+  --green:        #6f8c2a;
+  --orange:       #c0561f;
+  --purple:       #6b4ea0;
+  --pink:         #a83563;
+  --blue:         #356b9c;
+  --row-even:     rgba(0, 0, 0, 0.025);
+  --row-hover:    rgba(0, 0, 0, 0.05);
+  --select:       rgba(53, 107, 156, 0.25);
+  --mark-bg:      rgba(176, 125, 26, 0.25);
+  color-scheme:   light;
+}

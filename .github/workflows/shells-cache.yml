@@ -1,0 +1,68 @@
+name: shells-cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - kernel-cache/shells/**
+      - kernel-cache/scripts/pin-release.sh
+      - .github/workflows/shells-cache.yml
+  workflow_dispatch:
+  # nixos-unstable and DMS releases move at any hour, and the hosts move
+  # nixpkgs only once this build is in the cache.
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shells-cache
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: kernel-cache
+
+jobs:
+  build:
+    # Repository variable CACHIX_CACHE names the Cachix cache; the
+    # CACHIX_AUTH_TOKEN secret may push to it.
+    if: vars.CACHIX_CACHE != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      # The same heads a host's hourly update moves to. Nothing is committed;
+      # each run starts again from the lock on main.
+      - name: Follow nixos-unstable and the newest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          nix flake update nixpkgs --flake ./shells
+          for input in dms; do
+            repo=$(jq -r --arg i "$input" '.nodes[$i].original | "\(.owner)/\(.repo)"' shells/flake.lock)
+            tag=$(gh api "repos/$repo/releases/latest" --jq .tag_name)
+            scripts/pin-release.sh "$input" "$tag"
+          done
+
+      - name: Build and push what the cache lacks
+        env:
+          CACHE: ${{ vars.CACHIX_CACHE }}
+        run: |
+          for package in dms; do
+            path=$(nix eval --raw "./shells#$package.outPath")
+            hash=${path#/nix/store/}
+            if curl -fsS --max-time 20 -o /dev/null "https://$CACHE.cachix.org/${hash%%-*}.narinfo"; then
+              echo "Already in the cache: $path"
+              continue
+            fi
+            nix build --print-build-logs --no-link "./shells#$package"
+            echo "$path" | cachix push "$CACHE"
+          done

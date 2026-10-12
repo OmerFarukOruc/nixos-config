@@ -1,0 +1,12 @@
+# Recipients of the encrypted files under secrets/. fedora-desktop edits them
+# with its ~/.ssh/id_ed25519; each host decrypts its own file with the age key
+# derived from its SSH host key (ssh-to-age on /etc/ssh/ssh_host_ed25519_key.pub).
+keys:
+  - &fedora-desktop ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJHssXWObnlGCbmBHiZKivhCt97YQWzBuK8WXwSa5VEn
+  - &nixos-rog age1dv44zphjr702d598p7p4p35vk7834ttr8escl6geg0cuxx3mcukq6gm6gl
+creation_rules:
+  - path_regex: secrets/nixos-rog\.yaml$
+    key_groups:
+      - age:
+          - *fedora-desktop
+          - *nixos-rog

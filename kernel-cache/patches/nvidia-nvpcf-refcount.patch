@@ -1,0 +1,24 @@
+From c70c6612bd17d4c68122eb0858fcac0b2ac58e79 Mon Sep 17 00:00:00 2001
+From: Lars Nieradzik <l.nieradzik@gmail.com>
+Date: Sun, 16 Aug 2026 15:41:50 +0200
+Subject: [PATCH] nvidia: fix dynamic power refcount underflow in
+ rm_acpi_nvpcf_notify
+
+---
+ src/nvidia/arch/nvalloc/unix/src/osapi.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/nvidia/arch/nvalloc/unix/src/osapi.c b/src/nvidia/arch/nvalloc/unix/src/osapi.c
+index a3d614d45e..ae708ddedd 100644
+--- a/src/nvidia/arch/nvalloc/unix/src/osapi.c
++++ b/src/nvidia/arch/nvalloc/unix/src/osapi.c
+@@ -6123,8 +6123,8 @@ void NV_API_CALL rm_acpi_nvpcf_notify(
+             {
+                gpuNotifySubDeviceEvent(pGpu, NV2080_NOTIFIERS_NVPCF_EVENTS,
+                                        NULL, 0, 0, 0);
++               os_unref_dynamic_power(nv, NV_DYNAMIC_PM_FINE);
+             }
+-            os_unref_dynamic_power(nv, NV_DYNAMIC_PM_FINE);
+         }
+         rmapiLockRelease();
+     }

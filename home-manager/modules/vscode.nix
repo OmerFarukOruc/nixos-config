@@ -1,0 +1,181 @@
+# VS Code with a transparent, frameless window, which the compositor blurs.
+# The steps mirror what the vscode-vibrancy-continued extension does to an
+# installed VS Code, done at build time because the store is read-only. Each
+# edit fails the build when VS Code no longer has the text it changes.
+{
+  inputs,
+  lib,
+  osConfig,
+  pkgs,
+  ...
+}:
+let
+  vibrancy = inputs.vscode-vibrancy;
+  appOut = "resources/app/out";
+  runtimeDir = "vscode-vibrancy-runtime-v6";
+  workbench = "vs/code/electron-browser/workbench/workbench.html";
+
+  inherit (osConfig) scheme;
+  themeName = if osConfig.oruc.theme.isLight then "Default Light" else "Default Dark";
+  theme = builtins.fromJSON (builtins.readFile (vibrancy + "/themes/${themeName}.json"));
+
+  # The extension's global.vscode_vibrancy_plugin on Linux, in the shape that
+  # buildMainJS in v1.4.0's extension/index.js builds; a new release can
+  # change that shape. The settings are the defaults, except that the
+  # theme follows the scheme's variant and the background is the scheme's
+  # base00.
+  injectData = {
+    vibrancyVersion = (lib.importJSON "${vibrancy}/package.json").version;
+    os = "linux";
+    win11 = false;
+    macWindowButtons = false;
+    diagnosticsPath = null;
+    config = {
+      type = "auto";
+      opacity = -1;
+      backgroundOverride = "#${scheme.base00}";
+      theme = themeName;
+      enableAutoTheme = false;
+      preferredDarkTheme = "Default Dark";
+      preferredLightTheme = "Default Light";
+      preferedDarkTheme = "Default Dark";
+      preferedLightTheme = "Default Light";
+      imports = [ "/path/to/file" ];
+      refreshInterval = 10;
+      preventFlash = true;
+      windowMode = "auto";
+      windowControlsStyle = "auto";
+      forceFramelessWindow = false;
+      disableFramelessWindow = false;
+      disableThemeFixes = false;
+      disableColorCustomizations = false;
+    };
+    inherit theme;
+    themeCSS = builtins.readFile (vibrancy + "/themes/${themeName}.css");
+    imports = {
+      css = "";
+      js = "";
+    };
+  };
+
+  bootstrapJs = pkgs.writeText "vscode-vibrancy-bootstrap.js" ''
+
+    /* !! VSCODE-VIBRANCY-START !! */
+    ;(function(){
+    global.vscode_vibrancy_plugin = ${builtins.toJSON injectData}; try{ import("@vibrancyRuntimeUrl@"); } catch (err) {console.error(err)}
+    })()
+    /* !! VSCODE-VIBRANCY-END !! */
+  '';
+
+  vscode = pkgs.vscode.overrideAttrs (old: {
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.jq ];
+    postPatch = (old.postPatch or "") + ''
+      runtimeEntry="$out/lib/vscode/${appOut}/${runtimeDir}/index.cjs"
+      # VS Code 1.140 and newer create the window in mainImpl.js.
+      windowFile="${appOut}/mainImpl.js"
+      [[ -f $windowFile ]] || windowFile="${appOut}/main.js"
+      chmod u+w resources/app "${appOut}" "${appOut}/main.js" "$windowFile" \
+        "${appOut}/vs/code/electron-browser/workbench" "${appOut}/${workbench}"
+
+      cp -r "${vibrancy}/runtime-pre-esm" "${appOut}/${runtimeDir}"
+
+      # A frameless, transparent window.
+      sed -i 's/experimentalDarkMode/frame:false,transparent:true,experimentalDarkMode/g' "$windowFile"
+      grep -q 'frame:false,transparent:true,experimentalDarkMode' "$windowFile" ||
+        { echo "vibrancy: no window options to patch in $windowFile" >&2; exit 1; }
+
+      substitute ${bootstrapJs} vscode-vibrancy-bootstrap.js \
+        --replace-fail "@vibrancyRuntimeUrl@" "file://$runtimeEntry"
+      cat vscode-vibrancy-bootstrap.js >>"${appOut}/main.js"
+      rm vscode-vibrancy-bootstrap.js
+
+      # Allow the runtime's Trusted Types policy.
+      sed -i 's/^[[:space:]]*trusted-types$/& VscodeVibrancyContinued/' "${appOut}/${workbench}"
+      grep -q 'trusted-types VscodeVibrancyContinued' "${appOut}/${workbench}" ||
+        { echo "vibrancy: no trusted-types line in ${workbench}" >&2; exit 1; }
+
+      # VS Code checks workbench.html against product.json and reports a
+      # corrupt installation when they differ.
+      checksum=$(sha256sum "${appOut}/${workbench}" | cut -d' ' -f1)
+      checksum=$(printf "$(sed 's/../\\x&/g' <<<"$checksum")" | base64 | tr -d '=')
+      jq --arg key "${workbench}" --arg value "$checksum" '.checksums[$key] = $value' \
+        resources/app/product.json >product.json.new
+      grep -q "$checksum" product.json.new ||
+        { echo "vibrancy: product.json has no workbench.html checksum" >&2; exit 1; }
+      mv product.json.new resources/app/product.json
+    '';
+  });
+  # The settings the extension's applySettings writes: see-through
+  # backgrounds from its key lists in extension/file-transforms.js, with an
+  # opacity of -1 meaning the theme's Linux opacity. A key keeps the colour
+  # it would have without vibrancy and gets only a new alpha.
+  alpha =
+    opacity:
+    lib.toLower (lib.fixedWidthString 2 "0" (lib.toHexString (builtins.floor (opacity * 255 + 0.5))));
+  baseColors = {
+    "sideBar.background" = scheme.base01;
+  };
+  colorsWith =
+    suffix: keys: lib.genAttrs keys (key: "#${baseColors.${key} or scheme.base00}${suffix}");
+  colorCustomizations =
+    colorsWith "00" [
+      "editorPane.background"
+      "editorGroupHeader.tabsBackground"
+      "editorGroupHeader.noTabsBackground"
+      "breadcrumb.background"
+      "editorGutter.background"
+      "panel.background"
+      "tab.activeBackground"
+      "tab.unfocusedActiveBackground"
+    ]
+    // colorsWith (alpha theme.opacity.linux) [
+      "sideBar.background"
+      "sideBarTitle.background"
+      "activityBar.background"
+      "editor.background"
+      "tab.inactiveBackground"
+      "tab.unfocusedInactiveBackground"
+    ]
+    // colorsWith (alpha (lib.max theme.opacity.linux 0.75)) [
+      "editorStickyScroll.background"
+      "editorStickyScrollGutter.background"
+      "sideBarStickyScroll.background"
+      "panelStickyScroll.background"
+      "terminalStickyScroll.background"
+      "minimap.background"
+    ]
+    // colorsWith (alpha 0.9) [
+      "inlineChat.background"
+      "editorWidget.background"
+      "editorHoverWidget.background"
+      "editorSuggestWidget.background"
+      "notifications.background"
+      "notificationCenterHeader.background"
+      "menu.background"
+      "quickInput.background"
+    ]
+    // theme.colorCustomizations
+    // {
+      "terminal.background" = "#00000000";
+    };
+in
+{
+  programs.vscode = {
+    enable = true;
+    package = vscode;
+    mutableExtensionsDir = true;
+    profiles.default = {
+      enableUpdateCheck = false;
+      enableExtensionUpdateCheck = false;
+      userSettings = {
+        "extensions.autoUpdate" = false;
+        "telemetry.telemetryLevel" = "off";
+        "terminal.integrated.gpuAcceleration" = "off";
+        "window.autoDetectColorScheme" = false;
+        "window.controlsStyle" = "custom";
+        "window.systemColorTheme" = theme.systemColorTheme;
+        "workbench.colorCustomizations" = colorCustomizations;
+      };
+    };
+  };
+}
