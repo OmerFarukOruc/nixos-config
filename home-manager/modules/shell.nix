@@ -155,6 +155,9 @@ in
         "session"
         "global"
       ];
+      # At the default of 0 the search fills the screen and pins a short
+      # result list to the bottom, far below the prompt.
+      inline_height = 20;
       tmux = {
         enabled = true;
         width = "80%";
