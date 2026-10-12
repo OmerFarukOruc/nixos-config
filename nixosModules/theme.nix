@@ -51,14 +51,24 @@ in
         mono = "JetBrainsMono Nerd Font";
       };
       gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
-      wallpaper = lib.findFirst builtins.pathExists null (
-        map (extension: ../assets/wallpapers + "/${schemeName}.${extension}") [
-          "png"
-          "jpg"
-          "jpeg"
-          "webp"
-        ]
-      );
+      wallpaper =
+        let
+          file = lib.findFirst builtins.pathExists null (
+            map (extension: ../assets/wallpapers + "/${schemeName}.${extension}") [
+              "png"
+              "jpg"
+              "jpeg"
+              "webp"
+            ]
+          );
+          # A copy of the one file, because a path inside the flake makes every
+          # change to this repository a new wallpaper store path.
+          copy = lib.fileset.toSource {
+            root = dirOf file;
+            fileset = file;
+          };
+        in
+        if file == null then null else "${copy}/${baseNameOf file}";
       ansiNames = [
         "Black"
         "Red"

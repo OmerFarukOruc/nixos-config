@@ -218,7 +218,9 @@ in
   # there is none.
   xdg.dataFile =
     lib.optionalAttrs (theme.wallpaper != null) {
-      "backgrounds/oruc/${builtins.baseNameOf theme.wallpaper}".source = theme.wallpaper;
+      # An attribute name cannot carry the store path's context.
+      "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}".source =
+        theme.wallpaper;
     }
     // {
       "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
