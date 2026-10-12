@@ -19,7 +19,7 @@ on:
     - cron: "23 3 * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: kernel-cache
@@ -124,6 +124,10 @@ jobs:
   record:
     needs: [lock, build]
     runs-on: ubuntu-latest
+    # Only this job pushes to main. The build job runs upstream code and keeps
+    # a read-only token.
+    permissions:
+      contents: write
     steps:
       # The tip of main, so a record commit from an earlier run does not make
       # the push below a non-fast-forward.
