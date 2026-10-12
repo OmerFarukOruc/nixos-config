@@ -79,6 +79,9 @@ system:
 ```
 
 A successful deploy ends with the line `Deployment completed from release <release>.`
+When the new system no longer holds some packages, the line before it names
+them, as `dix` lists them under REMOVED. The full `dix` comparison comes
+earlier, before the activation.
 
 ## What the deploy does
 
