@@ -155,15 +155,19 @@ stays installed.
 
 ## Exit codes
 
-The table lists the deploy's own codes that this guide and the updater name.
-A failed activation returns the exit status of `switch-to-configuration`, such
-as 4. Other failures exit with other codes, such as 1.
+The table lists every code from 64 up that `deploy.sh` and the updater set.
+`nix fmt` runs `scripts/check-exit-codes.sh`, which fails when the table and the
+scripts differ. A failed activation returns the exit status of
+`switch-to-configuration`, such as 4. Other failures exit with other codes,
+such as 1.
 
 | Code | Cause | State of the target |
 | --- | --- | --- |
+| 64 | The command line is wrong: an unknown option, a wrong number of arguments, an invalid host name or an invalid action. | Unchanged. |
 | 65 | The Git tree is dirty, and the command has no `--allow-dirty`. | Unchanged. |
 | 70 | A rollback timer from an earlier deploy is still pending. | Unchanged. |
 | 71 | The deploy could not arm the rollback timer. | Nothing activated. |
+| 72 | The rollback ran before the deploy stopped the rollback timer, so the target is not on the candidate. | Previous system restored by the rollback timer. |
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
