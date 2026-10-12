@@ -411,11 +411,14 @@ REMOTE
 
 new_system=
 previous_system=
+# The packages the new system no longer holds, as dix lists them.
+removed_packages=
 
 # Build first. Nothing changes on the target until this succeeds.
 build_candidate() {
   previous_system=$(target_system) || return $?
-  new_system=$(
+  local output
+  output=$(
     on_target "$host" "$release_relative" "$action" <<'REMOTE'
 set -euo pipefail
 
@@ -429,8 +432,15 @@ new=$(nix build --no-link --print-out-paths \
 # What the new system changes, for the deployer to read before it activates.
 # The first deploy that adds dix runs on a system without it.
 if command -v dix >/dev/null; then
-  dix "$(readlink -f /run/current-system)" "$new" >&2 ||
-    printf '%s\n' 'dix could not compare the running and the new system.' >&2
+  if diff=$(dix --color never "$(readlink -f /run/current-system)" "$new" 2>&1); then
+    printf '%s\n' "$diff" >&2
+    # The deploy names these again when it ends, where the deployer reads them.
+    removed=$(awk '/^REMOVED$/ { r = 1; next } r && /^\[R/ { print $2; next } { r = 0 }' <<<"$diff" |
+      paste -sd ' ') || removed=
+    [[ -z $removed ]] || printf 'removed=%s\n' "$removed"
+  else
+    printf '%s\n' "$diff" 'dix could not compare the running and the new system.' >&2
+  fi
 fi
 
 # When the ESP did not mount, the boot entries would land in the root
@@ -473,6 +483,8 @@ fi
 printf '%s\n' "$new"
 REMOTE
   ) || return $?
+  new_system=${output##*$'\n'}
+  removed_packages=$(sed -n 's/^removed=//p' <<<"$output")
 }
 
 # The timer stops only after the rollback succeeded. When it failed, the timer
@@ -688,6 +700,9 @@ deploy() {
 
 if deploy; then
   cp -- "$deploy_state_dir/flake.lock" "$repo_dir/flake.lock"
+  if [[ -n $removed_packages ]]; then
+    printf 'This deploy removed: %s.\n' "${removed_packages// /, }"
+  fi
   printf 'Deployment completed from release %s.\n' "$release_id"
 else
   status=$?
