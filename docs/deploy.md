@@ -50,10 +50,14 @@ activation.
 CI runs the formatter check, `nix flake check --no-build` and the evaluation of
 every host on every pull request and on every push to `main`.
 
-To format locally, use nixos-rog, because fedora-desktop has no Nix:
+fedora-desktop has no Nix, so `scripts/check-on-rog.sh` runs the formatter
+check and `nix flake check --no-build` on a copy of this checkout on nixos-rog.
+With `--fix` it formats instead of checking and copies the changed files back:
 
-1. Run `ssh nixos-rog 'cd <copy of the repo> && nix fmt'`.
-2. Copy the changed files back to fedora-desktop.
+```sh
+scripts/check-on-rog.sh
+scripts/check-on-rog.sh --fix
+```
 
 ## Deploy
 

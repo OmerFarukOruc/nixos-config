@@ -24,5 +24,8 @@ jobs:
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      # The log gets the report too, because gh cannot read a job summary. The
+      # default shell lacks pipefail, so a failing script would pass.
       - name: Report what each host builds
-        run: ci/build-report.sh >>"$GITHUB_STEP_SUMMARY"
+        shell: bash
+        run: ci/build-report.sh | tee -a "$GITHUB_STEP_SUMMARY"

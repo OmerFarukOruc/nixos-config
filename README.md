@@ -91,6 +91,7 @@ target.
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
+| `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog; `--fix` formats |
 | `scripts/move-inputs.sh` | move inputs to their newest release or branch head, except the kernel and llm-agents |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
