@@ -21,6 +21,11 @@ esac
 
 # Each run gets its own copy, so two runs cannot remove each other's.
 copy=$(ssh -o BatchMode=yes "$host" mktemp -d /tmp/check-nixos-config.XXXXXXXX)
+# The trap below removes $copy, so it must be exactly the new directory.
+if [[ ! $copy =~ ^/tmp/check-nixos-config\.[A-Za-z0-9]{8}$ ]]; then
+  echo "mktemp on $host printed an unexpected path: $copy" >&2
+  exit 1
+fi
 # remote < SCRIPT: runs SCRIPT on the host with the copy's path as $1. The
 # host's login shell is zsh, so the script runs in bash.
 remote() { ssh -o BatchMode=yes "$host" bash -s -- "$copy"; }
