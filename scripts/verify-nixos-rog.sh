@@ -21,8 +21,10 @@ entry and an older generation from the Limine menu, the HDMI picture) are
 listed in the report as manual.
 
 The facts the checks expect (the NVIDIA driver version, the Wi-Fi interface,
-the low-battery threshold) come from /etc/oruc/verify-facts, which the
-deployed system writes.
+the low-battery threshold, the Plasma panel widgets and KWin effects) come
+from /etc/oruc/verify-facts, which the deployed system writes. The KWin
+effects are checked only in a Plasma session that started after the current
+system; an older session is listed as manual.
 
 Exit status: 0 when no check fails (the manual checks are for a person to
 do), 1 when one fails, 64 for a usage error.
@@ -115,12 +117,13 @@ remote() {
 remote_checks() {
   remote <<'REMOTE'
 set -uo pipefail
+report() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; } # report NAME STATUS DETAIL
 check() { # check NAME DETAIL CONDITION...
   local name=$1 detail=$2; shift 2
   if "$@" >/dev/null 2>&1; then
-    printf '%s\tpass\t%s\n' "$name" "$detail"
+    report "$name" pass "$detail"
   else
-    printf '%s\tfail\t%s\n' "$name" "$detail"
+    report "$name" fail "$detail"
   fi
 }
 armoury=/sys/class/firmware-attributes/asus-armoury/attributes
@@ -234,6 +237,46 @@ for shell in noctalia dms; do
   check "shell-scope-$shell" "ConditionEnvironment=ORUC_SHELL=$shell" \
     grep -qx "ConditionEnvironment=ORUC_SHELL=$shell" "$units/$shell.service"
 done
+
+# The panel widgets and KWin effects that the deployed config turns on. A
+# widget is QML under share/plasma/plasmoids or a compiled applet plugin.
+if [[ -n ${plasma_widgets:-} ]]; then
+  missing=()
+  IFS=, read -ra widgets <<<"$plasma_widgets"
+  for widget in "${widgets[@]}"; do
+    found=false
+    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
+      if [[ -e $root/share/plasma/plasmoids/$widget || -e $root/lib/qt-6/plugins/plasma/applets/$widget.so ]]; then
+        found=true
+        break
+      fi
+    done
+    $found || missing+=("$widget")
+  done
+  check plasma-widgets-installed "missing: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
+fi
+# A running session keeps the plugins it loaded at login, so a deploy that
+# drops or adds one shows only after the next login.
+if [[ -n ${plasma_widgets:-}${kwin_effects:-} ]]; then
+  plasma_pid=$(systemctl --user show -p MainPID --value plasma-plasmashell 2>/dev/null)
+  if [[ ${plasma_pid:-0} == 0 ]]; then
+    report plasma-session manual "No Plasma session runs; log in to Plasma and rerun"
+  elif (($(date +%s) - $(ps -o etimes= -p "$plasma_pid") < $(stat -c %Y /run/current-system))); then
+    report plasma-session manual \
+      "plasmashell started before the current system; log out and in to load it, then rerun"
+  else
+    report plasma-session pass "plasmashell started after the current system"
+    if [[ -n ${kwin_effects:-} ]]; then
+      loaded=$(busctl --user get-property org.kde.KWin /Effects org.kde.kwin.Effects loadedEffects 2>/dev/null)
+      missing=()
+      IFS=, read -ra effects <<<"$kwin_effects"
+      for effect in "${effects[@]}"; do
+        [[ $loaded == *\"$effect\"* ]] || missing+=("$effect")
+      done
+      check kwin-effects-loaded "not loaded: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
+    fi
+  fi
+fi
 
 # Last, so the checks above give the idle dGPU time to power off.
 if [[ -n $nvidia_dev ]]; then
