@@ -27,6 +27,10 @@ in
         shellcheck
         shfmt
       ];
+      # Without a tree root, treefmt outside a Git checkout falls back to the
+      # directory of its config file, /nix/store, and formats the whole store.
+      # This makes it fail at once instead.
+      settings.tree-root-cmd = "git rev-parse --show-toplevel";
       settings.formatter = {
         deadnix = {
           command = "deadnix";
