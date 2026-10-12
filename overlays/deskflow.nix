@@ -51,7 +51,10 @@ in
         checkPhase = ''
           runHook preCheck
           export QT_QPA_PLATFORM=offscreen
-          ctest --test-dir "src/unittests" --output-on-failure \
+          # One test at a time: SettingsTests and I18NTests read and write the
+          # same tmp/test/Deskflow.conf, so in parallel SettingsTests can read
+          # the language I18NTests just wrote and fail.
+          ctest --test-dir "src/unittests" --output-on-failure --parallel 1 \
             --exclude-regex "OSX(KeyState|Clipboard)Tests"
           runHook postCheck
         '';
