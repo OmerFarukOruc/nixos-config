@@ -104,10 +104,12 @@ in
                 NvDynamicBoost = 5;
                 NvTempTarget = 75;
               };
+              # Balanced keeps a 4-minute all-thread stress-ng run at 80 °C
+              # with an 86 °C peak. 50/70/70 W held it at the 95 °C limit.
               Balanced = {
-                PptPl1Spl = 50;
-                PptPl2Sppt = 70;
-                PptPl3Fppt = 70;
+                PptPl1Spl = 40;
+                PptPl2Sppt = 50;
+                PptPl3Fppt = 65;
                 DgpuTgp = 70;
                 NvDynamicBoost = 10;
                 NvTempTarget = 83;
