@@ -39,6 +39,7 @@ in
       google-chrome
       infisical
       jq
+      nerd-fonts.caskaydia-cove
       nixfmt
       pipx
       ripgrep
@@ -103,7 +104,8 @@ in
     enable = true;
     enableZshIntegration = true;
     settings = {
-      font-family = "${osConfig.oruc.theme.fonts.mono} Mono";
+      # Matches fedora-desktop. The bars use oruc.theme.fonts.mono instead.
+      font-family = "CaskaydiaCove Nerd Font Mono";
       font-size = 11;
       font-feature = [
         "-calt"
@@ -146,6 +148,9 @@ in
       window-vsync = true;
       confirm-close-surface = true;
       resize-overlay = "always";
+      # io_uring rings count against the per-user memlock limit. When it is
+      # full, new tabs stay blank (error.SystemResources); epoll uses no rings.
+      async-backend = "epoll";
       # Relative paths resolve against the directory of the Ghostty config file.
       # Ghostty runs the shaders in this order.
       custom-shader = [

@@ -28,7 +28,7 @@ in
     icons = readOnly types.str "Icon theme that follows the scheme variant.";
     fonts = {
       ui = readOnly types.str "Font family of interface text.";
-      mono = readOnly types.str "Nerd Font family of the shell bars and, in its Mono variant, the terminal.";
+      mono = readOnly types.str "Nerd Font family of the shell bars.";
     };
     gtk = readOnly types.str "GTK theme that follows the scheme variant.";
     wallpaper = readOnly (types.nullOr types.path) "Wallpaper named after the selected scheme in assets/wallpapers, or null when none exists.";
