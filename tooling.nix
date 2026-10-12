@@ -23,6 +23,7 @@ in
       runtimeInputs = with pkgs; [
         deadnix
         keep-sorted
+        lychee
         shellcheck
         shfmt
       ];
@@ -60,6 +61,25 @@ in
           includes = [ "*.sh" ];
           priority = 2;
         };
+        # Relative links and their heading anchors. --offline skips web links.
+        lychee = {
+          command = "lychee";
+          options = [
+            "--offline"
+            "--include-fragments"
+            "--no-progress"
+          ];
+          includes = [ "*.md" ];
+        };
+        exit-codes = {
+          command = lib.getExe pkgs.bash;
+          options = [ "scripts/check-exit-codes.sh" ];
+          includes = [
+            "deploy.sh"
+            "docs/deploy.md"
+            "scripts/auto-update.sh"
+          ];
+        };
       };
     };
 
@@ -69,6 +89,7 @@ in
       deadnix
       jq
       keep-sorted
+      lychee
       nixfmt
       shellcheck
       shfmt
