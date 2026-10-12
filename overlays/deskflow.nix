@@ -1,13 +1,38 @@
 # Deskflow 1.27.0, which nixpkgs does not have yet. Once nixpkgs' deskflow
-# reaches 1.27.0 this overlay passes it through unchanged; then delete the file.
-# Release 1.27.0 drops the evdev.xml path, the legacy tests and the user docs
+# reaches 1.27.0 this overlay keeps its version; then delete the version
+# override. Release 1.27.0 drops the evdev.xml path, the legacy tests and the user docs
 # that nixpkgs' 1.26.0 build patches, runs and installs.
-final: prev: {
-  deskflow =
-    if final.lib.versionAtLeast prev.deskflow.version "1.27.0" then
-      prev.deskflow
+#
+# Deskflow shares the clipboard on Wayland only when it builds against
+# libportal 0.10.0 or newer, which adds the clipboard API. Without it the
+# client never sends what you copy to the server. Only Deskflow gets the newer
+# libportal, so nothing else rebuilds. Once nixpkgs' libportal reaches 0.10.0
+# the override passes it through; then delete it.
+final: prev:
+let
+  libportal =
+    if final.lib.versionAtLeast prev.libportal.version "0.10.0" then
+      prev.libportal
     else
-      prev.deskflow.overrideAttrs (_old: {
+      prev.libportal.overrideAttrs (_old: {
+        version = "0.10.0";
+        src = final.fetchFromGitHub {
+          owner = "flatpak";
+          repo = "libportal";
+          tag = "0.10.0";
+          hash = "sha256-vU3jnHxCvxZMSJOh5hzkCB8uuE0NnbnZM7+eQ6a5+oI=";
+        };
+        # 0.10.0 already contains nixpkgs' Qt 6.9 patch.
+        patches = [ ];
+      });
+  deskflow = prev.deskflow.override { inherit libportal; };
+in
+{
+  deskflow =
+    if final.lib.versionAtLeast deskflow.version "1.27.0" then
+      deskflow
+    else
+      deskflow.overrideAttrs (_old: {
         version = "1.27.0";
         src = final.fetchFromGitHub {
           owner = "deskflow";
