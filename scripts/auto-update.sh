@@ -98,25 +98,30 @@ other_hosts_evaluate() {
   done
 }
 
-# Succeeds when the omerfarukoruc cache holds the DankMaterialShell build this
-# lock needs. The shells-cache workflow builds it every hour for the head of
-# nixos-unstable and the newest DMS release.
-dms_cached() {
-  local path
-  path=$(nix eval --impure --raw --expr "
-    (builtins.getFlake \"git+file://$PWD\").inputs.dms.packages.\${builtins.currentSystem}.default.outPath") ||
-    return 1
-  path=${path#/nix/store/}
-  curl -fsS --max-time 20 --retry 2 -o /dev/null "https://omerfarukoruc.cachix.org/${path%%-*}.narinfo"
+# Succeeds when a cache holds every package of ci/cached-packages.nix that this
+# host uses at this lock. The host-packages-cache workflow builds them every
+# hour for the newest inputs; cache.nixos.org holds one that nixpkgs builds
+# unchanged.
+packages_cached() {
+  local paths path
+  paths=$(nix eval --impure --raw --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
+    --apply "hosts: builtins.concatStringsSep \"\\n\" (builtins.concatMap
+      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.attrValues hosts.$host))") || return 1
+  while read -r path; do
+    [[ -n $path ]] || continue
+    path=${path#/nix/store/}
+    curl -fs --max-time 20 --retry 2 -o /dev/null "https://omerfarukoruc.cachix.org/${path%%-*}.narinfo" ||
+      curl -fs --max-time 20 --retry 2 -o /dev/null "https://cache.nixos.org/${path%%-*}.narinfo" ||
+      return 1
+  done <<<"$paths"
 }
 
-tags=$(scripts/update-release-tags.sh --except dms) || echo "Some release-tagged inputs stay where they are."
+# The inputs the packages of ci/cached-packages.nix come from. They move below,
+# once the cache holds those packages.
+cached_from=(nixpkgs dms kwin-effects-better-blur-dx silent-sddm sops-nix)
+tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
 # The kernel input moves only through update-kernel.sh, which first checks
-# that the kernel cache holds the new build. The gated inputs move below.
-names=$(jq -r '.nodes.root.inputs | keys[]
-  | select(IN("nix-cachyos-kernel", "llm-agents", "nixpkgs", "dms") | not)' flake.lock)
-mapfile -t inputs <<<"$names"
-nix flake update "${inputs[@]}"
+# that the kernel cache holds the new build.
 scripts/update-kernel.sh || echo "The kernel input stays where it is."
 
 held=$(mktemp -d)
@@ -124,32 +129,30 @@ trap 'rm -rf -- "$held"' EXIT
 hold() { cp flake.nix flake.lock "$held/"; }
 release() { cp "$held/flake.nix" "$held/flake.lock" .; }
 
-# DMS follows nixpkgs, so a new nixpkgs or DMS release needs a new DMS build,
-# which would compile here at full load. nixpkgs and DMS wait for the cache,
-# but for a day at most, so a broken DMS build cannot hold back every other
-# package's fixes.
-# Noctalia comes from nixpkgs, so cache.nixos.org normally holds it.
-since=$STATE_DIRECTORY/shells-held-since
+# A new nixpkgs or DMS release needs new builds of the packages in
+# ci/cached-packages.nix, which would compile here at full load. Their inputs
+# wait for the cache, but for a day at most, so one broken build cannot hold
+# back every other package's fixes.
+since=$STATE_DIRECTORY/packages-held-since
 hold
-dms_tags=$(scripts/update-release-tags.sh dms) || true
-nix flake update nixpkgs dms
+cached_tags=$(scripts/move-inputs.sh "${cached_from[@]}")
 if cmp -s flake.lock "$held/flake.lock"; then
   :
-elif dms_cached; then
+elif packages_cached; then
   rm -f -- "$since" "$since.notified"
-  [[ -n $dms_tags ]] && tags+=${tags:+$'\n'}$dms_tags
+  [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
 else
   [[ -f $since && $(<"$since") =~ ^[0-9]+$ ]] || date +%s >"$since"
   if (($(date +%s) - $(<"$since") < 86400)); then
-    echo "The cache lacks a DMS build for the new nixpkgs; nixpkgs and DMS stay where they are."
+    echo "The cache lacks builds for the new ${cached_from[*]}; they stay where they are."
     release
   else
-    echo "A DMS build has been missing from the cache for a day; nixpkgs moves and this host compiles it."
+    echo "Builds have been missing from the cache for a day; ${cached_from[*]} move and this host compiles them."
     if [[ ! -f $since.notified ]]; then
-      notify normal "DMS build not in the cache" "nixpkgs waited a day for the shells-cache DMS build. Updates compile DMS on the laptop until that build works again." &&
+      notify normal "Builds not in the cache" "nixpkgs waited a day for the host-packages-cache builds. Updates compile them on the laptop until that workflow works again." &&
         touch "$since.notified"
     fi
-    [[ -n $dms_tags ]] && tags+=${tags:+$'\n'}$dms_tags
+    [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
   fi
 fi
 

@@ -19,18 +19,17 @@ service skips the run.
 Each run collects its input and app changes into one update, and does these
 steps:
 
-1. It moves the release-tagged inputs except DMS with `update-release-tags.sh`.
-2. It updates every other input except the kernel, nixpkgs, DMS and llm-agents.
-3. It moves the kernel, nixpkgs, DMS and llm-agents by the rules in the table
-   below.
-4. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
-   kernel and app steps.
-5. When no input or app moved, it logs "Everything is current." and deploys
+1. It moves every input that the table below does not name with
+   `move-inputs.sh`.
+2. It moves the inputs in the table by the rules there.
+3. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
+   input, kernel and app steps.
+4. When no input or app moved, it logs "Everything is current." and deploys
    nothing.
-6. It checks that every other host still evaluates. When one does not, the
+5. It checks that every other host still evaluates. When one does not, the
    update fails with status 76.
-7. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
-8. It squash-merges the result to `main` through the `auto-update` branch. The
+6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
+7. It squash-merges the result to `main` through the `auto-update` branch. The
    PR body holds dix's comparison of the old and new system.
 
 A desktop notification reports each update or failure.
@@ -42,7 +41,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | --- | --- |
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| nixpkgs and DMS | They wait up to a day for the cache to hold the DMS build. See [DMS and nixpkgs](#dms-and-nixpkgs). |
+| nixpkgs, dms, kwin-effects-better-blur-dx, silent-sddm and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -65,23 +64,31 @@ To run the updater now and read its log:
 ssh nixos-rog 'sudo systemctl start oruc-auto-update; journalctl -u oruc-auto-update -n 50'
 ```
 
-### DMS and nixpkgs
+### Cached packages
 
-Noctalia comes from nixpkgs, so the NixOS cache holds it. DankMaterialShell
-(DMS) follows this flake's nixpkgs, so each new nixpkgs or DMS release needs a
-new DMS build.
+cache.nixos.org does not hold the packages that come from this flake's own
+inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
+each host: DankMaterialShell (DMS), Deskflow, the KWin blur effect, the
+SilentSDDM theme and `sops-install-secrets`. It reads them from the host's own
+configuration, so they are the exact builds the host would compile.
 
-Every hour, the [shells-cache](../.github/workflows/shells-cache.yml) workflow
-builds DMS for the head of nixos-unstable and the newest DMS release. It pushes
-the build to the `omerfarukoruc` Cachix cache. GitHub emails a failed scheduled
-run of that workflow.
+Every hour, the [host-packages-cache](../.github/workflows/host-packages-cache.yml)
+workflow moves the inputs with the same `move-inputs.sh`, builds the packages
+that the caches lack and pushes them to the `omerfarukoruc` Cachix cache. It
+also builds them for every push to `main`, so a later deploy of nixos-latitude
+downloads them. GitHub emails a failed scheduled run of that workflow.
 
-The updater moves nixpkgs and the DMS tag only once that cache holds the build.
-So nixpkgs updates can lag nixos-unstable by an hour or two, and the laptop
-downloads DMS instead of compiling it.
+The updater moves the inputs those packages come from only once the cache
+holds every package this host uses. So nixpkgs updates can lag nixos-unstable
+by an hour or two, and the laptop downloads the packages instead of compiling
+them.
 
-After a day without that build, nixpkgs moves anyway and the laptop compiles
-DMS. A notification says so once.
+After a day without those builds, the inputs move anyway and the laptop
+compiles the packages. A notification says so once.
+
+whisper-cpp is not in the list. Its CUDA build references NVIDIA libraries
+that are unfree, and `cachix push` uploads a whole closure, so the laptop
+compiles it when nixpkgs changes it.
 
 ## Failures and notifications
 

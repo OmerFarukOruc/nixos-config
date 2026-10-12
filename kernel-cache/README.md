@@ -35,17 +35,16 @@ which lists the nix-cachyos-kernel revision, the kernel version and every pushed
 output path. A host checks
 those paths in the cache before it locks the same revision.
 
-`shells/flake.nix` builds the desktop shell the hosts would otherwise compile,
-[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (MIT),
-the way the hosts do: at a release tag, following nixos-unstable. Every hour
-the [`shells-cache` workflow](../.github/workflows/shells-cache.yml) moves that flake to the head of nixos-unstable and to the
-newest DMS release (`scripts/pin-release.sh`), then builds and pushes it when
-the cache lacks it. It commits nothing. A host moves nixpkgs and the DMS tag
-only once the cache holds that build. The hosts take Noctalia from nixpkgs,
-which the NixOS cache holds.
+The same cache holds packages that the root flake's hosts would compile, such
+as DankMaterialShell. The
+[`host-packages-cache` workflow](../.github/workflows/host-packages-cache.yml)
+builds them from the hosts' own configuration;
+[nixos-rog.md](../docs/nixos-rog.md#cached-packages) describes it.
 
-Nothing unfree is built or pushed. The NVIDIA module builds from
+Nothing unfree is pushed. The NVIDIA module builds from
 [open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules).
+The host-packages-cache workflow fails before the push when a closure holds a
+path that cache.nixos.org lacks and that is not a listed package.
 
 ## Setup
 
@@ -66,6 +65,6 @@ records the build.
 CACHIX_AUTH_TOKEN=... scripts/build-local.sh --rev <nix-cachyos-kernel sha> --record zen4 x86_64-v3
 ```
 
-The token comes from the environment; push only the outputs in `flake.nix` and
-`shells/flake.nix`, because the cache is public. The `kernel-cache` workflow can also be started by hand
+The token comes from the environment; push only the outputs in `flake.nix`,
+because the cache is public. The `kernel-cache` workflow can also be started by hand
 for one revision: `gh workflow run kernel-cache -f rev=<sha>`.

@@ -71,6 +71,11 @@ cursor, icons, wallpaper, ANSI slots) from the selected Base16 scheme.
 ## kernel-cache
 
 `kernel-cache/` is a separate flake. GitHub Actions builds it into the
-`omerfarukoruc` Cachix cache. The cache holds the CachyOS kernel, the NVIDIA
-open module and DankMaterialShell. The [kernel-cache README](../kernel-cache/README.md)
+`omerfarukoruc` Cachix cache. The cache holds the CachyOS kernel and the NVIDIA
+open module. The [kernel-cache README](../kernel-cache/README.md)
 explains how the hosts follow it.
+
+The same cache holds the host packages in `ci/cached-packages.nix`, which the
+host-packages-cache workflow builds from each host's configuration.
+[nixos-rog.md](nixos-rog.md#cached-packages) explains how the updater waits for
+them.

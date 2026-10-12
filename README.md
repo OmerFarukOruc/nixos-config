@@ -10,7 +10,7 @@ with a CachyOS kernel that CI compiles so the laptops never do.**
 [![NixOS unstable](https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white)](https://github.com/NixOS/nixpkgs/tree/nixos-unstable)
 [![check](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/check.yml?branch=main&style=flat-square&label=check&logo=github)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/check.yml)
 [![kernel-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/kernel-cache.yml?branch=main&style=flat-square&label=kernel-cache&logo=linux&logoColor=white)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/kernel-cache.yml)
-[![shells-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/shells-cache.yml?branch=main&style=flat-square&label=shells-cache)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/shells-cache.yml)
+[![host-packages-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/host-packages-cache.yml?branch=main&style=flat-square&label=host-packages-cache)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/host-packages-cache.yml)
 [![Cachix](https://img.shields.io/badge/cachix-omerfarukoruc-4E7FC1?style=flat-square)](https://omerfarukoruc.cachix.org)
 
 [Hosts](#hosts) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs)
@@ -91,6 +91,7 @@ target.
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
+| `scripts/move-inputs.sh` | move inputs to their newest release or branch head, except the kernel and llm-agents |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
@@ -108,7 +109,7 @@ host on every pull request and push to `main`.
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair |
 | [nixos-rog](docs/nixos-rog.md) | the hourly updater, secrets, DNS and the post-deploy check |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
-| [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and DMS and how hosts follow it |
+| [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
 | [CONTEXT.md](CONTEXT.md) | the domain terms |
 
