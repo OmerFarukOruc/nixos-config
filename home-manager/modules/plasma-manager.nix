@@ -102,11 +102,12 @@ in
           EdgeLighting = true;
           # Glass reads #AARRGGBB, so 10 is the alpha.
           GlowColor = "#10${osConfig.scheme.base0D}";
-          # Light bends at the window edges for the liquid look. Glass divides
-          # RefractionStrength by 20 and multiplies RefractionEdgeSize by 10 px.
-          RefractionStrength = 10;
+          # Refraction is off. The zeros are written out because plasma-manager
+          # never removes a key it wrote before. RefractionEdgeSize stays,
+          # because the edge lighting band reads it even with refraction off.
+          RefractionStrength = 0;
           RefractionEdgeSize = 3;
-          RefractionRGBFringing = 1;
+          RefractionRGBFringing = 0;
           # Square window and menu corners, written out because plasma-manager
           # never removes a key it wrote before.
           TopCornerRadius = 0;
