@@ -73,11 +73,11 @@ kernel-cache/          the separate flake that CI builds into Cachix
 scripts/               update, verify and auto-update scripts
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
-docs/                  operating guides and architecture decisions
+docs/                  operating guides and the architecture
 ```
 
 [docs/architecture.md](docs/architecture.md) explains how the inventory, the
-theme and Home Manager connect.
+login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
@@ -110,7 +110,7 @@ host on every pull request and push to `main`.
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and DMS and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
-| [CONTEXT.md](CONTEXT.md) · [ADRs](docs/adr/) | the domain terms and the recorded decisions |
+| [CONTEXT.md](CONTEXT.md) | the domain terms |
 
 ## Built on
 

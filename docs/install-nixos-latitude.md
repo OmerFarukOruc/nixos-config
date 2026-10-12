@@ -1,11 +1,12 @@
 # First install of nixos-latitude
 
 Run on the laptop from the NixOS minimal ISO. fedora-desktop serves this repo
-over the LAN at <fedora-desktop-ip>:8090 during the install.
+over the LAN at `<fedora-desktop-ip>:8090` during the install.
 
-1. In BIOS (F2 at the Dell logo): turn off Secure Boot. Set boot mode to UEFI.
-2. Boot the USB stick (F12 at the Dell logo picks the boot device).
-3. Connect Wi-Fi:
+1. Open the BIOS setup with F2 at the Dell logo. Disable Secure Boot, and set the
+   boot mode to UEFI.
+2. Boot the USB stick. F12 at the Dell logo picks the boot device.
+3. Connect to Wi-Fi:
 
    ```
    sudo -i
@@ -29,10 +30,10 @@ over the LAN at <fedora-desktop-ip>:8090 during the install.
    mount -o umask=077 /dev/disk/by-label/BOOT /mnt/boot
    ```
 
-   If the disk is SATA, its name is `/dev/sda`. Partitions are then `sda1` and `sda2`.
+   If the disk is SATA, its name is `/dev/sda`, and the partitions are `sda1` and `sda2`.
 
-5. Fetch this repo, generate the hardware file under the current `machines/`
-   layout, evaluate it, and install:
+5. Download this repo, write the hardware file into the current `machines/`
+   layout, evaluate the flake, and install:
 
    ```
    mkdir -p /mnt/etc/nixos
@@ -45,7 +46,7 @@ over the LAN at <fedora-desktop-ip>:8090 during the install.
 
    `nixos-install` asks for the root password at the end.
 
-6. Set the user password, reboot, remove the USB stick:
+6. Set the user password, reboot, and remove the USB stick:
 
    ```
    nixos-enter --root /mnt -c 'passwd oruc'

@@ -1,14 +1,38 @@
 # Check and deploy a change
 
-Run deploy commands from fedora-desktop. The script copies source-controlled files
-to a fresh release under `~/.local/state/nixos-config-deploy/releases/` and builds
-the system from that immutable candidate on the target. After a successful deploy, it
-atomically updates `~/.local/state/nixos-config-deploy/current`. Failed candidates
-remain available for inspection, and earlier releases are never modified.
-fedora-desktop has no Nix installed. The SSH alias `nixos-latitude` in
+- [Check before you deploy](#check-before-you-deploy)
+- [Deploy](#deploy)
+- [What the deploy does](#what-the-deploy-does)
+- [Exit codes](#exit-codes)
+- [One deploy at a time](#one-deploy-at-a-time)
+- [Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)
+- [Release records and cleanup](#release-records-and-cleanup)
+- [When a deploy fails](#when-a-deploy-fails)
+
+Run deploy commands from fedora-desktop. fedora-desktop has no Nix installed,
+so `deploy.sh` builds on the target. The SSH alias `nixos-latitude` in
 `~/.ssh/config` selects the target and its SSH key.
 
-Check evaluation and build the system on the target without activating it:
+Every deploy command in this guide can change boot or running system state.
+Run one only with separate approval for the activation.
+
+This guide uses these terms:
+
+- A **release** is a copy of the source-controlled files under
+  `~/.local/state/nixos-config-deploy/releases/` on the target. The deploy
+  never changes a release after it writes it.
+- The **candidate** is the new release that a deploy builds the system from.
+  A failed candidate stays on the target for inspection.
+- `~/.local/state/nixos-config-deploy/current` is a symlink to the last
+  release that deployed successfully. The deploy updates it atomically after
+  a successful deploy.
+- The **rollback timer** is `deploy-rollback.timer` on the target. When it
+  fires, it restores the previous system.
+
+## Check before you deploy
+
+These commands check evaluation and build the system on the target. They do
+not activate it:
 
 ```sh
 ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && nix eval --raw --no-write-lock-file .#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
@@ -16,136 +40,240 @@ ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current
 ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && nix build --no-link --no-write-lock-file .#nixosConfigurations.nixos-latitude.config.system.build.toplevel'
 ```
 
-These checks use the source selected by the `current` symlink. They prove
-evaluation or build success only. They do not activate the generation or prove
-that the hardware and services work after activation.
+The commands use the source that the `current` symlink selects. They prove
+only that evaluation or the build succeeds. They do not activate the
+generation, and they do not prove that the hardware and services work after
+activation.
 
-CI runs the formatter check, `nix flake check --no-build` and the evaluation of every
-host on every pull request and on every push to `main`. To format locally, run
-`ssh nixos-rog 'cd <copy of the repo> && nix fmt'`, because fedora-desktop has no
-Nix, then copy the changed files back.
+CI runs the formatter check, `nix flake check --no-build` and the evaluation of
+every host on every pull request and on every push to `main`.
 
-Every deploy command below can change boot or running system state. Run one only
-after activation is separately authorized. `switch` is the default. It activates
-the generation now and makes it the boot default:
+To format locally, use nixos-rog, because fedora-desktop has no Nix:
+
+1. Run `ssh nixos-rog 'cd <copy of the repo> && nix fmt'`.
+2. Copy the changed files back to fedora-desktop.
+
+## Deploy
+
+`switch` is the default action. It activates the generation now and makes it
+the boot default:
 
 ```sh
 ./deploy.sh nixos-latitude
 ```
 
-Use `test` to activate until reboot without changing the boot default, or `boot`
-to set the boot default without activating the running system:
+`test` activates the generation until reboot and does not change the boot
+default. `boot` sets the boot default and does not activate the running
+system:
 
 ```sh
 ./deploy.sh nixos-latitude test
 ./deploy.sh nixos-latitude boot
 ```
 
-`switch` and `test` confirm or roll back. The script builds the candidate on the
-target first and changes nothing if the build fails. It then arms a 420 second
-timer (`deploy-rollback.timer`) that restores the previous system, and activates
-the candidate with `switch-to-configuration test` in a system service, so an SSH
-drop cannot interrupt it. The script then opens fresh SSH logins and checks that
-`sshd` and `tailscaled` are active. A host that deploys itself (the host name
-given is its own) runs every step locally and checks the two units without an
-SSH login. When the deploy user is logged in, the script also records that
-user's running services before activation, except those a timer, socket or path
-started, apps a launcher started (`app-*`), `systemd-run` jobs (`run-*`) and
-transient D-Bus services (`dbus-*`). The script stops before it arms the timer
-when it cannot list them. Twenty seconds after the SSH
-check, if one of them has failed or waits to restart, or the script cannot query
-them, it restores the previous system at once and exits 75. This catches a switch that breaks the
-desktop shell or compositor while SSH still answers. Only after that does it stop the timer, and
-for `switch` it makes the confirmed build the system profile and boot default
-without building or activating it again. If activation fails, the
-script restores the previous system at once. A unit that fails during activation
-(`switch-to-configuration` exit 4) counts as a failed activation. When the SSH
-connection drops during activation, the script reconnects and waits up to 180
-seconds for the exit status that the activation unit records in
-`/run/deploy-activate.status`, and restores the previous system when it is not 0.
-When the restore fails, the script prints that the target may still run the
-candidate and leaves the timer armed, which repeats the restore at its deadline.
-The boot default is unchanged then, so a reboot also restores the previous system. If the target
-stops answering, the timer restores the previous system after 420 seconds,
-without any command from this machine. A candidate that is never confirmed never
-becomes the boot default.
-After the build, the script prints dix's comparison of the running and the new
-system; a failed comparison does not stop the deploy.
-Before it changes the boot default, the script checks that `/boot` is mounted
-(exit 79 otherwise) and that the ESP has room for
-every kernel and initrd of the new generation and its specialisations plus 1 GiB,
-and exits 74 without touching the ESP when it does not. If installing the boot
-entries fails, it sets the system profile and boot entries back to the previous
-generation and exits 73.
-`boot` builds the same way, then makes the build the system profile and boot
-default. It activates nothing and has no timer. A pending `deploy-rollback.timer` from
-an earlier run makes the next deploy stop before it changes anything.
+A successful deploy ends with the line `Deployment completed from release <release>.`
 
-The script refuses a dirty Git tree. After reviewing every local change, use the
-single dirty-deploy escape hatch when that state is intentional:
+## What the deploy does
+
+`switch` and `test` activate the candidate, check it, and roll back when a
+check fails. `boot` builds the same way, then makes the build the system
+profile and boot default. It activates nothing and has no rollback timer.
+
+The deploy runs these steps in order:
+
+1. It takes the deploy lock on the host. See
+   [One deploy at a time](#one-deploy-at-a-time).
+2. Before it uploads anything, it checks the running release and the
+   boot-default release. See [Dirty trees and other checkouts](#dirty-trees-and-other-checkouts).
+3. It copies the source-controlled files to a new release, the candidate.
+4. It stops before it changes anything when a rollback timer from an earlier
+   run is still pending (exit 70).
+5. It builds the candidate on the target. When the build fails, nothing on the
+   target changes.
+6. It prints dix's comparison of the running and the new system. A failed
+   comparison does not stop the deploy.
+7. Before it changes the boot default, it checks that `/boot` is mounted
+   (exit 79 otherwise).
+8. It checks the free space on the ESP. The ESP needs room for all kernels and
+   initrds of the new generation and its specialisations together, plus 1 GiB.
+   Without that room, it exits 74 and does not touch the ESP.
+9. For `switch` and `test`, when the deploy user is logged in, it records that
+   user's running services. The list leaves out:
+   - services that a timer, socket or path started
+   - apps that a launcher started (`app-*`)
+   - `systemd-run` jobs (`run-*`)
+   - transient D-Bus services (`dbus-*`)
+
+   When the deploy cannot list the services, it stops before it arms the
+   rollback timer.
+10. It arms the rollback timer for 420 seconds (exit 71 when it cannot).
+11. It activates the candidate with `switch-to-configuration test` in a system
+    service, so an SSH drop cannot interrupt the activation.
+12. It opens fresh SSH logins and checks that `sshd` and `tailscaled` are
+    active.
+13. Twenty seconds after the SSH check, it checks the recorded user services.
+    The next list says what happens when this check fails.
+14. It stops the rollback timer.
+15. For `switch`, it makes the checked build the system profile and boot
+    default. It does not build or activate the build again.
+16. After the whole deploy succeeds, it updates `current` and copies the
+    target's `flake.lock` into this repository. Then it prints
+    `Deployment completed from release <release>.`
+
+A host that deploys itself (the host name given is its own) runs every step
+locally. It checks the two units without an SSH login.
+
+When a step after the build fails, the deploy acts as follows:
+
+- **A user service fails the step 13 check.** One of them failed or waits to
+  restart, or the deploy cannot query them. The deploy restores the previous
+  system at once and exits 75. This check catches a switch that breaks the
+  desktop shell or compositor while SSH still answers.
+- **Activation fails.** The deploy restores the previous system at once. A
+  unit that fails during activation (`switch-to-configuration` exit 4) counts
+  as a failed activation.
+- **The SSH connection drops during activation.** The deploy reconnects and
+  waits up to 180 seconds for the exit status that the activation unit records
+  in `/run/deploy-activate.status`. It restores the previous system when that
+  status is not 0.
+- **The restore fails.** The deploy prints that the target may still run the
+  candidate. It leaves the rollback timer armed, and the timer repeats the
+  restore at its deadline. The boot default did not change, so a reboot also
+  restores the previous system.
+- **The target stops answering.** The rollback timer restores the previous
+  system after 420 seconds. It needs no command from the machine that runs the
+  deploy.
+- **Installing the boot entries fails.** The deploy sets the system profile and
+  boot entries back to the previous generation and exits 73.
+
+For `switch`, the candidate becomes the boot default only after it passes the
+SSH check and the user-service check.
+
+The deploy checks only what it can see: the build, activation, SSH, Tailscale
+and the running user services. A program that starts but misbehaves
+stays installed.
+
+## Exit codes
+
+The table lists the deploy's own codes that this guide and the updater name.
+A failed activation returns the exit status of `switch-to-configuration`, such
+as 4. Other failures exit with other codes, such as 1.
+
+| Code | Cause | State of the target |
+| --- | --- | --- |
+| 65 | The Git tree is dirty, and the command has no `--allow-dirty`. | Unchanged. |
+| 70 | A rollback timer from an earlier deploy is still pending. | Unchanged. |
+| 71 | The deploy could not arm the rollback timer. | Nothing activated. |
+| 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. |
+| 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
+| 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
+| 76 | Another host no longer evaluates. The [updater](nixos-rog.md#hourly-updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
+| 77 | Another deploy holds the lock on the host. | Unchanged. |
+| 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
+| 79 | `/boot` is not mounted. | Unchanged. |
+
+## One deploy at a time
+
+Only one deploy runs on a host at a time. A second deploy exits 77 and names
+the deploy that holds the lock.
+
+The lock goes when that deploy exits or loses its connection. Keepalives on
+both ends close a dead connection within about 45 seconds.
+
+When a deploy finds its own lock dropped before activation, it does these
+steps:
+
+1. It takes the lock again.
+2. It repeats the release check in
+   [Dirty trees and other checkouts](#dirty-trees-and-other-checkouts).
+3. It reads the running system again for the rollback.
+
+It exits 77 if another deploy holds the lock by then, or 70 if another deploy
+left a rollback timer. During activation, the pending rollback timer keeps
+other deploys out.
+
+## Dirty trees and other checkouts
+
+The deploy refuses a dirty Git tree. When that state is intentional, first
+review every local change. Then use the single escape hatch for a dirty
+deploy:
 
 ```sh
 ./deploy.sh --allow-dirty nixos-latitude test
 ```
 
-The dirty deploy includes modified tracked files and non-ignored untracked files.
-Ignored files are never copied.
+A dirty deploy includes modified tracked files and untracked files that Git
+does not ignore. The deploy never copies ignored files.
 
-Each release has a record beside it,
-`~/.local/state/nixos-config-deploy/releases/<release>.source`. The record names
-the machine and checkout it came from, the branch, the commit, whether the tree
-was dirty, the action, and `CLAUDE_CONFIG_DIR` when an agent deployed it.
-Promotion adds the system it built. To see who deployed what a host runs, read
-the record whose `system=` line matches `readlink -f /run/current-system`.
+Before it uploads anything, the deploy checks two releases on the host. One is
+the release that runs, and one is the release that is the boot default. The
+deploy exits 78 when one of them meets both of these conditions:
 
-Only one deploy runs on a host at a time. A second deploy exits 77 and names the
-deploy that holds the lock. The lock goes when that deploy exits or loses its
-connection. Keepalives on both ends close a dead connection within about 45
-seconds. When a deploy finds its own lock dropped before activation, it takes the
-lock again and repeats the check below, reads the running system again for the
-rollback, and exits 77 if another deploy holds it by then or 70 if it left a
-rollback timer. During activation the pending rollback timer keeps other deploys out.
+- It came from another checkout.
+- It holds a version of a file that is neither in the candidate nor anywhere
+  in this checkout's history.
 
-Before it uploads anything, the script checks the release that runs on the host
-and the release that is its boot default. When one of them came from another
-checkout and holds a version of a file that is neither in the candidate nor
-anywhere in this checkout's history, the script exits 78. It prints that
-release's record and the files the deploy would drop. A squash-merged branch
-passes, because each version it deployed is in `main`'s history. Merge the work
-into this checkout, or rerun with `--replace` after its owner agrees:
+The deploy then prints that release's record and the files the deploy would
+drop. A squash-merged branch passes, because each version it deployed is in
+`main`'s history.
+
+To continue, merge the work into this checkout. Or, after the owner of that
+work agrees, rerun with `--replace`:
 
 ```sh
 ./deploy.sh --replace nixos-rog test
 ```
 
-When the target check, the rebuild or the activation fails, the failed release
-stays on the target and the local `flake.lock` stays unchanged. The script copies
-the target's `flake.lock` back into this repository only after the whole deploy
-succeeds. A build that succeeds and then rolls back changes nothing locally.
-Commit the lock change before the next clean deployment.
+## Release records and cleanup
 
-The deploy checks only what it can see: the build, activation, SSH, Tailscale
-and the running user services. A program that starts but misbehaves stays
-installed.
+Each release has a record beside it,
+`~/.local/state/nixos-config-deploy/releases/<release>.source`. The record
+names these facts:
 
-Release cleanup is explicit. The command below keeps the five newest candidates,
-always protects the release selected by `current` and the releases whose records
-match the running system or the boot default, prints every older release it will
-delete, and then removes those disposable source copies with their records:
+- the machine and checkout the release came from
+- the branch and the commit
+- whether the tree was dirty
+- the action
+- `CLAUDE_CONFIG_DIR`, when an agent deployed it
+
+When the deploy promotes the release, it adds the system it built as a
+`system=` line. To see who deployed what a host runs, read the record whose
+`system=` line matches `readlink -f /run/current-system`.
+
+Release cleanup is explicit. This command deletes old releases:
 
 ```sh
 ./deploy.sh nixos-latitude prune
 ```
 
-If a rebuild fails, inspect its complete output, fix the source on
-fedora-desktop, and rerun the chosen deploy command. The failure message names
-the candidate release retained for read-only investigation. The `current`
-symlink continues to identify the last successful release. Do not run a
-different target-side rebuild and then forget to apply the same fix here.
+The command keeps the five newest releases. It always keeps the release
+that `current` selects, and the releases whose records match the running
+system or the boot default. It prints every older release it will delete.
+Then it deletes those disposable source copies and their records.
 
-For example, re-run the evaluation and build commands above, then retry the same
-non-persistent test action after the fix is authorized:
+## When a deploy fails
 
-```sh
-./deploy.sh nixos-latitude test
-```
+When the rebuild, the activation or a check after the upload fails, the failed
+release stays on the target. The local `flake.lock` does not change. A build that
+succeeds and then rolls back changes nothing locally. The `current` symlink
+still points to the last successful release.
+
+After a successful deploy changes `flake.lock`, commit that change before the
+next clean deploy.
+
+When a rebuild fails, do these steps:
+
+1. Read the complete output of the rebuild. The failure message names the
+   candidate release that stays on the target for read-only investigation.
+2. Fix the source on fedora-desktop. When you also try a fix with a rebuild on
+   the target, apply the same fix here.
+3. Run the evaluation and build commands in
+   [Check before you deploy](#check-before-you-deploy) again.
+4. With approval for the fix, run the same deploy command again. For
+   example, rerun the `test` action, which does not persist:
+
+   ```sh
+   ./deploy.sh nixos-latitude test
+   ```
+
+   The deploy prints `Deployment completed from release <release>.`
