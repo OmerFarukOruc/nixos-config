@@ -14,7 +14,9 @@ so `deploy.sh` builds on the target. The SSH alias `nixos-latitude` in
 `~/.ssh/config` selects the target and its SSH key.
 
 Every deploy command in this guide can change boot or running system state.
-Run one only with separate approval for the activation.
+Omer's request for a change also approves its deploy. After the change merges
+to `main`, run `./deploy.sh <host> switch` for each host it affects without
+asking again. When a host is unreachable, report it as the blocker.
 
 This guide uses these terms:
 
@@ -273,8 +275,8 @@ When a rebuild fails, do these steps:
    the target, apply the same fix here.
 3. Run the evaluation and build commands in
    [Check before you deploy](#check-before-you-deploy) again.
-4. With approval for the fix, run the same deploy command again. For
-   example, rerun the `test` action, which does not persist:
+4. Run the same deploy command again. For example, rerun the `test` action,
+   which does not persist:
 
    ```sh
    ./deploy.sh nixos-latitude test
