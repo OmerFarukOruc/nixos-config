@@ -69,8 +69,9 @@ ssh nixos-rog 'sudo systemctl start oruc-auto-update; journalctl -u oruc-auto-up
 cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
 each host: DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
-style, the SilentSDDM theme and `sops-install-secrets`. It reads them from the
-host's own configuration, so they are the exact builds the host would compile.
+style, the SilentSDDM theme and `sops-install-secrets`, plus the newer
+libportal that Deskflow links. It reads them from the host's own
+configuration, so they are the exact builds the host would compile.
 
 Every hour, the [host-packages-cache](../.github/workflows/host-packages-cache.yml)
 workflow moves the inputs with the same `move-inputs.sh`, builds the packages

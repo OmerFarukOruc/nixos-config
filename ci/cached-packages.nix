@@ -22,6 +22,11 @@ let
     "sops-install-secrets"
   ];
 
+  # Free libraries that a listed package links and that only this flake
+  # builds, such as the newer libportal of overlays/deskflow.nix. The package
+  # in the cache is of no use while its closure is incomplete there.
+  dependencies = [ "libportal" ];
+
   free =
     p:
     lib.throwIf (p.meta.unfree or true) "${p.name} is unfree, so the public cache must not hold it." p;
@@ -34,12 +39,16 @@ let
         ++ config.home-manager.users.oruc.home.packages
         ++ lib.optional (config ? sops) config.sops.package;
       picked = lib.filter (p: lib.elem (p.pname or null) pnames) candidates;
+      inputs = lib.concatMap (p: p.buildInputs or [ ] ++ p.propagatedBuildInputs or [ ]) picked;
+      deps = lib.filter (d: lib.elem (d.pname or null) dependencies) inputs;
     in
-    lib.listToAttrs (map (p: lib.nameValuePair p.pname (free p)) picked);
+    lib.listToAttrs (map (p: lib.nameValuePair p.pname (free p)) (picked ++ deps));
 
   hosts = lib.mapAttrs (_: host: hostPackages host.config) flake.nixosConfigurations;
   # A renamed package would otherwise drop out of the cache without a sign.
-  lost = lib.subtractLists (lib.concatMap lib.attrNames (lib.attrValues hosts)) pnames;
+  lost = lib.subtractLists (lib.concatMap lib.attrNames (lib.attrValues hosts)) (
+    pnames ++ dependencies
+  );
 in
 lib.throwIf (lost != [ ])
   "No host has a package named ${lib.concatStringsSep ", " lost}; update ci/cached-packages.nix."
