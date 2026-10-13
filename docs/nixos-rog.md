@@ -214,10 +214,15 @@ for several minutes, and needs the charger plugged in:
 ```sh
 scripts/thermal-test-rog.sh balanced
 scripts/thermal-test-rog.sh performance --ppt 35,45,60 --seconds 120 --label perf-35
+scripts/thermal-test-rog.sh performance --load gpu --seconds 120 --label gpu-perf
 ```
 
 It prints the peak temperature, the clock over the last 40 s of load and the
-highest fan speeds. The samples go to `~/.local/state/nixos-config-thermal/`.
+highest fan speeds. `--load gpu` runs gpu-burn on the RTX 4070 instead of
+stress-ng on the CPU, and `--load both` runs both; the summary then adds the
+RTX 4070's highest power draw and temperature. The samples go to
+`~/.local/state/nixos-config-thermal/`, and their first line names the
+script's git blob, so a run cited in a PR can be matched to its commit.
 On exit it sets the original profile again and restarts asusd and
 `oruc-cpu-limits`, which write that profile's own limits and curves.
 

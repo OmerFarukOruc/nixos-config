@@ -2,7 +2,7 @@
 
 - Manage `nixos-latitude` and `nixos-rog` through this repository, not by editing `/etc/nixos` directly on a host.
 - Deploy every merged change to the hosts it affects, per docs/deploy.md.
-- fedora-desktop has no Nix. Evaluate, check, or run a unit script from this checkout with the `scripts/*-on-rog.sh` scripts, and stress-test nixos-rog's CPU with `scripts/thermal-test-rog.sh` (README.md, Commands).
+- fedora-desktop has no Nix. Evaluate, check, or run a unit script from this checkout with the `scripts/*-on-rog.sh` scripts, and stress-test nixos-rog's CPU or GPU with `scripts/thermal-test-rog.sh` (README.md, Commands).
 - Install only tools Omer types by hand on this host. Do not install scanners on the host. Use per-project toolchains via direnv.
 
 # Nixpkgs
