@@ -60,6 +60,18 @@ scripts/check-on-rog.sh
 scripts/check-on-rog.sh --fix
 ```
 
+`scripts/eval-on-rog.sh` prints one value of a host's configuration from the
+same kind of copy. Before you deploy a new or changed `script` of a systemd
+service, run it with `scripts/run-unit-on-rog.sh`. It runs the script on the
+laptop as root with only the unit's environment, so a command missing from
+the unit's `path` fails there instead of after the deploy. A unit still
+running at the timeout passes, as a long-running unit should.
+
+```sh
+scripts/eval-on-rog.sh 'systemd.services."oruc-cpu-limits".environment.PATH'
+scripts/run-unit-on-rog.sh oruc-cpu-limits 40
+```
+
 ## Deploy
 
 `switch` is the default action. It activates the generation now and makes it
