@@ -24,6 +24,17 @@ let
     };
   };
 
+  # Showing the RTX 4070's sensors keeps it awake (docs/nixos-rog.md, Power and
+  # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in DRM card
+  # order; on nixos-rog, the only hybrid machine, nvidia-drm registers first, so
+  # gpu1 is the Radeon 890M.
+  kvitals = {
+    name = "org.kde.plasma.kvitals";
+  }
+  // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
+    config.General.gpuSelection = "gpu1";
+  };
+
   allCorners = value: {
     topLeft = value;
     topRight = value;
@@ -132,7 +143,7 @@ in
             "org.kde.plasma.panelspacer"
             "org.kde.plasma.digitalclock"
             "org.kde.plasma.panelspacer"
-            "org.kde.plasma.kvitals"
+            kvitals
             "org.kde.plasma.systemtray"
             "org.kde.plasma.showdesktop"
             (colorizer topBarStyle)

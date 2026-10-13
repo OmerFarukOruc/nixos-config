@@ -199,6 +199,10 @@ Facts that matter when you change or measure them:
   systemd's sleep hooks, so the unit also checks the limit every 30 s.
 - Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
   `temp1` shows the same value.
+- The RTX 4070 sleeps only while nothing reads it. A program that shows its
+  usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
+  awake, so the kVitals panel widget shows only the Radeon. KWin and
+  nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake.
 
 To measure a profile, or a change to its limits or fan curves before you
 commit it, run the thermal test. It heats the laptop and runs the fans hard
