@@ -1,14 +1,25 @@
-# Host rules
+# Hosts
 
-- Manage `nixos-latitude` and `nixos-rog` through this repository, not by editing `/etc/nixos` directly on a host.
-- Deploy every merged change to the hosts it affects, per docs/deploy.md.
-- fedora-desktop has no Nix. Evaluate, check, or run a unit script from this checkout with the `scripts/*-on-rog.sh` scripts, and stress-test nixos-rog's CPU with `scripts/thermal-test-rog.sh` (README.md, Commands).
-- Install only tools Omer types by hand on this host. Do not install scanners on the host. Use per-project toolchains via direnv.
+- Change `nixos-latitude` and `nixos-rog` only through this repository. `deploy.sh` builds from a copy of this checkout, so an edit to a host's `/etc/nixos` never reaches the system.
+- Deploy every merged change to each host it affects without asking again, as [docs/deploy.md](docs/deploy.md#deploy) describes. A host is affected when its system `drvPath` changes; compare it for both hosts with the "What an edit rebuilds or restarts" lookup below.
+- [CONTEXT.md](CONTEXT.md) defines the domain terms (login session, hybrid mode, integrated mode) and each host's SSH alias.
+- nixos-rog's hourly updater squash-merges input and app moves to `main`, so `main` and `flake.lock` move often. Branch from a freshly fetched `origin/main` ([docs/nixos-rog.md](docs/nixos-rog.md#hourly-updater)).
+- Host packages are tools that Omer or a coding agent runs by hand. Linters, formatters and scanners come from a project's own dev shell through direnv.
+
+# Checks
+
+fedora-desktop has no Nix, so these scripts run Nix on a copy of this checkout on nixos-rog. [README.md](README.md#everyday-commands) lists every script.
+
+- Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs CI's formatter check and `nix flake check` with import from derivation off.
+- Print one configuration value with `scripts/eval-on-rog.sh <attribute>`.
+- Before deploying a new or changed systemd `script`, run it with `scripts/run-unit-on-rog.sh <unit>`.
+- Before changing power, fan or heat settings, read [Power and heat](docs/nixos-rog.md#power-and-heat). It names the one owner of each setting and the `scripts/thermal-test-rog.sh` load test.
+- For a change visible on screen, follow [Check a visual change](docs/nixos-rog.md#check-a-visual-change).
 
 # Nixpkgs
 
 - `flake.lock` holds more than one nixpkgs node. Ours is the one the root input names: `jq -r '.nodes.root.inputs.nixpkgs as $n | "\($n) \(.nodes[$n].locked.rev)"' flake.lock`. llm-agents and nix-cachyos-kernel keep their own nixpkgs on purpose, so their binary caches still match.
-- Fix a nixpkgs package with an overlay in `overlays/` (`overrideAttrs` with patches); the first fix creates the directory. Fix a NixOS module with `disabledModules` plus the module from a second pinned nixpkgs input. Patching nixpkgs itself needs import from derivation, which CI forbids.
+- Fix a nixpkgs package with an overlay in `overlays/` (`overrideAttrs` with patches). `nixpkgs.overlays` in `nixosModules/common.nix` lists every overlay, so extend the package's existing overlay or add the new file to that list. Fix a NixOS module with `disabledModules` plus the module from a second pinned nixpkgs input. Patching nixpkgs itself needs import from derivation, which CI forbids.
 - A text edit in a build step fails the build when it changes nothing. Use `substituteInPlace --replace-fail`; after a `sed`, or a `--replace-quiet` where a release may use either of two forms, check the result with `grep`.
 
 # Lookups
