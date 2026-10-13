@@ -89,7 +89,8 @@ before it restores a generation.
 cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
 each host: DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
-style, the sddm-astronaut login theme and `sops-install-secrets`, plus the newer
+style, the sddm-astronaut login theme, the lock screen's video wallpaper plugin
+and `sops-install-secrets`, plus the newer
 libportal that Deskflow links. It reads them from the host's own
 configuration, so they are the exact builds the host would compile.
 

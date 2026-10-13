@@ -54,9 +54,25 @@ in
         };
       };
 
-      # The lock screen shows the still image that the login screen shows
-      # until its video starts.
-      kscreenlocker.appearance.wallpaper = osConfig.oruc.login.lockImage;
+      # The lock screen plays the login screen's video.
+      kscreenlocker.appearance.wallpaperCustomPlugin = lib.mkIf (osConfig.oruc.login.video != null) {
+        plugin = "luisbocanegra.smart.video.wallpaper.reborn";
+        config.General = {
+          VideoUrls = builtins.toJSON [
+            {
+              filename = "file://${osConfig.oruc.login.video}";
+              enabled = true;
+            }
+          ];
+          # The login theme's BackgroundSpeed in Themes/jake_the_dog.conf.
+          PlaybackRate = 1.2;
+          # The lock screen ignores the plugin's window-based pause rules, so
+          # the video would keep decoding while the display is off. The plugin
+          # checks the display by running kscreen-doctor once a second, which
+          # costs less CPU than decoding the video.
+          ScreenOffPausesVideo = true;
+        };
+      };
 
       # Glass replaces the built-in blur, and KWin names the effect after its
       # plugin file, glass.so. The package comes from nixosModules/desktop.nix.
@@ -205,6 +221,12 @@ in
         };
       };
     };
+
+    # The lock screen finds the wallpaper plugin of kscreenlocker's settings
+    # above through the user profile.
+    home.packages = lib.mkIf (osConfig.oruc.login.video != null) [
+      (pkgs.kdePackages.callPackage ../../pkgs/smart-video-wallpaper.nix { })
+    ];
 
     # KWin reads Glass's settings only when it loads the effect, and
     # plasma-manager writes kwinrc without telling KWin. With no Plasma session

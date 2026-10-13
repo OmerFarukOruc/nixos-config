@@ -155,4 +155,5 @@ ordering cycle on every pull request and push to `main`.
 [Noctalia](https://github.com/noctalia-dev/noctalia-shell) ·
 [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) ·
 [sddm-astronaut-theme](https://github.com/Keyitdev/sddm-astronaut-theme) ·
+[Smart Video Wallpaper Reborn](https://github.com/luisbocanegra/plasma-smart-video-wallpaper-reborn) ·
 [llm-agents.nix](https://github.com/numtide/llm-agents.nix)
