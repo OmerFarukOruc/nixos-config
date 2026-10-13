@@ -1,0 +1,90 @@
+--- a/src/client.cpp
++++ b/src/client.cpp
+@@ -25,6 +25,7 @@
+ {
+     connect(m_daemon, &Daemon::sensorRemoved, this, [this](const QString &sensor) {
+         m_subscribedSensors.remove(sensor);
++        m_subscriptionCounts.remove(sensor);
+     });
+ }
+ 
+@@ -40,6 +41,12 @@
+     KSysGuard::SensorDataList entries;
+ 
+     for (const QString &sensorPath : sensorPaths) {
++        // A sensor this client already holds gets only a count. Subscribing it
++        // again would add a reference that unsubscribe and disconnect never drop.
++        if (m_subscribedSensors.contains(sensorPath)) {
++            m_subscriptionCounts[sensorPath]++;
++            continue;
++        }
+         if (auto sensor = m_daemon->findSensor(sensorPath)) {
+             Connections connections;
+             connections.valueChanged = connect(sensor, &KSysGuard::SensorProperty::valueChanged, this, [this, sensor]() {
+@@ -53,7 +60,9 @@
+                 m_pendingMetaDataChanges[sensor->path()] = sensor->info();
+             });
+             connections.destroyed = connect(sensor, &KSysGuard::SensorProperty::destroyed, this, [this, sensor]() {
+-                m_subscribedSensors.remove(m_subscribedSensors.key(sensor));
++                const QString path = m_subscribedSensors.key(sensor);
++                m_subscribedSensors.remove(path);
++                m_subscriptionCounts.remove(path);
+                 m_connections.remove(sensor);
+             });
+ 
+@@ -62,6 +71,7 @@
+             sensor->subscribe();
+ 
+             m_subscribedSensors.insert(sensorPath, sensor);
++            m_subscriptionCounts.insert(sensorPath, 1);
+         }
+     }
+ }
+@@ -69,6 +79,10 @@
+ void Client::unsubscribeSensors(const QStringList &sensorPaths)
+ {
+     for (const QString &sensorPath : sensorPaths) {
++        if (auto count = m_subscriptionCounts.find(sensorPath); count != m_subscriptionCounts.end() && --*count > 0) {
++            continue;
++        }
++        m_subscriptionCounts.remove(sensorPath);
+         if (auto sensor = m_subscribedSensors.take(sensorPath)) {
+             auto connections = m_connections.take(sensor);
+             disconnect(connections.valueChanged);
+--- a/src/client.h
++++ b/src/client.h
+@@ -43,6 +43,8 @@
+     Daemon *m_daemon;
+     QHash<QString, KSysGuard::SensorProperty *> m_subscribedSensors;
+     QHash<KSysGuard::SensorProperty *, Connections> m_connections;
++    // How many times this client subscribed to each sensor it holds.
++    QHash<QString, int> m_subscriptionCounts;
+     KSysGuard::SensorDataList m_pendingUpdates;
+     KSysGuard::SensorInfoMap m_pendingMetaDataChanges;
+ };
+--- a/src/daemon.cpp
++++ b/src/daemon.cpp
+@@ -11,6 +11,7 @@
+ #include <chrono>
+ 
+ #include <QDBusConnection>
++#include <QDBusConnectionInterface>
+ #include <QDBusMetaType>
+ #include <QDBusServiceWatcher>
+ 
+@@ -170,6 +171,15 @@
+ {
+     const QString sender = QDBusContext::message().service();
+     m_serviceWatcher->addWatchedService(sender);
++    // A client can leave before the daemon reads its subscribe call, such as one
++    // that reconnects while the session ends. The watcher reports only a later
++    // disconnect, so the sensors of a client already gone would stay subscribed.
++    // The daemon does not quit here: the next queued call may be a live client's.
++    const QDBusReply<bool> registered = connection().interface()->isServiceRegistered(sender);
++    if (registered.isValid() && !registered.value()) {
++        delete m_clients.take(sender);
++        return;
++    }
+ 
+     Client *client = m_clients.value(sender);
+     if (!client) {

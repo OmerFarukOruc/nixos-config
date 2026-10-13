@@ -210,6 +210,11 @@ Facts that matter when you change or measure them:
   usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
   awake, so the kVitals panel widget shows only the Radeon. KWin and
   nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake.
+- A running `nvidia-smi dmon` under ksystemstats means some client still
+  holds an RTX 4070 sensor. After a login on 2026-10-13 it kept running with
+  no client, because ksystemstats kept sensors that a client had subscribed
+  to twice, or had subscribed to as it left. `overlays/ksystemstats.nix`
+  patches both.
 - How the firmware reads a fan curve (the rounding of each point, each fan's
   1 % floor, and the first point's speed below its temperature) is in the
   comment above `fanCurveTable` in `machines/nixos-rog/asus.nix`.

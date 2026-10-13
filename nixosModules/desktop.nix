@@ -145,6 +145,7 @@ in
 
     (lib.mkIf hasPlasma {
       services.desktopManager.plasma6.enable = true;
+      nixpkgs.overlays = [ (import ../overlays/ksystemstats.nix) ];
       # Konsole stays for Dolphin's F4 terminal.
       environment.plasma6.excludePackages = with pkgs.kdePackages; [
         elisa
