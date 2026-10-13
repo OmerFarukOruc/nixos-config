@@ -172,13 +172,13 @@ loaded_version=$(cat /sys/module/nvidia/version 2>/dev/null)
 check nvidia-driver "${loaded_version:-not loaded}" test "$loaded_version" = "$nvidia_version"
 
 # The daemon saves each profile change in its state file and starts in the
-# saved profile, so the current profile survives a reboot. Its ExecStartPost
-# sets balanced only when the file holds none, and a failure fails its start.
+# saved profile, or in balanced without one, so the running profile is the
+# one a reboot brings back.
 profile=$(powerprofilesctl get)
 ppd_state=$(systemctl is-active power-profiles-daemon)
 saved=$(sed -n 's/^Profile=//p' /var/lib/power-profiles-daemon/state.ini 2>/dev/null)
 check ppd-profile-kept "power-profiles-daemon is $ppd_state; saved ${saved:-nothing}, running $profile" \
-  test "$ppd_state/$saved" = "active/$profile"
+  test "$ppd_state/${saved:-balanced}" = "active/$profile"
 # The shell's power menu may pick any profile. Only low battery on battery
 # requires one.
 online=$(cat /sys/class/power_supply/ACAD/online)
