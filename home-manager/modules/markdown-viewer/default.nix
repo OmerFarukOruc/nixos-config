@@ -10,9 +10,11 @@ let
       gnugrep
       libnotify
       pandoc
-      xdg-utils
     ];
-    runtimeEnv.PANDOC_MD_ASSETS = ./assets;
+    runtimeEnv = {
+      PANDOC_MD_ASSETS = ./assets;
+      PANDOC_MD_KATEX = "${pkgs.katex}/lib/node_modules/katex/dist/";
+    };
     text = builtins.readFile ./pandoc-md-viewer.sh;
   };
   mimeTypes = [

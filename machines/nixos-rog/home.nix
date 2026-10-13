@@ -19,6 +19,14 @@
     ./warp-launchers.nix
   ];
 
+  # Both apps register their URL schemes with xdg-mime at start; declaring them
+  # keeps that rewrite of mimeapps.list identical to the Home Manager file.
+  xdg.mimeApps.defaultApplications = {
+    "x-scheme-handler/codex" = [ "chatgpt.desktop" ];
+    "x-scheme-handler/grokbot" = [ "grok-bot.desktop" ];
+    "x-scheme-handler/sand" = [ "grok-bot.desktop" ];
+  };
+
   # This sets only these keys, because input.touchpads would also delete every
   # touchpad key it does not set, such as pointer speed. The group name is this
   # laptop's vendor, product and device name.
