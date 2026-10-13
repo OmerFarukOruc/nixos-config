@@ -79,6 +79,7 @@
       chromium
       code-cursor
       cudaPackages.cudatoolkit
+      devenv
       fastfetch
       frida-tools
       gum
