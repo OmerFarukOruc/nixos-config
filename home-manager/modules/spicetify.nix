@@ -22,9 +22,13 @@ in
     spotifyPackage = pinned.spotify;
     spicetifyPackage = pinned.spicetify-cli;
     # Spotify's stock layout, recoloured with the key mapping of Stylix's
-    # spicetify target.
+    # spicetify target, except player: Marketplace paints its cards with it,
+    # and Stylix's light base04 left their base05 text unreadable.
     theme = {
-      name = "base16";
+      # Marketplace installs a theme only while the local theme is named
+      # marketplace. Its themes override these colours, and removing one
+      # brings them back.
+      name = "marketplace";
       src = pkgs.writeTextFile {
         name = "color.ini";
         destination = "/color.ini";
@@ -37,7 +41,7 @@ in
           highlight          = ${base02}
           highlight-elevated = ${base03}
           sidebar            = ${base01}
-          player             = ${base04}
+          player             = ${base01}
           card               = ${base03}
           shadow             = ${base00}
           selected-row       = ${base04}
@@ -57,10 +61,10 @@ in
     colorScheme = "base";
     enabledExtensions = with spicePkgs.extensions; [
       # keep-sorted start
-      beautifulLyrics
       fullAppDisplay
       history
       keyboardShortcut
+      simpleBeautifulLyrics
       songStats
       # keep-sorted end
     ];
