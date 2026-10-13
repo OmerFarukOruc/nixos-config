@@ -16,6 +16,8 @@ let
     "deskflow"
     "dms-shell"
     "glass-qt6"
+    # pkgs/herdr.nix, until llm-agents packages its version; it leaves with that file.
+    "herdr"
     "kwin-glass"
     # The login screen theme.
     "sddm-astronaut"

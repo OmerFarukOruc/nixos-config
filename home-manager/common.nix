@@ -5,6 +5,7 @@
     ./modules/applications.nix
     ./modules/editor
     ./modules/git.nix
+    ./modules/herdr.nix
     ./modules/idle.nix
     ./modules/launchers
     ./modules/markdown-viewer

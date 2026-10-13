@@ -5,6 +5,7 @@
   ...
 }:
 let
+  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   homeManagerBackup = pkgs.writeShellScript "home-manager-backup" ''
     set -euo pipefail
     target=$1
@@ -29,7 +30,9 @@ in
     extraSpecialArgs = {
       inherit inputs sessions;
       # The llm-agents.nix packages.
-      agents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+      agents = llmAgents // {
+        herdr = pkgs.callPackage ../pkgs/herdr.nix { inherit (llmAgents) herdr; };
+      };
     };
     sharedModules = [
       inputs.nix-index-database.homeModules.nix-index
