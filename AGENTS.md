@@ -13,7 +13,7 @@ fedora-desktop has no Nix, so these scripts run Nix on a copy of this checkout o
 - Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs CI's formatter check and `nix flake check` with import from derivation off.
 - Print one configuration value with `scripts/eval-on-rog.sh <attribute>`.
 - Before deploying a new or changed systemd `script`, run it with `scripts/run-unit-on-rog.sh <unit>`.
-- Before changing power, fan or heat settings, read [Power and heat](docs/nixos-rog.md#power-and-heat). It names the one owner of each setting and the `scripts/thermal-test-rog.sh` load test.
+- Before changing power, fan or heat settings, read [Power and heat](docs/nixos-rog.md#power-and-heat). It names the one owner of each setting and the `scripts/thermal-test-rog.sh` CPU and GPU load test.
 - For a change visible on screen, follow [Check a visual change](docs/nixos-rog.md#check-a-visual-change).
 
 # Nixpkgs
