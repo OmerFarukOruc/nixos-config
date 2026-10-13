@@ -98,6 +98,8 @@ target.
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
+| `scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog |
+| `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
 | `scripts/thermal-test-rog.sh PROFILE` | load nixos-rog's CPU in a power profile and record its temperature, power and fans |
 
 Every deploy command can change boot or running system state.

@@ -98,6 +98,10 @@ When the new system no longer holds some packages, the line before it names
 them, as `dix` lists them under REMOVED. The full `dix` comparison comes
 earlier, before the activation.
 
+After a deploy to nixos-rog, run `scripts/verify-nixos-rog.sh`. For a change
+you can see on screen, follow
+[Check a visual change](nixos-rog.md#check-a-visual-change).
+
 ## What the deploy does
 
 `switch` and `test` activate the candidate, check it, and roll back when a
