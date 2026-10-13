@@ -108,7 +108,7 @@
   home-manager.users.oruc.imports = [ ./home.nix ];
 
   users.users.oruc.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGaQ91S0Z2G3i0IAAYOo+8UoJc2b/ghOMNoapML0INNp oruc@fedora-desktop -> nixos-rog"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h omer-shared-2026-10-13"
   ];
 
   system.stateVersion = "26.11";
