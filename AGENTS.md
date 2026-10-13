@@ -13,11 +13,11 @@
 
 # Lookups
 
-Look up a Nix name, hash or rebuild cause before you write it. Run these on nixos-rog; from fedora-desktop, prefix them with `ssh nixos-rog`. They read upstream nixpkgs, not `flake.lock`, so `scripts/eval-on-rog.sh` stays the source for a value in this configuration. Claude Code also has the same lookups as the `nixos` MCP server.
+Look up a Nix name, hash or rebuild cause before you write it. The tools run on nixos-rog; from fedora-desktop, quote the whole command, as in `ssh nixos-rog '<command>'`, so that `$(...)` expands on rog. They read upstream nixpkgs, not `flake.lock`, so `scripts/eval-on-rog.sh` stays the source for a value in this configuration. Claude Code also has a `nixos` MCP server that searches search.nixos.org.
 
 - Option, package or `lib` name: `nix-search-tv print --indexes <nixos|home-manager|nixpkgs|noogle> | grep <word>`, then `nix-search-tv preview --indexes <index> --json <name>` for its type, default and declaration. Exit 1 means the name does not exist. plasma-manager options are not indexed.
 - Source hash or fetcher block: `nix run nixpkgs#nurl -- --json <url> <rev>`.
 - Draft of a new package with its vendor hash: `NIX_PATH=nixpkgs=$(nix eval --raw nixpkgs#path) nix run nixpkgs#nix-init -- --headless --url <url> --rev <tag> /tmp/draft.nix </dev/null`, then edit the draft.
-- What an edit rebuilds or restarts: take the two `<toplevel>.drvPath` values with `nix eval --raw`, then `nix run nixpkgs#nix-diff -- --color never --skip-already-compared --squash-text-diff <old.drv> <new.drv> | head -n 200`.
-- Why a package is in the closure: `nix why-depends --derivation /run/current-system <store path>`.
-- Which nixpkgs advance broke a build: `nix run nixpkgs#npc` with `--input nixpkgs`, in a copy of the checkout, because `checkout` and `bisect` rewrite `flake.lock`.
+- What an edit rebuilds or restarts: print the system `drvPath` for the change and for `origin/main` (a clean worktree) with `scripts/eval-on-rog.sh '.#nixosConfigurations.<host>.config.system.build.toplevel.drvPath'`, then run `nix run nixpkgs#nix-diff -- --color never --skip-already-compared <old.drv> <new.drv> | head -n 200 | cut -c1-300` on rog.
+- Why a package is in the running system: `nix why-depends /run/current-system <store path>`.
+- Which nixpkgs advance broke a build: in a copy of the checkout, because `npc` rewrites `flake.lock`, run `npc fetch`, then `npc bisect start --input nixpkgs nixos-unstable` and `npc bisect good|bad`, each as `nix run nixpkgs#npc -- <subcommand>`.

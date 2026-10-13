@@ -172,7 +172,8 @@ that checkout's `desktop/bin/desktop-sync.sh --config`. The script links the
 rules, skills, hooks and agents. It also syncs Claude Code's `settings.json` in
 both directions. Home Manager keeps the shell and tools, and adds one entry,
 `~/.claude/skills/claude-code-home-manager`, a plugin that gives Claude Code the
-`nixos` MCP server from `home-manager/modules/applications.nix`.
+`nixos` MCP server from `home-manager/modules/applications.nix`. The same
+server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
 
