@@ -5,12 +5,14 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: scripts/verify-nixos-rog.sh [--suspend] [--lan-ip ADDRESS] [--report FILE]
+Usage: scripts/verify-nixos-rog.sh [--suspend [--while-in-use]] [--lan-ip ADDRESS] [--report FILE]
 
 --suspend      also run three 20-second s2idle cycles with rtcwake and check
                that the kernel counts three successful suspends and that
-               Wi-Fi, the RTX 4070 and the CPU limits come back. The SSH session drops
-               while the laptop sleeps.
+               Wi-Fi, the RTX 4070 and the CPU limits come back. The SSH
+               session drops and the screen goes dark while the laptop
+               sleeps, so the cycles do not run while someone uses the laptop.
+--while-in-use run the cycles even while a local session is in use.
 --lan-ip       the laptop's Wi-Fi address, to check that SSH does not answer
                on the LAN; tailscale0 is the only way in.
 --report FILE  where to write the JSON report (default: a timestamped file
@@ -34,11 +36,13 @@ EOF
 host=nixos-rog
 octet='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
 suspend=false
+while_in_use=false
 lan_ip=
 report=
 while (($# > 0)); do
   case $1 in
     --suspend) suspend=true ;;
+    --while-in-use) while_in_use=true ;;
     --lan-ip | --report)
       if (($# < 2)); then
         usage
@@ -193,10 +197,10 @@ expected_boost=1
 boost=$(sort -u /sys/devices/system/cpu/cpufreq/policy*/boost | tr '\n' ' ')
 boost=${boost% }
 check boost-per-profile "boost=$boost in $profile" test "$boost" = "$expected_boost"
-# The firmware sets its package power limits from the platform profile (under
-# stress-ng on CachyOS: quiet 45 W, balanced and performance 60 W), while the
-# asus-armoury ppt_* values only echo what was last written. So the check is
-# that each daemon profile reaches the platform profile.
+# asusd writes the asus-armoury ppt_* power limits on each platform profile
+# change, and the firmware applies them: ryzenadj -i shows them as its STAPM
+# and PPT limits. This check covers the step before, that each daemon profile
+# reaches the platform profile.
 restore_profile() {
   sudo powerprofilesctl set "$profile" && [[ $(powerprofilesctl get) == "$profile" ]]
 }
@@ -361,6 +365,26 @@ if [[ -n $lan_ip ]]; then
     record lan-ssh-port pass "TCP 22 on $lan_ip refuses connections"
   else
     record lan-ssh-port fail "probe of $lan_ip:22 failed (exit $probe): $probe_error"
+  fi
+fi
+
+# A suspend darkens the screen of whoever uses the laptop. In use means the
+# seat's active session is a local user session that is neither idle nor
+# locked. The host exits 0 only when it read the session and it is not in
+# use, so a failed read also stops the cycles.
+if [[ $suspend == true && $while_in_use == false ]]; then
+  if ! ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
+set -euo pipefail
+id=$(loginctl show-seat seat0 -p ActiveSession --value)
+[[ -n $id ]] || exit 0
+# loginctl prints the properties in its own order, so sort them.
+session=$(loginctl show-session "$id" -p Class -p Remote -p IdleHint -p LockedHint | sort | paste -sd ' ')
+[[ $session != 'Class=user IdleHint=no LockedHint=no Remote=no' ]]
+REMOTE
+  then
+    record suspend-three-cycles fail \
+      "not suspended: a local session is in use or could not be read; lock the screen or rerun with --while-in-use"
+    suspend=false
   fi
 fi
 

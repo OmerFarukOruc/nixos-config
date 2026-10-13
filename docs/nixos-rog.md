@@ -183,7 +183,10 @@ scripts/verify-nixos-rog.sh
 ```
 
 The script writes a JSON report under `~/.local/state/nixos-config-verify/`.
-It exits 1 when a check fails. `--suspend` adds three s2idle cycles.
+It exits 1 when a check fails. `--suspend` adds three s2idle cycles. They
+darken the screen, so they do not run, and the check fails, while someone uses
+the laptop: a local session that is neither idle nor locked. Lock the screen
+first, or pass `--while-in-use`.
 It also checks that the Plasma panel widgets are installed and that KWin
 loaded the effects the config turns on. A Plasma session that started before
 the deploy shows as manual, because it keeps the plugins of the old system;
