@@ -49,8 +49,14 @@ new kernel runs after the next boot.
 
 Keep these steps outside the repository:
 
-1. Copy Omer's shared key `~/.ssh/id_ed25519_omer` from another of his
-   devices over SSH, mode 0600. GitHub already lists its public key.
+1. Copy Omer's shared key `~/.ssh/id_ed25519_omer` and its `.pub` from another
+   of his devices over SSH, mode 0600. GitHub already lists its public key. The
+   key has a password. Save it in the host's KWallet, so the gcr ssh-agent
+   unlocks the key on first use after each login:
+
+   ```sh
+   secret-tool store --label='Unlock password for: omer-all-devices' unique ssh-store:$HOME/.ssh/id_ed25519_omer
+   ```
 2. Run `gh auth login --git-protocol ssh` interactively. Store the resulting
    credential in the session Secret Service; never add `hosts.yml` to Git.
 3. Enroll the shared public key as a GitHub signing key.
