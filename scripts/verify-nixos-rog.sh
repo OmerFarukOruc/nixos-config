@@ -93,8 +93,9 @@ if [[ ! -r $facts ]]; then
 fi
 . "$facts"
 for fact in low_battery_percent nvidia_version wifi \
-  cpu_temp_limit_power_saver cpu_temp_limit_balanced \
-  cpu_max_khz_power_saver cpu_max_khz_balanced; do
+  cpu_temp_limit_power_saver cpu_temp_limit_balanced cpu_temp_limit_performance \
+  cpu_max_khz_power_saver cpu_max_khz_balanced cpu_max_khz_performance \
+  fan_temps_quiet_cpu fan_pwms_quiet_cpu armoury_ac_quiet_ppt_pl1_spl; do
   if [[ -z ${!fact:-} ]]; then
     exit 66
   fi
@@ -200,10 +201,44 @@ expected_boost=1
 boost=$(sort -u /sys/devices/system/cpu/cpufreq/policy*/boost | tr '\n' ' ')
 boost=${boost% }
 check boost-per-profile "boost=$boost in $profile" test "$boost" = "$expected_boost"
-# asusd writes the asus-armoury ppt_* power limits on each platform profile
-# change, and the firmware applies them: ryzenadj -i shows them as its STAPM
-# and PPT limits. This check covers the step before, that each daemon profile
-# reaches the platform profile.
+# asusd writes the asus-armoury limits and the fan curves of the platform
+# profile on each profile change, and the firmware applies the ppt_* limits:
+# ryzenadj -i shows them as its STAPM and PPT limits. These checks switch to
+# each profile and compare what reaches sysfs with the deployed config.
+# The kernel keeps the curve it last sent to the firmware in the
+# asus_custom_fan_curve hwmon, where pwmN_enable reads 1 while it applies.
+curve_dir=
+for dir in /sys/class/hwmon/hwmon*; do
+  [[ $(<"$dir/name") == asus_custom_fan_curve ]] && curve_dir=$dir
+done
+power_source=dc
+[[ $online == 1 ]] && power_source=ac
+# asus-wmi numbers the fans pwm1 to pwm3 in this order.
+fans=([1]=cpu [2]=gpu [3]=mid)
+# Prints each fan whose live curve differs from the facts of platform profile $1.
+fan_curve_diffs() {
+  local n temps_fact pwms_fact temps pwms enable
+  [[ -n $curve_dir ]] || { echo "no asus_custom_fan_curve hwmon"; return; }
+  for n in "${!fans[@]}"; do
+    temps_fact=fan_temps_${1}_${fans[n]} pwms_fact=fan_pwms_${1}_${fans[n]}
+    temps=$(cat "$curve_dir"/pwm${n}_auto_point{1..8}_temp | paste -sd,)
+    pwms=$(cat "$curve_dir"/pwm${n}_auto_point{1..8}_pwm | paste -sd,)
+    enable=$(<"$curve_dir/pwm${n}_enable")
+    [[ $temps == "${!temps_fact}" && $pwms == "${!pwms_fact}" && $enable == 1 ]] ||
+      echo "$1 ${fans[n]} temps $temps pwms $pwms enable $enable, want ${!temps_fact} ${!pwms_fact} 1"
+  done
+}
+# Prints each asus-armoury limit that differs from the facts of platform
+# profile $1 on the current power source.
+armoury_diffs() {
+  local prefix=armoury_${power_source}_${1}_ fact attribute live
+  for fact in ${!armoury_@}; do
+    [[ $fact == "$prefix"* ]] || continue
+    attribute=${fact#"$prefix"}
+    live=$(<"$armoury/$attribute/current_value")
+    [[ $live == "${!fact}" ]] || echo "$1 $attribute=$live, want ${!fact}"
+  done
+}
 restore_profile() {
   sudo powerprofilesctl set "$profile" && [[ $(powerprofilesctl get) == "$profile" ]]
 }
@@ -211,18 +246,25 @@ trap restore_profile EXIT HUP
 platform=()
 cpu=()
 cpu_ok=true
-for target in power-saver balanced; do
+fan_found=()
+armoury_found=()
+for target in power-saver balanced performance; do
   sudo powerprofilesctl set "$target" && sleep 1
-  platform+=("$target=$(</sys/firmware/acpi/platform_profile)")
+  pp=$(</sys/firmware/acpi/platform_profile)
+  platform+=("$target=$pp")
   # oruc-cpu-limits applies the limits after the profile change signal.
   want=$(expected_cpu_limits "$target")
   for _ in {1..5}; do
     got=$(cpu_limits)
-    [[ $got == "$want" ]] && break
+    fan_diff=$(fan_curve_diffs "$pp")
+    armoury_diff=$(armoury_diffs "$pp")
+    [[ $got == "$want" && -z $fan_diff$armoury_diff ]] && break
     sleep 1
   done
   [[ $got == "$want" ]] || cpu_ok=false
   cpu+=("$target=$got/want=$want")
+  [[ -z $fan_diff ]] || fan_found+=("${fan_diff//$'\n'/; }")
+  [[ -z $armoury_diff ]] || armoury_found+=("${armoury_diff//$'\n'/; }")
 done
 if restore_profile; then
   trap - EXIT HUP
@@ -231,8 +273,12 @@ else
   printf 'power-profile-restored\tfail\t%s\n' "could not set $profile again; the laptop may stay in another profile"
 fi
 check platform-profile-follows "${platform[*]}" \
-  test "${platform[*]}" = "power-saver=quiet balanced=balanced"
+  test "${platform[*]}" = "power-saver=quiet balanced=balanced performance=performance"
 check cpu-limits-follow-profile "${cpu[*]}" test "$cpu_ok" = true
+check fan-curves-follow-profile "${fan_found[*]:-every fan of quiet, balanced and performance matches}" \
+  test "${#fan_found[@]}" -eq 0
+check armoury-limits-follow-profile "${armoury_found[*]:-quiet, balanced and performance match on $power_source}" \
+  test "${#armoury_found[@]}" -eq 0
 # A long-running oruc-* service that crashed, for example on a command its
 # path lacks, shows as inactive or restarted; its restart count clears when
 # the unit restarts. Oneshots and units a timer starts are left out.

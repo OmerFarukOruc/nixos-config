@@ -1,5 +1,5 @@
-# Home Manager layer of nixos-rog: its own apps, htop meters and session
-# variables, on top of the workstation profile.
+# Home Manager layer of nixos-rog: its own apps and session variables, on
+# top of the workstation profile.
 {
   agents,
   config,
@@ -60,9 +60,6 @@
           ${config.xdg.configHome}/Deskflow/Deskflow.conf log toFile true
       '';
 
-  # The Ryzen AI 9 HX 370 has 24 threads.
-  oruc.htop.cpuColumns = 4;
-
   home.sessionVariables = {
     # Playwright uses the nixpkgs browsers; npm's downloaded ones do not run here.
     PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
@@ -88,7 +85,6 @@
       jadx
       kdePackages.kate
       lmstudio
-      micro
       mitmproxy
       nvtopPackages.full
       obsidian

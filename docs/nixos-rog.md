@@ -170,7 +170,10 @@ The Claude Code and Codex setup comes from the dotfiles checkout at
 `~/Desktop/workspace/dotfiles`. Every hour, `desktop-sync-config.timer` runs
 that checkout's `desktop/bin/desktop-sync.sh --config`. The script links the
 rules, skills, hooks and agents. It also syncs Claude Code's `settings.json` in
-both directions. Home Manager keeps the shell and tools.
+both directions. Home Manager keeps the shell and tools, and adds one entry,
+`~/.claude/skills/claude-code-home-manager`, a plugin that gives Claude Code the
+`nixos` MCP server from `home-manager/modules/applications.nix`. The same
+server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
 
@@ -206,6 +209,22 @@ Facts that matter when you change or measure them:
   usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
   awake, so the kVitals panel widget shows only the Radeon. KWin and
   nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake.
+- How the firmware reads a fan curve (the rounding of each point, each fan's
+  1 % floor, and the first point's speed below its temperature) is in the
+  comment above `fanCurveTable` in `machines/nixos-rog/asus.nix`.
+- The fans do not follow Tctl exactly. On 2026-10-13 the MID fan kept turning
+  at a Tctl of 47 °C, under its 52 °C first point, and stopped at 44 °C. Judge
+  a curve change by the fan speeds over a few minutes, not by one sample.
+- ROG Control Center shows each curve point as PWM × 100 / 255, rounded down,
+  and reads the curves from asusd. `asusctl fan-curve --mod-profile quiet`
+  (or `balanced`, `performance`) prints the same curves without the app.
+- `nvidia-smi` reports a 105 W power limit whatever asusd sets, and read
+  105 W with `nv_tgp` at 70 and at 85. The limits asusd set are the `current_value`
+  files under `/sys/class/firmware-attributes/asus-armoury/attributes/`. On AC
+  on 2026-10-13, under the thermal test's `--load gpu`, the RTX 4070 drew
+  about 80 W in balanced (`nv_tgp` 55, `nv_dynamic_boost` 5) and about 105 W
+  in performance (85 and 20). With 2 CPU threads also loaded, it drew about
+  60 W in balanced.
 
 To measure a profile, or a change to its limits or fan curves before you
 commit it, run the thermal test. It heats the laptop and runs the fans hard
@@ -239,8 +258,10 @@ It exits 1 when a check fails. `--suspend` adds three s2idle cycles. They
 darken the screen, so they do not run, and the check fails, while someone uses
 the laptop: a local session that is neither idle nor locked. Lock the screen
 first, or pass `--while-in-use`.
-It also checks that the Plasma panel widgets are installed and that KWin
-loaded the effects the config turns on. A Plasma session that started before
+It switches to each power profile and checks that the fan curves and
+asus-armoury limits there match the deployed config. It also checks that the
+Plasma panel widgets are installed and that KWin loaded the effects the config
+turns on. A Plasma session that started before
 the deploy shows as manual, because it keeps the plugins of the old system;
 log out and in, then rerun.
 
