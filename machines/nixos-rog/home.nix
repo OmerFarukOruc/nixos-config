@@ -103,6 +103,7 @@
     ]
     ++ [
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
+      (pkgs.callPackage ../../pkgs/grok-bot.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
     ]
     ++ (with agents; [
