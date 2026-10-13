@@ -72,15 +72,17 @@
  #include <QDBusMetaType>
  #include <QDBusServiceWatcher>
  
-@@ -170,6 +171,13 @@
+@@ -170,6 +171,15 @@
  {
      const QString sender = QDBusContext::message().service();
      m_serviceWatcher->addWatchedService(sender);
 +    // A client can leave before the daemon reads its subscribe call, such as one
 +    // that reconnects while the session ends. The watcher reports only a later
 +    // disconnect, so the sensors of a client already gone would stay subscribed.
-+    if (!connection().interface()->isServiceRegistered(sender)) {
-+        onServiceDisconnected(sender);
++    // The daemon does not quit here: the next queued call may be a live client's.
++    const QDBusReply<bool> registered = connection().interface()->isServiceRegistered(sender);
++    if (registered.isValid() && !registered.value()) {
++        delete m_clients.take(sender);
 +        return;
 +    }
  
