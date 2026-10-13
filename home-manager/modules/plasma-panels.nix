@@ -24,33 +24,60 @@ let
     };
   };
 
-  # kVitals copies these keys into its first profile when the panels are built
-  # again, so the settings made in Plasma survive the rebuild. Only the keys
-  # that differ from its defaults (package/contents/config/main.xml) are here.
+  # kVitals keeps its settings in profiles. When the panels are built again,
+  # it copies its settings into a new first profile as soon as it loads, which
+  # can be before plasma-manager has written them all; a key written later
+  # stays out of the profile. So the settings are also the package's defaults
+  # (contents/config/main.xml), which the copy reads for a key not yet written.
+  # Only the keys that differ from kVitals' own defaults are here.
   # Showing the RTX 4070's sensors keeps it awake (docs/nixos-rog.md, Power and
   # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in DRM card
   # order; on nixos-rog, the only hybrid machine, nvidia-drm registers first, so
   # gpu1 is the Radeon 890M.
   # kVitals colors its own text, so the top bar's accent color reaches it only
   # through fontColor. Its threshold colors still take precedence.
+  kvitalsSettings = {
+    pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,bat/power,uptime/uptime";
+    layoutType = "vertical";
+    iconSize = 8;
+    fontBold = true;
+    updateInterval = 1000;
+    enableThresholdColors = true;
+    labelOpacity = 0.5;
+    separatorOpacity = 1;
+    useCustomColors = true;
+    fontColor = osConfig.scheme.withHashtag.base0D;
+  }
+  // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
+    gpuSelection = "gpu1";
+  };
   kvitals = {
     name = "org.kde.plasma.kvitals";
-    config.General = {
-      pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,bat/power,uptime/uptime";
-      layoutType = "vertical";
-      iconSize = 8;
-      fontBold = true;
-      updateInterval = 1000;
-      enableThresholdColors = true;
-      labelOpacity = 0.5;
-      separatorOpacity = 1;
-      useCustomColors = true;
-      fontColor = osConfig.scheme.withHashtag.base0D;
-    }
-    // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
-      gpuSelection = "gpu1";
-    };
+    config.General = kvitalsSettings;
   };
+  kvitalsPackage = (pkgs.callPackage ../../pkgs/kvitals.nix { }).overrideAttrs (old: {
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.xmlstarlet ];
+    postInstall =
+      (old.postInstall or "")
+      + ''
+        xml=$out/share/plasma/plasmoids/org.kde.plasma.kvitals/contents/config/main.xml
+      ''
+      + lib.concatStrings (
+        lib.mapAttrsToList (
+          key: value:
+          let
+            text = lib.escapeShellArg (
+              if builtins.isBool value then lib.boolToString value else toString value
+            );
+            entry = "//k:entry[@name='${key}']/k:default";
+          in
+          ''
+            xmlstarlet ed -L -N k=http://www.kde.org/standards/kcfg/1.0 -u "${entry}" -v ${text} "$xml"
+            [ "$(xmlstarlet sel -N k=http://www.kde.org/standards/kcfg/1.0 -t -v "${entry}" "$xml")" = ${text} ]
+          ''
+        ) kvitalsSettings
+      );
+  });
 
   allCorners = value: {
     topLeft = value;
@@ -151,7 +178,7 @@ in
   # plasma-org.kde.plasma.desktop-appletsrc at the next login and builds the
   # panels again, so a panel or widget change made in Plasma lasts only until then.
   config = lib.mkIf isPlasma {
-    home.packages = [ (pkgs.callPackage ../../pkgs/kvitals.nix { }) ];
+    home.packages = [ kvitalsPackage ];
 
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
