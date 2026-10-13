@@ -38,8 +38,19 @@ rm -f "$manager/last_run_desktop_script_panels"
 systemctl --user stop plasma-plasmashell
 systemctl --user restart plasma-ksystemstats
 systemctl --user start plasma-plasmashell
-sleep 1
+# The panel script needs plasmashell's scripting interface.
+for _ in {1..20}; do
+  qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript 'print(1)' >/dev/null 2>&1 && break
+  sleep 1
+done
 "$manager/run_all.sh"
+# The panel script exits 0 even when plasmashell rejects it, and writes its
+# last-run record only after a success.
+if [[ ! -e $manager/last_run_desktop_script_panels ]]; then
+  echo "plasma-manager's panel script failed, so the panels may be missing." >&2
+  echo "To put the old panels back, stop plasma-plasmashell, copy the files from $backup to ~/.config and start it." >&2
+  exit 1
+fi
 
 for dev in /sys/bus/pci/devices/*; do
   if [[ $(<"$dev/vendor") == 0x10de && $(<"$dev/class") == 0x030* ]]; then
