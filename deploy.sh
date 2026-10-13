@@ -443,6 +443,17 @@ if command -v dix >/dev/null; then
   fi
 fi
 
+# A unit ordered after a service that itself starts after the target that
+# wants the unit forms an ordering cycle; the next boot then waits on it and
+# never reaches that target. The candidate's systemd-analyze reads only the
+# candidate's units; it exits 0 also when it finds a cycle.
+analysis=$(SYSTEMD_UNIT_PATH="$new/etc/systemd/system" "$new/sw/bin/systemd-analyze" verify default.target 2>&1) ||
+  printf '%s\n' "$analysis" 'systemd-analyze could not check the new units for an ordering cycle.' >&2
+if grep -q 'Found ordering cycle' <<<"$analysis"; then
+  printf '%s\n' "$analysis" 'The new system would not finish booting. Nothing on the target changed.' >&2
+  exit 80
+fi
+
 # When the ESP did not mount, the boot entries would land in the root
 # filesystem's /boot, where the firmware never looks.
 if [[ $action != test ]] && ! mountpoint -q /boot; then

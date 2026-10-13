@@ -102,31 +102,33 @@ The deploy runs these steps in order:
    target changes.
 6. It prints dix's comparison of the running and the new system. A failed
    comparison does not stop the deploy.
-7. Before it changes the boot default, it checks that `/boot` is mounted
+7. It checks that the candidate's units hold no ordering cycle, which would
+   stop the next boot before it reaches its targets (exit 80).
+8. Before it changes the boot default, it checks that `/boot` is mounted
    (exit 79 otherwise).
-8. It checks the free space on the ESP. The ESP needs room for all kernels and
+9. It checks the free space on the ESP. The ESP needs room for all kernels and
    initrds of the new generation and its specialisations together, plus 1 GiB.
    Without that room, it exits 74 and does not touch the ESP.
-9. For `switch` and `test`, when the deploy user is logged in, it records that
-   user's running services. The list leaves out:
-   - services that a timer, socket or path started
-   - apps that a launcher started (`app-*`)
-   - `systemd-run` jobs (`run-*`)
-   - transient D-Bus services (`dbus-*`)
+10. For `switch` and `test`, when the deploy user is logged in, it records that
+    user's running services. The list leaves out:
+    - services that a timer, socket or path started
+    - apps that a launcher started (`app-*`)
+    - `systemd-run` jobs (`run-*`)
+    - transient D-Bus services (`dbus-*`)
 
-   When the deploy cannot list the services, it stops before it arms the
-   rollback timer.
-10. It arms the rollback timer for 420 seconds (exit 71 when it cannot).
-11. It activates the candidate with `switch-to-configuration test` in a system
+    When the deploy cannot list the services, it stops before it arms the
+    rollback timer.
+11. It arms the rollback timer for 420 seconds (exit 71 when it cannot).
+12. It activates the candidate with `switch-to-configuration test` in a system
     service, so an SSH drop cannot interrupt the activation.
-12. It opens fresh SSH logins and checks that `sshd` and `tailscaled` are
+13. It opens fresh SSH logins and checks that `sshd` and `tailscaled` are
     active.
-13. Twenty seconds after the SSH check, it checks the recorded user services.
+14. Twenty seconds after the SSH check, it checks the recorded user services.
     The next list says what happens when this check fails.
-14. It stops the rollback timer.
-15. For `switch`, it makes the checked build the system profile and boot
+15. It stops the rollback timer.
+16. For `switch`, it makes the checked build the system profile and boot
     default. It does not build or activate the build again.
-16. After the whole deploy succeeds, it updates `current` and copies the
+17. After the whole deploy succeeds, it updates `current` and copies the
     target's `flake.lock` into this repository. Then it prints
     `Deployment completed from release <release>.`
 
@@ -135,7 +137,7 @@ locally. It checks the two units without an SSH login.
 
 When a step after the build fails, the deploy acts as follows:
 
-- **A user service fails the step 13 check.** One of them failed or waits to
+- **A user service fails the step 14 check.** One of them failed or waits to
   restart, or the deploy cannot query them. The deploy restores the previous
   system at once and exits 75. This check catches a switch that breaks the
   desktop shell or compositor while SSH still answers.
@@ -185,6 +187,7 @@ such as 1.
 | 77 | Another deploy holds the lock on the host. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
+| 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
 
 ## One deploy at a time
 
