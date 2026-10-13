@@ -33,8 +33,10 @@
         path: boot():/EFI/Microsoft/Boot/bootmgfw.efi
   '';
 
-  # asus-armoury, which sets the GPU mode and power limits, is in mainline
-  # from 6.19, so the stock 6.18 kernel cannot drive this laptop.
+  # The recovery boot entry runs the newest mainline kernel. asus-armoury, which
+  # sets the GPU mode and power limits, is in mainline from 6.19, so the stock
+  # 6.18 kernel cannot drive this laptop. The normal entry runs the CachyOS
+  # kernel of kernel.profile in machines/inventory.nix.
   oruc.recovery.kernelPackages = pkgs.linuxPackages_latest;
 
   # Turkey's Wi-Fi rules instead of the world domain, which limits channels

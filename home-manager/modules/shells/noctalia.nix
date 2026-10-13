@@ -138,7 +138,7 @@ in
             network_speed_compact = true;
           };
         };
-        # Reserves no space, and reveals from the bottom edge.
+        # The dock reserves no space and reveals from the bottom edge.
         dock = {
           enabled = true;
           position = "bottom";

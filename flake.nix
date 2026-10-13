@@ -3,6 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # scripts/update-kernel.sh moves this input, only to a revision that the
+    # kernel-cache workflow has built. scripts/move-inputs.sh skips it.
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
     base16.url = "github:SenchoPens/base16.nix";
     base16-schemes = {
@@ -17,7 +19,7 @@
       url = "github:AvengeMedia/DankMaterialShell/v1.6.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # No nixpkgs follows: cache.numtide.com holds builds for its own nixpkgs.
+    # No nixpkgs follows, because cache.numtide.com holds builds for its own nixpkgs.
     llm-agents.url = "github:numtide/llm-agents.nix";
     nvf = {
       url = "github:NotAShelf/nvf";

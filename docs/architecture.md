@@ -1,5 +1,12 @@
 # How the flake fits together
 
+- [Inventory](#inventory)
+- [Login sessions](#login-sessions)
+- [Add a host, launcher, shell or kernel profile](#add-a-host-launcher-shell-or-kernel-profile)
+- [Theme](#theme)
+- [Home Manager](#home-manager)
+- [kernel-cache](#kernel-cache)
+
 The flake builds `nixos-latitude` and `nixos-rog`. `nixos-desktop` stays an
 inert inventory record until its real hardware configuration and host policy
 exist.
@@ -9,22 +16,42 @@ exist.
 Shared NixOS policy lives in `nixosModules/`. Active host files live in
 `machines/<host>/`.
 
-The typed `oruc.machine` record in `machines/inventory.nix` is the source of
-these host facts:
+`nixosModules/default.nix` imports the modules every host uses, and it imports
+`nixosModules/workstation.nix`, which lists the workstation modules. Each module
+turns itself on from the machine record. It reads `kind`, `gpu` or a
+`features.*` switch, or it asks the `sessions` helpers (the module argument that
+`nixosModules/machine.nix` passes) which desktops and shells the machine offers.
+A new module goes in one of the two import lists and gates its own config on the
+record.
 
-- the host name
-- hardware-neutral machine facts
+`machines/inventory.nix` holds one value per machine for the typed
+`oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:
+
+- the host name, system, kind, form factor, GPU class and battery flag
 - the boot loader
+- the kernel profile and the Base16 scheme
 - the login sessions, described in [Login sessions](#login-sessions)
 - the launcher
 - the idle and touchpad settings
 - optional service gates
 
-Every session reads the same idle and touchpad settings:
+The other files in `machines/` define what a record may hold:
 
-- Plasma reads them through powerdevil and kcminputrc.
-- niri reads them through the touchpad section of `/etc/niri/host.kdl` and one
-  swayidle service (`home-manager/modules/idle.nix`) under either shell.
+- `schema.nix` declares each option, its default, and the checks that reject an
+  invalid record. For example, only a workstation offers a desktop session.
+- `selectors.nix` lists the valid launchers, shells and kernel profiles, and the
+  desktops that each launcher and shell supports.
+- `schemes.nix` lists the Base16 scheme names.
+- `sessions.nix` has the `sessions` helpers.
+
+Every session reads the same idle and touchpad settings. Plasma reads the idle
+settings through powerdevil (`home-manager/modules/plasma-manager.nix`). It reads
+the touchpad settings through a kcminputrc entry for the touchpad's device id,
+which each Plasma host writes in its own `home.nix`
+(`machines/nixos-rog/home.nix`). niri reads the touchpad section of
+`/etc/niri/host.kdl` and one swayidle service (`home-manager/modules/idle.nix`)
+under either shell. A machine with no battery uses only the AC idle values under
+niri.
 
 By default, on battery, the screen dims after 2 minutes and turns off after 5.
 On AC it does neither. The screen never locks, and the machine never suspends.
@@ -53,14 +80,39 @@ These rules follow from the list:
   own. The session's launcher sets `ORUC_SHELL`, and each shell's services
   start only when it matches. For niri the launcher also sets `NIRI_CONFIG` to
   a file that adds the shell's binds after `/etc/niri/config.kdl`.
+  A niri session that is already open misses a deploy that changes the
+  launcher. [Deploy](deploy.md#deploy) says how to tell and what to do.
 - **Plasma owns the shared look.** With Plasma present, Plasma owns
   `kdeglobals`, the GTK settings and the cursor, and the niri session inherits
   them. A niri-only machine keeps the files that Home Manager writes.
 
+## Add a host, launcher, shell or kernel profile
+
+- **A host.** Add a record to `rawMachines` in `machines/inventory.nix`. A record
+  alone stays inert, as `nixos-desktop` does. To build the host, add a
+  `nixosConfigurations.<name>` block in the same file, with `hostModules` that
+  name `machines/<name>/configuration.nix` and `hardware-configuration.nix`.
+- **A launcher.** Add it to `launcherSpecs` in `machines/selectors.nix` and
+  create `home-manager/modules/launchers/<name>.nix`. `launchers/default.nix`
+  imports a file for each name in `selectors.nix`.
+- **A shell.** Add it to `shellSpecs` in `machines/selectors.nix` and create
+  `home-manager/modules/shells/<name>.nix`. A niri shell also needs
+  `niri/shells/<name>.kdl` with its binds, because niri treats a missing include
+  as an error.
+- **A kernel profile.** Add it to `kernelSpecs` in `machines/selectors.nix`. For
+  the cache to hold a CachyOS profile's build, name it
+  `cachyos-latest-lto-<variant>` and set its `package` to
+  `[ "cachyosKernels" "linuxPackages-cachyos-latest-lto-<variant>" ]`. Then add `<variant>` to
+  `variants` and a `hostPackages` entry (an empty list is valid) in
+  `kernel-cache/flake.nix`. The kernel-cache workflow reads `variants`.
+
 ## Theme
 
-`nixosModules/theme.nix` derives the read-only `oruc.theme` values (variant,
-cursor, icons, wallpaper, ANSI slots) from the selected Base16 scheme.
+`nixosModules/theme.nix` derives the read-only `oruc.theme` values from the
+selected Base16 scheme (`theme.scheme` in the machine record). The values are
+whether the scheme is light, the cursor, icons and GTK theme that follow that
+variant, the wallpaper named after the scheme, and the ANSI slots. The font
+families are fixed.
 
 ## Home Manager
 
@@ -71,9 +123,10 @@ cursor, icons, wallpaper, ANSI slots) from the selected Base16 scheme.
 ## kernel-cache
 
 `kernel-cache/` is a separate flake. GitHub Actions builds it into the
-`omerfarukoruc` Cachix cache. The cache holds the CachyOS kernel and the NVIDIA
-open module. The [kernel-cache README](../kernel-cache/README.md)
-explains how the hosts follow it.
+`omerfarukoruc` Cachix cache. The cache holds the CachyOS kernels, the NVIDIA
+open modules, and ryzen-smu and turbostat for zen4. The
+[kernel-cache README](../kernel-cache/README.md) explains how the hosts follow
+it.
 
 The same cache holds the host packages in `ci/cached-packages.nix`, which the
 host-packages-cache workflow builds from each host's configuration.

@@ -1,7 +1,8 @@
 name: kernel-cache
 
 on:
-  # The hourly host updates merge to main too; only builder changes start a build.
+  # The hourly host updates merge to main too; only changes to these paths start
+  # a build.
   push:
     branches: [main]
     paths:
@@ -103,8 +104,8 @@ jobs:
       - name: Lock the chosen revision
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
 
-      # Build times differ by about 2x between runs of the same work, so record
-      # the runner's CPU next to them.
+      # Build times vary between runs of the same work, so record the runner's
+      # CPU next to them.
       - name: Show the runner's CPU
         run: |
           echo "$(nproc) CPUs: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)"
@@ -140,6 +141,8 @@ jobs:
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
 
       # Hosts read this file to check the cache before they lock this revision.
+      # The version comes from the x86_64-v3 kernel, so keep that variant in
+      # `variants` in flake.nix, or change this name.
       - name: Record the cached paths
         run: |
           # shellcheck disable=SC2016 # a Nix expression, not shell

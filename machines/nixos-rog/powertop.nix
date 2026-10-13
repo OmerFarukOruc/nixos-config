@@ -18,7 +18,8 @@ in
   };
 
   services.udev.extraRules = ''
-    # The ITE keyboard, kept out of autosuspend as in github.com/rajeevmen0n/nix.
+    # The keyboard (USB 0b05:19b6, the Aura device of asus.nix) stays out of
+    # autosuspend.
     ACTION=="bind", SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="19b6", TEST=="power/control", ATTR{power/control}="on"
     # The MT7925 Wi-Fi card is the only network link; its ASPM is already off
     # because the link dropped (network.nix).

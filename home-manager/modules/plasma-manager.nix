@@ -83,10 +83,11 @@ in
         };
         Plugins.glassEnabled = true;
         # On KWin 6.7 the only blur global is ext_background_effect_manager_v1,
-        # and Ghostty 1.3.1 asks only through org_kde_kwin_blur_manager. Glass
-        # forces blur behind the see-through pixels of every window only when
-        # BlurDecorations is on. Its window class list stays a blacklist,
-        # because a whitelist also drops the blur that panels ask for.
+        # and Ghostty 1.3.1 asks only through org_kde_kwin_blur_manager; recheck
+        # both when either updates. Glass forces blur behind the see-through
+        # pixels of every window only when BlurDecorations is on. Its window
+        # class list stays a blacklist, because a whitelist also drops the blur
+        # that panels ask for.
         Effect-blurplus = {
           BlurDecorations = true;
           # In blacklist mode these window classes get no blur. The ChatGPT
@@ -158,8 +159,8 @@ in
       # web shortcuts whenever plasma-manager is enabled.
       configFile.kuriikwsfilterrc = lib.mkForce { };
 
-      # Plasma's own power profile switch, also on Fn+F5 (Launch4) of the ROG
-      # laptop, as in the niri sessions.
+      # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
+      # ROG laptop, as in the Noctalia and DMS sessions.
       shortcuts.org_kde_powerdevil.powerProfile = [
         "Battery"
         "Meta+B"

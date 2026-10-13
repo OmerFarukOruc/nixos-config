@@ -36,8 +36,9 @@ fi
 host=$1
 action=${2:-switch}
 repo_dir=$(cd "$(dirname "$0")" && pwd)
-# The keepalive drops a dead connection within 30 s, which also frees the deploy
-# lock that connection holds.
+# A dead connection ends after 30 s here and after 45 s in the target's sshd
+# (nixosModules/connectivity.nix). The target's end frees the deploy lock that
+# the connection holds.
 ssh_opts=(-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 deployer=$(</proc/sys/kernel/hostname)
 local_target=false
@@ -248,7 +249,8 @@ ensure_lock() {
 
 # Prints each path whose version in the live release ($1, a blobs file) is
 # neither the candidate's nor anywhere in this checkout's history. A squash
-# merge keeps every merged version in the history, so merged work passes.
+# merge keeps the final version of each file, so work whose deployed files match
+# what merged passes.
 dropped_paths() {
   local history="$deploy_state_dir/history"
   if [[ ! -f $history ]]; then

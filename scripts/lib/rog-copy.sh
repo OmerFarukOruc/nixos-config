@@ -1,6 +1,7 @@
 # shellcheck shell=bash disable=SC2119,SC2120 # callers pass rog_remote its ARGs
-# Sourced by the scripts/*-on-rog.sh scripts after they cd to the checkout's
-# root. fedora-desktop has no Nix, so they work on a copy of this checkout on
+# Sourced by the scripts that run Nix on a copy of this checkout (build-on-rog.sh,
+# check-on-rog.sh, eval-on-rog.sh, run-unit-on-rog.sh) after they cd to the
+# checkout's root. fedora-desktop has no Nix, so they work on a copy on
 # nixos-rog. The copy holds the tracked files and the new files that
 # .gitignore does not exclude, as they are in the working tree.
 ROG_HOST=nixos-rog
@@ -10,7 +11,8 @@ ROG_COPY=
 # rog_remote [ARG...] < SCRIPT: runs SCRIPT on the host in bash, with the
 # copy's path as $1 and each ARG after it. The host's login shell is zsh, so
 # the arguments go through printf %q. Data goes to the host in its own call,
-# never beside a script: zsh joins a pipe and a heredoc into one stdin.
+# never beside a script, because the script already uses the call's stdin: bash
+# drops a piped input and zsh merges it into the script.
 rog_remote() {
   "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
 }

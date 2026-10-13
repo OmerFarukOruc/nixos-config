@@ -12,7 +12,8 @@ let
   braveDir = "${config.xdg.configHome}/BraveSoftware/Brave-WARP";
   # Brave ignores --force-webrtc-ip-handling-policy, so the profile's own
   # preference keeps WebRTC from sending UDP around the proxy. Brave
-  # rewrites Preferences while it runs, so the script sets it only then.
+  # rewrites Preferences while it runs, so the script sets it only when Brave is
+  # not running.
   brave-warp = pkgs.writeShellApplication {
     name = "brave-warp";
     runtimeInputs = [ pkgs.jq ];

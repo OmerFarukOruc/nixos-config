@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # usage: scripts/thermal-test-rog.sh PROFILE [--ppt PL1,PL2,PL3]
-#          [--fans 'CPU=T:P,... GPU=T:P,... MID=T:P,...'] [--threads N]
+#          [--fans 'CPU=TEMP:PWM,... GPU=TEMP:PWM,... MID=TEMP:PWM,...'] [--threads N]
 #          [--load cpu|gpu|both] [--seconds S] [--label LABEL]
 # Loads nixos-rog in a power-profiles-daemon PROFILE (power-saver, balanced or
 # performance) and records, every 5 s through the load and 30 s of cooldown:
@@ -14,10 +14,18 @@
 # those columns at -, because nvidia-smi keeps the GPU awake.
 #
 # --ppt (watts) and --fans override the profile's power limits and fan curves
-# for this run; each curve is 8 TEMP:PWM points, both rising left to right.
+# for this run. Each --fans group names one fan (CPU, GPU or MID) and gives 8
+# TEMP:PWM points, TEMP in degrees C (0-100) and PWM raw (0-255), never
+# falling left to right; fans you leave out keep the profile's curve, as in
+# --fans 'CPU=40:0,45:40,50:60,55:80,60:100,65:140,70:180,75:255'.
 # The overrides follow the profile switch, because every switch, even to the
-# current profile, makes asusd rewrite both. --threads 0, the default, loads
-# every CPU; --seconds defaults to 240.
+# current profile, makes asusd rewrite both. --threads (default 0, every CPU)
+# sets the CPU load's threads; --seconds takes 10 to 1800 (default 240);
+# --label names the file and defaults to PROFILE.
+#
+# Exit status: 2 for a usage error or battery power, 3 when the platform
+# profile changes or the charger is unplugged mid-run, 75 when another run
+# holds the lock.
 #
 # On exit, also after Ctrl-C, it sets the original profile again and restarts
 # asusd and oruc-cpu-limits, which write that profile's limits and curves.
@@ -89,7 +97,7 @@ for group in "${groups[@]}"; do
     temp=$((10#${BASH_REMATCH[1]}))
     pwm=$((10#${BASH_REMATCH[2]}))
     ((temp <= 100 && pwm <= 255 && temp >= last_temp && pwm >= last_pwm)) ||
-      die "fan $name: temperatures 0-100 and PWM 0-255, each rising left to right"
+      die "fan $name: temperatures 0-100 and PWM 0-255, never falling left to right"
     last_temp=$temp
     last_pwm=$pwm
   done

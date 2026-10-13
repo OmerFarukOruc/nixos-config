@@ -1,6 +1,6 @@
-# Shell setup that only oruc has. Root gets neither: sudo starts no user
-# manager for root, so no Atuin daemon socket exists, and /root has no
-# dotfiles checkout.
+# Shell setup that only oruc has. Root gets none of it. sudo starts no user
+# manager for root, so no Atuin daemon socket exists, and /root has no dotfiles
+# checkout.
 { lib, ... }:
 {
   programs.zsh = {

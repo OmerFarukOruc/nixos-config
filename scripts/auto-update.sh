@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Runs on nixos-rog from oruc-auto-update.service. Moves every flake input and
+# Runs on nixos-rog from oruc-auto-update.service. Moves the flake inputs and
 # every app in pkgs/ that names a release source to their newest release,
 # deploys the result to this host with deploy.sh, and squash-merges it to main.
-# A candidate that fails to build or activate is not tried again until main or
-# an upstream moves.
+# The kernel and llm-agents move only while a cache holds the builds they need.
+# nixpkgs, dms, silent-sddm and sops-nix wait for the cache for a day at most
+# (see below).
+# A candidate that fails another host's evaluation, the build or the activation
+# is not tried again until main or an upstream moves. The run retries after
+# deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the candidate's fault.
 # -E lets the ERR trap below fire inside functions too.
 set -Eeuo pipefail
 
@@ -161,7 +165,8 @@ else
   fi
 fi
 
-# The same holds for a coding agent and cache.numtide.com.
+# llm-agents moves only while cache.numtide.com holds every coding agent of its
+# new revision. Unlike the inputs above, it has no day limit.
 hold
 nix flake update llm-agents
 if ! cmp -s flake.lock "$held/flake.lock"; then

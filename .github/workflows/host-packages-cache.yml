@@ -9,7 +9,7 @@ on:
   pull_request:
   workflow_dispatch:
   # The newest inputs. The hourly host update moves the inputs these packages
-  # come from only once the cache holds them.
+  # come from once the cache holds them, or after a day without them.
   schedule:
     - cron: "17 * * * *"
 

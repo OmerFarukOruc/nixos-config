@@ -18,7 +18,8 @@
         # github.com/NVIDIA/open-gpu-kernel-modules, is built and pushed.
         config.allowUnfree = true;
       };
-      # One entry per CPU target a host selects (oruc.machine.kernel.profile).
+      # One entry per CPU target; a host selects it with
+      # oruc.machine.kernel.profile = "cachyos-latest-lto-<variant>".
       variants = [
         "x86_64-v3"
         "zen4"
@@ -45,10 +46,11 @@
             ./patches/nvidia-nvpcf-defer.patch
           ];
         }).open;
-      # Everything a host builds against the kernel, by output name. Out-of-tree
-      # modules and kernel tools must come from the same kernel package set.
-      # A variant builds only what its hosts use, because one failed build
-      # keeps the record job from moving every host to the new kernel.
+      # What a variant builds besides the kernel and the NVIDIA open module,
+      # which every variant builds, by output name. Out-of-tree modules and
+      # kernel tools must come from the same kernel package set. List only what
+      # the hosts of that variant use, because one failed build keeps the record
+      # job from moving every host to the new kernel.
       hostPackages = {
         x86_64-v3 = [ ];
         # nixos-rog: hardware.cpu.amd.ryzen-smu and environment.systemPackages.

@@ -1,4 +1,4 @@
-# Docker: rootful daemon, compose v2 plugin. oruc uses the socket.
+# Rootful Docker daemon with the compose v2 plugin. oruc uses the socket.
 {
   config,
   lib,

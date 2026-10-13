@@ -44,7 +44,7 @@ in
         meta = {
           version = 1;
           name = "Oruc Base16";
-          description = "Selected Base16 Gruvbox palette";
+          description = "Selected Base16 scheme";
           variant = if isLight then "light" else "dark";
           inherits = if isLight then "vicinae-light" else "vicinae-dark";
         };

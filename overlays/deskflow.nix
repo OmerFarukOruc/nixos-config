@@ -1,7 +1,8 @@
 # Deskflow 1.27.0, which nixpkgs does not have yet. Once nixpkgs' deskflow
-# reaches 1.27.0 this overlay keeps its version; then delete the version
-# override. Release 1.27.0 drops the evdev.xml path, the legacy tests and the user docs
-# that nixpkgs' 1.26.0 build patches, runs and installs.
+# reaches 1.27.0, the version check below passes it through unchanged; then
+# delete the version override. Release 1.27.0 drops the evdev.xml path, the
+# legacy tests and the user docs that nixpkgs' 1.26.0 build patches, runs and
+# installs.
 #
 # Deskflow shares the clipboard on Wayland only when it builds against
 # libportal 0.10.0 or newer, which adds the clipboard API. Without it the

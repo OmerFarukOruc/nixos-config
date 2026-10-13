@@ -7,8 +7,10 @@
 let
   inherit (config.oruc.machine) bootloader;
   esp = config.boot.loader.efi.efiSysMountPoint;
-  # Every generation keeps a kernel and initrd on the ESP, and angrr keeps this
-  # many, so the boot menu lists exactly the generations that survive.
+  # Every listed generation keeps a kernel and initrd on the ESP. The menu lists
+  # the newest this many generations, which is also angrr's newest-N rule. angrr
+  # keeps older generations too (one per day, the running one and the booted
+  # one); they stay in the profile without a menu entry.
   generations = config.services.angrr.settings.profile-policies.system.keep-latest-n;
 in
 {

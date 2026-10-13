@@ -1,5 +1,5 @@
-# Root-facing diagnostics stay system-wide. Interactive user tools are managed
-# by Home Manager, while project toolchains continue to come from direnv.
+# Root-facing diagnostics stay system-wide. Home Manager manages the
+# interactive user tools, and direnv supplies project toolchains.
 { pkgs, ... }:
 {
   environment.systemPackages = with pkgs; [

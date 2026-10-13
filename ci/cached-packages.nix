@@ -2,7 +2,7 @@
 # from this flake's own inputs, overlays or settings. The host-packages-cache
 # workflow builds them from the host's own configuration and pushes them to the
 # public omerfarukoruc Cachix cache. scripts/auto-update.sh moves the inputs
-# they come from only once that cache holds them.
+# they come from once that cache holds them, or after a day without them.
 #
 # Takes the root flake and returns { <host> = { <pname> = <package>; }; }.
 flake:

@@ -12,9 +12,11 @@ set -euo pipefail
 
 cache=omerfarukoruc
 cache_key='omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c='
+# Provides only the cachix client; it need not match the kernel-cache lock.
 nixpkgs=github:nixos/nixpkgs/3ed67ec0a4d3c7ab4ae1f04f8ee8df07bfa506a2
 # Keeps the compilers and earlier builds between runs.
 volume=nix-kernel-cache-store
+# The kernel-cache directory, mounted into the container as /src.
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 
 rev='' record=false variants=()

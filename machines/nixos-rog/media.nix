@@ -63,10 +63,10 @@ in
       # keep-sorted end
     ];
   };
-  # Installed, not loaded at boot: a loaded v4l2loopback shows up as a camera
-  # in every app. OBS loads it on Start Virtual Camera through pkexec, which
-  # needs the setuid wrapper. OBS finds the module only after a reboot into a
-  # system that has it.
+  # Installed, not loaded at boot, because a loaded v4l2loopback shows up as a
+  # camera in every app. OBS loads it on Start Virtual Camera through pkexec,
+  # which needs the setuid wrapper. OBS finds the module only after a reboot
+  # into a system that has it.
   boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
   security.polkit.enablePkexecWrapper = true;
 

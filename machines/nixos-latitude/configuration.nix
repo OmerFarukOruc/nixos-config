@@ -1,5 +1,5 @@
-# Dell Latitude 3550. Home lab box, half headless.
-# Desktop: niri with Noctalia, for occasional local use.
+# Dell Latitude 3550. Role and login sessions: machines/inventory.nix.
+# Hardware facts and measured dead ends: docs/nixos-latitude.md.
 _:
 
 {
@@ -8,7 +8,7 @@ _:
     daemonIOSchedClass = "idle";
   };
 
-  # Lab box: never sleep, lid close does nothing.
+  # Lab box: never sleep. The lid and the power key do nothing.
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchExternalPower = "ignore";
@@ -29,8 +29,9 @@ _:
   # A lab box nobody watches recovers on its own. A panic reboots it after
   # 10 s and leaves its log in EFI pstore, which CachyOS's kernel turns off by
   # default; systemd-pstore then moves the log to /var/lib/systemd/pstore. A
-  # hung system resets through the hardware watchdog, and a failed mount after
-  # the initrd no longer stops at the emergency shell.
+  # hung system resets through the hardware watchdog when the platform provides
+  # one, and a failed mount after the initrd no longer stops at the emergency
+  # shell.
   boot.kernelParams = [
     "panic=10"
     "efi_pstore.pstore_disable=0"

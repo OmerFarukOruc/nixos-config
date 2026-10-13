@@ -71,7 +71,8 @@ in
 
   # Claude Code gets the NixOS MCP server, so it looks up option and package
   # names instead of guessing them. Home Manager delivers the server list as
-  # a plugin in ~/.claude/skills/claude-code-home-manager; desktop-sync.sh
+  # a plugin in ~/.claude/skills/claude-code-home-manager; desktop/bin/desktop-sync.sh
+  # in the dotfiles checkout (docs/nixos-rog.md, Claude Code and Codex setup)
   # links the other entries there and removes only dangling ones.
   programs.mcp = {
     enable = true;

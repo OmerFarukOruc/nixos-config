@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # usage: scripts/move-inputs.sh [--except] [INPUT...]
 # Moves flake inputs to their newest upstream and locks them: an input pinned
-# to a release tag to its newest release, any other to the head of its branch.
+# to a release tag (v and digits) to its newest release, an input without a
+# pin or on a branch to the head of that branch. An input pinned to a commit
+# or to a tag of another form stays where it is.
 # Moves every input, only the INPUTs named, or with --except all but those.
 # nix-cachyos-kernel and llm-agents never move here, because each moves only
 # once a cache holds its builds: update-kernel.sh moves the kernel, and

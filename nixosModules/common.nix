@@ -4,7 +4,8 @@
     nixpkgs.config.allowUnfree = true;
     nixpkgs.overlays = [ (import ../overlays/deskflow.nix) ];
 
-    # Every host installs the coding agents in home-manager/modules/applications.nix.
+    # cache.numtide.com holds the builds of the coding agents (llm-agents.nix) that
+    # home-manager/modules/applications.nix installs on every host.
     nix.settings = {
       extra-substituters = [ "https://cache.numtide.com" ];
       extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
@@ -65,9 +66,7 @@
       };
     };
 
-    # Runs before each nix-gc and removes every system generation except the
-    # newest 5, one from each of the last 7 days, the running one, and the
-    # booted one. The boot menu lists only the newest 5.
+    # Runs before each nix-gc; docs/recovery.md states which generations it keeps.
     services.angrr = {
       enable = true;
       settings.profile-policies.system = {
@@ -90,8 +89,9 @@
     # A stuck service delays a shutdown 30 s instead of 90 s.
     systemd.settings.Manager.DefaultTimeoutStopSec = "30s";
 
-    # Crash dumps take at most 1 GiB and go after 3 days, systemd's own
-    # tmpfiles age, which NixOS does not ship.
+    # Crash dumps take at most 1 GiB and go after 3 days. systemd's own
+    # tmpfiles.d/systemd.conf, which NixOS ships, keeps them 2 weeks. The file
+    # of this rule, coredump.conf, sorts first, so its age wins.
     systemd.coredump.settings.Coredump.MaxUse = "1G";
     systemd.tmpfiles.settings.coredump."/var/lib/systemd/coredump".d = {
       mode = "0755";

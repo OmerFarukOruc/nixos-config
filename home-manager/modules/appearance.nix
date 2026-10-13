@@ -94,7 +94,8 @@ in
 
     (lib.mkIf hasNiri {
       # Plasma's platform theme gives every Qt application the colors and icons
-      # that kdeglobals names, which theme.nix writes from the scheme.
+      # that kdeglobals names, which theme.nix writes from the scheme. qt6ct is
+      # not an alternative: it left Dolphin light (observed 2026-09-21).
       qt = {
         enable = true;
         platformTheme.name = "kde";

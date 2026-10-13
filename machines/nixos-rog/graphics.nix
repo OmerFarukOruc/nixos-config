@@ -9,7 +9,9 @@ in
 {
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
   # first. When that is the RTX 4070, niri, its shell and Xwayland hold it
-  # awake for the whole session.
+  # awake for the whole session. nixosModules/desktop.nix and asus.nix also
+  # write /etc/niri/host.kdl; the text of the three merges, and config.kdl
+  # includes the result.
   environment.etc."niri/host.kdl".text = ''
     debug {
         render-drm-device "${radeonRenderNode}"
@@ -27,11 +29,10 @@ in
 
   hardware.nvidia = {
     open = true;
-    # The kernel overlay's own nvidiaPackages.latest is 610.57.04, and its
-    # patch for latest.open broke 615 until a fix after our pin; a mkDriver
-    # package skips that patch. Drop this once nvidiaPackages.latest in
-    # flake.lock is this version or newer. kernel-cache/flake.nix builds the
-    # open module with the same arguments, so change both together.
+    # nvidiaPackages.latest in flake.lock (the kernel overlay's nixpkgs is node
+    # nixpkgs_2) is older than this version. Drop this block once it is this
+    # version or newer. kernel-cache/flake.nix builds the open module with the
+    # same arguments, so change both together.
     # Driver hashes: nix-prefetch-url of NVIDIA's .run and of the GitHub tags of
     # open-gpu-kernel-modules, nvidia-settings and nvidia-persistenced.
     package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
@@ -66,10 +67,10 @@ in
     # Saves video memory across suspend. With the open module at 595 or newer,
     # NixOS uses the kernel's suspend notifiers instead of nvidia-suspend units.
     powerManagement.enable = true;
-    # Runtime D3: the dGPU powers off when nothing uses it.
+    # Runtime D3 powers off the dGPU when nothing uses it.
     powerManagement.finegrained = true;
-    # nvidia-powerd raises the GPU power limit above its 55 W base up to the
-    # TGP and boost that asusd sets; without it the limit stays at 55 W.
+    # nvidia-powerd is NVIDIA's Dynamic Boost daemon. docs/nixos-rog.md (Power
+    # and heat) has the measured GPU draw per profile.
     dynamicBoost.enable = true;
   };
   # asusd starts nvidia-powerd when AC is plugged in and stops it when AC is
@@ -90,8 +91,8 @@ in
   boot.kernelParams = [
     # The video memory saved at suspend goes to disk, never to a RAM-backed /tmp.
     "nvidia.NVreg_TemporaryFilePath=/var/tmp"
-    # s2idle is this laptop's only sleep state. CachyOS set this; the suspend
-    # gate in the install runbook decides whether it stays.
+    # s2idle is this laptop's only sleep state. CachyOS set this. The --suspend
+    # check of scripts/verify-nixos-rog.sh decides whether it stays.
     "nvidia.NVreg_EnableS0ixPowerManagement=1"
   ];
 }

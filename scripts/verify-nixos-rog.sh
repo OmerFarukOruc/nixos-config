@@ -5,26 +5,33 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: scripts/verify-nixos-rog.sh [--suspend [--while-in-use]] [--lan-ip ADDRESS] [--report FILE]
+Usage: scripts/verify-nixos-rog.sh [-h] [--suspend [--while-in-use]] [--lan-ip ADDRESS] [--report FILE]
 
 --suspend      also run three 20-second s2idle cycles with rtcwake and check
                that the kernel counts three successful suspends and that
                Wi-Fi, the RTX 4070 and the CPU limits come back. The SSH
                session drops and the screen goes dark while the laptop
                sleeps, so the cycles do not run while someone uses the laptop.
---while-in-use run the cycles even while a local session is in use.
+--while-in-use with --suspend, run the cycles even while a local session is in
+               use. Alone it has no effect.
 --lan-ip       the laptop's Wi-Fi address, to check that SSH does not answer
                on the LAN; tailscale0 is the only way in.
 --report FILE  where to write the JSON report (default: a timestamped file
                under ~/.local/state/nixos-config-verify/).
+
+Every run switches the laptop through power-saver, balanced and performance,
+for a few seconds each, to check that the fan curves, asus-armoury limits and
+CPU limits follow the profile, and then sets the original profile again.
 
 The checks that need a person at the laptop (booting Windows, the recovery
 entry and an older generation from the Limine menu, the HDMI picture) are
 listed in the report as manual.
 
 The facts the checks expect (the NVIDIA driver version, the Wi-Fi interface,
-the low-battery threshold, the Plasma panel widgets and KWin effects) come
-from /etc/oruc/verify-facts, which the deployed system writes. The KWin
+the low-battery threshold, the CPU temperature limit and top clock of each
+profile, the fan curves and asus-armoury limits of each platform profile, the
+Plasma panel widgets and KWin effects) come from /etc/oruc/verify-facts, which
+the deployed system writes (nixosModules/verify-facts.nix). The KWin
 effects are checked only in a Plasma session that started after the current
 system; an older session is listed as manual.
 

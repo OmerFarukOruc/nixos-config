@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
+# usage: scripts/update-kernel.sh (no arguments)
 # Moves the nix-cachyos-kernel input in flake.lock to the revision that the
 # kernel-cache workflow last built, after checking that every path it built is
 # in the omerfarukoruc Cachix cache. Hosts then download the CachyOS
 # kernel and the NVIDIA open module instead of compiling them.
-# Runs on fedora-desktop, which has no Nix: it copies the locked revisions of
-# the input and of the inputs below it from kernel-cache/flake.lock on GitHub.
+# Needs no Nix: it copies the locked revisions of the input and of the inputs
+# below it from kernel-cache/flake.lock on GitHub. A person runs it on
+# fedora-desktop; scripts/auto-update.sh runs it on nixos-rog.
+# Exit status 1 leaves flake.lock unchanged.
 set -euo pipefail
 
 builder=OmerFarukOruc/nixos-config
