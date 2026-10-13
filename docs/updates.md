@@ -3,6 +3,7 @@
 - [The kernel](#the-kernel)
 - [Other inputs](#other-inputs)
 - [Release tags](#release-tags)
+- [Spotify and Spicetify](#spotify-and-spicetify)
 - [Apps](#apps)
 
 fedora-desktop has no Nix. `update-kernel.sh` needs none, so it runs there.
@@ -107,6 +108,22 @@ and locks them. It moves one of these sets:
 - all of them
 - only the inputs named
 - with `--except`, all but those
+
+## Spotify and Spicetify
+
+`home-manager/modules/spicetify.nix` builds Spotify from `nixpkgs-spotify` and
+patches it with `spicetify-nix`. Both inputs pin a commit, so the updater never
+moves them. A Spotify release that the spicetify-cli release cannot patch still
+builds, then opens a blank window. To move them:
+
+1. Set both commits in `flake.nix`, then run
+   `nix flake update nixpkgs-spotify spicetify-nix` on nixos-rog.
+2. Read the `spotify` and `spicetify-cli` versions at the new nixpkgs commit. The
+   "Compatibility" list in the notes of that
+   [spicetify-cli release](https://github.com/spicetify/cli/releases) must
+   include the Linux Spotify version.
+3. Merge, deploy nixos-rog, and launch Spotify. If the window is blank, revert
+   the commit and deploy again.
 
 ## Apps
 

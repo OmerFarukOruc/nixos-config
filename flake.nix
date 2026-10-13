@@ -47,6 +47,14 @@
       url = "github:Fovty/hushmic-nix/b2af2236e162a1d3454bc479125b6cb2a31fc029";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Spicetify patches Spotify at build time. A Spotify release that the
+    # spicetify-cli release cannot patch still builds and opens a blank window,
+    # so these commit pins keep the hourly updater from shipping one.
+    nixpkgs-spotify.url = "github:nixos/nixpkgs/7fd4004d0511991fff3a0524856a9be09e28c5f0";
+    spicetify-nix = {
+      url = "github:Gerg-L/spicetify-nix/50246f67d72e042291e426823dd61567b796fea9";
+      inputs.nixpkgs.follows = "nixpkgs-spotify";
+    };
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
