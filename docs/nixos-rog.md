@@ -151,13 +151,13 @@ next run sends it again.
 the updater's GitHub token (`github-update-token`). sops encrypts the file for
 two recipients, which `.sops.yaml` lists:
 
-- fedora-desktop's `~/.ssh/id_ed25519`
+- Omer's shared SSH key, `~/.ssh/id_ed25519_shared`
 - the age key derived from the laptop's SSH host key
 
 Edit the file on fedora-desktop with a `sops` binary from Nix:
 
 ```sh
-SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519 sops secrets/nixos-rog.yaml
+SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_shared sops secrets/nixos-rog.yaml
 ```
 
 ### Rotate github-update-token
@@ -180,7 +180,7 @@ working token until the new one is deployed:
    file:
 
    ```sh
-   read -rs token && printf '%s' "$token" | jq -R . | docker run --rm -i --security-opt label=disable -v "$PWD":/w -v ~/.ssh/id_ed25519:/k:ro -e SOPS_AGE_SSH_PRIVATE_KEY_FILE=/k -w /w nixos/nix nix --extra-experimental-features 'nix-command flakes' shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
+   read -rs token && printf '%s' "$token" | jq -R . | docker run --rm -i --security-opt label=disable -v "$PWD":/w -v ~/.ssh/id_ed25519_shared:/k:ro -e SOPS_AGE_SSH_PRIVATE_KEY_FILE=/k -w /w nixos/nix nix --extra-experimental-features 'nix-command flakes' shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
    ```
 
 3. Commit the file and land it, then deploy it with

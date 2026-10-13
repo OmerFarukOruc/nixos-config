@@ -1,8 +1,10 @@
 # Host context
 
-nixos-latitude access: SSH alias `nixos-latitude`, key `~/.ssh/id_ed25519_nixos_latitude`.
+nixos-latitude access: SSH alias `nixos-latitude`, key `~/.ssh/id_ed25519_shared`.
 
-nixos-rog access: SSH alias `nixos-rog`, key `~/.ssh/id_ed25519_nixos_rog`.
+nixos-rog access: SSH alias `nixos-rog`, key `~/.ssh/id_ed25519_shared`.
+
+Omer uses one SSH key, `~/.ssh/id_ed25519_shared`, on every device he works from. Each host's `authorizedKeys`, GitHub and `.sops.yaml` name its public key.
 
 `sudo -n` works over SSH for `oruc` on nixos-rog (`security.sudo.wheelNeedsPassword` is off while `features.remoteAccess` is on, `nixosModules/connectivity.nix`). An SSH command there already has `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set, so `systemctl --user` works; a Wayland client also needs `WAYLAND_DISPLAY`. The Plasma session uses `wayland-0`; `ss -xl | grep wayland` lists the sockets that a compositor listens on, because leftover socket files stay in `$XDG_RUNTIME_DIR`.
 
