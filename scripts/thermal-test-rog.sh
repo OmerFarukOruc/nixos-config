@@ -167,8 +167,9 @@ printf 't_s\tphase\ttctl_c\tppt_w\tcpu_rpm\tgpu_rpm\tmid_rpm\tmhz\tsmu_limit_c\n
 "$stress" --cpu "$threads" --cpu-method matrixprod --timeout "${seconds}s" >/dev/null 2>&1 &
 load=$!
 # A Ctrl-C on fedora closes this script's output. The next sample write then
-# ends the script, and the EXIT trap stops the load with it.
-trap 'kill "$load" 2>/dev/null' EXIT
+# ends the script, and the EXIT trap stops the load with it. After a complete
+# run the load has already ended, and the failed kill would set the exit status.
+trap 'kill "$load" 2>/dev/null || true' EXIT
 trap 'exit 141' PIPE
 start=$SECONDS
 for ((t = 0; t <= seconds + 30; t = SECONDS - start)); do
