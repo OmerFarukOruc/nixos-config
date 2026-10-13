@@ -58,9 +58,6 @@ esac
 script_blob=$(git hash-object "$0")
 out=${TMPDIR:-/tmp}/mic-ab/$(date +%Y%m%dT%H%M%S)-${mode}${label:+-$label}
 mkdir -p "$out"
-remote=$(ssh "${ssh_opts[@]}" "$host" mktemp -d /tmp/mic-ab.XXXXXXXX)
-[[ $remote =~ ^/tmp/mic-ab\.[A-Za-z0-9]{8}$ ]] || die "mktemp on $host printed $remote"
-
 # rog_run SCRIPT ARG...: runs SCRIPT in bash on rog with the user's PipeWire.
 rog_run() {
   local script=$1
@@ -74,18 +71,27 @@ lib='node_id() {
     "first(.[] | select(.type == \"PipeWire:Interface:Node\" and .info.props.\"node.name\" == \$n) | .id) // empty"
 }'
 
-original_volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$2}"' "$mic")
-[[ -n $original_volume ]] || die "$mic is missing on $host" 3
-
 set_volume() {
   rog_run "$lib"$'\n''wpctl set-volume "$(node_id "$1")" "$2"' "$mic" "$1"
 }
 
+# Each value stays empty until there is something on rog to undo.
+original_volume='' remote=''
 cleanup() {
-  set_volume "$original_volume" || true
-  rog_run 'rm -rf -- "$1"' "$remote" || true
+  if [[ -n $original_volume ]]; then set_volume "$original_volume" || true; fi
+  if [[ -n $remote ]]; then rog_run 'rm -rf -- "$1"' "$remote" || true; fi
 }
 trap cleanup EXIT
+
+made=$(ssh "${ssh_opts[@]}" "$host" mktemp -d /tmp/mic-ab.XXXXXXXX)
+[[ $made =~ ^/tmp/mic-ab\.[A-Za-z0-9]{8}$ ]] || die "mktemp on $host printed $made"
+remote=$made
+
+# wpctl prints its usage to stdout when the node is missing, so only a number
+# shows that the microphone exists.
+volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$2}"' "$mic")
+[[ $volume =~ ^[0-9]+\.[0-9]+$ ]] || die "$mic is missing on $host" 3
+original_volume=$volume
 
 # record_script DIR SECONDS then NAME TARGET NODE_NAME per recording: records
 # each TARGET to DIR/NAME.wav, mono at 48 kHz, all at once. NODE_NAME - keeps
