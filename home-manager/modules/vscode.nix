@@ -159,6 +159,9 @@ let
     // {
       "terminal.background" = "#00000000";
     };
+  ghosttyFonts = lib.concatMapStringsSep ", " (font: "'${font}'") (
+    lib.toList config.programs.ghostty.settings.font-family
+  );
 in
 {
   options.oruc.vscodeSettings = lib.mkOption {
@@ -173,17 +176,22 @@ in
 
   config = {
     oruc.vscodeSettings = {
+      # Ghostty's font, which every host installs. A missing family falls
+      # back to a proportional font and breaks the column layout.
+      "editor.fontFamily" = "${ghosttyFonts}, monospace";
       "extensions.autoCheckUpdates" = false;
       "extensions.autoUpdate" = false;
       # Every folder opens trusted, without the Restricted Mode prompt.
       "security.workspace.trust.enabled" = false;
       "telemetry.telemetryLevel" = "off";
+      "terminal.integrated.fontFamily" = ghosttyFonts;
       "terminal.integrated.gpuAcceleration" = "off";
       "window.autoDetectColorScheme" = false;
       "window.controlsStyle" = "custom";
       "window.systemColorTheme" = theme.systemColorTheme;
       "update.mode" = "none";
       "workbench.colorCustomizations" = colorCustomizations;
+      "workbench.editorAssociations"."*.md" = "vscode.markdown.preview.editor";
     };
 
     programs.vscode = {
