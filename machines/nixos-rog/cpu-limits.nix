@@ -89,11 +89,13 @@ in
 
       # Applies the limits again when the SMU or policy0 lost them.
       check() {
-        local temp max=''${tops[$1]}
+        local profile temp max
+        profile=$(powerprofilesctl get)
+        max=''${tops[$profile]}
         temp=$(ryzenadj -i | awk -F'|' '/THM LIMIT CORE/ {printf "%d", $3}')
         [[ $max == top ]] && max=$(</sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq)
-        if [[ $temp != "''${temps[$1]}" || $(</sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq) != "$max" ]]; then
-          apply "$1"
+        if [[ $temp != "''${temps[$profile]}" || $(</sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq) != "$max" ]]; then
+          apply "$profile"
         fi
       }
 
@@ -104,11 +106,10 @@ in
       while true; do
         if read -r -t 30 line; then
           if [[ $line =~ $active ]]; then
-            profile=''${BASH_REMATCH[1]}
-            apply "$profile"
+            apply "''${BASH_REMATCH[1]}"
           fi
         elif (($? > 128)); then
-          check "$profile"
+          check
         else
           echo "gdbus monitor ended" >&2
           exit 1
