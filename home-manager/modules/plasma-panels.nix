@@ -31,6 +31,8 @@ let
   # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in DRM card
   # order; on nixos-rog, the only hybrid machine, nvidia-drm registers first, so
   # gpu1 is the Radeon 890M.
+  # kVitals colors its own text, so the top bar's accent color reaches it only
+  # through fontColor. Its threshold colors still take precedence.
   kvitals = {
     name = "org.kde.plasma.kvitals";
     config.General = {
@@ -42,6 +44,8 @@ let
       enableThresholdColors = true;
       labelOpacity = 0.5;
       separatorOpacity = 1;
+      useCustomColors = true;
+      fontColor = osConfig.scheme.withHashtag.base0D;
     }
     // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
       gpuSelection = "gpu1";
@@ -76,8 +80,9 @@ let
     shadow = false;
   };
 
-  # A transparent bar. Each widget sits on its own blurred, square background
-  # with an outline in the accent color, and its text and icons take that color.
+  # A transparent bar. Each widget sits on its own blurred background with
+  # slightly rounded corners and an outline in the accent color, and its text
+  # and icons take that color.
   topBarStyle = {
     nativePanel = hiddenNativeBackground;
     widgets.normal = {
@@ -85,21 +90,23 @@ let
       blurBehind = true;
       backgroundColor = schemeColor "backgroundColor" "Window" 0.5;
       foregroundColor = schemeColor "highlightColor" "Window" 1;
-      # Without radius.enabled, the colorizer rounds the corners by its default.
       radius = {
         enabled = true;
-        corner = allCorners 0;
+        corner = allCorners 3;
       };
       border = {
         enabled = true;
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
+      # For a widget, margin is the space between its background and its content.
       margin = {
         enabled = true;
         side = {
-          top = 4;
-          bottom = 4;
+          top = 6;
+          bottom = 6;
+          left = 8;
+          right = 8;
         };
       };
       spacing = 6;
