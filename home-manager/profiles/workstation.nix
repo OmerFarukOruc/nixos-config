@@ -1,5 +1,7 @@
 { lib, pkgs, ... }:
 {
+  imports = [ ../modules/spicetify.nix ];
+
   xdg.mimeApps.defaultApplications = {
     "inode/directory" = [ "org.kde.dolphin.desktop" ];
   }
@@ -30,7 +32,6 @@
       kdePackages.kio-extras
       mission-center
       moonlight-qt
-      spotify
       telegram-desktop
       wl-clipboard
       # keep-sorted end
