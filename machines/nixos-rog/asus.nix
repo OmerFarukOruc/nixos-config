@@ -271,7 +271,8 @@ in
     }
   '';
 
-  # Reported elsewhere on this model to freeze the kernel when a USB-C device
-  # is plugged in. The cost is the USB-C power source readout.
+  # One GA605WI owner's config (github.com/rajeevmen0n/nix, hosts/ga605wi)
+  # blacklists it with the comment "kernel freeze when type c port is used";
+  # we found no other report of it. The cost is the USB-C power source readout.
   boot.blacklistedKernelModules = [ "ucsi_acpi" ];
 }
