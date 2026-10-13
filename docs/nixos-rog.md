@@ -174,6 +174,46 @@ both directions. Home Manager keeps the shell and tools.
 
 The unit does nothing until that checkout exists.
 
+## Power and heat
+
+Six services share the laptop's power settings. Each setting has one owner:
+
+| Setting | Set in | Applied by |
+|---|---|---|
+| power profile, EPP, CPU boost | `nixosModules/peripherals.nix` | power-profiles-daemon |
+| power limits, NVIDIA limits, fan curves | `machines/nixos-rog/asus.nix`, `fan-curves.json` | asusd, on each profile change |
+| CPU temperature limit, top clock | `machines/nixos-rog/cpu-limits.nix` | `oruc-cpu-limits` |
+| power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
+| NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
+| scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd `--autopower` |
+
+Facts that matter when you change or measure them:
+
+- `powerprofilesctl set` over SSH needs `sudo`; polkit refuses it otherwise.
+- Every profile set, even to the current profile, makes asusd write that
+  profile's power limits and fan curves again. Write a test override after
+  the switch.
+- An s2idle resume resets the CPU temperature limit in the SMU (the chip's
+  power controller) to 95 °C. `oruc-cpu-limits` sets it again after a resume
+  through systemd. `rtcwake`, as in `verify-nixos-rog.sh --suspend`, skips
+  systemd's sleep hooks, so the unit also checks the limit every 30 s.
+- Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
+  `temp1` shows the same value.
+
+To measure a profile, or a change to its limits or fan curves before you
+commit it, run the thermal test. It heats the laptop and runs the fans hard
+for several minutes, and needs the charger plugged in:
+
+```sh
+scripts/thermal-test-rog.sh balanced
+scripts/thermal-test-rog.sh performance --ppt 35,45,60 --seconds 120 --label perf-35
+```
+
+It prints the peak temperature, the clock over the last 40 s of load and the
+highest fan speeds. The samples go to `~/.local/state/nixos-config-thermal/`.
+On exit it sets the original profile again and restarts asusd and
+`oruc-cpu-limits`, which write that profile's own limits and curves.
+
 ## Check the running laptop
 
 After a deploy, check the running laptop from fedora-desktop:
