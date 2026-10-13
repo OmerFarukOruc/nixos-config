@@ -171,13 +171,16 @@ check rtx4070-on-pci "${nvidia_dev:-absent}" test -n "$nvidia_dev"
 loaded_version=$(cat /sys/module/nvidia/version 2>/dev/null)
 check nvidia-driver "${loaded_version:-not loaded}" test "$loaded_version" = "$nvidia_version"
 
-# The daemon sets balanced in ExecStartPost, and a failure there fails its
-# start, so an active daemon shows that the boot default was applied.
-check ppd-boot-balanced "power-profiles-daemon is $(systemctl is-active power-profiles-daemon)" \
-  systemctl is-active --quiet power-profiles-daemon
-# After boot the shell's power menu may pick any profile. Only low battery on
-# battery requires one.
+# The daemon saves each profile change in its state file and starts in the
+# saved profile, so the current profile survives a reboot. Its ExecStartPost
+# sets balanced only when the file holds none, and a failure fails its start.
 profile=$(powerprofilesctl get)
+ppd_state=$(systemctl is-active power-profiles-daemon)
+saved=$(sed -n 's/^Profile=//p' /var/lib/power-profiles-daemon/state.ini 2>/dev/null)
+check ppd-profile-kept "power-profiles-daemon is $ppd_state; saved ${saved:-nothing}, running $profile" \
+  test "$ppd_state/$saved" = "active/$profile"
+# The shell's power menu may pick any profile. Only low battery on battery
+# requires one.
 online=$(cat /sys/class/power_supply/ACAD/online)
 capacity=$(cat /sys/class/power_supply/BAT1/capacity)
 if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then

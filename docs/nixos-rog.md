@@ -190,6 +190,9 @@ Six services share the laptop's power settings. Each setting has one owner:
 Facts that matter when you change or measure them:
 
 - `powerprofilesctl set` over SSH needs `sudo`; polkit refuses it otherwise.
+- The profile you pick stays after a reboot, because power-profiles-daemon
+  saves it in `/var/lib/power-profiles-daemon/state.ini` and starts in it.
+  Without a saved profile, it starts in balanced.
 - Every profile set, even to the current profile, makes asusd write that
   profile's power limits and fan curves again. Write a test override after
   the switch.
