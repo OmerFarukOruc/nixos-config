@@ -253,3 +253,10 @@ scripts/screenshot-nixos-rog.sh --window /tmp/nixos-rog.png
 The script opens the Ghostty window on the running session, takes the shot and
 closes the window. Without `--window` it takes the screen as it is. Crop the
 window's edges at full size before you judge them.
+
+Glass's `WindowClasses` list names windows by their resource class or resource
+name. To read both for each open window, run:
+
+```sh
+scripts/kwin-windows-on-rog.sh
+```
