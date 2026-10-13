@@ -1,5 +1,7 @@
 # colgrep, semantic code search with a local search agent, from the prebuilt
-# Linux release of lightonai/next-plaid. That build has the CUDA encoder.
+# Linux release of lightonai/next-plaid. That build has the CUDA encoder. It
+# names no release source, so scripts/update-app.sh skips it; move version and
+# hash by hand.
 {
   lib,
   stdenv,
