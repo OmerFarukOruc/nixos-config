@@ -19,6 +19,8 @@ let
     "kwin-glass"
     # The login screen theme.
     "sddm-astronaut"
+    # The lock screen's video wallpaper plugin.
+    "smart-video-wallpaper"
     "sops-install-secrets"
   ];
 

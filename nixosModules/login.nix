@@ -10,17 +10,17 @@ let
   jake = pkgs.sddm-astronaut.override { embeddedTheme = "jake_the_dog"; };
 in
 {
-  options.oruc.login.lockImage = lib.mkOption {
+  options.oruc.login.video = lib.mkOption {
     type = lib.types.nullOr lib.types.path;
     readOnly = true;
-    description = "Still frame of the login screen, for a lock screen that matches it, or null on a host without the themed login screen.";
+    description = "Video the login screen plays, for a lock screen that matches it, or null on a host without the themed login screen.";
   };
 
   config = lib.mkMerge [
     {
-      oruc.login.lockImage =
+      oruc.login.video =
         if themed then
-          "${jake}/share/sddm/themes/sddm-astronaut-theme/Backgrounds/jake_the_dog.png"
+          "${jake}/share/sddm/themes/sddm-astronaut-theme/Backgrounds/jake_the_dog.mp4"
         else
           null;
     }
