@@ -48,7 +48,10 @@ generation, and they do not prove that the hardware and services work after
 activation.
 
 CI runs the formatter check, `nix flake check --no-build` and the evaluation of
-every host on every pull request and on every push to `main`.
+every host on every pull request and on every push to `main`. Its `unit-cycles`
+job also runs `ci/unit-cycles.sh`, the ordering-cycle check of step 7, on each
+host's units. It builds the unit files without the programs they start, so it
+downloads about 1.8 GiB instead of the whole system (CI log, 2026-10-13).
 
 fedora-desktop has no Nix, so `scripts/check-on-rog.sh` runs the formatter
 check and `nix flake check --no-build` on a copy of this checkout on nixos-rog.

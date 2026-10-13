@@ -101,8 +101,9 @@ target.
 | `scripts/thermal-test-rog.sh PROFILE` | load nixos-rog's CPU in a power profile and record its temperature, power and fans |
 
 Every deploy command can change boot or running system state.
-CI runs the formatter, `nix flake check --no-build` and the evaluation of each
-host on every pull request and push to `main`.
+CI runs the formatter, `nix flake check --no-build`, the evaluation of each
+host and a check of each host's units for an ordering cycle on every pull
+request and push to `main`.
 
 ## Docs
 

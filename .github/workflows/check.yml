@@ -44,3 +44,18 @@ jobs:
         run: |
           nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
             --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+
+  # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
+  # this job finds the cycle before the merge.
+  unit-cycles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            allow-import-from-derivation = false
+      - name: Check each host's units for an ordering cycle
+        run: ci/unit-cycles.sh
