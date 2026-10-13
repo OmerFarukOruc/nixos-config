@@ -16,14 +16,6 @@ let
   };
 
   ronTuple = values: "(${lib.concatMapStringsSep ", " toString values})";
-  # asusd writes these limits on every platform profile change, also one that
-  # power-profiles-daemon makes. Each value stays inside the GA605W range of the
-  # kernel's asus-armoury table; on battery the only GPU limit is the
-  # temperature target. Quiet takes each range's minimum and performance each
-  # GPU range's maximum; the other values trade speed for heat and fan noise.
-  # In a 4-minute all-thread stress-ng run on AC, the CPU peaked at 62 °C in
-  # quiet (boost off), 75 °C in balanced and 81 °C in performance.
-  # cpu-limits.nix caps each profile's CPU temperature.
   tunings =
     profiles:
     "{${
@@ -38,6 +30,69 @@ let
         '') profiles
       )
     }}";
+  # asusd writes these limits on every platform profile change, also one that
+  # power-profiles-daemon makes. Each value stays inside the GA605W range of the
+  # kernel's asus-armoury table; on battery the only GPU limit is the
+  # temperature target. Quiet takes each range's minimum and performance each
+  # GPU range's maximum; the other values trade speed for heat and fan noise.
+  # In a 4-minute all-thread stress-ng run on AC, the CPU peaked at 62 °C in
+  # quiet (boost off), 75 °C in balanced and 81 °C in performance.
+  # cpu-limits.nix caps each profile's CPU temperature.
+  acTunings = {
+    Quiet = {
+      PptPl1Spl = 15;
+      PptPl2Sppt = 35;
+      PptPl3Fppt = 35;
+      DgpuTgp = 55;
+      NvDynamicBoost = 5;
+      NvTempTarget = 75;
+    };
+    Balanced = {
+      PptPl1Spl = 25;
+      PptPl2Sppt = 35;
+      PptPl3Fppt = 45;
+      DgpuTgp = 55;
+      NvDynamicBoost = 5;
+      NvTempTarget = 75;
+    };
+    Performance = {
+      PptPl1Spl = 35;
+      PptPl2Sppt = 45;
+      PptPl3Fppt = 60;
+      DgpuTgp = 85;
+      NvDynamicBoost = 20;
+      NvTempTarget = 87;
+    };
+  };
+  dcTunings = {
+    Quiet = {
+      PptPl1Spl = 25;
+      PptPl2Sppt = 31;
+      PptPl3Fppt = 45;
+      NvTempTarget = 75;
+    };
+    Balanced = {
+      PptPl1Spl = 25;
+      PptPl2Sppt = 35;
+      PptPl3Fppt = 45;
+      NvTempTarget = 75;
+    };
+    Performance = {
+      PptPl1Spl = 35;
+      PptPl2Sppt = 44;
+      PptPl3Fppt = 60;
+      NvTempTarget = 87;
+    };
+  };
+  # The asus-armoury attribute that asusd writes each tuning to.
+  armouryAttribute = {
+    PptPl1Spl = "ppt_pl1_spl";
+    PptPl2Sppt = "ppt_pl2_sppt";
+    PptPl3Fppt = "ppt_pl3_fppt";
+    DgpuTgp = "nv_tgp";
+    NvDynamicBoost = "nv_dynamic_boost";
+    NvTempTarget = "nv_temp_target";
+  };
   # The firmware takes the power limits above only while every fan follows a
   # custom curve. Points are (°C, PWM 0-255); both rise left to right. The
   # kernel sends each point as 100 * PWM / 255 percent, rounded down, and in a
@@ -82,6 +137,39 @@ let
   '';
 in
 {
+  # verify-nixos-rog.sh compares the live armoury limits and fan curves of each
+  # platform profile with these.
+  oruc.verifyFacts =
+    let
+      armouryFacts =
+        source:
+        lib.concatMapAttrs (
+          profile:
+          lib.mapAttrs' (
+            name: value:
+            lib.nameValuePair "armoury_${source}_${lib.toLower profile}_${armouryAttribute.${name}}" (
+              toString value
+            )
+          )
+        );
+      fanFacts =
+        profile:
+        lib.concatMapAttrs (
+          fan: points:
+          let
+            key = "${profile}_${lib.toLower fan}";
+            list = values: lib.concatMapStringsSep "," toString values;
+          in
+          {
+            "fan_temps_${key}" = list (map lib.head points);
+            "fan_pwms_${key}" = list (map lib.last points);
+          }
+        );
+    in
+    armouryFacts "ac" acTunings
+    // armouryFacts "dc" dcTunings
+    // lib.concatMapAttrs fanFacts fanCurveTable;
+
   services.asusd = {
     enable = true;
     # asusd reads every field here; a missing one makes it start from its
@@ -103,56 +191,8 @@ in
           profile_balanced_epp: BalancePower,
           profile_custom_epp: Performance,
           profile_performance_epp: Performance,
-          ac_profile_tunings: ${
-            tunings {
-              Quiet = {
-                PptPl1Spl = 15;
-                PptPl2Sppt = 35;
-                PptPl3Fppt = 35;
-                DgpuTgp = 55;
-                NvDynamicBoost = 5;
-                NvTempTarget = 75;
-              };
-              Balanced = {
-                PptPl1Spl = 25;
-                PptPl2Sppt = 35;
-                PptPl3Fppt = 45;
-                DgpuTgp = 55;
-                NvDynamicBoost = 5;
-                NvTempTarget = 75;
-              };
-              Performance = {
-                PptPl1Spl = 35;
-                PptPl2Sppt = 45;
-                PptPl3Fppt = 60;
-                DgpuTgp = 85;
-                NvDynamicBoost = 20;
-                NvTempTarget = 87;
-              };
-            }
-          },
-          dc_profile_tunings: ${
-            tunings {
-              Quiet = {
-                PptPl1Spl = 25;
-                PptPl2Sppt = 31;
-                PptPl3Fppt = 45;
-                NvTempTarget = 75;
-              };
-              Balanced = {
-                PptPl1Spl = 25;
-                PptPl2Sppt = 35;
-                PptPl3Fppt = 45;
-                NvTempTarget = 75;
-              };
-              Performance = {
-                PptPl1Spl = 35;
-                PptPl2Sppt = 44;
-                PptPl3Fppt = 60;
-                NvTempTarget = 87;
-              };
-            }
-          },
+          ac_profile_tunings: ${tunings acTunings},
+          dc_profile_tunings: ${tunings dcTunings},
           armoury_settings: {
               PanelOverdrive: 1,
           },
