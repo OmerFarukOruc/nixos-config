@@ -47,6 +47,7 @@
   libseccomp,
   libcap_ng,
   pipewire,
+  libpulseaudio,
 }:
 stdenv.mkDerivation rec {
   pname = "claude-desktop";
@@ -103,9 +104,11 @@ stdenv.mkDerivation rec {
     libcap_ng
     pipewire
   ];
+  # Loaded with dlopen, so autoPatchelf does not see them.
   runtimeDependencies = [
     (lib.getLib systemd)
     libGL
+    libpulseaudio
   ];
 
   dontConfigure = true;
