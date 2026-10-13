@@ -155,10 +155,12 @@ two recipients, which `.sops.yaml` lists:
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
 - the age key derived from the laptop's SSH host key
 
-Edit the file on fedora-desktop with a `sops` binary from Nix:
+Edit the file from a checkout on nixos-rog. The shared key has a password, and
+sops reads the key file itself, not ssh-agent, so it asks for the password on
+the terminal. A run without a terminal fails with `could not read passphrase`.
 
 ```sh
-SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer sops secrets/nixos-rog.yaml
+SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops secrets/nixos-rog.yaml
 ```
 
 ### Rotate github-update-token
@@ -172,16 +174,14 @@ working token until the new one is deployed:
    Contents and Pull requests to read and write, and no expiration. When the
    repository moves to a new GitHub repository, edit the token's repository
    access by hand, because a fine-grained token names its repositories.
-2. From the repository root, write the token into the file without printing
-   it. fedora-desktop has no Nix,
-   so the command runs `sops` from a `nixos/nix` container that mounts the
-   checkout and the SSH key. It waits for the token on a hidden prompt. `jq -R .`
-   turns the token into the JSON string that `sops set` expects, and the
-   container reads it from stdin, so it never appears in a process list or a
-   file:
+2. From the repository root of a checkout on nixos-rog, write the token into
+   the file without printing it. The command waits for the token on a hidden
+   prompt. `jq -R .` turns the token into the JSON string that `sops set`
+   expects, and sops reads it from stdin, so it never appears in a process list
+   or a file. sops then asks for the shared key's password on the terminal:
 
    ```sh
-   read -rs token && printf '%s' "$token" | jq -R . | docker run --rm -i --security-opt label=disable -v "$PWD":/w -v ~/.ssh/id_ed25519_omer:/k:ro -e SOPS_AGE_SSH_PRIVATE_KEY_FILE=/k -w /w nixos/nix nix --extra-experimental-features 'nix-command flakes' shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
+   read -rs token && printf '%s' "$token" | jq -R . | SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
    ```
 
 3. Commit the file and land it, then deploy it with
