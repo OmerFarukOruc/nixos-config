@@ -253,8 +253,10 @@ It exits 1 when a check fails. `--suspend` adds three s2idle cycles. They
 darken the screen, so they do not run, and the check fails, while someone uses
 the laptop: a local session that is neither idle nor locked. Lock the screen
 first, or pass `--while-in-use`.
-It also checks that the Plasma panel widgets are installed and that KWin
-loaded the effects the config turns on. A Plasma session that started before
+It switches to each power profile and checks that the fan curves and
+asus-armoury limits there match the deployed config. It also checks that the
+Plasma panel widgets are installed and that KWin loaded the effects the config
+turns on. A Plasma session that started before
 the deploy shows as manual, because it keeps the plugins of the old system;
 log out and in, then rerun.
 
