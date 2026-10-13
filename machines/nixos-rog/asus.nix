@@ -18,11 +18,12 @@ let
   ronTuple = values: "(${lib.concatMapStringsSep ", " toString values})";
   # asusd writes these limits on every platform profile change, also one that
   # power-profiles-daemon makes. Each value stays inside the GA605W range of the
-  # kernel's asus-armoury table; the battery range has no GPU limits. Quiet
-  # takes the lowest value of each range. The other profiles trade speed for
-  # heat and fan noise. In a 4-minute all-thread stress-ng run on AC, the CPU
-  # peaked at 62 °C in quiet (boost off), 75 °C in balanced and 81 °C in
-  # performance. cpu-limits.nix caps each profile's CPU temperature.
+  # kernel's asus-armoury table; on battery the only GPU limit is the
+  # temperature target. Quiet takes each range's minimum and performance each
+  # GPU range's maximum; the other values trade speed for heat and fan noise.
+  # In a 4-minute all-thread stress-ng run on AC, the CPU peaked at 62 °C in
+  # quiet (boost off), 75 °C in balanced and 81 °C in performance.
+  # cpu-limits.nix caps each profile's CPU temperature.
   tunings =
     profiles:
     "{${
@@ -123,9 +124,9 @@ in
                 PptPl1Spl = 35;
                 PptPl2Sppt = 45;
                 PptPl3Fppt = 60;
-                DgpuTgp = 70;
-                NvDynamicBoost = 10;
-                NvTempTarget = 80;
+                DgpuTgp = 85;
+                NvDynamicBoost = 20;
+                NvTempTarget = 87;
               };
             }
           },
@@ -147,7 +148,7 @@ in
                 PptPl1Spl = 35;
                 PptPl2Sppt = 44;
                 PptPl3Fppt = 60;
-                NvTempTarget = 80;
+                NvTempTarget = 87;
               };
             }
           },
