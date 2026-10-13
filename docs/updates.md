@@ -118,6 +118,10 @@ no release source.
 Each package except KVitals names its release source. KVitals has no release
 source, so `update-app.sh` leaves it.
 
+Before you decide that a vendor publishes no release source, read the `.deb`'s
+`postinst` (`dpkg-deb -e <deb> <dir>`). Grok Bot's registers the APT
+repository that its `passthru.aptIndex` names.
+
 | App | Release source |
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
