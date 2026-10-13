@@ -64,8 +64,12 @@ in
               enabled = true;
             }
           ];
+          # The login theme's BackgroundSpeed in Themes/jake_the_dog.conf.
+          PlaybackRate = 1.2;
           # The lock screen ignores the plugin's window-based pause rules, so
-          # the video would keep decoding while the display is off.
+          # the video would keep decoding while the display is off. The plugin
+          # checks the display by running kscreen-doctor once a second, which
+          # costs less CPU than decoding the video.
           ScreenOffPausesVideo = true;
         };
       };
