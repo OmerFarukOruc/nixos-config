@@ -1,6 +1,7 @@
 {
   agents,
   config,
+  lib,
   osConfig,
   pkgs,
   sessions,
@@ -39,7 +40,9 @@ in
       google-chrome
       infisical
       jq
+      mcp-nixos
       nerd-fonts.caskaydia-cove
+      nix-search-tv
       nixfmt
       pipx
       ripgrep
@@ -55,7 +58,6 @@ in
     ++ (with agents; [
       # keep-sorted start
       agentsview
-      claude-code
       codex
       cursor-agent
       grok
@@ -66,6 +68,20 @@ in
       brave
       opencode
     ];
+
+  # Claude Code gets the NixOS MCP server, so it looks up option and package
+  # names instead of guessing them. Home Manager delivers the server list as
+  # a plugin in ~/.claude/skills/claude-code-home-manager; desktop-sync.sh
+  # links the other entries there and removes only dangling ones.
+  programs.mcp = {
+    enable = true;
+    servers.nixos.command = lib.getExe pkgs.mcp-nixos;
+  };
+  programs.claude-code = {
+    enable = true;
+    package = agents.claude-code;
+    enableMcpIntegration = true;
+  };
 
   # Package managers install only releases that have aged releaseAgeDays, so a
   # hijacked release is usually pulled before it reaches this host. Each tool

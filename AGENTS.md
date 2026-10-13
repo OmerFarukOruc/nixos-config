@@ -10,3 +10,14 @@
 - `flake.lock` holds more than one nixpkgs node. Ours is the one the root input names: `jq -r '.nodes.root.inputs.nixpkgs as $n | "\($n) \(.nodes[$n].locked.rev)"' flake.lock`. llm-agents and nix-cachyos-kernel keep their own nixpkgs on purpose, so their binary caches still match.
 - Fix a nixpkgs package with an overlay in `overlays/` (`overrideAttrs` with patches); the first fix creates the directory. Fix a NixOS module with `disabledModules` plus the module from a second pinned nixpkgs input. Patching nixpkgs itself needs import from derivation, which CI forbids.
 - A text edit in a build step fails the build when it changes nothing. Use `substituteInPlace --replace-fail`; after a `sed`, or a `--replace-quiet` where a release may use either of two forms, check the result with `grep`.
+
+# Lookups
+
+Look up a Nix name, hash or rebuild cause before you write it. Run these on nixos-rog; from fedora-desktop, prefix them with `ssh nixos-rog`. They read upstream nixpkgs, not `flake.lock`, so `scripts/eval-on-rog.sh` stays the source for a value in this configuration. Claude Code also has the same lookups as the `nixos` MCP server.
+
+- Option, package or `lib` name: `nix-search-tv print --indexes <nixos|home-manager|nixpkgs|noogle> | grep <word>`, then `nix-search-tv preview --indexes <index> --json <name>` for its type, default and declaration. Exit 1 means the name does not exist. plasma-manager options are not indexed.
+- Source hash or fetcher block: `nix run nixpkgs#nurl -- --json <url> <rev>`.
+- Draft of a new package with its vendor hash: `NIX_PATH=nixpkgs=$(nix eval --raw nixpkgs#path) nix run nixpkgs#nix-init -- --headless --url <url> --rev <tag> /tmp/draft.nix </dev/null`, then edit the draft.
+- What an edit rebuilds or restarts: take the two `<toplevel>.drvPath` values with `nix eval --raw`, then `nix run nixpkgs#nix-diff -- --color never --skip-already-compared --squash-text-diff <old.drv> <new.drv> | head -n 200`.
+- Why a package is in the closure: `nix why-depends --derivation /run/current-system <store path>`.
+- Which nixpkgs advance broke a build: `nix run nixpkgs#npc` with `--input nixpkgs`, in a copy of the checkout, because `checkout` and `bisect` rewrite `flake.lock`.
