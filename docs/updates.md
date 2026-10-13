@@ -132,8 +132,9 @@ release and prints the new version. It prints nothing when the app is current,
 when its newest feed release is younger than 3 days, or when the package names
 no release source.
 
-Each package except KVitals and Smart Video Wallpaper names its release source.
-Those two have none, so `update-app.sh` leaves them.
+ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their release source.
+colgrep, herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh`
+leaves them and their version and hash move by hand.
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s
 `postinst` (`dpkg-deb -e <deb> <dir>`). Grok Bot's registers the APT
