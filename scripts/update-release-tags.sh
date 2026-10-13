@@ -2,7 +2,9 @@
 # usage: scripts/update-release-tags.sh [--except] [INPUT...]
 # Moves flake inputs pinned to a GitHub release tag (github:owner/repo/v1.2.3)
 # to that repository's newest release and locks them: every such input, only
-# the INPUTs named, or with --except all but those.
+# the INPUTs named, or with --except all but those. A tag is a v and digits
+# separated by dots; an input pinned to a tag of another form, such as 1.2.3 or
+# v1.2.3-rc1, stays where it is.
 # Prints "input: old -> new" for each input it moved. An input whose release
 # lookup or lock fails stays where it is.
 set -euo pipefail

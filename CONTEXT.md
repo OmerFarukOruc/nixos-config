@@ -4,7 +4,16 @@ nixos-latitude access: SSH alias `nixos-latitude`, key `~/.ssh/id_ed25519_nixos_
 
 nixos-rog access: SSH alias `nixos-rog`, key `~/.ssh/id_ed25519_nixos_rog`.
 
+`sudo -n` works over SSH for `oruc` on nixos-rog (`security.sudo.wheelNeedsPassword` is off while `features.remoteAccess` is on, `nixosModules/connectivity.nix`). An SSH command there already has `XDG_RUNTIME_DIR` and `DBUS_SESSION_BUS_ADDRESS` set, so `systemctl --user` works; a Wayland client also needs `WAYLAND_DISPLAY`. The Plasma session uses `wayland-0`; `ss -xl | grep wayland` lists the sockets that a compositor listens on, because leftover socket files stay in `$XDG_RUNTIME_DIR`.
+
 ## Language
+
+**This PC**:
+fedora-desktop, where the agent runs. It has no Nix, and this repository holds no configuration for it beyond the inert `nixos-desktop` record. Read its setup from the machine itself.
+_Avoid_: the desktop
+
+**The laptop**:
+nixos-rog, Omer's daily ASUS ROG. nixos-latitude is also a laptop, so name it by its host name; it is the home lab box.
 
 **Login session**:
 A desktop with its shell, offered by the display manager. A machine's first session is its default session.

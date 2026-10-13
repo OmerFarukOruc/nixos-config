@@ -1,4 +1,4 @@
-# Disk health: smartd watches every disk and logs to the journal. With
+# Disk health. smartd watches every disk and logs to the journal. With
 # features.diskSelfTests it also runs a short self-test daily at 02:00 and a
 # long one on Sundays at 03:00.
 { config, lib, ... }:

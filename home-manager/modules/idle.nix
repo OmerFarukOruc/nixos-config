@@ -11,8 +11,9 @@ let
   # Without a battery the machine is always on AC.
   idle = if machine.hasBattery then machine.idle else { inherit (machine.idle) ac; };
 
-  # niri has no idle settings of its own, and neither Noctalia nor DMS splits
-  # them by power state, so one swayidle serves every niri session.
+  # niri has no idle settings of its own, and Noctalia has one set of idle
+  # timeouts for both power states, so one swayidle serves every niri session.
+  # DMS can split its timeouts by power state, but dms.nix leaves them off.
   oruc-idle = pkgs.writeShellApplication {
     name = "oruc-idle";
     runtimeInputs = [
@@ -38,8 +39,7 @@ let
         echo ac
       }
 
-      # The same panel backlights as the brightness keys in niri/config.kdl:
-      # the pattern skips nvidia_0, and touching it wakes the RTX 4070.
+      # The same panel backlights as the brightness keys in niri/config.kdl.
       if [[ $1 == undim ]]; then
         if [[ -e $dimmed ]]; then
           for device in /sys/class/backlight/*_b*; do

@@ -13,7 +13,7 @@ let
   # and fills every key left out here from its own defaults. Its typed
   # options in plasma-manager write the setting names of releases before 3,
   # which current releases ignore.
-  # The keys: package/contents/ui/code/globals.js in plasma-panel-colorizer.
+  # The keys are in package/contents/ui/code/globals.js of plasma-panel-colorizer.
   # sourceType 0 is a custom color, 1 a color from the Plasma color scheme.
   colorizer = style: {
     name = "luisbocanegra.panel.colorizer";
@@ -107,9 +107,9 @@ let
     shadow = false;
   };
 
-  # A transparent bar. Each widget sits on its own blurred background with
-  # slightly rounded corners and an outline in the accent color, and its text
-  # and icons take that color.
+  # This style makes a transparent bar. Each widget sits on its own blurred
+  # background with slightly rounded corners and an outline in the accent color,
+  # and its text and icons take that color.
   topBarStyle = {
     nativePanel = hiddenNativeBackground;
     widgets.normal = {
@@ -141,9 +141,9 @@ let
     };
   };
 
-  # The dock style of fedora-desktop: one blurred, rounded, faintly tinted
-  # background with no outline, icons in the scheme's text color, and
-  # popups that float clear of the panel. The blur follows this radius, while
+  # This dock style matches fedora-desktop: one blurred, rounded, faintly tinted
+  # background with no outline, icons in the scheme's text color, and popups
+  # that float clear of the panel. The blur follows this radius, while
   # fedora-desktop takes its corners from its Plasma theme.
   dockStyle = {
     nativePanel = {

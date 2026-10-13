@@ -10,6 +10,9 @@
 # indexes carry no release date.
 # Prints the new version, or nothing when the package is already current, its
 # newest release is younger than minAgeDays, or it names no source.
+# On a failure it exits non-zero and prints the problem as the last line on
+# stderr; scripts/auto-update.sh uses that line as the notification text and as
+# the key that stops a repeated problem from notifying again.
 set -euo pipefail
 
 name=${1:?usage: update-app.sh NAME}

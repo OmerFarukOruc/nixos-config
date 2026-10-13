@@ -1,4 +1,4 @@
-# Remote desktop hosting over Tailscale: Sunshine streams the niri session, and
+# Remote desktop hosting over Tailscale. Sunshine streams the niri session, and
 # Moonlight on another machine connects.
 { config, lib, ... }:
 lib.mkIf config.oruc.machine.features.remoteDesktop {

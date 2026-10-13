@@ -18,9 +18,9 @@
     ./warp-launchers.nix
   ];
 
-  # Only these keys: input.touchpads would also delete every touchpad key it
-  # does not set, such as pointer speed. The group name is this laptop's
-  # vendor, product and device name.
+  # This sets only these keys, because input.touchpads would also delete every
+  # touchpad key it does not set, such as pointer speed. The group name is this
+  # laptop's vendor, product and device name.
   programs.plasma.configFile.kcminputrc."Libinput/10248/537/ASUF1209:00 2808:0219 Touchpad" = {
     Enabled = true;
     TapToClick = osConfig.oruc.machine.touchpad.tapToClick;
@@ -51,7 +51,8 @@
 
   # The client's log otherwise shows only in its window. Deskflow writes it to
   # ~/deskflow.log, as on fedora-desktop, and rotates it at 1 MiB. Deskflow
-  # also saves its own settings in this file, so the switch sets one key.
+  # also saves its own settings in Deskflow.conf, so the switch sets only the
+  # toFile key.
   home.activation.deskflowLogToFile =
     lib.hm.dag.entryBetween [ "reloadSystemd" ] [ "writeBoundary" ]
       ''

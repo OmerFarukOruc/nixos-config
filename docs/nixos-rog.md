@@ -5,10 +5,19 @@
 - [Secrets](#secrets)
 - [DNS](#dns)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
+- [Power and heat](#power-and-heat)
 - [Check the running laptop](#check-the-running-laptop)
+- [Check a visual change](#check-a-visual-change)
+- [Plasma panels](#plasma-panels)
+- [Deskflow](#deskflow)
+- [Keyboard keys](#keyboard-keys)
+- [Known faults](#known-faults)
 - [Drive VS Code](#drive-vs-code)
 
 Boot entries, generations and the GPU mode are in [recovery.md](recovery.md#nixos-rog).
+
+A date in this guide marks a measurement or a reading of upstream source on that
+day. Repeat the measurement before you rely on it.
 
 ## Hourly updater
 
@@ -65,6 +74,13 @@ To run the updater now and read its log:
 ssh nixos-rog 'sudo systemctl start oruc-auto-update; journalctl -u oruc-auto-update -n 50'
 ```
 
+A manual deploy exits 77 while an update holds the deploy lock, and the updater
+deploys `main` again on top of a generation you restored. To pause the updater
+until the next reboot, run
+`sudo systemctl mask --runtime --now oruc-auto-update.timer` on nixos-rog.
+[recovery.md](recovery.md#a-generation-the-boot-menu-does-not-list) pauses it
+before it restores a generation.
+
 ### Cached packages
 
 cache.nixos.org does not hold the packages that come from this flake's own
@@ -90,9 +106,12 @@ them.
 After a day without those builds, the inputs move anyway and the laptop
 compiles the packages. A notification says so once.
 
-whisper-cpp is not in the list. Its CUDA build references NVIDIA libraries
-that are unfree, and `cachix push` uploads a whole closure, so the laptop
-compiles it when nixpkgs changes it.
+whisper-cpp is not in the list. `machines/nixos-rog/media.nix` builds it for
+the RTX 4070's CUDA architecture (sm_89) only, and neither cache.nixos.org nor
+the Cachix cache holds that build. Its closure holds unfree NVIDIA libraries, and
+`cachix push` uploads a whole closure, so the public cache must not receive it.
+The laptop compiles whisper-cpp itself, each time an update changes its
+derivation.
 
 ## Failures and notifications
 
@@ -104,13 +123,11 @@ The exit codes below come from `deploy.sh`, except 76. The
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
-| Any other failed update, such as status 76 | The run does not try that update again until `main` or an upstream moves. | Critical |
+| The deploy fails with another status, or another host no longer evaluates (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
+| Any other step of the script fails, such as a Nix evaluation, `git push` or `gh pr merge` | The next run tries again. | Critical |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |
-
-Exit 70 means a pending rollback timer, 71 a rollback timer the deploy could not
-arm, 74 a full ESP and 79 an unmounted `/boot`.
 
 A clone or fetch fails while GitHub answers when, for example, the token
 expired or was revoked, or the account lost access to the repository.
@@ -140,14 +157,49 @@ Edit the file on fedora-desktop with a `sops` binary from Nix:
 SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519 sops secrets/nixos-rog.yaml
 ```
 
+### Rotate github-update-token
+
+The token does not expire. Rotate it when it may have leaked. GitHub lists it as
+"nixos-rog auto-update". Do the steps in this order, so the laptop keeps a
+working token until the new one is deployed:
+
+1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
+   tokens). Set the repository access to this repository only, the permissions
+   Contents and Pull requests to read and write, and no expiration. When the
+   repository moves to a new GitHub repository, edit the token's repository
+   access by hand, because a fine-grained token names its repositories.
+2. From the repository root, write the token into the file without printing
+   it. fedora-desktop has no Nix,
+   so the command runs `sops` from a `nixos/nix` container that mounts the
+   checkout and the SSH key. It waits for the token on a hidden prompt. `jq -R .`
+   turns the token into the JSON string that `sops set` expects, and the
+   container reads it from stdin, so it never appears in a process list or a
+   file:
+
+   ```sh
+   read -rs token && printf '%s' "$token" | jq -R . | docker run --rm -i --security-opt label=disable -v "$PWD":/w -v ~/.ssh/id_ed25519:/k:ro -e SOPS_AGE_SSH_PRIVATE_KEY_FILE=/k -w /w nixos/nix nix --extra-experimental-features 'nix-command flakes' shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
+   ```
+
+3. Commit the file and land it, then deploy it with
+   `./deploy.sh nixos-rog switch`. [deploy.md](deploy.md) has the rules.
+4. Start the updater as in [Hourly updater](#hourly-updater). The new token
+   works when the log reaches "Everything is current." or the update deploys.
+   When the log shows `git ... failed while GitHub answers`, the new token is
+   wrong or lacks access to this repository, and the laptop holds it. Skip
+   step 5, because the old token still works on GitHub. Create a corrected token,
+   repeat steps 2 to 4 with it, and in step 5 delete both the old token and the
+   wrong one.
+5. Delete the old token on the same GitHub page.
+
 ## DNS
 
-DNS goes only to NextDNS over TLS.
+Public names go only to NextDNS over TLS. Tailnet names go to Tailscale's
+MagicDNS.
 
 The public names under `risoluto.dev` (`openchamber.risoluto.dev`,
-`cliproxy.risoluto.dev`) point at Tailscale addresses. The profile's
-DNS-rebinding protection answers those names with `0.0.0.0`. So the profile's
-Allowlist in the NextDNS dashboard holds `risoluto.dev`. That entry also turns
+`cliproxy.risoluto.dev`) point at Tailscale addresses. The NextDNS profile's
+DNS-rebinding protection answers those names with `0.0.0.0`. So the NextDNS
+profile's Allowlist in the dashboard holds `risoluto.dev`. That entry also turns
 off NextDNS filtering for that one domain.
 
 Without the entry, OpenChamber and cliproxy fail to connect as if the server
@@ -168,10 +220,15 @@ A reboot also switches back.
 ## Claude Code and Codex setup
 
 The Claude Code and Codex setup comes from the dotfiles checkout at
-`~/Desktop/workspace/dotfiles`. Every hour, `desktop-sync-config.timer` runs
-that checkout's `desktop/bin/desktop-sync.sh --config`. The script links the
-rules, skills, hooks and agents. It also syncs Claude Code's `settings.json` in
-both directions. Home Manager keeps the shell and tools, and adds one entry,
+`~/Desktop/workspace/dotfiles`. Every hour, the user timer
+`desktop-sync-config.timer` runs that checkout's
+`desktop/bin/desktop-sync.sh --config`. Query it with `systemctl --user`. The
+script links the rules, skills, hooks and agents. It also syncs Claude Code's
+`settings.json` in both directions. The service sets `DESKTOP_SYNC_COMMIT=1`, so
+the script also commits the config files it recorded and pushes them to `main`,
+only while the checkout is on `main` and equal to `origin/main`.
+
+Home Manager keeps the shell and tools, and adds one entry,
 `~/.claude/skills/claude-code-home-manager`, a plugin that gives Claude Code the
 `nixos` MCP server from `home-manager/modules/applications.nix`. The same
 server list is in `~/.config/mcp/mcp.json`.
@@ -184,16 +241,23 @@ Six services share the laptop's power settings. Each setting has one owner:
 
 | Setting | Set in | Applied by |
 |---|---|---|
-| power profile, EPP, CPU boost | `nixosModules/peripherals.nix` | power-profiles-daemon |
-| power limits, NVIDIA limits, fan curves | `machines/nixos-rog/asus.nix`, `fan-curves.json` | asusd, on each profile change |
+| power profile, EPP, CPU boost | power-profiles-daemon's own profile rules; `nixosModules/peripherals.nix` only enables it | power-profiles-daemon |
+| power limits, NVIDIA limits, fan curves | `machines/nixos-rog/asus.nix`, `machines/nixos-rog/fan-curves.json` | asusd, on each profile change |
 | CPU temperature limit, top clock | `machines/nixos-rog/cpu-limits.nix` | `oruc-cpu-limits` |
 | power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
 | NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
 | scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd `--autopower` |
 
+Edit the fan curve numbers in `machines/nixos-rog/fan-curves.json`. `asus.nix`
+only reads that file and hands each curve to asusd.
+
 Facts that matter when you change or measure them:
 
 - `powerprofilesctl set` over SSH needs `sudo`; polkit refuses it otherwise.
+- power-profiles-daemon's `power-saver` is asusd's `quiet` profile.
+  `thermal-test-rog.sh` takes `power-saver`, `balanced` or `performance`;
+  `fan-curves.json` and `asusctl fan-curve` use `quiet`, `balanced` and
+  `performance`.
 - The profile you pick stays after a reboot, because power-profiles-daemon
   saves it in `/var/lib/power-profiles-daemon/state.ini` and starts in it.
   Without a saved profile, it starts in balanced.
@@ -206,50 +270,133 @@ Facts that matter when you change or measure them:
   systemd's sleep hooks, so the unit also checks the limit every 30 s.
 - Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
   `temp1` shows the same value.
+- How the firmware reads a fan curve (the rounding of each point, each fan's
+  1 % floor, and the first point's speed below its temperature) is in the
+  comment above `fanCurveTable` in `machines/nixos-rog/asus.nix`.
+- The fans do not follow Tctl exactly. On 2026-10-13 the MID fan kept turning
+  at a Tctl of 47 °C, under its first point (50, 55 or 52 °C in quiet, balanced
+  and performance), and stopped at 44 °C. Judge a curve change by the fan speeds
+  over a few minutes, not by one sample.
+- ROG Control Center shows each curve point as PWM × 100 / 255, rounded down,
+  and reads the curves from asusd. `asusctl fan-curve --mod-profile quiet`
+  (or `balanced`, `performance`) prints the same curves without the app.
+- `nvidia-smi` reports a 105 W power limit whatever asusd sets. It showed 105 W
+  with `nv_tgp` at 70 and at 85 in a test; the deployed config uses 55 and 85.
+  The limits asusd set are the `current_value` files under
+  `/sys/class/firmware-attributes/asus-armoury/attributes/`. On AC
+  on 2026-10-13, under the thermal test's `--load gpu`, the RTX 4070 drew
+  about 80 W in balanced (`nv_tgp` 55, `nv_dynamic_boost` 5) and about 105 W
+  in performance (85 and 20). With 2 CPU threads also loaded, it drew about
+  60 W in balanced.
+
+From fedora-desktop, in the repository root, run the thermal test to measure a
+profile, or a change to its limits or fan curves before you commit it. It drives
+nixos-rog over SSH, heats the laptop and runs the fans hard for several minutes,
+and needs the charger plugged in:
+
+```sh
+scripts/thermal-test-rog.sh balanced
+scripts/thermal-test-rog.sh performance --ppt 35,45,60 --seconds 120 --label perf-35
+scripts/thermal-test-rog.sh performance --load gpu --seconds 120 --label gpu-perf
+scripts/thermal-test-rog.sh balanced --fans 'CPU=40:0,45:40,50:60,55:80,60:100,65:140,70:180,75:255' --label cpu-fan-try
+```
+
+`--fans` takes one group per fan (`CPU`, `GPU` or `MID`) of 8 `TEMP:PWM` points,
+and the example shows the CPU group. The override lasts for that run only, so
+copy a curve you like into `fan-curves.json`.
+
+The test measures heat, clock and fan speed under full load, on AC, with the
+limits of the profile you name. It exits 2 on battery, so it cannot answer a
+complaint about balanced mode on battery. The battery limits are `dcTunings` in
+`machines/nixos-rog/asus.nix`, and balanced uses EPP `balance_power` on battery
+(see [CPU and power profile](#cpu-and-power-profile)). Read the live values over
+SSH with `powerprofilesctl get` and the asus-armoury `current_value` files
+instead.
+
+It prints the peak temperature, the clock over the last 40 s of load and the
+highest CPU and MID fan speeds. The samples file also records the GPU fan.
+`--load gpu` runs gpu-burn on the RTX 4070 instead of stress-ng on the CPU, and
+`--load both` runs both; the summary then adds the RTX 4070's highest power draw
+and temperature. The samples go to `~/.local/state/nixos-config-thermal/`, and
+their first line names the script's git blob, so a run cited in a PR can be
+matched to its commit. On exit it sets the original profile again and restarts
+asusd and `oruc-cpu-limits`, which write that profile's own limits and curves.
+
+The test builds stress-ng and gpu-burn from the release deployed on nixos-rog,
+so it needs a prior deploy. It exits 75 when another thermal test runs there.
+
+### CPU and power profile
+
+- power-profiles-daemon 0.30 writes the governor, the energy preference (EPP,
+  the CPU's hint for how fast to ramp up) and the `boost` file of every CPU
+  policy. power-saver sets `powersave`, EPP `power` and boost off. Balanced sets
+  `powersave`, boost on, and EPP `balance_performance` on AC or `balance_power`
+  on battery. Performance sets `performance`, EPP `performance` and boost on.
+  Source: `src/ppd-driver-amd-pstate.c` at tag 0.30, read 2026-10-13.
+- power-profiles-daemon writes the per-policy `policy*/boost` files, and the
+  global `cpufreq/boost` stays 1. It rewrites boost on every profile change and
+  every switch between AC and battery, so a hand-written boost value does not
+  last. `verify-nixos-rog.sh` reads the per-policy files.
+- With the `performance` governor, the amd-pstate driver accepts only EPP
+  `performance` and answers any other value with `-EBUSY` (upstream
+  `drivers/cpufreq/amd-pstate.c`, read 2026-10-12). On the laptop in performance,
+  `energy_performance_available_preferences` lists only `performance` (read
+  2026-10-13).
+- scx_lavd `--autopower` reads EPP, so an EPP change also changes the
+  scheduler's mode (scx source, read 2026-10-12).
+- Boost stays on in balanced because `oruc-cpu-limits` caps that profile's top
+  clock at 4.0 GHz (`machines/nixos-rog/cpu-limits.nix`). Boost off cuts
+  all-core speed by about 45 % and one-core speed by about 60 %. In performance
+  under full load on 2026-10-10, stress-ng fell from 45 406 to 24 959 operations
+  per second on all cores and from 4 567 to 1 806 on one core, while Tctl fell
+  from 95 to 67 °C and CPU power from 71 to 36 W. That run used the power
+  settings of that day, not today's.
+- The same file sets balanced's CPU temperature limit to 80 °C. The balanced fan
+  curve is a separate setting in `fan-curves.json`, applied by asusd. Its CPU
+  points run from 55 to 94 °C, so the points above 80 °C matter only when Tctl
+  passes the limit.
+- `amd_pstate/prefcore` reads `disabled` by design. On this Zen 5 chip the
+  `amd_hfi` driver ranks the cores instead, and scx_lavd reads that ranking from
+  `cpufreq/amd_pstate_prefcore_ranking`. The 8 fast threads (4 Zen 5 cores)
+  rank 196 to 208 and the 16 efficient threads (8 Zen 5c cores) rank 125
+  (CachyOS 7.2.8 source and laptop, 2026-10-12;
+  `amd_hfi` was still bound on 2026-10-13).
+- The asus-armoury ranges on the GA605WI, read on AC on 2026-10-13:
+  `ppt_pl1_spl` 15 to 80 W, `ppt_pl2_sppt` and `ppt_pl3_fppt` 35 to 80 W,
+  `nv_tgp` 55 to 85 W, `nv_dynamic_boost` 5 to 20 W and `nv_temp_target` 75 to
+  87 °C.
+
+### RTX 4070 sleep
+
 - The RTX 4070 sleeps only while nothing reads it. A program that shows its
   usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
-  awake, so the kVitals panel widget shows only the Radeon. KWin and
+  awake, so the kVitals panel widget shows only the Radeon. KWin, niri and
   nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake.
 - A running `nvidia-smi dmon` under ksystemstats means some client still
   holds an RTX 4070 sensor. After a login on 2026-10-13 it kept running with
   no client, because ksystemstats kept sensors that a client had subscribed
   to twice, or had subscribed to as it left. `overlays/ksystemstats.nix`
   patches both.
-- How the firmware reads a fan curve (the rounding of each point, each fan's
-  1 % floor, and the first point's speed below its temperature) is in the
-  comment above `fanCurveTable` in `machines/nixos-rog/asus.nix`.
-- The fans do not follow Tctl exactly. On 2026-10-13 the MID fan kept turning
-  at a Tctl of 47 °C, under its 52 °C first point, and stopped at 44 °C. Judge
-  a curve change by the fan speeds over a few minutes, not by one sample.
-- ROG Control Center shows each curve point as PWM × 100 / 255, rounded down,
-  and reads the curves from asusd. `asusctl fan-curve --mod-profile quiet`
-  (or `balanced`, `performance`) prints the same curves without the app.
-- `nvidia-smi` reports a 105 W power limit whatever asusd sets, and read
-  105 W with `nv_tgp` at 70 and at 85. The limits asusd set are the `current_value`
-  files under `/sys/class/firmware-attributes/asus-armoury/attributes/`. On AC
-  on 2026-10-13, under the thermal test's `--load gpu`, the RTX 4070 drew
-  about 80 W in balanced (`nv_tgp` 55, `nv_dynamic_boost` 5) and about 105 W
-  in performance (85 and 20). With 2 CPU threads also loaded, it drew about
-  60 W in balanced.
-
-To measure a profile, or a change to its limits or fan curves before you
-commit it, run the thermal test. It heats the laptop and runs the fans hard
-for several minutes, and needs the charger plugged in:
-
-```sh
-scripts/thermal-test-rog.sh balanced
-scripts/thermal-test-rog.sh performance --ppt 35,45,60 --seconds 120 --label perf-35
-scripts/thermal-test-rog.sh performance --load gpu --seconds 120 --label gpu-perf
-```
-
-It prints the peak temperature, the clock over the last 40 s of load and the
-highest fan speeds. `--load gpu` runs gpu-burn on the RTX 4070 instead of
-stress-ng on the CPU, and `--load both` runs both; the summary then adds the
-RTX 4070's highest power draw and temperature. The samples go to
-`~/.local/state/nixos-config-thermal/`, and their first line names the
-script's git blob, so a run cited in a PR can be matched to its commit.
-On exit it sets the original profile again and restarts asusd and
-`oruc-cpu-limits`, which write that profile's own limits and curves.
+- To see whether it sleeps, read
+  `/sys/bus/pci/devices/0000:65:00.0/power/runtime_status` once a second. It
+  reads `suspended`, `resuming` or `active`. Never poll with `nvidia-smi`, which
+  wakes the card. The Radeon is `0000:66:00.0`.
+- On battery, the firmware sends the driver a power-limit notice (NVPCF) on
+  every 1 % charge drop, which woke the sleeping card for 20 to 22 s. Measured
+  2026-10-11 on driver 615.78.08, BIOS 316, idle on battery: 4 of 4 drops from
+  100 to 96 % woke it with the stock driver, and 0 of 4 with the two patches of
+  [NVIDIA pull request 1299](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299)
+  that `machines/nixos-rog/graphics.nix` applies. Repeat the count after a
+  driver update. The comment in `graphics.nix` says when to drop the patches.
+- The patches do not cover unplugging the charger or switching the platform
+  profile. Each still wakes the card once. In a 25-minute patched run on
+  2026-10-12, those two wakes kept it awake for 44 s.
+- The power cost of a wake is below about 5 W, the swing of the battery reading
+  around one drop (19.6, 21.3 and 24.2 W before, during and after a wake).
+  Measure idle draw from the charge difference over a whole run instead. On
+  2026-10-11 the charge fell 0.208 Ah in 21
+  minutes on battery, which is about 10 W. The real figure lies between 9 and 11
+  W, because the battery reports charge in coarse steps.
 
 ## Check the running laptop
 
@@ -259,17 +406,18 @@ After a deploy, check the running laptop from fedora-desktop:
 scripts/verify-nixos-rog.sh
 ```
 
-The script writes a JSON report under `~/.local/state/nixos-config-verify/`.
-It exits 1 when a check fails. `--suspend` adds three s2idle cycles. They
-darken the screen, so they do not run, and the check fails, while someone uses
-the laptop: a local session that is neither idle nor locked. Lock the screen
-first, or pass `--while-in-use`.
-It switches to each power profile and checks that the fan curves and
-asus-armoury limits there match the deployed config. It also checks that the
-Plasma panel widgets are installed and that KWin loaded the effects the config
-turns on. A Plasma session that started before
-the deploy shows as manual, because it keeps the plugins of the old system;
-log out and in, then rerun.
+The script writes a JSON report under `~/.local/state/nixos-config-verify/` and
+exits 1 when a check fails. It switches the laptop to each power profile in
+turn, checks that the CPU limits, fan curves and asus-armoury limits there match
+the deployed config, then sets the original profile again. It also checks that
+the Plasma panel widgets are installed and that KWin loaded the effects the
+config turns on. A Plasma session that started before the deploy shows as
+manual, because it keeps the plugins of the old system; log out and in, then
+rerun.
+
+`--suspend` adds three s2idle cycles. They darken the screen, so they do not
+run, and the check fails, while someone uses the laptop (a local session that is
+neither idle nor locked). Lock the screen first, or pass `--while-in-use`.
 
 ## Check a visual change
 
@@ -286,12 +434,146 @@ The script opens the Ghostty window on the running session, takes the shot and
 closes the window. Without `--window` it takes the screen as it is. Crop the
 window's edges at full size before you judge them.
 
-Glass's `WindowClasses` list names windows by their resource class or resource
-name. To read both for each open window, run:
+Glass's `WindowClasses` list is a blacklist. A window it names gets no blur,
+and each entry must match the window's resource class or resource name exactly.
+To read both for each open window in the Plasma session, run:
 
 ```sh
 scripts/kwin-windows-on-rog.sh
 ```
+
+## Plasma panels
+
+plasma-manager builds both panels, the top bar and the dock, from
+`home-manager/modules/plasma-panels.nix`. Whenever that layout changes, it
+deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
+the panels again. A panel or widget change made in Plasma's settings window
+lasts only until then, so write a lasting change in the Nix file.
+
+- Panel Colorizer draws the blurred backgrounds. Its blur area can stay stale in
+  the running session. On the night of 2026-10-12 to 2026-10-13, after a live
+  change of the dock's height and style, the blur covered only part of the dock,
+  and toggling edit mode did not refresh it. Judge a panel change after a new login.
+- A logout can show a black screen with a cursor for about a minute. On
+  2026-10-13 plasmashell did not quit, and systemd killed it at its stop
+  timeout. The cause is not confirmed.
+- To try a panel setting before you write it into the Nix file, run a script in
+  the running plasmashell. First copy `~/.config/plasma-org.kde.plasma.desktop-appletsrc`
+  and `~/.config/plasmashellrc` to a backup directory, such as
+  `~/.local/state/dock-try`, so you can put them back:
+
+  ```sh
+  ssh nixos-rog 'export XDG_RUNTIME_DIR=/run/user/$(id -u) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus WAYLAND_DISPLAY=wayland-0; qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "print(panels().length)"'
+  ```
+
+- KWin reads an effect's `kwinrc` settings only when it loads the effect. A
+  deploy reloads Glass only (`home.activation.reloadGlass` in
+  `home-manager/modules/plasma-manager.nix`). After a change to another effect,
+  call `reconfigureEffect` in the Plasma session, as that activation does:
+  `busctl --user call org.kde.KWin /Effects org.kde.kwin.Effects reconfigureEffect s <name>`.
+- Glass settings are the `Effect-blurplus` keys in `plasma-manager.nix`.
+  Ghostty's opacity and blur are `programs.ghostty.settings` in
+  `home-manager/modules/applications.nix`, and its colors are in `theme.nix`.
+  To read Glass's option names at the revision `flake.lock` pins, run this in
+  the repository root:
+
+  ```sh
+  rev=$(jq -r '.nodes["kwin-effects-glass"].locked.rev' flake.lock)
+  gh api "repos/4v3ngR/kwin-effects-glass/contents/src/blur.kcfg?ref=$rev" --jq .content | base64 -d
+  ```
+
+Prove a panel or effect change with `scripts/screenshot-nixos-rog.sh` before and
+after it. [Check a visual change](#check-a-visual-change) says how to see the
+blur.
+
+## Deskflow
+
+Deskflow shares one keyboard, mouse and clipboard between the two machines.
+fedora-desktop is the server and nixos-rog is the client. They connect over
+Tailscale.
+
+On nixos-rog:
+
+- The `deskflow` user service in `machines/nixos-rog/home.nix` starts the client
+  at a Plasma login only. A Wayland client types through the remote desktop
+  portal, which Plasma has and niri does not. The service exits 5 when another
+  Deskflow already runs, such as a copy that Plasma's autostart or the menu
+  started. The unit treats 5 as success and does not restart.
+- `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
+  With an older libportal, Deskflow builds without clipboard code and the laptop
+  never sends what you copy. The overlay's install check fails the build in that
+  case.
+- Home Manager sets only `log.toFile` in `~/.config/Deskflow/Deskflow.conf`,
+  because Deskflow rewrites that file. The server address and the TLS keys in it
+  stay as you set them in the Deskflow window. Both machines write
+  `~/deskflow.log`.
+
+On fedora-desktop, outside this repository:
+
+- The server is the upstream RPM, installed with `dnf install`, at the version of
+  the laptop's client, because Fedora's package can lag the release.
+  `rpm -q deskflow` on fedora-desktop prints the server's version, and
+  `scripts/eval-on-rog.sh --json '.#nixosConfigurations.nixos-rog.pkgs.deskflow.version'`
+  prints the laptop's.
+- TLS is on, and the server requires client certificates. Keep the Network IP
+  setting automatic, because a fixed Tailscale address would stop the server
+  whenever Tailscale is not up yet.
+- The server's screen for the laptop must be named exactly `nixos-rog`.
+  Deskflow 1.27 ignores a second alias for a screen, and the server then logs
+  `unrecognised client name "nixos-rog"`. When the laptop boots Windows, set the
+  Windows client's computer name to `nixos-rog` as well.
+- Do not press Regenerate certificate. It changes the server's fingerprint, and
+  the laptop refuses the server until you accept the new one there. A
+  fingerprint prompt on the laptop that you did not cause is suspicious, so
+  decline it.
+
+After a deploy that changes Deskflow, the service restarts the client, and Plasma
+may ask on the laptop to allow remote control with clipboard access. Approve it
+with the laptop's own keyboard or touchpad.
+
+To check the clipboard, move the cursor onto the laptop and copy there. Then
+look for `computer "nixos-rog" updated clipboard 0` in `~/deskflow.log` on
+fedora-desktop. Deskflow sends the laptop's clipboard only after the cursor has
+been on the laptop, so a `wl-copy` over SSH while the cursor is on fedora-desktop
+proves nothing.
+
+## Keyboard keys
+
+Fn lock is on, so the function row sends plain F1 to F12 and its special keys
+need Fn. Fn+Esc toggles Fn lock. This table comes from `libinput debug-events`
+on 2026-10-09, in the niri sessions:
+
+| Keys | Sends | Effect |
+| --- | --- | --- |
+| Fn+F1 | `KEY_MUTE` | mute |
+| Fn+F4 | `KEY_PROG3` (`XF86Launch3`) | next Aura effect; niri binds it in `machines/nixos-rog/asus.nix` |
+| Fn+F5 | `KEY_PROG4` (`XF86Launch4`) | cycles the power profile in the niri shells and in Plasma |
+| Fn+F6 | `Meta+Shift+S` | screenshot in niri; the laptop has no Print key |
+| Fn+F7, Fn+F8 | `KEY_BRIGHTNESSDOWN`, `KEY_BRIGHTNESSUP` | brightness |
+| Fn+F9 | `Meta+P` | Plasma's display switch; niri does not bind it |
+| Fn+F10 | `KEY_F21` | nothing in this repository binds it |
+| Fn+F11 | `KEY_SLEEP` | suspends the laptop |
+| Fn+Left, Right, Up, Down | `Home`, `End`, `Page Up`, `Page Down` | navigation, not keyboard lighting |
+
+Fn+F2, Fn+F3 and Fn+F12 sent nothing in that log.
+
+`wev` cannot show a key that niri binds, because niri takes it before any window
+sees it. To read the keycodes of every key, run this in a terminal on the
+laptop. It asks for the sudo password:
+
+```sh
+sudo nix run nixpkgs#libinput -- debug-events --show-keycodes
+```
+
+## Known faults
+
+- The MT7925 Bluetooth controller needs linux-firmware 20260916 or newer. Older
+  firmware leaves `bluetoothctl list` empty and logs
+  `hci0: Execution of wmt command timed out` after a restart from CachyOS. Keep
+  the nixpkgs input at or above that release.
+- asusd logs `Failed to set pwm3_enable to 1: No such device` at start. It does
+  not change the fans, because `verify-nixos-rog.sh` compares every fan's curve,
+  MID included, and passes with the message in the log.
 
 ## Drive VS Code
 

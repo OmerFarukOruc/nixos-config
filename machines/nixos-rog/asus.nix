@@ -36,7 +36,9 @@ let
   # temperature target. Quiet takes each range's minimum and performance each
   # GPU range's maximum; the other values trade speed for heat and fan noise.
   # In a 4-minute all-thread stress-ng run on AC, the CPU peaked at 62 °C in
-  # quiet (boost off), 75 °C in balanced and 81 °C in performance.
+  # quiet (boost off), 75 °C in balanced and 81 °C in performance. The fan
+  # curves' first points changed after that run. Rerun it with
+  # scripts/thermal-test-rog.sh (docs/nixos-rog.md, Power and heat).
   # cpu-limits.nix caps each profile's CPU temperature.
   acTunings = {
     Quiet = {
@@ -94,17 +96,17 @@ let
     NvTempTarget = "nv_temp_target";
   };
   # The firmware takes the power limits above only while every fan follows a
-  # custom curve. Points are (°C, PWM 0-255); both rise left to right. The
-  # kernel sends each point as 100 * PWM / 255 percent, rounded down, and in a
-  # sweep on 2026-10-13 every fan started from stop at 1 % (PWM 3); PWM 0-2
-  # send 0 %, which stops the fan. The firmware also runs each fan at its first
-  # point's speed below that point's temperature. So the CPU and GPU fans start
-  # at PWM 3 and never stop. The MID fan starts at 0 and stops when cool,
-  # because at 1 % it turns at 3400-4300 rpm, against about 2200 for the others.
-  # Quiet is the factory performance curve with its repeated top point traded
-  # for a first point at 50 °C. The factory curve reaches its top speed at
-  # 76 °C, which four busy threads pass; balanced reaches the same top speed at
-  # 94 °C and performance at 86 °C, so light work stays quieter.
+  # custom curve. fan-curves.json maps each profile (quiet, balanced,
+  # performance) and each fan (CPU, GPU, MID) to 8 points of (°C, PWM 0-255);
+  # neither value falls from left to right. The kernel sends each point as
+  # 100 * PWM / 255 percent, rounded down, and in a sweep on 2026-10-13 every
+  # fan started from stop at 1 % (PWM 3); PWM 0-2 send 0 %, which stops the
+  # fan. The firmware also runs each fan at its first point's speed below that
+  # point's temperature. So the CPU and GPU fans start at PWM 3 and never stop.
+  # The MID fan starts at 0 and stops when cool, because at 1 % it turns at
+  # 3400-4300 rpm, against about 2200 for the others.
+  # The CPU curve ends at 82 °C with PWM 104 in quiet, at 94 °C with 165 in
+  # balanced and at 86 °C with 200 in performance.
   fanCurveTable = lib.importJSON ./fan-curves.json;
   fanCurves =
     profiles:
@@ -259,7 +261,9 @@ in
   };
 
   # The Aura key sends XF86Launch3; asusctl 6.5.0 has no `aura -n`. The laptop
-  # has no Print key; Fn+F6 sends Mod+Shift+S.
+  # has no Print key; Fn+F6 sends Mod+Shift+S. These binds append to
+  # /etc/niri/host.kdl, which nixosModules/desktop.nix and graphics.nix also
+  # write; config.kdl includes the merged text.
   environment.etc."niri/host.kdl".text = ''
     binds {
         XF86Launch3 { spawn "${lib.getExe' config.services.asusd.package "asusctl"}" "aura" "effect" "--next-mode"; }

@@ -32,7 +32,8 @@ rec {
     else
       session.desktop;
 
-  # The session of a machine that has one; the first listed is the default.
+  # Name of the default session, the first one listed. A machine with no session
+  # has none, so callers check hasAnyDesktop first.
   defaultSession = machine: sessionName machine (builtins.head machine.sessions);
 
   # With more than one session, a user service that belongs to one session

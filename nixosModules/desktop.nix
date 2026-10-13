@@ -163,8 +163,9 @@ in
         pkgs.kdePackages.wallpaper-engine-plugin
       ];
 
-      # scripts/verify-nixos-rog.sh checks that each panel widget and each
-      # KWin effect that plasma-manager turns on is installed and loaded.
+      # scripts/verify-nixos-rog.sh checks that each panel widget that
+      # plasma-manager adds is installed, and that each KWin effect it turns on
+      # is loaded.
       oruc.verifyFacts =
         let
           plasma = config.home-manager.users.oruc.programs.plasma;

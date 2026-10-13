@@ -52,7 +52,7 @@ lib.mkIf (cfg.kind == "workstation") {
   users.users.oruc.extraGroups = [ "networkmanager" ];
 
   # Outside tailscale0 the only open port is Tailscale's own UDP port. The
-  # check covers the port lists and trusted interfaces only: allowPing,
+  # check covers the port lists and trusted interfaces only. allowPing,
   # extraInputRules and extraCommands pass unchecked, and Docker and zapret2
   # write their own nftables rules, which it cannot see.
   assertions =

@@ -9,9 +9,10 @@
 # 95 °C. A sleep that bypasses systemd, such as rtcwake, runs no resume
 # command, so the unit also checks both limits every 30 s.
 #
-# power-profiles-daemon turns boost off in power-saver, so quiet needs no clock
-# cap. One busy thread at 5.1 GHz held the CPU at 74 °C and spun the fans up;
-# at 4.0 GHz it stayed at 56 °C with the fans at their floor.
+# power-profiles-daemon turns boost off in power-saver, which asusd calls quiet,
+# so power-saver needs no clock cap. One busy thread at 5.1 GHz held the CPU at
+# 74 °C and spun the fans up; at 4.0 GHz it stayed at 56 °C with the fans at
+# their floor.
 {
   config,
   lib,
@@ -55,7 +56,7 @@ in
   systemd.services.oruc-cpu-limits = {
     description = "Set the CPU temperature limit and top clock of the power profile";
     # power-profiles-daemon starts after multi-user.target, so a unit ordered
-    # after the daemon must not be wanted by that target: the boot would wait
+    # after the daemon must not be wanted by that target, or the boot would wait
     # on a cycle and never reach it.
     wantedBy = [ "graphical.target" ];
     requires = [ "power-profiles-daemon.service" ];

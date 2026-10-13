@@ -1,5 +1,8 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
+# Colors are fixed hex values, based on Starship's pastel-powerline preset. They
+# do not come from oruc.theme, so a scheme change does not recolor the prompt.
+
 format = """
 [](#9A348E)\
 $os\

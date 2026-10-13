@@ -1,10 +1,24 @@
 # Home Manager operator notes
 
 Home Manager is integrated into the NixOS configuration of every host through
-`nixosModules/home-manager.nix`, for `oruc` and for root. A NixOS rebuild
-activates the matching user environment, and rolling back to a retained NixOS
-generation rolls back its Home Manager generation too. There is no separate
-standalone Home Manager configuration or retention claim.
+`nixosModules/home-manager.nix`. `oruc` gets `home-manager/common.nix` plus the
+host layer in `machines/<host>/home.nix`. root gets only
+`home-manager/modules/shell.nix`, so `sudo -i` has the same shell and tools. A
+NixOS rebuild activates the matching user environment, and rolling back to a
+retained NixOS generation rolls back its Home Manager generation too.
+
+## Adding a module
+
+A module that belongs to one desktop, shell or launcher turns itself on with
+`sessions.hasDesktop`, `sessions.hasShell` or `cfg.launcher`. Other modules,
+such as `shell.nix` and `git.nix`, apply on every host. The
+[login sessions](../docs/architecture.md#login-sessions) section of the
+architecture doc explains how session units bind to a desktop.
+
+To add a shell or a launcher, follow
+[Add a host, launcher, shell or kernel profile](../docs/architecture.md#add-a-host-launcher-shell-or-kernel-profile).
+A launcher module must give the four commands that
+`home-manager/modules/launchers/helpers.nix` lists (app, command, ssh and file).
 
 ## First activation and history
 
@@ -12,16 +26,15 @@ When Home Manager adopts a path that already exists, it moves that path to a
 timestamped sibling such as `.zshrc.hm-backup-20260920T120000Z`. It does not
 scan or change unrelated files. The two mime files that Home Manager owns,
 `~/.config/mimeapps.list` and `~/.local/share/applications/mimeapps.list`, follow
-the same rule. Home Manager finds collisions from the generated configuration,
-so a new managed path needs no second handwritten list. Existing Home Manager
-symlinks stay.
+the same rule. Existing Home Manager symlinks stay.
 
 Atuin is local-only: sync and update checks are disabled, and no account is
 configured. Do not import native Zsh history; a machine without an Atuin
 database starts with a fresh local database. An existing Atuin database is
 left intact rather than deleted automatically. Native Zsh history remains
-enabled, includes failed commands, and is available with Ctrl-P/Ctrl-N
-(search by the text typed so far) or `fc -l`.
+enabled and includes failed commands. Up, Down, Ctrl-P and Ctrl-N search it by
+the text typed so far (`history-substring-search`), and `fc -l` lists it. Atuin
+owns Ctrl-R and does not take Up.
 
 ## Updates
 
@@ -36,8 +49,8 @@ new kernel runs after the next boot.
 
 Keep these steps outside the repository:
 
-1. Create a unique Ed25519 key in `~/.ssh` for this host and register only its
-   public key with GitHub.
+1. Create a unique Ed25519 key `~/.ssh/id_ed25519_github` for this host and
+   register only its public key with GitHub.
 2. Run `gh auth login --git-protocol ssh` interactively. Store the resulting
    credential in the session Secret Service; never add `hosts.yml` to Git.
 3. Enroll the host public key as a GitHub signing key.
@@ -54,3 +67,27 @@ Keep these steps outside the repository:
 
 Do not commit private keys, Atuin keys/databases, GitHub credentials, or the
 host-local signing include.
+
+## Logins on a new laptop
+
+Run the logins from another machine with `ssh -t <host>`. The host has no
+browser over ssh, so you open the login page in the browser in front of you and
+type the code there. gh, Codex and Claude Code each
+need their own login. Behavior below was observed on nixos-rog on 2026-10-10.
+
+- **gh.** Run `gh auth login --git-protocol ssh --web`. Over ssh the host has no
+  clipboard tool and no display, so gh cannot copy its one-time code or open a
+  browser. Type the code gh prints into your own browser, and ignore the
+  browser launch error that follows. `--insecure-storage` keeps the token in
+  `~/.config/gh/hosts.yml`; whether the Secret Service keyring is unlocked over
+  ssh was not tested.
+- **gh SSH key.** When gh generates a key during login, check `gh ssh-key list`.
+  On nixos-rog the generated key never reached GitHub, and
+  `gh ssh-key add ~/.ssh/id_ed25519.pub --title <host>` uploaded it.
+- **Codex.** Run `codex login --device-auth`.
+- **Claude Code.** `~/.claude` takes `claude auth login`. Each extra account has
+  its own folder and takes `CLAUDE_CONFIG_DIR=~/.claude-<name> claude auth login`.
+  Do not copy a `.credentials.json` from another machine, because Claude Code
+  rotates the refresh token on use and the first refresh on one machine logs
+  the other out. The account folder layout is in `desktop/bin/guide.md` of the
+  dotfiles checkout.

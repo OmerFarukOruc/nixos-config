@@ -84,6 +84,12 @@ in
             "scripts/auto-update.sh"
           ];
         };
+        # A document whose first list is a contents list names each of its headings.
+        doc-contents = {
+          command = lib.getExe pkgs.bash;
+          options = [ "scripts/check-doc-contents.sh" ];
+          includes = [ "*.md" ];
+        };
       };
     };
 

@@ -1,20 +1,21 @@
 # kernel-cache
 
-Builds the CachyOS kernel (`linux-cachyos-latest-lto-x86_64-v3` and
-`linux-cachyos-latest-lto-zen4` from
-[nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel)) and the
-NVIDIA open kernel module for each on GitHub Actions, plus `ryzen-smu` and
-`turbostat` for zen4, and pushes them to a public Cachix cache, so the NixOS
-hosts that use them do not compile them. `hostPackages` in `flake.nix` lists
-what each variant's hosts build against the kernel. A failed build of any of
-them stops the run before it records the new revision, so no host moves to that
-kernel until the next run succeeds.
+This flake builds the CachyOS kernels `linux-cachyos-latest-lto-x86_64-v3` and
+`linux-cachyos-latest-lto-zen4` (from
+[nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel)), the NVIDIA
+open kernel module for each, and the packages that hosts build against the
+kernel. GitHub Actions pushes them to a public Cachix cache, so the NixOS hosts
+that use them do not compile them. `hostPackages` in `flake.nix` lists the
+extra packages each variant builds besides the kernel and its NVIDIA module. A failed build of any output stops the run before it
+records the new revision, so no host moves to that kernel until the next run
+succeeds.
 
 The kernel's store path depends only on the nix-cachyos-kernel revision in
 `flake.lock`, because the input's `pinned` overlay builds with the input's own
 nixpkgs. A host gets a cache hit when it locks the same revision and uses the
-`pinned` overlay. The NVIDIA module also needs the same `mkDriver` arguments as
-the host's `hardware.nvidia.package`.
+`pinned` overlay. The NVIDIA module also needs the same `mkDriver` arguments
+and patches as `hardware.nvidia.package` in `machines/nixos-rog/graphics.nix`.
+Nothing compares them, so change both files together.
 
 The same path is what upstream's Hydra builds, so the build jobs and
 `scripts/build-local.sh` also read upstream's binary cache
@@ -22,18 +23,21 @@ The same path is what upstream's Hydra builds, so the build jobs and
 downloaded and pushed to Cachix instead of compiled. That cache keeps outputs
 for a few days only, so it helps when the `release` branch has just moved.
 
-This directory is its own flake with its own `flake.lock`, so the builder moves
-to a new revision first and the hosts follow only once the cache holds it.
+This directory is its own flake with its own `flake.lock`, so it moves to a new
+nix-cachyos-kernel revision first and the hosts follow only once the cache holds
+that build.
 
-The `variants` list in `flake.nix` names the CPU targets; each one builds in
-its own job. The
-[`kernel-cache` workflow](../.github/workflows/kernel-cache.yml) builds on every
-push to `main` that changes this flake or its patches, and once a day after moving
-`flake.lock` to the head of the upstream `release` branch. After the build and
-the push to Cachix succeed, it commits `flake.lock` with `cached-paths.json`,
-which lists the nix-cachyos-kernel revision, the kernel version and every pushed
-output path. A host checks
-those paths in the cache before it locks the same revision.
+The `variants` list in `flake.nix` names the CPU targets, and each builds in its
+own job. The [`kernel-cache` workflow](../.github/workflows/kernel-cache.yml)
+runs on a push to `main` that changes this flake, its patches or the workflow,
+on a manual start, and once a day after it moves `flake.lock` to the head of the
+upstream `release` branch. After the build and the push to Cachix succeed, it
+commits `flake.lock` with `cached-paths.json`, which lists the
+nix-cachyos-kernel revision, the kernel version and every pushed output path. A
+host checks those paths in the cache before it locks the same revision.
+
+No pull-request check evaluates this flake. A broken change shows first as a
+failed `kernel-cache` run on `main`.
 
 The same cache holds packages that the root flake's hosts would compile, such
 as DankMaterialShell. The
@@ -56,16 +60,19 @@ fails.
 
 ## Building on another machine
 
-A hosted runner has 4 CPUs, and an LTO kernel takes it about 2 to 4 hours, close
-to the job's 6-hour limit. `scripts/build-local.sh` builds variants in a
-`nixos/nix` container on a faster machine and pushes them to the cache. With
-`--record` it then starts the `kernel-cache` workflow, which finds every path in the cache and
-records the build.
+A hosted runner has 4 CPUs, and a job stops at the 6-hour limit. When a compile
+from source does not finish in that time, `scripts/build-local.sh` builds
+variants in a `nixos/nix` container on a faster machine and pushes them to the
+cache. With `--record` it then starts the `kernel-cache` workflow, which finds
+every path in the cache and records the build.
 
 ```sh
 CACHIX_AUTH_TOKEN=... scripts/build-local.sh --rev <nix-cachyos-kernel sha> --record zen4 x86_64-v3
 ```
 
 The token comes from the environment; push only the outputs in `flake.nix`,
-because the cache is public. The `kernel-cache` workflow can also be started by hand
-for one revision: `gh workflow run kernel-cache -f rev=<sha>`.
+because the cache is public. The `kernel-cache` workflow can also be started by
+hand for one revision: `gh workflow run kernel-cache -f rev=<sha>`. On
+fedora-desktop,
+[docs/updates.md](../docs/updates.md#when-the-cache-lacks-the-kernel) has the
+command that reads the token from Infisical and the steps that follow.

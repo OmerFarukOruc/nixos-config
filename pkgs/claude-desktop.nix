@@ -120,7 +120,8 @@ stdenv.mkDerivation rec {
     cp -r usr/lib/claude-desktop $out/lib
     cp -r usr/share/. $out/share/
     # chrome-sandbox needs setuid. Without it Electron uses the user-namespace
-    # sandbox, which --no-sandbox in the wrapper would turn off.
+    # sandbox, so the wrapper passes no --no-sandbox, which would turn that
+    # sandbox off.
     rm -f $out/lib/chrome-sandbox
     desktopFiles=("$out"/share/applications/*.desktop)
     if [ ! -f "''${desktopFiles[0]:-}" ]; then

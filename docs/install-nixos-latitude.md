@@ -1,17 +1,28 @@
 # First install of nixos-latitude
 
-Run on the laptop from the NixOS minimal ISO. fedora-desktop serves this repo
-over the LAN at `<fedora-desktop-ip>:8090` during the install.
+Run on nixos-latitude from the NixOS minimal ISO. Before you start, serve the
+committed files of this repository from fedora-desktop as a tarball with one
+top-level directory, which step 5 strips:
+
+```
+mkdir -p /tmp/serve
+git -C <nixos-config checkout> archive --format=tar.gz --prefix=nixos-config/ -o /tmp/serve/nixos-config.tar.gz HEAD
+python3 -m http.server 8090 --directory /tmp/serve
+```
+
+`git archive` ships only committed files, so commit first. nixos-latitude fetches
+the tarball from `<fedora-desktop-ip>:8090`, so fedora-desktop must accept TCP
+port 8090 from the LAN. Stop the server after step 5.
 
 1. Open the BIOS setup with F2 at the Dell logo. Disable Secure Boot, and set the
    boot mode to UEFI.
 2. Boot the USB stick. F12 at the Dell logo picks the boot device.
-3. Connect to Wi-Fi:
+3. Connect to Wi-Fi. The ISO uses NetworkManager, and `nmtui` does the same
+   interactively:
 
    ```
    sudo -i
-   wpa_passphrase 'SSID' 'PASSWORD' > /etc/wpa_supplicant.conf
-   systemctl restart wpa_supplicant
+   nmcli device wifi connect 'SSID' password 'PASSWORD'
    ping -c 2 <fedora-desktop-ip>
    ```
 
@@ -30,12 +41,24 @@ over the LAN at `<fedora-desktop-ip>:8090` during the install.
    mount -o umask=077 /dev/disk/by-label/BOOT /mnt/boot
    ```
 
-   If the disk is SATA, its name is `/dev/sda`, and the partitions are `sda1` and `sda2`.
+   The ESP is 4 GiB because every kept generation stores a kernel and an
+   initrd on it. `keep-latest-n` in `nixosModules/common.nix` sets the count
+   (5), and `nixosModules/bootloader.nix` applies it. `docs/recovery.md` mounts the
+   labels `BOOT` and `nixos`. For a SATA disk, set `DISK=/dev/sda` and use
+   `"${DISK}1"` and `"${DISK}2"` in the two `mkfs` lines.
 
-5. Download this repo, write the hardware file into the current `machines/`
-   layout, evaluate the flake, and install:
+5. Download this repository, replace its
+   `machines/nixos-latitude/hardware-configuration.nix` with one generated for
+   this disk, check that the flake evaluates and builds, and install. The ISO
+   enables neither flakes nor this repository's binary caches. `NIX_CONFIG`
+   turns both on, so the CachyOS kernel downloads instead of compiling on the
+   live system. The keys are copies of the ones in `nixosModules/kernel.nix`
+   and `nixosModules/common.nix`.
 
    ```
+   export NIX_CONFIG='experimental-features = nix-command flakes
+   extra-substituters = https://omerfarukoruc.cachix.org https://cache.numtide.com
+   extra-trusted-public-keys = omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
    mkdir -p /mnt/etc/nixos
    curl http://<fedora-desktop-ip>:8090/nixos-config.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
    nixos-generate-config --root /mnt --show-hardware-config > /mnt/etc/nixos/machines/nixos-latitude/hardware-configuration.nix
@@ -62,3 +85,22 @@ over the LAN at `<fedora-desktop-ip>:8090` during the install.
 
    Open the printed URL on any device and approve the machine.
    From then on fedora-desktop reaches it as `nixos-latitude` over Tailscale.
+
+8. Keep the generated disk ids in the repository. In the nixos-config checkout
+   on fedora-desktop, copy the file the install generated:
+
+   ```
+   scp nixos-latitude:/etc/nixos/machines/nixos-latitude/hardware-configuration.nix machines/nixos-latitude/hardware-configuration.nix
+   ```
+
+   Commit it and deploy as [deploy.md](deploy.md#deploy) describes. `deploy.sh`
+   ships this checkout, and step 4 gave the disks new UUIDs. The committed file
+   still holds the old UUIDs, so the next generation could not mount root at
+   the next boot.
+
+   The header of this file points to `/etc/nixos/configuration.nix`. Ignore it.
+   Host changes go in `machines/nixos-latitude/configuration.nix` and ship with
+   `deploy.sh`.
+
+Hardware facts and measured dead ends for this laptop are in
+[nixos-latitude.md](nixos-latitude.md).

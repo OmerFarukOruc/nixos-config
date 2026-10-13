@@ -143,6 +143,8 @@ in
             hoverPopoutDelay = 150;
           }
         ];
+        # DMS idle stays off. swayidle in idle.nix handles idle and screen off
+        # for every niri session. The values pin the DMS defaults.
         acLockTimeout = 0;
         batteryLockTimeout = 0;
         acSuspendTimeout = 0;

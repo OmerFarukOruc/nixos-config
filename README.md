@@ -13,7 +13,7 @@ with a CachyOS kernel that CI compiles so the laptops never do.**
 [![host-packages-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/host-packages-cache.yml?branch=main&style=flat-square&label=host-packages-cache)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/host-packages-cache.yml)
 [![Cachix](https://img.shields.io/badge/cachix-omerfarukoruc-4E7FC1?style=flat-square)](https://omerfarukoruc.cachix.org)
 
-[Hosts](#hosts) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs)
+[Hosts](#hosts) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
 
 <img src="assets/screenshots/nixos-rog-plasma-fastfetch.webp" width="90%" alt="nixos-rog running KDE Plasma with fastfetch in Ghostty">
 
@@ -45,7 +45,7 @@ is an inventory record only; the flake does not build it.
   turbostat on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
   cache. `scripts/update-kernel.sh` moves a host only to a revision whose every
   path is already in that cache.
-- **🪟 Three desktops, one theme.** nixos-rog offers Plasma, niri with Noctalia
+- **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
   colors, cursor, icons and wallpaper of all of them, and of SDDM.
 - **🛟 Deploys that roll themselves back.** `deploy.sh` builds on the target,
@@ -57,23 +57,28 @@ is an inventory record only; the flake does not build it.
   result to itself and squash-merges it to `main`.
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/nixos-rog.yaml`
   with the age key derived from the laptop's SSH host key.
-- **🧭 Private DNS everywhere.** DNS goes only to NextDNS over TLS, with a
-  `captive-dns` switch for Wi-Fi sign-in pages.
+- **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
+  tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
+  sign-in pages.
 
 ## Layout
 
 ```text
-flake.nix              inputs and the two nixosConfigurations
-machines/              the typed host inventory and one folder per host
+flake.nix              inputs; machines/inventory.nix builds the two nixosConfigurations
+machines/              the typed machine inventory and one folder per host
 nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme, ...
 home-manager/          the user layer, with one module per shell and app
-niri/                  niri config shared by the Noctalia and DMS sessions
+niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
 kernel-cache/          the separate flake that CI builds into Cachix
-scripts/               update, verify and auto-update scripts
+ci/  .github/          CI scripts and workflows: host-package cache, build report, unit ordering check
+scripts/               checks and builds on nixos-rog, update scripts, the updater and the post-deploy check
+tooling.nix            the formatter (nix fmt), its linters and the dev shell
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
 docs/                  operating guides and the architecture
+assets/                screenshots and wallpapers
+AGENTS.md  CONTEXT.md  agent rules; domain terms and SSH aliases
 ```
 
 [docs/architecture.md](docs/architecture.md) explains how the inventory, the
@@ -81,45 +86,60 @@ login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
-Run these from fedora-desktop, which has no Nix; `deploy.sh` builds on the
-target.
+Run these from fedora-desktop, which has no Nix. `deploy.sh` builds on the
+target, and the `-on-rog` scripts run Nix on nixos-rog over SSH. `move-inputs.sh`
+and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
+`nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
+checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 
 | Command | What it does |
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
-| `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest |
+| `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog; `--fix` formats |
-| `scripts/eval-on-rog.sh ATTRIBUTE` | print one value of nixos-rog's configuration, evaluated on nixos-rog |
-| `scripts/run-unit-on-rog.sh UNIT` | run a service's script on nixos-rog with only the unit's environment, before a deploy |
-| `scripts/move-inputs.sh` | move inputs to their newest release or branch head, except the kernel and llm-agents |
+| `scripts/eval-on-rog.sh [--json] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json` |
+| `scripts/build-on-rog.sh [ATTRIBUTE...]` | build on nixos-rog from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system |
+| `scripts/run-unit-on-rog.sh UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, before a deploy |
+| `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog |
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
 | `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
-| `scripts/thermal-test-rog.sh PROFILE` | load nixos-rog's CPU, GPU or both in a power profile and record temperature, power and fans |
+| `scripts/thermal-test-rog.sh PROFILE [OPTION...]` | load nixos-rog's CPU, GPU or both in a power profile and record temperature, power and fans; the script header lists the options |
 
-Every deploy command can change boot or running system state.
+`deploy.sh` takes a `HOST` (nixos-rog or nixos-latitude), `--allow-dirty` for a
+dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
+says when to use either flag. Every deploy command can change boot or running
+system state.
+
+`scripts/auto-update.sh` is the updater that `oruc-auto-update.service` runs.
+`scripts/check-exit-codes.sh` and `scripts/check-doc-contents.sh` run inside
+`nix fmt`, and `scripts/lib/` holds helpers that other scripts source. Nobody
+runs these by hand.
+
 CI runs the formatter, `nix flake check --no-build`, the evaluation of each
-host and a check of each host's units for an ordering cycle on every pull
-request and push to `main`.
+host and of the cached host packages, and a check of each host's units for an
+ordering cycle on every pull request and push to `main`.
 
 ## Docs
 
 | Guide | Covers |
 | --- | --- |
+| [Architecture](docs/architecture.md) | the inventory, login sessions, theme and Home Manager |
 | [Deploy](docs/deploy.md) | evaluation checks, the deploy and rollback steps, exit codes, release records |
 | [Updates](docs/updates.md) | the kernel, release-tagged inputs and app packages |
-| [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair |
-| [nixos-rog](docs/nixos-rog.md) | the hourly updater, secrets, DNS, power and heat, and the post-deploy check |
+| [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
+| [nixos-rog](docs/nixos-rog.md) | the hourly updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
+| [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
-| [CONTEXT.md](CONTEXT.md) | the domain terms |
+| [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |
 
 ## Built on
 

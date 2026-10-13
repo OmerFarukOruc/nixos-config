@@ -2,12 +2,12 @@
 # these values in ~/.config/kwinoutputconfig.json, which it rewrites itself, so
 # this service applies them at each Plasma login instead. niri has no HDR.
 #
-# The panel's EDID: 10-bit, DCI-P3 primaries with the PQ (SMPTE ST 2084)
-# transfer, 617 nits peak, 400 nits frame average, and 400 nits as its maximum
-# suggested SDR luminance. KWin reads the peak from the EDID, so no override.
+# The panel's EDID says 10-bit, DCI-P3 primaries with the PQ (SMPTE ST 2084)
+# transfer, 617 nits peak, 400 nits frame average and 400 nits maximum suggested
+# SDR luminance. KWin reads the peak from the EDID, so no override.
 { lib, pkgs, ... }:
 let
-  # SDR white in nits: the panel's suggested SDR maximum. A higher value
+  # SDR white in nits, set to the panel's suggested SDR maximum. A higher value
   # exceeds its frame-average limit. Each login sets it back to this value.
   sdrBrightness = 400;
   # How far SDR colours stretch into the panel's gamut, in percent. Display
