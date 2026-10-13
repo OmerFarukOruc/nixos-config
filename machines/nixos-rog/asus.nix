@@ -43,10 +43,11 @@ let
   # kernel sends each point as 100 * PWM / 255 percent, rounded down, and in a
   # sweep on 2026-10-13 every fan started from stop at 1 % (PWM 3); PWM 0-2
   # send 0 %, which stops the fan. The firmware also runs each fan at its first
-  # point's speed below that point's temperature, so every first point is PWM 3
-  # and the fans never stop.
+  # point's speed below that point's temperature. So the CPU and GPU fans start
+  # at PWM 3 and never stop. The MID fan starts at 0 and stops when cool,
+  # because at 1 % it turns at 3400-4300 rpm, against about 2200 for the others.
   # Quiet is the factory performance curve with its repeated top point traded
-  # for a 1 % first point at 50 °C. The factory curve reaches its top speed at
+  # for a first point at 50 °C. The factory curve reaches its top speed at
   # 76 °C, which four busy threads pass; balanced reaches the same top speed at
   # 94 °C and performance at 86 °C, so light work stays quieter.
   fanCurveTable = lib.importJSON ./fan-curves.json;
