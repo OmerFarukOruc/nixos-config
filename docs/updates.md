@@ -61,7 +61,7 @@ Each package names where its releases come from:
 
 | App | Release source |
 | --- | --- |
-| Claude Desktop, ChatGPT | an APT index in `passthru.aptIndex` |
+| Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
 | OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed` |
 
 A feed release moves its app only once it is 3 days old, by the feed's
