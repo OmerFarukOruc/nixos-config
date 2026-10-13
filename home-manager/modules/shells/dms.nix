@@ -43,6 +43,14 @@ in
 
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "dms") {
     oruc.shellServices.dms = "dms";
+    # dms-open hands a page or link to the DMS app picker, which runs only in
+    # niri. Plasma once picked it for an HTML file, and the open failed.
+    xdg.mimeApps.associations.removed = lib.genAttrs [
+      "text/html"
+      "application/xhtml+xml"
+      "x-scheme-handler/http"
+      "x-scheme-handler/https"
+    ] (_: [ "dms-open.desktop" ]);
     programs.dank-material-shell = {
       enable = true;
       systemd.enable = true;

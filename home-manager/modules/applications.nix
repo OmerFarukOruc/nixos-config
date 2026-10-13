@@ -219,8 +219,14 @@ in
       "x-scheme-handler/http" = [ "brave-origin.desktop" ];
       "x-scheme-handler/https" = [ "brave-origin.desktop" ];
       "application/pdf" = [ "brave-origin.desktop" ];
+      # Claude Code writes this handler file itself and registers it again with
+      # xdg-mime, which replaces the Home Manager link with a plain file.
+      "x-scheme-handler/claude-cli" = [ "claude-code-url-handler.desktop" ];
     };
   };
+  # Apps that register their own URL scheme rewrite mimeapps.list. Every such
+  # scheme is declared, so the next switch replaces the file without a backup.
+  xdg.configFile."mimeapps.list".force = true;
 
   home.sessionVariables = {
     BROWSER = "brave-origin";

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Renders a Markdown file as styled HTML and opens it in the default browser.
+# Renders a Markdown file as styled HTML and opens it in Brave.
+# It skips xdg-open because KDE can route text/html to the DMS app picker,
+# which is not running under Plasma.
 # PANDOC_MD_ASSETS names the directory with the stylesheet, the after-body
-# script and the code highlighting theme.
+# script and the code highlighting theme. PANDOC_MD_KATEX names the KaTeX dist
+# directory, so math renders without a download.
 set -euo pipefail
 
 fail() {
@@ -63,11 +66,11 @@ END { if (fm == 1) for (i = 1; i <= n; i++) emit(held[i]) }
   pandoc -s -f gfm-yaml_metadata_block+tex_math_dollars --embed-resources \
     "${toc[@]}" \
     --highlight-style="$PANDOC_MD_ASSETS/typewriter-neutral.theme" \
-    --katex \
+    --katex="$PANDOC_MD_KATEX" \
     --resource-path="$dir" \
     --metadata pagetitle="$name" \
     -c "$PANDOC_MD_ASSETS/pandoc-md.css" \
     -A "$PANDOC_MD_ASSETS/pandoc-md.afterbody.html" \
     -o "$out" || fail "pandoc failed on $name"
 
-xdg-open "$out" || fail "could not open browser"
+brave-origin "$out" || fail "could not open Brave"
