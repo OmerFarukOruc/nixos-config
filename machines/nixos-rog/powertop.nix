@@ -18,8 +18,9 @@ in
   };
 
   services.udev.extraRules = ''
-    # The keyboard (USB 0b05:19b6, the Aura device of asus.nix) stays out of
-    # autosuspend.
+    # powertop's auto-tune would let the keyboard (USB 0b05:19b6, the Aura
+    # device of asus.nix) autosuspend. nixos-hardware's asus/zephyrus/ga402x
+    # profile keeps it out of autosuspend on kernels before 6.9.
     ACTION=="bind", SUBSYSTEM=="usb", ATTR{idVendor}=="0b05", ATTR{idProduct}=="19b6", TEST=="power/control", ATTR{power/control}="on"
     # The MT7925 Wi-Fi card is the only network link; its ASPM is already off
     # because the link dropped (network.nix).

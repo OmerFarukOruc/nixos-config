@@ -12,6 +12,7 @@
 - [Deskflow](#deskflow)
 - [Keyboard keys](#keyboard-keys)
 - [Known faults](#known-faults)
+- [VS Code settings](#vs-code-settings)
 - [Drive VS Code](#drive-vs-code)
 
 Boot entries, generations and the GPU mode are in [recovery.md](recovery.md#nixos-rog).
@@ -575,6 +576,28 @@ sudo nix run nixpkgs#libinput -- debug-events --show-keycodes
   not change the fans, because `verify-nixos-rog.sh` compares every fan's curve,
   MID included, and passes with the message in the log.
 
+## VS Code settings
+
+`oruc.vscodeSettings` holds the VS Code settings this repository owns.
+`home-manager/modules/vscode.nix` declares it and sets most keys, and
+`home-manager/modules/theme.nix` adds the theme keys. Each switch writes them into
+`~/.config/Code/User/settings.json` over the values there and lists them in
+`settingsSync.ignoredSettings`, so Settings Sync keeps them off Omer's other
+machines. An assertion in the same file fails evaluation when a setting reaches
+the file any other way. Every other key in `settings.json` is Omer's. It
+survives each switch, and Settings Sync uploads it.
+
+- Add a setting that every host needs to `oruc.vscodeSettings`.
+- When Omer asks why VS Code behaves a certain way, name the key that causes it
+  and wait for his answer before you write a key outside `oruc.vscodeSettings`,
+  because Settings Sync copies that key to his other machines.
+- `settings.json` is a writable file. When a switch cannot parse it, such as
+  after a hand edit that is not JSON5, the switch warns and keeps the file, and
+  the declared settings apply at the next switch after it parses.
+- A key removed from `oruc.vscodeSettings` stays in `settings.json` but leaves
+  the ignore list, so Settings Sync uploads it. Delete it from the file too.
+- The editor and terminal fonts come from Ghostty's `font-family` setting.
+
 ## Drive VS Code
 
 nixos-rog is Omer's daily laptop. Before you click in VS Code, take a
@@ -594,7 +617,10 @@ scripts/vscode-cdp-on-rog.sh run '[{"shot":"/tmp/vscode.png"}]'
 scripts/vscode-cdp-on-rog.sh off
 ```
 
-`run` takes a JSON list of steps and prints one JSON line for each:
+`run` runs the steps with Node on fedora-desktop, which needs the built-in
+`fetch` and `WebSocket` globals; `node -e 'console.log(typeof WebSocket)'`
+prints `function` when Node has them. It takes a JSON list of steps and prints
+one JSON line for each:
 
 | Step | What it does |
 | --- | --- |

@@ -20,7 +20,7 @@ fedora-desktop has no Nix, so these scripts run Nix on a copy of this checkout o
 - Before deploying a new or changed systemd `script`, run it with `scripts/run-unit-on-rog.sh <unit>`.
 - Before changing power, fan or heat settings, read [Power and heat](docs/nixos-rog.md#power-and-heat). It names the one owner of each setting and the `scripts/thermal-test-rog.sh` CPU and GPU load test.
 - For a change visible on screen, follow [Check a visual change](docs/nixos-rog.md#check-a-visual-change).
-- Before changing Deskflow, keyboard keys or Plasma panels on nixos-rog, read [Deskflow](docs/nixos-rog.md#deskflow), [Keyboard keys](docs/nixos-rog.md#keyboard-keys) or [Plasma panels](docs/nixos-rog.md#plasma-panels).
+- Before changing Deskflow, keyboard keys, Plasma panels or VS Code settings on nixos-rog, read [Deskflow](docs/nixos-rog.md#deskflow), [Keyboard keys](docs/nixos-rog.md#keyboard-keys), [Plasma panels](docs/nixos-rog.md#plasma-panels) or [VS Code settings](docs/nixos-rog.md#vs-code-settings). To click in VS Code there, use [Drive VS Code](docs/nixos-rog.md#drive-vs-code).
 
 # Nixpkgs
 
