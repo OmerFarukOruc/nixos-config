@@ -49,7 +49,7 @@ new kernel runs after the next boot.
 
 Keep these steps outside the repository:
 
-1. Copy Omer's shared key `~/.ssh/id_ed25519_shared` from another of his
+1. Copy Omer's shared key `~/.ssh/id_ed25519_omer` from another of his
    devices over SSH, mode 0600. GitHub already lists its public key.
 2. Run `gh auth login --git-protocol ssh` interactively. Store the resulting
    credential in the session Secret Service; never add `hosts.yml` to Git.
@@ -60,7 +60,7 @@ Keep these steps outside the repository:
    [gpg]
        format = ssh
    [user]
-       signingKey = ~/.ssh/id_ed25519_shared.pub
+       signingKey = ~/.ssh/id_ed25519_omer.pub
    [commit]
        gpgSign = true
    ```
@@ -82,7 +82,7 @@ need their own login. Behavior below was observed on nixos-rog on 2026-10-10.
   `~/.config/gh/hosts.yml`; whether the Secret Service keyring is unlocked over
   ssh was not tested.
 - **gh SSH key.** Skip the key that gh offers to generate during login, because
-  the shared key `~/.ssh/id_ed25519_shared` is already on GitHub.
+  the shared key `~/.ssh/id_ed25519_omer` is already on GitHub.
 - **Codex.** Run `codex login --device-auth`.
 - **Claude Code.** `~/.claude` takes `claude auth login`. Each extra account has
   its own folder and takes `CLAUDE_CONFIG_DIR=~/.claude-<name> claude auth login`.
