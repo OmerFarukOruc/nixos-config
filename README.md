@@ -47,7 +47,8 @@ is an inventory record only; the flake does not build it.
   path is already in that cache.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
-  colors, cursor, icons and wallpaper of all of them, and of SDDM.
+  colors, cursor, icons and wallpaper of all of them. The login screen and the
+  Plasma lock screen show Jake the dog instead.
 - **🛟 Deploys that roll themselves back.** `deploy.sh` builds on the target,
   activates under a 420 second rollback timer, then checks SSH, Tailscale and
   the user's running services. A deploy that breaks any of them restores the
@@ -153,5 +154,5 @@ ordering cycle on every pull request and push to `main`.
 [niri](https://github.com/YaLTeR/niri) ·
 [Noctalia](https://github.com/noctalia-dev/noctalia-shell) ·
 [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) ·
-[SilentSDDM](https://github.com/uiriansan/SilentSDDM) ·
+[sddm-astronaut-theme](https://github.com/Keyitdev/sddm-astronaut-theme) ·
 [llm-agents.nix](https://github.com/numtide/llm-agents.nix)

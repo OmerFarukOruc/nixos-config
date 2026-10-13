@@ -59,10 +59,6 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    silent-sddm = {
-      url = "github:uiriansan/SilentSDDM";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # A prebuilt nix-index database, refreshed weekly upstream, for comma and
     # command-not-found.
     nix-index-database = {
