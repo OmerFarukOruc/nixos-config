@@ -31,9 +31,9 @@ let
   # (contents/config/main.xml), which the copy reads for a key not yet written.
   # Only the keys that differ from kVitals' own defaults are here.
   # Showing the RTX 4070's sensors keeps it awake (docs/nixos-rog.md, Power and
-  # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in DRM card
-  # order; on nixos-rog, the only hybrid machine, nvidia-drm registers first, so
-  # gpu1 is the Radeon 890M.
+  # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in PCI
+  # address order; on nixos-rog, the only hybrid machine, the RTX 4070
+  # (0000:65:00.0) comes first, so gpu1 is the Radeon 890M.
   # kVitals colors its own text, so the top bar's accent color reaches it only
   # through fontColor. Its threshold colors still take precedence.
   kvitalsSettings = {

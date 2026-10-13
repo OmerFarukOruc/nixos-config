@@ -14,6 +14,7 @@
 
 fedora-desktop has no Nix, so these scripts run Nix on a copy of this checkout on nixos-rog. [README.md](README.md#everyday-commands) lists every script you run by hand.
 
+- A PR that changes `pkgs/`, `overlays/` or `home-manager/modules/plasma-*.nix` gets a review of its final diff from an agent that did not write it, before `pr-land`.
 - Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs CI's formatter check and `nix flake check` with import from derivation off. CI also evaluates `ci/cached-packages.nix` and runs `ci/unit-cycles.sh`; the script does not.
 - Print one configuration value with `scripts/eval-on-rog.sh [--json] <attribute>`. A bare attribute is a path under nixos-rog's `config`; a flake attribute with `#` reaches another host. A value that is not a string needs `--json`.
 - Before a new or changed package or overlay lands, prove it builds with `scripts/build-on-rog.sh [ATTRIBUTE...]`. Each attribute is a flake attribute such as `.#nixosConfigurations.nixos-rog.pkgs.deskflow`; with none it builds nixos-rog's system. It builds on nixos-rog from a copy of the checkout and prints each output path.
