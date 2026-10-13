@@ -35,6 +35,11 @@ the deployed system writes (nixosModules/verify-facts.nix). The KWin
 effects are checked only in a Plasma session that started after the current
 system; an older session is listed as manual.
 
+After a panel build from the current system's panel script, the panel file
+must hold every widget setting in plasma-panels.nix, which the system writes
+to /etc/oruc/verify-plasma-panels.json. After an older build the check is
+listed as manual.
+
 Exit status: 0 when no check fails (the manual checks are for a person to
 do), 1 when one fails, 64 for a usage error.
 EOF
@@ -86,7 +91,8 @@ fi
 mkdir -p -- "$(dirname "$report")"
 ssh_opts=(-o ConnectTimeout=15 -o BatchMode=yes)
 results=$(mktemp)
-trap 'rm -f -- "$results"' EXIT
+work=$(mktemp -d)
+trap 'rm -rf -- "$results" "$work"' EXIT
 
 # One line per check: name<TAB>pass|fail|manual<TAB>detail
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
@@ -404,6 +410,41 @@ case $status in
   0) ;;
   66) record verify-facts fail "/etc/oruc/verify-facts is missing on $host or lacks a fact the checks need; deploy a system that writes it" ;;
   *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
+esac
+
+# The panel file holds the settings of the last panel build, so it is compared
+# only after a build from this system's panel script, at a login or by
+# scripts/panels-rebuild-on-rog.sh.
+build=$(
+  ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE' || true
+manager=$HOME/.local/share/plasma-manager
+if [[ ! -r /etc/oruc/verify-plasma-panels.json ]]; then
+  echo none
+elif [[ $(sha256sum "$manager/data/desktop_script_panels.js" 2>/dev/null) == "$(cat "$manager/last_run_desktop_script_panels" 2>/dev/null)" ]]; then
+  echo current
+else
+  echo old
+fi
+REMOTE
+)
+case $build in
+  none) ;;
+  old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
+  current)
+    compared=0
+    if ssh "${ssh_opts[@]}" "$host" cat /etc/oruc/verify-plasma-panels.json >"$work/expected.json" &&
+      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
+      differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" 2>&1) || compared=$?
+    else
+      compared=255
+    fi
+    case $compared in
+      0) record plasma-panel-settings pass "the panel file holds every setting in plasma-panels.nix" ;;
+      1) record plasma-panel-settings fail "${differences//$'\n'/; }" ;;
+      *) record plasma-panel-settings fail "could not compare the panel file (exit $compared): ${differences:-copy from $host failed}" ;;
+    esac
+    ;;
+  *) record plasma-panel-settings fail "could not read the panel build state on $host" ;;
 esac
 
 if [[ -n $lan_ip ]]; then

@@ -179,6 +179,16 @@ in
         // lib.optionalAttrs (effects != { }) {
           kwin_effects = list (map (lib.removeSuffix "Enabled") (lib.attrNames effects));
         };
+
+      # scripts/verify-nixos-rog.sh compares the panel file after a panel build
+      # with these settings (scripts/lib/plasma-panel-settings.py). The values
+      # hold slashes and JSON, which verify-facts does not allow.
+      environment.etc."oruc/verify-plasma-panels.json".text = builtins.toJSON (
+        map (panel: {
+          inherit (panel) location;
+          widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
+        }) config.home-manager.users.oruc.programs.plasma.panels
+      );
     })
   ];
 }
