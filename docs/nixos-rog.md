@@ -6,6 +6,7 @@
 - [DNS](#dns)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
 - [Check the running laptop](#check-the-running-laptop)
+- [Drive VS Code](#drive-vs-code)
 
 Boot entries, generations and the GPU mode are in [recovery.md](recovery.md#nixos-rog).
 
@@ -286,3 +287,45 @@ name. To read both for each open window, run:
 ```sh
 scripts/kwin-windows-on-rog.sh
 ```
+
+## Drive VS Code
+
+nixos-rog is Omer's daily laptop. Before you click in VS Code, take a
+screenshot with `scripts/screenshot-nixos-rog.sh`. When he is working in VS
+Code, tell him what to click, or ask him to close it.
+
+`scripts/vscode-cdp-on-rog.sh` drives VS Code from fedora-desktop over the
+Chrome DevTools Protocol. `on` refuses while VS Code runs, because a stop
+signal raises its quit dialogs and a forced stop loses the open window. Once
+Omer has closed it, `on` starts VS Code with a debugging port on the laptop's
+loopback and tunnels the port to `127.0.0.1:19229`:
+
+```sh
+scripts/vscode-cdp-on-rog.sh on
+scripts/vscode-cdp-on-rog.sh run '[{"key":"F1"},{"text":"Help: About"},{"key":"Enter"},{"sleep":500},{"eval":"document.querySelector(\".monaco-dialog-box\")?.innerText"},{"key":"Escape"}]'
+scripts/vscode-cdp-on-rog.sh run '[{"shot":"/tmp/vscode.png"}]'
+scripts/vscode-cdp-on-rog.sh off
+```
+
+`run` takes a JSON list of steps and prints one JSON line for each:
+
+| Step | What it does |
+| --- | --- |
+| `{"eval": "JS"}` | evaluates the expression in the window and prints its value |
+| `{"key": "F1"}` | presses `F1`, `Enter`, `Escape`, `Tab`, `End`, `Home`, `ArrowUp` or `ArrowDown` |
+| `{"text": "..."}` | types the text into the focused field |
+| `{"click": [x, y]}` | clicks at window coordinates in CSS pixels |
+| `{"shot": "FILE"}` | saves a PNG of the window |
+| `{"sleep": 500}` | waits the given milliseconds |
+
+`off` closes the tunnel. VS Code keeps its debugging port until Omer quits it.
+
+- `browser-harness` cannot drive VS Code: Electron answers its first browser
+  command with `Not supported`. Use `run`.
+- `window.dialogStyle` is `custom` in `home-manager/modules/vscode.nix`, so
+  VS Code draws its dialogs inside the window, where `eval` and `click` reach
+  them. File pickers stay native, outside the window.
+- When Settings Sync is turned on and finds a conflict, it waits on its
+  "Conflicts Detected" dialog. Resolve the conflict through that dialog's
+  "Show Conflicts" button; a conflict resolved from the side bar leaves the
+  dialog waiting and Sync stays in "Turning on...".

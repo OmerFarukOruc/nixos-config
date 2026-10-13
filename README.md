@@ -100,6 +100,7 @@ target.
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog |
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
+| `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
 | `scripts/thermal-test-rog.sh PROFILE` | load nixos-rog's CPU, GPU or both in a power profile and record temperature, power and fans |
 
 Every deploy command can change boot or running system state.

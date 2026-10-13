@@ -188,6 +188,8 @@ in
       "terminal.integrated.gpuAcceleration" = "off";
       "window.autoDetectColorScheme" = false;
       "window.controlsStyle" = "custom";
+      # Dialogs drawn in the window, where scripts/vscode-cdp-on-rog.sh reaches them.
+      "window.dialogStyle" = "custom";
       "window.systemColorTheme" = theme.systemColorTheme;
       "update.mode" = "none";
       "workbench.colorCustomizations" = colorCustomizations;
