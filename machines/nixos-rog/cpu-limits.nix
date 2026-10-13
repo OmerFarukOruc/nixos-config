@@ -57,7 +57,7 @@ in
     # power-profiles-daemon starts after multi-user.target, so a unit ordered
     # after the daemon must not be wanted by that target: the boot would wait
     # on a cycle and never reach it.
-    wantedBy = [ "multi-user.target" ];
+    wantedBy = [ "graphical.target" ];
     requires = [ "power-profiles-daemon.service" ];
     after = [ "power-profiles-daemon.service" ];
     path = [
