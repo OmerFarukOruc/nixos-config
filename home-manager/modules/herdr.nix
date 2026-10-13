@@ -42,7 +42,7 @@ in
   # herdr reports an integration that an older herdr installed as outdated but
   # does not update it, so each switch installs the ones that are not current.
   home.activation.herdrIntegrations = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    herdrStatus=$'\n'"$(${herdr} integration status 2>/dev/null)"
+    herdrStatus=$'\n'"$(${herdr} integration status 2>/dev/null || true)"
     ${lib.concatStrings (
       lib.mapAttrsToList (id: dir: ''
         if [[ -d "$HOME/${dir}" && $herdrStatus != *$'\n'"${id}: current "* ]]; then
