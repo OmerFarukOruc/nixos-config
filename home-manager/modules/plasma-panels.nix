@@ -24,15 +24,28 @@ let
     };
   };
 
+  # kVitals copies these keys into its first profile when the panels are built
+  # again, so the settings made in Plasma survive the rebuild. Only the keys
+  # that differ from its defaults (package/contents/config/main.xml) are here.
   # Showing the RTX 4070's sensors keeps it awake (docs/nixos-rog.md, Power and
   # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in DRM card
   # order; on nixos-rog, the only hybrid machine, nvidia-drm registers first, so
   # gpu1 is the Radeon 890M.
   kvitals = {
     name = "org.kde.plasma.kvitals";
-  }
-  // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
-    config.General.gpuSelection = "gpu1";
+    config.General = {
+      pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,bat/power,uptime/uptime";
+      layoutType = "vertical";
+      iconSize = 8;
+      fontBold = true;
+      updateInterval = 1000;
+      enableThresholdColors = true;
+      labelOpacity = 0.5;
+      separatorOpacity = 1;
+    }
+    // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
+      gpuSelection = "gpu1";
+    };
   };
 
   allCorners = value: {
@@ -63,16 +76,24 @@ let
     shadow = false;
   };
 
-  # A transparent bar with each widget on its own blurred, rounded background.
+  # A transparent bar. Each widget sits on its own blurred, square background
+  # with an outline in the accent color, and its text and icons take that color.
   topBarStyle = {
     nativePanel = hiddenNativeBackground;
     widgets.normal = {
       enabled = true;
       blurBehind = true;
-      backgroundColor = schemeColor "backgroundColor" "Window" 0.75;
+      backgroundColor = schemeColor "backgroundColor" "Window" 0.5;
+      foregroundColor = schemeColor "highlightColor" "Window" 1;
+      # Without radius.enabled, the colorizer rounds the corners by its default.
       radius = {
         enabled = true;
-        corner = allCorners 10;
+        corner = allCorners 0;
+      };
+      border = {
+        enabled = true;
+        width = 1;
+        color = schemeColor "highlightColor" "Window" 1;
       };
       margin = {
         enabled = true;
@@ -135,7 +156,7 @@ in
       panels = [
         {
           location = "top";
-          height = 34;
+          height = 44;
           lengthMode = "fill";
           widgets = [
             "org.kde.plasma.kickerdash"
@@ -159,14 +180,30 @@ in
           alignment = "center";
           widgets = [
             {
-              # The Teams entry is the web app that Brave writes to
-              # ~/.local/share/applications.
+              # The Teams and WhatsApp Web entries are web apps that Brave
+              # writes to ~/.local/share/applications. Chrome's
+              # com.google.Chrome.desktop is hidden from menus, so the dock
+              # names google-chrome.desktop.
               iconTasks.launchers = [
-                "applications:systemsettings.desktop"
                 "preferred://filemanager"
+                "applications:systemsettings.desktop"
                 "preferred://browser"
-                "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+                "applications:google-chrome.desktop"
+                "applications:firefox.desktop"
+                "applications:SourceGit.desktop"
                 "applications:chatgpt.desktop"
+                "applications:com.anthropic.Claude.desktop"
+                "applications:grok-bot.desktop"
+                "applications:openchamber.desktop"
+                "applications:cursor.desktop"
+                "applications:org.opengamingcollective.rog-control-center.desktop"
+                "applications:slack.desktop"
+                "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+                "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
+                "applications:discord.desktop"
+                "applications:org.telegram.desktop.desktop"
+                "applications:spotify.desktop"
+                "applications:md.obsidian.Obsidian.desktop"
               ];
             }
             (colorizer dockStyle)
