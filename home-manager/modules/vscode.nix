@@ -3,6 +3,7 @@
 # installed VS Code, done at build time because the store is read-only. Each
 # edit fails the build when VS Code no longer has the text it changes.
 {
+  config,
   inputs,
   lib,
   osConfig,
@@ -160,22 +161,59 @@ let
     };
 in
 {
-  programs.vscode = {
-    enable = true;
-    package = vscode;
-    mutableExtensionsDir = true;
-    profiles.default = {
-      enableUpdateCheck = false;
-      enableExtensionUpdateCheck = false;
-      userSettings = {
-        "extensions.autoUpdate" = false;
-        "telemetry.telemetryLevel" = "off";
-        "terminal.integrated.gpuAcceleration" = "off";
-        "window.autoDetectColorScheme" = false;
-        "window.controlsStyle" = "custom";
-        "window.systemColorTheme" = theme.systemColorTheme;
-        "workbench.colorCustomizations" = colorCustomizations;
+  options.oruc.vscodeSettings = lib.mkOption {
+    inherit (pkgs.formats.json { }) type;
+    default = { };
+    description = ''
+      VS Code settings that each switch writes into settings.json, over the
+      values there. Settings Sync skips these keys, so this machine's look
+      stays off the other machines.
+    '';
+  };
+
+  config = {
+    oruc.vscodeSettings = {
+      "extensions.autoCheckUpdates" = false;
+      "extensions.autoUpdate" = false;
+      "telemetry.telemetryLevel" = "off";
+      "terminal.integrated.gpuAcceleration" = "off";
+      "window.autoDetectColorScheme" = false;
+      "window.controlsStyle" = "custom";
+      "window.systemColorTheme" = theme.systemColorTheme;
+      "update.mode" = "none";
+      "workbench.colorCustomizations" = colorCustomizations;
+    };
+
+    programs.vscode = {
+      enable = true;
+      package = vscode;
+      mutableExtensionsDir = true;
+      profiles.default = {
+        # Settings Sync and the settings editor write settings.json, so it
+        # must be a writable file instead of a link into the store.
+        mutableUserSettings = true;
+        userSettings = config.oruc.vscodeSettings // {
+          "settingsSync.ignoredSettings" = lib.attrNames config.oruc.vscodeSettings;
+        };
       };
     };
+
+    # Home Manager's own step fails the switch when it cannot merge, such as
+    # after a hand edit that is not JSON5, and a deploy then rolls back. This
+    # runs the same merge, but a failure only warns and keeps the file.
+    home.activation.vscodeMutableUserSettings = lib.mkForce (
+      lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        ${import "${inputs.home-manager}/modules/programs/vscode/mutableSettings.nix" {
+          inherit lib pkgs;
+          name = "Visual Studio Code";
+        }}
+        vscodeMutableSettings ${lib.escapeShellArg "${config.xdg.configHome}/Code/User/settings.json"} \
+          ${
+            (pkgs.formats.json { }).generate "vscode-user-settings"
+              config.programs.vscode.profiles.default.userSettings
+          } \
+          || warnEcho "VS Code settings.json is unchanged, so the declared settings apply at the next switch after it parses."
+      ''
+    );
   };
 }
