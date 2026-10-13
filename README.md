@@ -111,6 +111,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
 | `scripts/panels-rebuild-on-rog.sh` | build the Plasma panels on nixos-rog as the next login would, without a logout |
 | `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
+| `scripts/mic-ab-on-rog.sh level VOLUME...` or `ab` | record nixos-rog's microphone to pick its level, or to compare the raw microphone with both denoised sources; the script header lists the steps |
 | `scripts/thermal-test-rog.sh PROFILE [OPTION...]` | load nixos-rog's CPU, GPU or both in a power profile and record temperature, power and fans; the script header lists the options |
 
 `deploy.sh` takes a `HOST` (nixos-rog or nixos-latitude), `--allow-dirty` for a

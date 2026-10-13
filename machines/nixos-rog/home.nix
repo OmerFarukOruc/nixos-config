@@ -14,6 +14,7 @@
     ./desktop-sync.nix
     ./easyeffects.nix
     ./hdr.nix
+    ./hushmic.nix
     ./mpv.nix
     ./warp-launchers.nix
   ];

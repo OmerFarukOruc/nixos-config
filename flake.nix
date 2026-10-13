@@ -41,6 +41,12 @@
       url = "github:4v3ngR/Glass/81edfa7f7f0d74997ab730598fa32805b20e4040";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # HushMic builds from source with no binary cache, so a commit pin keeps
+    # the hourly updater from rebuilding it on rog for every upstream move.
+    hushmic = {
+      url = "github:Fovty/hushmic-nix/b2af2236e162a1d3454bc479125b6cb2a31fc029";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";

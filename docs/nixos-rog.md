@@ -6,6 +6,7 @@
 - [DNS](#dns)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
 - [Power and heat](#power-and-heat)
+- [Microphone](#microphone)
 - [Check the running laptop](#check-the-running-laptop)
 - [Check a visual change](#check-a-visual-change)
 - [Plasma panels](#plasma-panels)
@@ -53,6 +54,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms, silent-sddm and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
+| kwin-effects-glass, glass-style and hushmic | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -398,6 +400,37 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
   2026-10-11 the charge fell 0.208 Ah in 21
   minutes on battery, which is about 10 W. The real figure lies between 9 and 11
   W, because the battery reports charge in coarse steps.
+
+## Microphone
+
+Apps that record from the default source get HushMic's denoised internal
+microphone, "HushMic". HushMic, from `machines/nixos-rog/hushmic.nix`, runs
+Ceva's DPDFNet model on the raw microphone. `mic-default-source.service`, in
+`machines/nixos-rog/media.nix`, makes that source the default and sets the
+microphone level after every HushMic start. While HushMic is not running,
+WirePlumber falls back to an earlier default source it remembers, such as
+"Easy Effects Source", or else to the raw microphone. An app that names the raw
+microphone in its own settings skips the denoising; set it to the default
+source or to "HushMic".
+
+EasyEffects offers a second denoised source, "Easy Effects Source", made with
+DeepFilterNet from `machines/nixos-rog/easyeffects.nix`. It also reads the raw
+microphone, so pick one of the two sources in an app, never both. In the
+2026-10-13 A/B take, HushMic cut silence and typing by 73 to 75 dB and
+DeepFilterNet by 5 to 8 dB, and both kept speech within 1 dB.
+
+EasyEffects' bypass switch resets to off at each EasyEffects start. Leave it
+off: EasyEffects unlinks its input pipeline 10 s after the last app stops
+recording, and with bypass on it does not link it again, so the next app that
+records gets silence.
+
+From fedora-desktop, in the repository root, compare the microphone level or the
+two denoisers. Someone at the laptop follows the prompts:
+
+```sh
+scripts/mic-ab-on-rog.sh level 0.3 0.5 0.7
+scripts/mic-ab-on-rog.sh ab
+```
 
 ## Check the running laptop
 
