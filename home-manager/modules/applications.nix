@@ -195,11 +195,6 @@ in
     '';
   };
 
-  programs.yazi = {
-    enable = true;
-    enableZshIntegration = true;
-  };
-
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
