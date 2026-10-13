@@ -107,9 +107,5 @@
 
   home-manager.users.oruc.imports = [ ./home.nix ];
 
-  users.users.oruc.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h omer-all-devices"
-  ];
-
   system.stateVersion = "26.11";
 }

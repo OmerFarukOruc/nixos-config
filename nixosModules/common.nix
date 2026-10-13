@@ -153,6 +153,9 @@
       isNormalUser = true;
       extraGroups = [ "wheel" ];
       shell = pkgs.zsh;
+      openssh.authorizedKeys.keys = [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h omer-all-devices"
+      ];
     };
     programs.zsh.enable = true;
     # Home Manager's nix-index answers unknown commands.
