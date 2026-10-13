@@ -38,12 +38,16 @@ let
       )
     }}";
   # The firmware takes the power limits above only while every fan follows a
-  # custom curve. Points are (°C, PWM 0-255); both rise left to right.
+  # custom curve. Points are (°C, PWM 0-255); both rise left to right. The
+  # kernel sends each point as 100 * PWM / 255 percent, rounded down, and in a
+  # sweep on 2026-10-13 every fan started from stop at 1 % (PWM 3). So a point
+  # is either 0, which stops the fan, or at least PWM 3; PWM 1 and 2 also send
+  # 0 %.
   # Quiet is the factory performance curve with its repeated top point traded
   # for a first point that stops the fans below 50 °C. The factory curve
   # reaches its top speed at 76 °C, which four busy threads pass; balanced
   # reaches the same top speed at 94 °C and performance at 86 °C, so light work
-  # stays quieter, and both idle at the quiet curve's floor.
+  # stays quieter.
   fanCurveTable = lib.importJSON ./fan-curves.json;
   fanCurves =
     profiles:
