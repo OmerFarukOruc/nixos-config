@@ -6,7 +6,7 @@ EXPECTED.json is /etc/oruc/verify-plasma-panels.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
 APPLETSRC is ~/.config/plasma-org.kde.plasma.desktop-appletsrc. Prints one line
 per setting that differs and exits 1, or prints nothing and exits 0. Exits 2
-when a file cannot be read.
+when a file cannot be read or compared.
 
 A widget that keeps its settings in profiles (kVitals' profileList) reads
 only its active profile, so the declared keys found in that profile are
@@ -66,7 +66,7 @@ def difference(want, got, path=""):
                 return found
         return None
     if isinstance(want, list):
-        items = got if isinstance(got, list) else (got.split(",") if isinstance(got, str) else [])
+        items = got if isinstance(got, list) else (got.split(",") if got else [])
         for index, value in enumerate(want):
             if index >= len(items):
                 return f"{path}[{index}]", value, None
@@ -187,7 +187,11 @@ def main():
     except (OSError, ValueError) as error:
         print(error, file=sys.stderr)
         return 2
-    problems = compare(panels, groups)
+    try:
+        problems = compare(panels, groups)
+    except Exception as error:  # A malformed file must not read as a difference.
+        print(f"cannot compare: {error!r}", file=sys.stderr)
+        return 2
     for problem in problems:
         print(problem)
     return 1 if problems else 0

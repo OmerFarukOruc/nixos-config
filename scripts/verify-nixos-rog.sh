@@ -428,7 +428,7 @@ fi
 REMOTE
 )
 case $build in
-  none) ;;
+  none) record plasma-panel-settings manual "$host has no /etc/oruc/verify-plasma-panels.json; deploy a system that writes it, then rerun" ;;
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
