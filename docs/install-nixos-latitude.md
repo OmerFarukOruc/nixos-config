@@ -102,5 +102,16 @@ port 8090 from the LAN. Stop the server after step 5.
    Host changes go in `machines/nixos-latitude/configuration.nix` and ship with
    `deploy.sh`.
 
+9. After the laptop boots the deployed generation, delete the generation that
+   `nixos-install` made:
+
+   ```
+   ssh -t nixos-latitude 'sudo nix-env -p /nix/var/nix/profiles/system --delete-generations 1'
+   ```
+
+   `nixos-install` registers that generation's GC root under `/mnt`, so the
+   root goes stale after the first boot. angrr, which deletes old generations
+   before each `nix-gc`, never sees it, and it would stay on disk for good.
+
 Hardware facts and measured dead ends for this laptop are in
 [nixos-latitude.md](nixos-latitude.md).

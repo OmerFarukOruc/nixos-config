@@ -10,8 +10,11 @@
 
 Each host keeps the newest 5 system generations, one from each of the last 7
 days, the running one, and the booted one. The boot menu lists only the newest
-5. angrr deletes the other generations before the weekly `nix-gc`. `nix-gc`
-then deletes the unreachable store paths.
+5. angrr deletes the other generations before the daily `nix-gc`. `nix-gc`
+then deletes the unreachable store paths. angrr sees only generations with a
+root in `/nix/var/nix/gcroots/auto`. The generation `nixos-install` made has
+none, so it stays until someone deletes it by hand
+([install-nixos-latitude.md](install-nixos-latitude.md), step 9).
 
 The systemd-boot menu in the sections below is the one on nixos-latitude.
 nixos-rog uses Limine, which the [nixos-rog](#nixos-rog) section covers.

@@ -58,7 +58,7 @@
       # angrr decides which system generations go, so the GC deletes none itself.
       gc = {
         automatic = true;
-        dates = "weekly";
+        dates = "daily";
       };
       optimise = {
         automatic = true;
