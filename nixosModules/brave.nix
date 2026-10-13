@@ -1,7 +1,8 @@
-# Brave's settings as recommended policies: a new profile starts with these
-# values, and its settings page can still change them. Brave Origin reads
-# /etc/brave/policies. Notification permissions and the theme colour are
-# managed-only policies, so they stay in the profile and Brave Sync.
+# Brave's settings as policies; Brave Origin reads /etc/brave/policies.
+# Recommended policies set the values a new profile starts with, and its
+# settings page can still change them. Notification permissions and the theme
+# colour are managed-only policies, and Brave Sync carries them, so they stay
+# in the profile.
 {
   environment.etc."brave/policies/recommended/oruc.json".text = builtins.toJSON {
     BookmarkBarEnabled = true;
@@ -15,5 +16,16 @@
     DefaultSearchProviderName = "Google";
     DefaultSearchProviderKeyword = ":g";
     DefaultSearchProviderSearchURL = "https://www.google.com/search?q={searchTerms}";
+  };
+
+  # Teams' setting "Keep my current status when I'm active outside of Teams on
+  # the web" needs the Idle Detection API. Brave blocks it on every site, and
+  # --enable-features=IdleDetection only shows the site setting on the
+  # settings page. This permission does not sync, so a policy can own it.
+  environment.etc."brave/policies/managed/oruc.json".text = builtins.toJSON {
+    IdleDetectionAllowedForUrls = [
+      "https://teams.cloud.microsoft"
+      "https://teams.microsoft.com"
+    ];
   };
 }
