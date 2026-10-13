@@ -175,6 +175,8 @@ in
     oruc.vscodeSettings = {
       "extensions.autoCheckUpdates" = false;
       "extensions.autoUpdate" = false;
+      # Every folder opens trusted, without the Restricted Mode prompt.
+      "security.workspace.trust.enabled" = false;
       "telemetry.telemetryLevel" = "off";
       "terminal.integrated.gpuAcceleration" = "off";
       "window.autoDetectColorScheme" = false;
