@@ -226,6 +226,24 @@ fi
 check platform-profile-follows "${platform[*]}" \
   test "${platform[*]}" = "power-saver=quiet balanced=balanced"
 check cpu-limits-follow-profile "${cpu[*]}" test "$cpu_ok" = true
+# A long-running oruc-* service that crashed, for example on a command its
+# path lacks, shows as inactive or restarted; its restart count clears when
+# the unit restarts. Oneshots and units a timer starts are left out.
+running=()
+broken=()
+while read -r unit state _; do
+  [[ $state == enabled ]] || continue
+  declare -A unit_state=()
+  while IFS== read -r key value; do
+    unit_state[$key]=$value
+  done < <(systemctl show -p Type -p TriggeredBy -p ActiveState -p NRestarts "$unit")
+  [[ ${unit_state[Type]} == oneshot || -n ${unit_state[TriggeredBy]} ]] && continue
+  running+=("$unit=${unit_state[ActiveState]}/${unit_state[NRestarts]} restarts")
+  [[ ${unit_state[ActiveState]} == active && ${unit_state[NRestarts]} == 0 ]] ||
+    broken+=("$unit")
+done < <(systemctl list-unit-files --no-legend 'oruc-*.service')
+check oruc-long-running-units "${running[*]:-none found}" \
+  test "${#running[@]}" -gt 0 -a "${#broken[@]}" -eq 0
 check asusd-profile-switching-off "asusd.ron" \
   grep -q 'change_platform_profile_on_ac: false' /etc/asusd/asusd.ron
 check slash-off-on-battery "asusctl slash get" \
