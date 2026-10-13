@@ -19,6 +19,6 @@
   config.specialisation.recovery.configuration = {
     boot.kernelPackages = lib.mkForce config.oruc.recovery.kernelPackages;
     boot.loader.systemd-boot.sortKey = "o_recovery";
-    programs.silentSDDM.enable = lib.mkForce false;
+    services.displayManager.sddm.theme = lib.mkForce "";
   };
 }

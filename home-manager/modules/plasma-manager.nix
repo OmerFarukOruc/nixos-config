@@ -54,6 +54,9 @@ in
         };
       };
 
+      # The lock screen shows the login screen's image.
+      kscreenlocker.appearance.wallpaper = osConfig.oruc.login.lockImage;
+
       # Glass replaces the built-in blur, and KWin names the effect after its
       # plugin file, glass.so. The package comes from nixosModules/desktop.nix.
       kwin = {

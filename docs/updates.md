@@ -89,8 +89,8 @@ workflow both run it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
 then compile the kernel, the llm-agents packages, and the packages built from
-nixpkgs, dms, silent-sddm and sops-nix. Move the kernel with
-`scripts/update-kernel.sh`. Move nixpkgs, dms, silent-sddm and sops-nix by hand
+nixpkgs, dms and sops-nix. Move the kernel with
+`scripts/update-kernel.sh`. Move nixpkgs, dms and sops-nix by hand
 only after the host-packages-cache workflow
 ([nixos-rog.md](nixos-rog.md#cached-packages)) has pushed the packages for the
 lock you will deploy. The workflow builds the lock that `scripts/move-inputs.sh`

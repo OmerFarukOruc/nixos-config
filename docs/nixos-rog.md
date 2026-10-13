@@ -53,7 +53,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | --- | --- |
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| nixpkgs, dms, silent-sddm and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
+| nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
 | kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
@@ -89,7 +89,7 @@ before it restores a generation.
 cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
 each host: DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
-style, the SilentSDDM theme and `sops-install-secrets`, plus the newer
+style, the sddm-astronaut login theme and `sops-install-secrets`, plus the newer
 libportal that Deskflow links. It reads them from the host's own
 configuration, so they are the exact builds the host would compile.
 

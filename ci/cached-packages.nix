@@ -17,8 +17,8 @@ let
     "dms-shell"
     "glass-qt6"
     "kwin-glass"
-    # The SilentSDDM theme.
-    "silent"
+    # The login screen theme.
+    "sddm-astronaut"
     "sops-install-secrets"
   ];
 

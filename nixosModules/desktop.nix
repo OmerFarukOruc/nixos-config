@@ -57,6 +57,9 @@ in
       };
 
       services.greetd.enable = false;
+      # Puts the Qt plugins and QML modules of the system profile on each
+      # session's search path.
+      qt.enable = true;
       services.orca.enable = false;
       hardware.graphics.enable = true;
       users.users.oruc.extraGroups = [ "video" ];
