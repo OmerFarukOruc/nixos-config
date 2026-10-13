@@ -10,6 +10,9 @@ let
   # SDR white in nits: the panel's suggested SDR maximum. A higher value
   # exceeds its frame-average limit. Each login sets it back to this value.
   sdrBrightness = 400;
+  # How far SDR colours stretch into the panel's gamut, in percent. Display
+  # settings calls it sRGB color intensity.
+  sdrGamut = 100;
   apply = pkgs.writeShellApplication {
     name = "oruc-plasma-hdr";
     runtimeInputs = [
@@ -18,14 +21,16 @@ let
     ];
     text = ''
       # The panel's connector is eDP-1 or eDP-2, depending on driver probe order.
+      # kscreen-doctor's JSON has no SDR gamut field, so every login applies
+      # all the values.
       kscreen-doctor -j \
         | jq -r '.outputs[]
             | select(.connected and .enabled and (.name | startswith("eDP")))
-            | select((.hdr and .wcg and .["sdr-brightness"] == ${toString sdrBrightness}) | not)
             | .name' \
         | while read -r name; do
             kscreen-doctor "output.$name.hdr.enable" "output.$name.wcg.enable" \
-              "output.$name.sdr-brightness.${toString sdrBrightness}"
+              "output.$name.sdr-brightness.${toString sdrBrightness}" \
+              "output.$name.sdrGamut.${toString sdrGamut}"
           done
     '';
   };
