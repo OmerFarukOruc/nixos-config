@@ -14,11 +14,11 @@ for host in $hosts; do
     --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd)
   units=$(grep -- '-system-units$' <<<"$paths")
   systemd=$(grep -v -- '-system-units$' <<<"$paths")
-  # The programs the units start are missing here, so systemd-analyze reports
-  # them and exits 1; only a higher status means it could not check.
+  # systemd-analyze exits 0 also when it finds a cycle, so only its message
+  # counts; any other status means it did not check.
   rc=0
   analysis=$(SYSTEMD_UNIT_PATH=$units "$systemd/bin/systemd-analyze" verify default.target 2>&1) || rc=$?
-  if ((rc > 1)); then
+  if ((rc != 0)); then
     printf '%s\n' "$analysis" "$host: systemd-analyze could not check the units (exit $rc)."
     status=1
   elif grep -q 'Found ordering cycle' <<<"$analysis"; then
@@ -26,7 +26,7 @@ for host in $hosts; do
     grep -E 'ordering cycle|Job .* deleted' <<<"$analysis" || true
     status=1
   else
-    echo "$host: no ordering cycle (systemd-analyze exit $rc)"
+    echo "$host: no ordering cycle"
   fi
 done
 exit "$status"
