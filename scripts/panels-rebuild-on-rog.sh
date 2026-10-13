@@ -5,7 +5,10 @@
 # plasma-manager deletes the panel file and builds the panels again. It first
 # copies the panel files to ~/.local/state/panels-rebuild/<time>/ and prints
 # that directory; to undo, stop plasma-plasmashell, copy the files back and
-# start it. Exits 1 when no Plasma session runs or the rebuild fails.
+# start it. The build drops every panel change made in Plasma's settings since
+# the last build, so ask Omer before you run it to clear a failed
+# plasma-panel-settings check. Exits 1 when no Plasma session runs or the
+# rebuild fails.
 set -euo pipefail
 if (($#)); then
   echo "usage: $0" >&2
