@@ -1,8 +1,10 @@
-# Keeps the session active, so Teams in Brave shows Available while Omer works
-# on fedora-desktop through Deskflow. Plasma on Wayland reports no idle time,
-# so a virtual mouse moves one pixel and back every minute, well inside Teams'
-# five minutes before Away. It moves only on weekdays from 09:00 to 18:00.
-# `stay-active off` pauses it until the next boot.
+# Keeps Teams in Brave Available while Omer works on fedora-desktop through
+# Deskflow. nixos-rog gets no input then, so KWin counts the session as idle,
+# and Teams reads that idle time through Brave's Idle Detection API
+# (nixosModules/brave.nix). A virtual mouse moves one pixel and back every
+# minute, well inside Teams' five minutes before Away. It moves only on
+# weekdays from 09:00 to 18:00. `stay-active off` pauses it until the next
+# boot.
 { config, pkgs, ... }:
 let
   unit = "oruc-stay-active.service";
@@ -39,6 +41,12 @@ in
     serviceConfig = {
       DynamicUser = true;
       SupplementaryGroups = [ config.programs.ydotool.group ];
+      # ydotoold reports started before it creates its socket, so the first
+      # move after boot can fail. A restart also starts a stopped ydotoold
+      # through `requires`. RestartSec keeps the restarts under systemd's
+      # default limit of 5 starts in 10 seconds.
+      Restart = "on-failure";
+      RestartSec = 10;
     };
     script = ''
       while true; do
