@@ -98,6 +98,7 @@ target.
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
+| `scripts/thermal-test-rog.sh PROFILE` | load nixos-rog's CPU in a power profile and record its temperature, power and fans |
 
 Every deploy command can change boot or running system state.
 CI runs the formatter, `nix flake check --no-build` and the evaluation of each
@@ -110,7 +111,7 @@ host on every pull request and push to `main`.
 | [Deploy](docs/deploy.md) | evaluation checks, the deploy and rollback steps, exit codes, release records |
 | [Updates](docs/updates.md) | the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair |
-| [nixos-rog](docs/nixos-rog.md) | the hourly updater, secrets, DNS and the post-deploy check |
+| [nixos-rog](docs/nixos-rog.md) | the hourly updater, secrets, DNS, power and heat, and the post-deploy check |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
