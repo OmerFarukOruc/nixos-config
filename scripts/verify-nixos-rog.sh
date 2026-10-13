@@ -440,7 +440,9 @@ case $build in
     fi
     case $compared in
       0) record plasma-panel-settings pass "the panel file holds every setting in plasma-panels.nix" ;;
-      1) record plasma-panel-settings fail "${differences//$'\n'/; }" ;;
+      # A difference is usually a change made in Plasma's settings, which the
+      # next panel build drops, so the detail asks before a rebuild.
+      1) record plasma-panel-settings fail "${differences//$'\n'/; }. A change made in Plasma lasts only until the next panel build; ask Omer whether to write it into plasma-panels.nix before you rebuild the panels" ;;
       *) record plasma-panel-settings fail "could not compare the panel file (exit $compared): ${differences:-copy from $host failed}" ;;
     esac
     ;;
