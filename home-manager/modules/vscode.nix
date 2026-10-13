@@ -225,5 +225,23 @@ in
           || warnEcho "VS Code settings.json is unchanged, so the declared settings apply at the next switch after it parses."
       ''
     );
+
+    # A key set any other way, including through the two update-check
+    # options, reaches settings.json without the ignore list, so Settings
+    # Sync copies it to the other machines.
+    assertions =
+      let
+        profile = config.programs.vscode.profiles.default;
+      in
+      [
+        {
+          assertion =
+            lib.attrNames profile.userSettings
+            == lib.attrNames (config.oruc.vscodeSettings // { "settingsSync.ignoredSettings" = null; })
+            && profile.enableUpdateCheck == null
+            && profile.enableExtensionUpdateCheck == null;
+          message = "Set VS Code settings through oruc.vscodeSettings, so Settings Sync skips them.";
+        }
+      ];
   };
 }
