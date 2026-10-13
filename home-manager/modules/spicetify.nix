@@ -1,6 +1,5 @@
 {
   inputs,
-  osConfig,
   pkgs,
   ...
 }:
@@ -12,7 +11,6 @@ let
     config.allowUnfree = true;
   };
   spicePkgs = inputs.spicetify-nix.legacyPackages.${system};
-  inherit (osConfig) scheme;
 in
 {
   imports = [ inputs.spicetify-nix.homeManagerModules.spicetify ];
@@ -21,44 +19,16 @@ in
     enable = true;
     spotifyPackage = pinned.spotify;
     spicetifyPackage = pinned.spicetify-cli;
-    # Spotify's stock layout, recoloured with the key mapping of Stylix's
-    # spicetify target, except player: Marketplace paints its cards with it,
-    # and Stylix's light base04 left their base05 text unreadable.
-    theme = {
-      # Marketplace installs a theme only while the local theme is named
-      # marketplace. Its themes override these colours, and removing one
-      # brings them back.
-      name = "marketplace";
-      src = pkgs.writeTextFile {
-        name = "color.ini";
-        destination = "/color.ini";
-        text = with scheme; ''
-          [base]
-          text               = ${base05}
-          subtext            = ${base05}
-          main               = ${base00}
-          main-elevated      = ${base02}
-          highlight          = ${base02}
-          highlight-elevated = ${base03}
-          sidebar            = ${base01}
-          player             = ${base01}
-          card               = ${base03}
-          shadow             = ${base00}
-          selected-row       = ${base04}
-          button             = ${base04}
-          button-active      = ${base04}
-          button-disabled    = ${base03}
-          tab-active         = ${base02}
-          notification       = ${base02}
-          notification-error = ${base08}
-          equalizer          = ${base0B}
-          misc               = ${base02}
-        '';
-      };
-      # The sidebar config breaks Spotify's current navigation bar.
-      sidebarConfig = false;
-    };
-    colorScheme = "base";
+    # Marketplace refuses to install themes while this theme is set, because
+    # the local theme is not named marketplace.
+    theme = spicePkgs.themes.sleek;
+    colorScheme = "RosePine";
+    enabledSnippets = with spicePkgs.snippets; [
+      # keep-sorted start
+      roundedNowPlaying
+      sonicDancing
+      # keep-sorted end
+    ];
     enabledExtensions = with spicePkgs.extensions; [
       # keep-sorted start
       fullAppDisplay
