@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# usage: scripts/panels-rebuild-on-rog.sh
+# Builds the Plasma panels on nixos-rog as the next login would, without a
+# logout: ksystemstats and plasmashell start fresh in login order, and then
+# plasma-manager deletes the panel file and builds the panels again. It first
+# copies the panel files to ~/.local/state/panels-rebuild/<time>/ and prints
+# that directory; to undo, stop plasma-plasmashell, copy the files back and
+# start it. Exits 1 when no Plasma session runs or the rebuild fails.
+set -euo pipefail
+if (($#)); then
+  echo "usage: $0" >&2
+  exit 64
+fi
+
+ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s <<'EOF'
+set -euo pipefail
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+if [[ $(systemctl --user show -p MainPID --value plasma-plasmashell) == 0 ]]; then
+  echo "No Plasma session runs on nixos-rog; log in to Plasma first." >&2
+  exit 1
+fi
+
+backup=$HOME/.local/state/panels-rebuild/$(date -u +%Y%m%dT%H%M%SZ)
+mkdir -p "$backup"
+cp ~/.config/plasma-org.kde.plasma.desktop-appletsrc ~/.config/plasmashellrc "$backup/"
+echo "Backup: $backup"
+
+manager=$HOME/.local/share/plasma-manager
+# Without its last-run record, run_all.sh runs the panel script again.
+rm -f "$manager/last_run_desktop_script_panels"
+# At a login ksystemstats starts before plasmashell. Repeated ksystemstats
+# restarts under a running plasmashell left kVitals without updates on
+# 2026-10-13.
+systemctl --user stop plasma-plasmashell
+systemctl --user restart plasma-ksystemstats
+systemctl --user start plasma-plasmashell
+sleep 1
+"$manager/run_all.sh"
+
+for dev in /sys/bus/pci/devices/*; do
+  if [[ $(<"$dev/vendor") == 0x10de && $(<"$dev/class") == 0x030* ]]; then
+    nvidia=$dev
+    break
+  fi
+done
+status=none
+if [[ -n ${nvidia:-} ]]; then
+  for _ in {1..30}; do
+    status=$(<"$nvidia/power/runtime_status")
+    [[ $status == suspended ]] && break
+    sleep 1
+  done
+fi
+echo "plasmashell: $(systemctl --user is-active plasma-plasmashell)"
+echo "nvidia-smi processes: $(pgrep -c -x nvidia-smi || true)"
+echo "RTX 4070: $status"
+echo "Run scripts/verify-nixos-rog.sh next."
+systemctl --user is-active --quiet plasma-plasmashell
+EOF

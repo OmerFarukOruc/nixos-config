@@ -457,8 +457,16 @@ lasts only until then, so write a lasting change in the Nix file.
 - A logout can show a black screen with a cursor for about a minute. On
   2026-10-13 plasmashell did not quit, and systemd killed it at its stop
   timeout. The cause is not confirmed.
+- To build the panels from the Nix file as the next login would, without a
+  logout, deploy and then run `scripts/panels-rebuild-on-rog.sh`. It backs up
+  the panel files, restarts ksystemstats and plasmashell in login order, runs
+  plasma-manager's panel script and prints the RTX 4070's power state. Then run
+  `scripts/verify-nixos-rog.sh`.
 - To try a panel setting before you write it into the Nix file, run a script in
-  the running plasmashell. First copy `~/.config/plasma-org.kde.plasma.desktop-appletsrc`
+  the running plasmashell. A script's `writeConfig` reaches the panel file, but
+  kVitals and Panel Colorizer read it only when plasmashell starts, so restart
+  it with `systemctl --user restart plasma-plasmashell` to see the setting.
+  First copy `~/.config/plasma-org.kde.plasma.desktop-appletsrc`
   and `~/.config/plasmashellrc` to a backup directory, such as
   `~/.local/state/dock-try`, so you can put them back:
 
