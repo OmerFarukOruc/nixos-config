@@ -19,6 +19,72 @@ let
     name = "whisper-v3";
     text = ''exec ${lib.getExe' whisper-cpp "whisper-cli"} -m ${whisperModel} "$@"'';
   };
+
+  inherit (import ./audio-nodes.nix) mic;
+  # wpctl's volume for the internal microphone. At 1.0 the codec adds 60 dB
+  # (Capture +30 dB and Internal Mic Boost +30 dB), and speech clips.
+  # scripts/mic-ab-on-rog.sh on 2026-10-13: speech clipped 36726 samples at
+  # 0.45 and peaked at -3.2 dBFS at 0.3; at 0.25 the 60 s A/B take peaked at
+  # -5.2 dBFS with no clipped samples.
+  micVolume = "0.25";
+
+  # EasyEffects saves easyeffectsrc while it runs, so a store link would stop
+  # every save. This sets only the keys below before each start.
+  easyeffectsSettings = pkgs.writeShellApplication {
+    name = "easyeffects-settings";
+    runtimeInputs = [ pkgs.kdePackages.kconfig ];
+    text = ''
+      rc=''${XDG_CONFIG_HOME:-$HOME/.config}/easyeffects/db/easyeffectsrc
+      mkdir -p "$(dirname "$rc")"
+      set_key() { kwriteconfig6 --file "$rc" --group "$1" --key "$2" "''${@:3}"; }
+      # A pinned input keeps the pipeline on the raw microphone while
+      # HushMic's source is the default source.
+      set_key StreamInputs useDefaultInputDevice --type bool false
+      set_key StreamInputs inputDevice ${mic}
+      # Apps reach EasyEffects' source only when they pick it. With
+      # processAllInputs, EasyEffects also moved HushMic's capture stream to
+      # its own source, past a blocklist entry for it, so HushMic heard
+      # EasyEffects' output.
+      set_key EffectsPipelines processAllInputs --type bool false
+      set_key EffectsPipelines bypass --type bool false
+      # The pipeline unlinks 10 s after the last app stops recording. Linked
+      # all the time, DeepFilterNet took 19 % of a core with nothing
+      # recording (2026-10-13). With bypass on, EasyEffects does not link the
+      # pipeline again, so the next app records silence until bypass is off.
+      set_key EffectsPipelines inactivityTimerEnable --type bool true
+    '';
+  };
+
+  micDefaultSource = pkgs.writeShellApplication {
+    name = "mic-default-source";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.pipewire
+      pkgs.wireplumber
+    ];
+    text = ''
+      node_id() {
+        pw-dump | jq -r --arg name "$1" \
+          'first(.[] | select(.type == "PipeWire:Interface:Node" and .info.props."node.name" == $name) | .id) // empty'
+      }
+      # HushMic creates its source a moment after its unit starts.
+      for _ in $(seq 30); do
+        source=$(node_id hushmic_source)
+        microphone=$(node_id ${mic})
+        [[ -n $source && -n $microphone ]] && break
+        sleep 1
+      done
+      if [[ -z $source || -z $microphone ]]; then
+        echo "hushmic_source or ${mic} did not appear within 30 s." >&2
+        exit 1
+      fi
+      # WirePlumber keeps this choice in its state. While HushMic is not
+      # running, it falls back to an earlier default it remembers, such as
+      # easyeffects_source, or else to the raw microphone.
+      wpctl set-default "$source"
+      wpctl set-volume "$microphone" ${micVolume}
+    '';
+  };
 in
 {
   security.rtkit.args = [ "--rttime-usec-max=${toString realtimeLimitUs}" ];
@@ -74,4 +140,23 @@ in
     whisper-cpp
     whisper-v3
   ];
+
+  systemd.user.services.easyeffects.serviceConfig.ExecStartPre = [
+    (lib.getExe easyeffectsSettings)
+  ];
+  # Apps that record from the default source get HushMic's denoised
+  # microphone. In the 2026-10-13 A/B take, HushMic cut silence and typing by
+  # 73 to 75 dB and EasyEffects' DeepFilterNet by 5 to 8 dB, and both kept
+  # speech within 1 dB. It runs again with every HushMic start.
+  systemd.user.services.mic-default-source = {
+    description = "Make HushMic's source the default and set the microphone level";
+    after = [ "hushmic.service" ];
+    partOf = [ "hushmic.service" ];
+    wantedBy = [ "hushmic.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = lib.getExe micDefaultSource;
+    };
+  };
 }

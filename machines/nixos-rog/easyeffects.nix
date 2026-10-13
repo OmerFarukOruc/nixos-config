@@ -1,4 +1,4 @@
-# EasyEffects removes noise from the internal microphone with RNNoise and
+# EasyEffects removes noise from the internal microphone with DeepFilterNet and
 # equalizes the internal speakers with a convolver. Each preset loads whenever
 # its device route is active.
 _:
@@ -13,8 +13,7 @@ let
       preset-name = preset;
     };
   };
-  mic = "alsa_input.pci-0000_66_00.6.analog-stereo";
-  speakers = "alsa_output.pci-0000_66_00.6.analog-stereo";
+  inherit (import ./audio-nodes.nix) mic speakers;
 
   # A 48 kHz, 526-tap, linear-phase speaker EQ for the GA605W. Its gain peaks at
   # +6.3 dB near 138 Hz and stays above +4 dB down to 20 Hz.
@@ -22,21 +21,22 @@ let
 in
 {
   xdg.dataFile = {
-    "easyeffects/input/RNNoise.json".text = builtins.toJSON {
+    "easyeffects/input/DeepFilterNet.json".text = builtins.toJSON {
       input = {
         blocklist = [ ];
-        plugins_order = [ "rnnoise#0" ];
-        # EasyEffects 8.3 defaults, with the built-in model.
-        "rnnoise#0" = {
+        plugins_order = [ "deepfilternet#0" ];
+        # EasyEffects 8.3 defaults. An attenuation limit of 100 dB does not
+        # limit the suppression.
+        "deepfilternet#0" = {
           bypass = false;
           input-gain = 0.0;
           output-gain = 0.0;
-          model-name = "";
-          use-standard-model = true;
-          enable-vad = false;
-          vad-thres = 50.0;
-          wet = 0.0;
-          release = 20.0;
+          attenuation-limit = 100.0;
+          min-processing-threshold = -10.0;
+          max-erb-processing-threshold = 30.0;
+          max-df-processing-threshold = 20.0;
+          min-processing-buffer = 0;
+          post-filter-beta = 0.02;
         };
       };
     };
@@ -113,7 +113,7 @@ in
       };
     };
   }
-  // autoload "input" mic "Internal Microphone" "RNNoise"
+  // autoload "input" mic "Internal Microphone" "DeepFilterNet"
   // autoload "output" speakers "Speakers" "Speakers"
   // autoload "output" speakers "Headphones" "Flat";
 }
