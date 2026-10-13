@@ -188,7 +188,7 @@ in
     set -g pane-active-border-style "fg=${scheme.base0D}"
   '';
 
-  programs.vscode.profiles.default.userSettings = {
+  oruc.vscodeSettings = {
     "workbench.colorTheme" = "Default ${if theme.isLight then "Light" else "Dark"} Modern";
     # vscode.nix sets the see-through backgrounds.
     "workbench.colorCustomizations" = {
