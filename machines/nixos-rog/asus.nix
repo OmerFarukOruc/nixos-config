@@ -169,7 +169,7 @@ in
     auraConfigs."19b6".text = ''
       (
           config_name: "aura_19b6.ron",
-          brightness: Med,
+          brightness: High,
           current_mode: Static,
           builtins: {
               ${lib.concatMapStrings auraEffect [
