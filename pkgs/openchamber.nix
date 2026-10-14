@@ -5,23 +5,15 @@
   lib,
   appimageTools,
   fetchurl,
-  python3,
 }:
 let
   pname = "openchamber";
-  version = "2.3.2";
+  version = "2.3.3";
   src = fetchurl {
     url = "https://github.com/openchamber/openchamber/releases/download/v${version}/OpenChamber-${version}-linux-x86_64.AppImage";
-    hash = "sha512-79bZca8bsgGoTlap3Wzf/HFS7YyWMJ+6fOXHwXiWYeIgOySRKK83m/y5bERpDTnSCe5xOJf8zkQPEaPPXrufjQ==";
+    hash = "sha512-ToHBt8EKCZ+gFD+Lh1uFKVn2CNC876nebj8VZ6MNzXXE8UVpP/dQJqY5J91c9w74yeVTDAQ156UPmnMDRwnf6Q==";
   };
-  contents = appimageTools.extract {
-    inherit pname version src;
-    # Save as image on a chat message titled the save dialog with the image's
-    # whole data: URL; the patch downloads it through a blob: URL instead.
-    postExtract = ''
-      ${lib.getExe python3} ${./openchamber-image-export.py} $out/resources/web-dist/assets
-    '';
-  };
+  contents = appimageTools.extract { inherit pname version src; };
 in
 appimageTools.wrapAppImage {
   inherit pname version;
