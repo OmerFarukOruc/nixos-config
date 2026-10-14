@@ -35,12 +35,22 @@ EOF
 fi
 
 # The same checks as CI's check.yml, which also forbids import from derivation.
+# Evaluation warnings do not fail the check; the summary at the end lists them.
 rog_remote <<'EOF'
-set -e
+set -eo pipefail
 cd "$1"
 git add -A
 nix fmt -- --ci
-nix flake check --no-build --no-write-lock-file --option allow-import-from-derivation false
+log=$(mktemp)
+trap 'rm -f -- "$log"' EXIT
+nix flake check --no-build --no-write-lock-file --option allow-import-from-derivation false 2>&1 | tee "$log"
 nix eval --json --no-write-lock-file --option allow-import-from-derivation false \
   ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
+echo
+warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)
+if [[ -z $warnings ]]; then
+  echo "No evaluation warnings."
+else
+  printf '%d distinct evaluation warnings:\n%s\n' "$(wc -l <<<"$warnings")" "$warnings"
+fi
 EOF

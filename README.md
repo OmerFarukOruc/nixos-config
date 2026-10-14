@@ -101,8 +101,8 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `upgrade` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main` |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
-| `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog; `--fix` formats |
-| `scripts/eval-on-rog.sh [--json] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json` |
+| `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog and list each distinct evaluation warning; `--fix` formats |
+| `scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
 | `scripts/build-on-rog.sh [ATTRIBUTE...]` | build on nixos-rog from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system |
 | `scripts/run-unit-on-rog.sh UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |

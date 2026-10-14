@@ -40,9 +40,26 @@ jobs:
             exit 1
           fi
           for host in $hosts; do
-            nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath"
+            log=$RUNNER_TEMP/eval-$host.log
+            status=0
+            nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath" \
+              2>"$log" || status=$?
             echo
+            cat "$log" >&2
+            ((status == 0)) || exit "$status"
           done
+          # Warnings do not fail the job, so a warning from an upstream input
+          # never blocks the updater; each one shows as an annotation.
+          warnings=$(cat "$RUNNER_TEMP"/eval-*.log | grep -o 'evaluation warning: .*' | sort -u || true)
+          if [[ -z $warnings ]]; then
+            echo "No evaluation warnings." >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "$(wc -l <<<"$warnings") distinct evaluation warnings:" >>"$GITHUB_STEP_SUMMARY"
+            while read -r warning; do
+              echo "::warning title=Evaluation warning::${warning#evaluation warning: }"
+              echo "- ${warning#evaluation warning: }" >>"$GITHUB_STEP_SUMMARY"
+            done <<<"$warnings"
+          fi
       # Not a flake output, so the steps above do not evaluate it.
       - name: Evaluate the cached host packages
         run: |
