@@ -1,5 +1,5 @@
 # Wi-Fi driver option, NextDNS over TLS with a captive-portal switch, and TCP
-# tuning.
+# tuning, and the Tailscale operator.
 { config, pkgs, ... }:
 let
   profile = config.sops.placeholder.nextdns-profile;
@@ -10,6 +10,11 @@ in
   boot.extraModprobeConfig = ''
     options mt7925e disable_aspm=Y
   '';
+
+  # browser-lend runs `tailscale serve` as oruc to lend Brave's debugging port
+  # to risoluto-dev-1, and only the operator may change serve without sudo.
+  # The list adds to the shared flags in nixosModules/connectivity.nix.
+  services.tailscale.extraSetFlags = [ "--operator=oruc" ];
 
   services.resolved = {
     enable = true;
