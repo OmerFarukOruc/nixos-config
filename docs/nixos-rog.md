@@ -73,10 +73,11 @@ environments carry only the file paths. systemd removes the directory after
 the run. Processes of `oruc` can still read those files; this removes the
 token from inherited environments without isolating the service from that user.
 
-To run the updater now and read its log:
+To run the updater now, run `upgrade` on nixos-rog. It prints the updater's
+log while it runs and exits with the run's status. From fedora-desktop:
 
 ```sh
-ssh nixos-rog 'sudo systemctl start oruc-auto-update; journalctl -u oruc-auto-update -n 50'
+ssh -t nixos-rog upgrade
 ```
 
 A manual deploy exits 77 while an update holds the deploy lock, and the updater

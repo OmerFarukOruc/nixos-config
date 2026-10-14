@@ -3,8 +3,34 @@
 # them to this host and merges them to main. The token is a systemd credential,
 # and the script writes private runtime config files for gh and Nix. The token
 # stays out of child-process environments; files remain readable by oruc.
+#
+# `upgrade` runs the updater now and shows its log while it runs.
 { config, pkgs, ... }:
+let
+  unit = "oruc-auto-update.service";
+  upgrade = pkgs.writeShellApplication {
+    name = "upgrade";
+    text = ''
+      journalctl --follow --lines 0 --output cat --unit ${unit} &
+      follow=$!
+      trap 'kill "$follow" 2>/dev/null' EXIT
+      status=0
+      # A oneshot start returns when the run ends, and joins a run the timer
+      # already started.
+      sudo systemctl start ${unit} || status=$?
+      # journalctl prints the last lines a moment after the unit ends.
+      sleep 1
+      if [[ $(systemctl show --property ConditionResult --value ${unit}) == no ]]; then
+        echo "The updater runs only on AC power. Plug in and run upgrade again." >&2
+        exit 1
+      fi
+      exit "$status"
+    '';
+  };
+in
 {
+  environment.systemPackages = [ upgrade ];
+
   sops.secrets.github-update-token = { };
 
   systemd.services.oruc-auto-update = {

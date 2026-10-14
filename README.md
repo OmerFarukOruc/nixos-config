@@ -99,6 +99,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
+| `upgrade` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main` |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog; `--fix` formats |
 | `scripts/eval-on-rog.sh [--json] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json` |
