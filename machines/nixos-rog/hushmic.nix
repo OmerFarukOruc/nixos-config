@@ -9,14 +9,26 @@
   ...
 }:
 let
-  # rog's Nix daemon builds under SCHED_BATCH (nix.daemonCPUSchedPolicy), and
-  # this test expects a new thread to start under SCHED_OTHER. Its failure
-  # poisons a lock that three other rt tests share, so they fail with it.
-  hushmic = inputs.hushmic.packages.${pkgs.stdenv.hostPlatform.system}.hushmic.overrideAttrs (old: {
-    checkFlags = (old.checkFlags or [ ]) ++ [
-      "--skip=rt::tests::timeshare_data_loop_in_this_process_never_requests_a_policy_change"
-    ];
-  });
+  hushmic =
+    (inputs.hushmic.packages.${pkgs.stdenv.hostPlatform.system}.hushmic.override {
+      # The package reads these from the deprecated xorg set, and each read
+      # prints a rename warning on every evaluation.
+      xorg = {
+        libX11 = pkgs.libx11;
+        libXcursor = pkgs.libxcursor;
+        libXi = pkgs.libxi;
+        libXrandr = pkgs.libxrandr;
+        inherit (pkgs) libxcb;
+      };
+    }).overrideAttrs
+      (old: {
+        # rog's Nix daemon builds under SCHED_BATCH (nix.daemonCPUSchedPolicy), and
+        # this test expects a new thread to start under SCHED_OTHER. Its failure
+        # poisons a lock that three other rt tests share, so they fail with it.
+        checkFlags = (old.checkFlags or [ ]) ++ [
+          "--skip=rt::tests::timeshare_data_loop_in_this_process_never_requests_a_policy_change"
+        ];
+      });
   settings = (pkgs.formats.toml { }).generate "hushmic-config.toml" {
     enabled = true;
     inherit (import ./audio-nodes.nix) mic;
