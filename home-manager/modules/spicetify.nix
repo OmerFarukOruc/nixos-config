@@ -34,7 +34,6 @@ in
     enabledSnippets = with spicePkgs.snippets; [
       # keep-sorted start
       roundedNowPlaying
-      sonicDancing
       # keep-sorted end
     ];
     enabledExtensions = with spicePkgs.extensions; [
