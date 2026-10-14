@@ -146,8 +146,8 @@ repository that its `passthru.aptIndex` names.
 | OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed` |
 
 The updater on nixos-rog builds each moved app on its own first. A version that
-does not build stays out of the update and sends one notification. The other
-updates go ahead.
+does not build stays out of the update and sends one notification, which
+quotes the build's last error line. The other updates go ahead.
 
 When an app's update check fails, the app stays where it is. Examples are an
 unreadable feed or index, or a feed file that is not the one the package

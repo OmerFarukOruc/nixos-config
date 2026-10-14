@@ -213,18 +213,26 @@ while read -r file; do
   rm -f -- "$failed_check" "$failed_check.err"
   [[ -n $version ]] || continue
   broken=$STATE_DIRECTORY/broken-$app
-  if nix build --no-link --impure --expr \
-    "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" </dev/null; then
-    rm -f -- "$broken"
+  build_log=$STATE_DIRECTORY/build-$app.log
+  built=true
+  nix build --no-link --impure --expr \
+    "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" \
+    </dev/null 2>"$build_log" || built=false
+  cat "$build_log" >&2
+  if $built; then
+    rm -f -- "$broken" "$build_log"
     apps+=$'\n'"- $app: $version"
     continue
   fi
   git checkout -- "$file"
-  echo "$app $version does not build; it stays where it is."
+  # shellcheck source=/dev/null
+  . scripts/lib/build-error.sh
+  reason=$(build_error "$build_log")
+  echo "$app $version does not build: ${reason:-no error line}. It stays where it is."
   # Each run builds it again, since a fix on main or a failed download can
   # clear the failure, but only the first failure of a version notifies.
   [[ -f $broken && $(<"$broken") == "$version" ]] && continue
-  notify normal "$app update skipped" "$app $version does not build. The other updates go ahead. See: journalctl -u oruc-auto-update" &&
+  notify normal "$app update skipped" "$app $version does not build: ${reason:-no error line}. The other updates go ahead. See: journalctl -u oruc-auto-update" &&
     echo "$version" >"$broken"
 done < <(printf '%s\n' pkgs/*.nix)
 
