@@ -366,12 +366,11 @@ The last line says how to continue. It compares this checkout with its local
   after `git fetch origin && git reset --hard origin/main`.
 - When the checkout is behind `origin/main`, it continues after `git pull`.
 - Otherwise merge the work into this checkout. Or, after the owner of that
-  work agrees, rerun with `--replace`. `--replace` drops the other checkout's
-  work from the host, so it is wrong for a checkout that is only out of date:
+  work agrees, rerun with `--replace`, as in
+  `./deploy.sh --replace nixos-rog test`.
 
-```sh
-./deploy.sh --replace nixos-rog test
-```
+`--replace` drops the other checkout's work from the host, so it is wrong for
+a checkout that is only out of date.
 
 ## Release records and cleanup
 

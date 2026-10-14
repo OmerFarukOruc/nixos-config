@@ -282,7 +282,7 @@ checkout_hint() {
   elif git -C "$repo_dir" merge-base --is-ancestor HEAD origin/main; then
     behind=$(git -C "$repo_dir" rev-list --count HEAD..origin/main)
     if ((behind > 0)); then
-      printf 'This checkout is %d commits behind origin/main. Run git pull, then deploy again.\n' "$behind" >&2
+      printf 'This checkout is behind origin/main by %d commit(s). Run git pull, then deploy again.\n' "$behind" >&2
       return 0
     fi
   fi
