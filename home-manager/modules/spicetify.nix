@@ -21,7 +21,15 @@ in
     spicetifyPackage = pinned.spicetify-cli;
     # Marketplace refuses to install themes while this theme is set, because
     # the local theme is not named marketplace.
-    theme = spicePkgs.themes.sleek;
+    theme = spicePkgs.themes.sleek // {
+      # Continuous progress transitions keep the GPU busy during playback.
+      additionalCss = ''
+        .x-progressBar-fillColor,
+        .progress-bar__slider {
+          transition: none !important;
+        }
+      '';
+    };
     colorScheme = "RosePine";
     enabledSnippets = with spicePkgs.snippets; [
       # keep-sorted start
