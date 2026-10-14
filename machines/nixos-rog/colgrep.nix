@@ -16,10 +16,11 @@ in
   ];
 
   # colgrep keeps its settings in a writable config.json, so each switch sets
-  # these keys and leaves the others to `colgrep settings`. The hook mode makes
-  # its Claude Code hooks delegate code search to `colgrep --agent`.
+  # these keys and leaves the others to `colgrep settings`. In hybrid mode its
+  # Claude Code hooks suggest plain colgrep for names and patterns and
+  # `colgrep --agent` for questions about behaviour.
   home.activation.colgrepSettings = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    run ${lib.getExe colgrep} settings --hook-mode agent --agent-llama-server ${llamaServer} >/dev/null \
+    run ${lib.getExe colgrep} settings --hook-mode hybrid --agent-llama-server ${llamaServer} >/dev/null \
       || warnEcho "colgrep's settings are unchanged; run colgrep settings by hand."
   '';
 }
