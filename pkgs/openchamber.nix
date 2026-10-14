@@ -9,10 +9,10 @@
 }:
 let
   pname = "openchamber";
-  version = "2.2.0";
+  version = "2.3.2";
   src = fetchurl {
     url = "https://github.com/openchamber/openchamber/releases/download/v${version}/OpenChamber-${version}-linux-x86_64.AppImage";
-    hash = "sha512-B5/UpJu4iKleeNzd2WXSRxPgf3V4JEn8FpPfHvTw87sfFJIHe2jnxYIRCK1BUiZ5Dt33OCxRsmcZ3wc0mBGhHQ==";
+    hash = "sha512-79bZca8bsgGoTlap3Wzf/HFS7YyWMJ+6fOXHwXiWYeIgOySRKK83m/y5bERpDTnSCe5xOJf8zkQPEaPPXrufjQ==";
   };
   contents = appimageTools.extract {
     inherit pname version src;
@@ -32,7 +32,8 @@ appimageTools.wrapAppImage {
     substituteInPlace $out/share/applications/openchamber.desktop \
       --replace-fail 'Exec=AppRun --no-sandbox %U' 'Exec=openchamber %U'
     echo 'MimeType=x-scheme-handler/openchamber;' >>$out/share/applications/openchamber.desktop
-    install -Dm644 ${contents}/openchamber.svg -t $out/share/icons/hicolor/scalable/apps
+    install -Dm644 ${contents}/usr/share/icons/hicolor/512x512/apps/openchamber.png \
+      -t $out/share/icons/hicolor/512x512/apps
   '';
   passthru.releaseFeed = "https://github.com/openchamber/openchamber/releases/latest/download/latest-linux.yml";
 
