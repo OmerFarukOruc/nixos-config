@@ -128,9 +128,9 @@ builds, then opens a blank window. To move them:
 ## Apps
 
 `scripts/update-app.sh NAME` moves `pkgs/NAME.nix` to the vendor's newest
-release and prints the new version. It prints nothing when the app is current,
-when its newest release is still in the 3-day wait, or when the package names
-no release source.
+release, with no waiting period, and prints the new version. It
+prints nothing when the app is current or when the package names no release
+source.
 
 ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their release source.
 herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
@@ -144,14 +144,6 @@ repository that its `passthru.aptIndex` names.
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
 | OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed` |
-
-A feed release moves its app only once it is 3 days old, by the feed's
-`releaseDate`. An APT candidate waits 3 days from its first observation, keyed
-by app, source URL, version and checksum. A changed checksum starts a new wait
-even when the version stays the same. Manual runs use
-`${XDG_STATE_HOME:-$HOME/.local/state}/nixos-config/app-first-seen`; the hourly
-service uses its `StateDirectory`. Both runs enforce the wait. A missing,
-invalid or future record starts the wait again.
 
 The updater on nixos-rog builds each moved app on its own first. A version that
 does not build stays out of the update and sends one notification. The other
