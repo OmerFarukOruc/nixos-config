@@ -18,6 +18,15 @@ lib.mkIf (cfg.kind == "workstation") {
     openFirewall = true;
   };
 
+  # tailscaled-set runs `tailscale set` with extraSetFlags as a oneshot when
+  # tailscaled starts, so a switch that changes the flags left them unapplied
+  # until the next boot. Kept active, it restarts on a switch that changes it,
+  # and PartOf runs it again whenever tailscaled restarts.
+  systemd.services.tailscaled-set = {
+    partOf = [ "tailscaled.service" ];
+    serviceConfig.RemainAfterExit = true;
+  };
+
   networking.firewall = {
     enable = true;
     trustedInterfaces = [ config.services.tailscale.interfaceName ];
