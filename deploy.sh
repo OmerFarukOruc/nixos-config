@@ -268,6 +268,27 @@ dropped_paths() {
   ' "$history" "$mismatches"
 }
 
+# Prints how to continue after the release check refused. It reads only local
+# refs, so a fetch that has not run yet can leave a stale clone unnamed.
+checkout_hint() {
+  local behind
+  if ! git -C "$repo_dir" rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
+    :
+  elif ! git -C "$repo_dir" merge-base HEAD origin/main >/dev/null; then
+    printf '%s\n' 'This checkout shares no history with origin/main, likely because the' \
+      "repository's history was rewritten. If it holds no work of its own, run" \
+      'git fetch origin && git reset --hard origin/main, then deploy again.' >&2
+    return 0
+  elif git -C "$repo_dir" merge-base --is-ancestor HEAD origin/main; then
+    behind=$(git -C "$repo_dir" rev-list --count HEAD..origin/main)
+    if ((behind > 0)); then
+      printf 'This checkout is behind origin/main by %d commit(s). Run git pull, then deploy again.\n' "$behind" >&2
+      return 0
+    fi
+  fi
+  printf '%s\n' 'Merge that work into this checkout, or rerun with --replace after its owner agrees.' >&2
+}
+
 # A deploy replaces what runs on the target and its boot default. Refuse when
 # either came from another checkout and holds files this deploy would drop.
 # The current link names only the last promoted release, which a reboot or a
@@ -316,7 +337,7 @@ REMOTE
     # Indents every line, which a parameter expansion would not do for the first.
     # shellcheck disable=SC2001
     sed 's/^/  /' <<<"$dropped" >&2
-    printf '%s\n' 'Merge that work into this checkout, or rerun with --replace after its owner agrees.' >&2
+    checkout_hint
     return 78
   done <<<"$live"
 }

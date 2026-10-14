@@ -358,12 +358,19 @@ that differ.
 A system with no release record, such as one built by hand, is reported and not
 checked. `--replace` skips the check.
 
-To continue, merge the work into this checkout. Or, after the owner of that
-work agrees, rerun with `--replace`:
+The last line says how to continue. It compares this checkout with its local
+`origin/main`, so run `git fetch` first when the clone may be old:
 
-```sh
-./deploy.sh --replace nixos-rog test
-```
+- When the checkout shares no history with `origin/main`, the repository's
+  history was likely rewritten. A checkout with no work of its own continues
+  after `git fetch origin && git reset --hard origin/main`.
+- When the checkout is behind `origin/main`, it continues after `git pull`.
+- Otherwise merge the work into this checkout. Or, after the owner of that
+  work agrees, rerun with `--replace`, as in
+  `./deploy.sh --replace nixos-rog test`.
+
+`--replace` drops the other checkout's work from the host, so it is wrong for
+a checkout that is only out of date.
 
 ## Release records and cleanup
 
