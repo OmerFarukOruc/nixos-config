@@ -135,6 +135,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |
+| The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
 
 A clone or fetch fails while GitHub answers when, for example, the token
 expired or was revoked, or the account lost access to the repository.

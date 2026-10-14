@@ -27,16 +27,19 @@ export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
 # notify URGENCY TITLE BODY. Succeeds only when the notification was shown, so a
 # run records "already notified" only after a delivery; a caller that records
 # nothing ends the call with "|| true". The body can start with "- ", which
-# notify-send would read as an option without the "--".
+# notify-send would read as an option without the "--". During a shutdown the
+# session bus can stop answering, and notify-send would then wait past the 30 s
+# that systemd gives a stopping run before it kills it.
 notify() {
   local bus
   bus=/run/user/$(id -u)/bus
   [[ -S $bus ]] || return 1
-  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus notify-send -a "System update" -u "$1" -- "$2" "$3"
+  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$2" "$3"
 }
 trap 'notify critical "Update failed" "See: journalctl -u oruc-auto-update" || true' ERR
-# The unit's TimeoutStartSec ends a hung run with SIGTERM, which skips the ERR trap.
-trap 'notify critical "Update stopped" "systemd stopped the run, likely at its time limit. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
+# systemd ends the run with SIGTERM at the unit's TimeoutStartSec or when the
+# system shuts down, and SIGTERM skips the ERR trap.
+trap 'notify critical "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
 
 # Config files live only for this service run. Shell builtins keep the token
 # out of argv, and exported variables carry paths only.
