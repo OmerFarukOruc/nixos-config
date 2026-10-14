@@ -11,6 +11,8 @@ let
   upgrade = pkgs.writeShellApplication {
     name = "upgrade";
     text = ''
+      # Asks for the password before the log starts, so the two do not share a line.
+      sudo -v
       journalctl --follow --lines 0 --output cat --unit ${unit} &
       follow=$!
       trap 'kill "$follow" 2>/dev/null' EXIT
