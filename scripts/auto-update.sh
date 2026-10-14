@@ -18,10 +18,6 @@ dir=$STATE_DIRECTORY/repo
 failed=$STATE_DIRECTORY/failed-candidate
 # The deploy.sh exit status that held the last run back.
 waiting=$STATE_DIRECTORY/waiting
-GH_TOKEN=$(<"$CREDENTIALS_DIRECTORY/github-token")
-export GH_TOKEN
-# Nix's GitHub fetcher allows 60 unauthenticated API calls an hour.
-export NIX_CONFIG="access-tokens = github.com=$GH_TOKEN"
 # The personal Git config pushes over SSH and signs with an agent key; the
 # service has neither.
 export GIT_CONFIG_GLOBAL=/dev/null
@@ -42,6 +38,21 @@ trap 'notify critical "Update failed" "See: journalctl -u oruc-auto-update" || t
 # The unit's TimeoutStartSec ends a hung run with SIGTERM, which skips the ERR trap.
 trap 'notify critical "Update stopped" "systemd stopped the run, likely at its time limit. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
 
+# Config files live only for this service run. Shell builtins keep the token
+# out of argv, and exported variables carry paths only.
+umask 077
+unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN token
+[[ $RUNTIME_DIRECTORY == /* ]]
+mkdir -p -- "$RUNTIME_DIRECTORY/gh"
+token=$(<"$CREDENTIALS_DIRECTORY/github-token")
+[[ $token =~ ^[a-zA-Z0-9_]+$ ]]
+printf 'access-tokens = github.com=%s\n' "$token" >"$RUNTIME_DIRECTORY/nix.conf"
+printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$token" >"$RUNTIME_DIRECTORY/gh/hosts.yml"
+unset token
+chmod 600 "$RUNTIME_DIRECTORY/nix.conf" "$RUNTIME_DIRECTORY/gh/hosts.yml"
+export NIX_CONFIG="include $RUNTIME_DIRECTORY/nix.conf"
+export GH_CONFIG_DIR="$RUNTIME_DIRECTORY/gh"
+
 # A failed clone or fetch is quiet only during a network outage. Any other
 # failure, such as a revoked token or lost repository access, would stop every
 # update with no sign, so it notifies and fails.
@@ -56,7 +67,7 @@ remote_failed() {
   exit 0
 }
 
-# git asks gh for credentials, and gh reads GH_TOKEN.
+# git asks gh for credentials from the private runtime hosts.yml.
 git_auth=(-c 'credential.helper=' -c 'credential.helper=!gh auth git-credential')
 if [[ ! -d $dir/.git ]]; then
   git "${git_auth[@]}" clone --quiet "https://github.com/$repo.git" "$dir" || remote_failed clone

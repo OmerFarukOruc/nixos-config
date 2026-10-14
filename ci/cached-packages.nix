@@ -29,6 +29,11 @@ let
   # Free libraries that a listed package links and that only this flake
   # builds, such as the newer libportal of overlays/deskflow.nix. The package
   # in the cache is of no use while its closure is incomplete there.
+  # These names are selected from direct buildInputs and propagatedBuildInputs
+  # only. ci/host-packages.sh checks the recursive runtime closure and refuses
+  # to push an unlisted path that cache.nixos.org lacks. A dependency deeper in
+  # that closure needs an explicit source here; the global pkgs.libportal is
+  # not Deskflow's private override.
   dependencies = [ "libportal" ];
 
   free =

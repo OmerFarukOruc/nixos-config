@@ -6,8 +6,8 @@
 #   passthru.releaseFeed  an electron-builder latest-linux.yml feed
 # A feed release moves the package only once it is minAgeDays old, the same
 # wait releaseAgeDays in home-manager/modules/applications.nix gives package
-# managers, so a hijacked release is usually pulled before it arrives. APT
-# indexes carry no release date.
+# managers. APT indexes carry no release date, so each candidate waits from
+# its first observation, keyed by source, version and checksum.
 # Prints the new version, or nothing when the package is already current, its
 # newest release is younger than minAgeDays, or it names no source.
 # On a failure it exits non-zero and prints the problem as the last line on
@@ -62,6 +62,41 @@ if [[ -n $feed ]]; then
     exit 1
   }
   ((released <= $(date +%s) - minAgeDays * 86400)) || exit 0
+fi
+
+if [[ -n $index ]]; then
+  # A per-candidate lock serializes concurrent runs using this state directory.
+  # Rename publishes a complete record, including after an interrupted run.
+  apt_old_enough() (
+    umask 077
+    state=${STATE_DIRECTORY:-${XDG_STATE_HOME:-$HOME/.local/state}/nixos-config}/app-first-seen
+    mkdir -p -- "$state" || exit 2
+    key=$(printf '%s\0' "$name" "$index" "$latest" "$sha" | sha256sum) || exit 2
+    key=${key%% *}
+    exec 9>"$state/$key.lock" || exit 2
+    flock 9 || exit 2
+    now=$(date +%s) || exit 2
+    seen=
+    [[ ! -f $state/$key ]] || seen=$(<"$state/$key") || exit 2
+    if [[ ! $seen =~ ^[0-9]{1,12}$ ]] || ((10#$seen > now)); then
+      record=$(mktemp "$state/.first-seen.XXXXXX") || exit 2
+      trap 'rm -f -- "$record"' EXIT
+      printf '%s\n' "$now" >"$record" || exit 2
+      mv -f -- "$record" "$state/$key" || exit 2
+      exit 1
+    fi
+    ((now - 10#$seen >= minAgeDays * 86400))
+  )
+  quarantine_status=0
+  apt_old_enough || quarantine_status=$?
+  case $quarantine_status in
+    0) ;;
+    1) exit 0 ;;
+    *)
+      echo "could not record the first observation of $name $latest" >&2
+      exit 1
+      ;;
+  esac
 fi
 
 if [[ -n $index ]]; then

@@ -15,7 +15,7 @@ The kernel's store path depends only on the nix-cachyos-kernel revision in
 nixpkgs. A host gets a cache hit when it locks the same revision and uses the
 `pinned` overlay. The NVIDIA module also needs the same `mkDriver` arguments
 and patches as `hardware.nvidia.package` in `machines/nixos-rog/graphics.nix`.
-Nothing compares them, so change both files together.
+Both import `nvidia-driver.nix`, which holds those shared arguments.
 
 The same path is what upstream's Hydra builds, so the build jobs and
 `scripts/build-local.sh` also read upstream's binary cache
@@ -29,15 +29,16 @@ that build.
 
 The `variants` list in `flake.nix` names the CPU targets, and each builds in its
 own job. The [`kernel-cache` workflow](../.github/workflows/kernel-cache.yml)
-runs on a push to `main` that changes this flake, its patches or the workflow,
+runs on a push to `main` that changes this flake, its driver arguments, its patches or the workflow,
 on a manual start, and once a day after it moves `flake.lock` to the head of the
 upstream `release` branch. After the build and the push to Cachix succeed, it
 commits `flake.lock` with `cached-paths.json`, which lists the
 nix-cachyos-kernel revision, the kernel version and every pushed output path. A
 host checks those paths in the cache before it locks the same revision.
 
-No pull-request check evaluates this flake. A broken change shows first as a
-failed `kernel-cache` run on `main`.
+The `check` workflow evaluates every package's derivation on pull requests and
+pushes to `main`. `scripts/check-on-rog.sh` runs the same evaluation without a
+build. A bad driver argument or missing patch fails that check before a merge.
 
 The same cache holds packages that the root flake's hosts would compile, such
 as DankMaterialShell. The

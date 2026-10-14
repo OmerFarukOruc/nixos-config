@@ -351,7 +351,9 @@ deploy exits 78 when one of them meets both of these conditions:
 
 The deploy then prints that release's record and the files the deploy would
 drop. A squash-merged branch passes when the version it deployed is the version
-that merged, because the merge puts that version in `main`'s history.
+that merged, because the merge puts that version in `main`'s history. The
+check compares the candidate files first and reads Git history only for files
+that differ.
 
 A system with no release record, such as one built by hand, is reported and not
 checked. `--replace` skips the check.

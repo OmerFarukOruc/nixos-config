@@ -1,8 +1,8 @@
 # Every hour on AC power, scripts/auto-update.sh moves the flake inputs and the
 # apps in pkgs/ that name a release source to their newest releases, deploys
 # them to this host and merges them to main. The token is a systemd credential,
-# but the script exports it as GH_TOKEN and in NIX_CONFIG, so while a run lasts
-# any process of oruc can read it from /proc/<pid>/environ.
+# and the script writes private runtime config files for gh and Nix. The token
+# stays out of child-process environments; files remain readable by oruc.
 { config, pkgs, ... }:
 {
   sops.secrets.github-update-token = { };
@@ -53,6 +53,9 @@
       TimeoutStartSec = "2h";
       User = "oruc";
       StateDirectory = "oruc-auto-update";
+      RuntimeDirectory = "oruc-auto-update";
+      RuntimeDirectoryMode = "0700";
+      UMask = "0077";
       LoadCredential = "github-token:${config.sops.secrets.github-update-token.path}";
       ExecStart = "${pkgs.bash}/bin/bash ${../../scripts/auto-update.sh}";
     };
