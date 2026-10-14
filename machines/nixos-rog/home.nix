@@ -11,7 +11,6 @@
 {
   imports = [
     ../../home-manager/profiles/workstation.nix
-    ./colgrep.nix
     ./desktop-sync.nix
     ./easyeffects.nix
     ./hdr.nix
