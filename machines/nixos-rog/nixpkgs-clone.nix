@@ -1,4 +1,4 @@
-# A local nixpkgs clone for reading sources, fetched hourly on AC power.
+# A local nixpkgs master clone for reading sources, fetched hourly on AC power.
 { pkgs, ... }:
 {
   systemd.services.nixpkgs-clone = {
@@ -11,10 +11,12 @@
     script = ''
       if ! git rev-parse --quiet --verify HEAD >/dev/null 2>&1; then
         find . -mindepth 1 -delete
-        git clone https://github.com/NixOS/nixpkgs.git .
+        git clone --single-branch --branch master https://github.com/NixOS/nixpkgs.git .
       fi
+      # Migrate existing clones without deleting their refs or history.
+      git remote set-branches origin master
       git fetch --prune origin
-      git reset --quiet --hard origin/HEAD
+      git reset --quiet --hard origin/master
     '';
     serviceConfig = {
       Type = "oneshot";
