@@ -31,28 +31,10 @@ in
     open = true;
     # nvidiaPackages.latest in flake.lock (the kernel overlay's nixpkgs is node
     # nixpkgs_2) is older than this version. Drop this block once it is this
-    # version or newer. kernel-cache/flake.nix builds the open module with the
-    # same arguments, so change both together.
-    # Driver hashes: nix-prefetch-url of NVIDIA's .run and of the GitHub tags of
-    # open-gpu-kernel-modules, nvidia-settings and nvidia-persistenced.
-    package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-      version = "615.78.08";
-      sha256_64bit = "sha256-Pj9t3cLudnoIGFMAr3vjyyhuznZpjS3eNSRZl4LQf/4=";
-      openSha256 = "sha256-HBINiOjL0ZJLIAJeNIBYHBnwgUXtNwPPtnFpAI1YwF4=";
-      settingsSha256 = "sha256-inDRpG02sdDgHmlqgu/DsgK8OFdOt1fZIYyXdhlGC/c=";
-      persistencedSha256 = "sha256-RzeR6Ldct6MUxjnXRyThdh5Y3jjMehTVg85MtwuWNX4=";
-      # Defers the NVPCF ACPI notify that the firmware sends on every 1 %
-      # battery drop, which otherwise wakes the suspended RTX 4070 for about
-      # 20 s. The files are the two commits of
-      # https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299, kept in
-      # the repository so a rewritten pull request cannot break a rebuild.
-      # kernel-cache/flake.nix builds the cached module from the same files.
-      # Drop them once an NVIDIA release contains the change.
-      patchesOpen = [
-        ../../kernel-cache/patches/nvidia-nvpcf-refcount.patch
-        ../../kernel-cache/patches/nvidia-nvpcf-defer.patch
-      ];
-    };
+    # version or newer. The cache and host import the same driver arguments.
+    package = config.boot.kernelPackages.nvidiaPackages.mkDriver (
+      import ../../kernel-cache/nvidia-driver.nix
+    );
 
     prime = {
       offload = {

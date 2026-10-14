@@ -25,27 +25,8 @@
         "zen4"
       ];
       kernelPackages = variant: pkgs.cachyosKernels."linuxPackages-cachyos-latest-lto-${variant}";
-      # Must match the host's hardware.nvidia.package arguments exactly.
       nvidiaOpen =
-        variant:
-        ((kernelPackages variant).nvidiaPackages.mkDriver {
-          version = "615.78.08";
-          sha256_64bit = "sha256-Pj9t3cLudnoIGFMAr3vjyyhuznZpjS3eNSRZl4LQf/4=";
-          openSha256 = "sha256-HBINiOjL0ZJLIAJeNIBYHBnwgUXtNwPPtnFpAI1YwF4=";
-          settingsSha256 = "sha256-inDRpG02sdDgHmlqgu/DsgK8OFdOt1fZIYyXdhlGC/c=";
-          persistencedSha256 = "sha256-RzeR6Ldct6MUxjnXRyThdh5Y3jjMehTVg85MtwuWNX4=";
-          # Defers the NVPCF ACPI notify that the firmware sends on every 1 %
-          # battery drop, which otherwise wakes a runtime-suspended GPU for
-          # about 20 s. The files are the two commits of
-          # https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299, kept in
-          # the repository so a rewritten pull request cannot break a rebuild.
-          # machines/nixos-rog/graphics.nix applies the same files. Drop them
-          # once an NVIDIA release contains the change.
-          patchesOpen = [
-            ./patches/nvidia-nvpcf-refcount.patch
-            ./patches/nvidia-nvpcf-defer.patch
-          ];
-        }).open;
+        variant: ((kernelPackages variant).nvidiaPackages.mkDriver (import ./nvidia-driver.nix)).open;
       # What a variant builds besides the kernel and the NVIDIA open module,
       # which every variant builds, by output name. Out-of-tree modules and
       # kernel tools must come from the same kernel package set. List only what

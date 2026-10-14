@@ -252,15 +252,20 @@ ensure_lock() {
 # merge keeps the final version of each file, so work whose deployed files match
 # what merged passes.
 dropped_paths() {
-  local history="$deploy_state_dir/history"
+  local history="$deploy_state_dir/history" mismatches="$deploy_state_dir/mismatches"
+  awk -F '\t' '
+    FILENAME == ARGV[1] { candidate[$2] = $1; next }
+    candidate[$2] != $1 { print }
+  ' "$blobs" "$1" >"$mismatches" || return $?
+  [[ -s $mismatches ]] || return 0
   if [[ ! -f $history ]]; then
-    git -C "$repo_dir" rev-list --objects HEAD | awk '{ print $1 }' >"$history" || return $?
+    git -C "$repo_dir" rev-list --objects HEAD | awk '{ print $1 }' >"$history.next" || return $?
+    mv -- "$history.next" "$history" || return $?
   fi
   awk -F '\t' '
     FILENAME == ARGV[1] { known[$1] = 1; next }
-    FILENAME == ARGV[2] { candidate[$2] = $1; next }
-    candidate[$2] != $1 && !($1 in known) { print $2 }
-  ' "$history" "$blobs" "$1"
+    !($1 in known) { print $2 }
+  ' "$history" "$mismatches"
 }
 
 # A deploy replaces what runs on the target and its boot default. Refuse when

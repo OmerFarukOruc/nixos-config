@@ -67,9 +67,11 @@ A switch leaves the desktop shell, the keyring and other user services on their
 old version. `home-manager/README.md` lists them.
 
 `oruc-auto-update.service` reads a fine-grained GitHub token,
-`github-update-token`, limited to this repository. The script passes it to git,
-gh and Nix in its environment. So any process of `oruc` can read the token
-while a run lasts.
+`github-update-token`, limited to this repository. The script writes private
+Nix and gh config files under the service's runtime directory. Child-process
+environments carry only the file paths. systemd removes the directory after
+the run. Processes of `oruc` can still read those files; this removes the
+token from inherited environments without isolating the service from that user.
 
 To run the updater now and read its log:
 
@@ -271,7 +273,9 @@ Facts that matter when you change or measure them:
 - An s2idle resume resets the CPU temperature limit in the SMU (the chip's
   power controller) to 95 °C. `oruc-cpu-limits` sets it again after a resume
   through systemd. `rtcwake`, as in `verify-nixos-rog.sh --suspend`, skips
-  systemd's sleep hooks, so the unit also checks the limit every 30 s.
+  systemd's sleep hooks, so the unit also checks the limit every 30 s. Each
+  check reads the current power profile again, so a missed profile signal
+  cannot restore the previous profile's limits.
 - Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
   `temp1` shows the same value.
 - How the firmware reads a fan curve (the rounding of each point, each fan's

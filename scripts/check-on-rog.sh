@@ -41,4 +41,6 @@ cd "$1"
 git add -A
 nix fmt -- --ci
 nix flake check --no-build --no-write-lock-file --option allow-import-from-derivation false
+nix eval --json --no-write-lock-file --option allow-import-from-derivation false \
+  ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
 EOF
