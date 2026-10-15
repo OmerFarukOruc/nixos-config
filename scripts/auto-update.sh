@@ -88,11 +88,16 @@ git clean -fdxq
 # cannot tell.
 uncached_agents() {
   local agents plan
+  # This evaluates every package of llm-agents, also those this host does not
+  # use, so their evaluation warnings show only when the evaluation fails. The
+  # host's own build prints the warnings of the packages it uses.
   agents=$(nix eval --impure --raw --expr "
     let pkgs = (builtins.getFlake \"git+file://$PWD\").inputs.llm-agents.packages.\${builtins.currentSystem};
         drv = p: let r = builtins.tryEval p.drvPath; in if r.success then [ r.value ] else [ ];
-    in builtins.concatStringsSep \"\\n\" (builtins.concatMap drv (builtins.attrValues pkgs))") ||
+    in builtins.concatStringsSep \"\\n\" (builtins.concatMap drv (builtins.attrValues pkgs))" \
+    2>"$RUNTIME_DIRECTORY/agents-eval.err") ||
     {
+      cat "$RUNTIME_DIRECTORY/agents-eval.err" >&2
       echo unknown
       return
     }
@@ -320,7 +325,12 @@ if [[ $(git rev-parse origin/main) != "$base" ]]; then
   exit 0
 fi
 
-git "${git_auth[@]}" push --quiet --force origin "$branch"
+# GitHub answers every push of the branch, which the merge below deletes, with
+# a hint to open a pull request; only a failed push shows what it printed.
+if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>&1); then
+  printf '%s\n' "$push_output" >&2
+  false
+fi
 # GitHub caps a PR body at 65536 characters.
 system_diff=$(dix --color never "$old_system" "$(readlink -f /run/current-system)" 2>&1) ||
   system_diff="dix could not compare the systems."
