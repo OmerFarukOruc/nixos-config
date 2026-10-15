@@ -201,6 +201,14 @@ in
             imageFilenameTemplate = "Screenshot_<yyyy><MM><dd>_<HH><mm><ss>";
           };
         };
+        # Baloo indexes file names only, and skips ~/Desktop/workspace, whose
+        # git checkouts, build output and worktrees change all the time. An
+        # existing index keeps the file contents it holds until
+        # `balooctl6 purge` rebuilds it.
+        baloofilerc.General = {
+          "only basic indexing" = true;
+          "exclude folders" = "${config.home.homeDirectory}/Desktop/workspace/";
+        };
         # The Glass style and decoration share this radius, so buttons and
         # menus are square too.
         glassrc.Common.CornerRadius = 0;
