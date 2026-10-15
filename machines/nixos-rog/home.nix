@@ -96,7 +96,6 @@
       jadx
       kdePackages.kate
       lmstudio
-      mission-center
       mitmproxy
       nvtopPackages.full
       obsidian
