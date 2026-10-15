@@ -8,18 +8,24 @@
 { config, pkgs, ... }:
 let
   unit = "oruc-auto-update.service";
+  identifier = "oruc-auto-update";
   upgrade = pkgs.writeShellApplication {
     name = "upgrade";
     text = ''
       # Asks for the password before the log starts, so the two do not share a line.
       sudo -v
-      journalctl --follow --lines 0 --output cat --unit ${unit} &
+      # The updater's output and systemd's start and end lines. --unit would
+      # also show the session lines of every sudo call inside the run.
+      journalctl --follow --lines 0 --output cat \
+        _SYSTEMD_UNIT=${unit} SYSLOG_IDENTIFIER=${identifier} + _PID=1 UNIT=${unit} &
       follow=$!
       trap 'kill "$follow" 2>/dev/null' EXIT
       status=0
       # A oneshot start returns when the run ends, and joins a run the timer
-      # already started.
-      sudo systemctl start ${unit} || status=$?
+      # already started. With a terminal on stdin, sudo runs the command in a
+      # new pseudo-terminal and puts this terminal in raw mode, so each log
+      # line printed meanwhile starts where the previous one ended.
+      sudo systemctl start ${unit} </dev/null || status=$?
       # journalctl prints the last lines a moment after the unit ends.
       sleep 1
       if [[ $(systemctl show --property ConditionResult --value ${unit}) == no ]]; then
@@ -84,6 +90,7 @@ in
       RuntimeDirectory = "oruc-auto-update";
       RuntimeDirectoryMode = "0700";
       UMask = "0077";
+      SyslogIdentifier = identifier;
       LoadCredential = "github-token:${config.sops.secrets.github-update-token.path}";
       ExecStart = "${pkgs.bash}/bin/bash ${../../scripts/auto-update.sh}";
     };
