@@ -201,9 +201,10 @@ in
             imageFilenameTemplate = "Screenshot_<yyyy><MM><dd>_<HH><mm><ss>";
           };
         };
-        # Baloo indexes file names only, and skips the git checkouts, whose
-        # build output and worktrees change all the time. A change here takes
-        # effect on an existing index after `balooctl6 purge`.
+        # Baloo indexes file names only, and skips ~/Desktop/workspace, whose
+        # git checkouts, build output and worktrees change all the time. An
+        # existing index keeps the file contents it holds until
+        # `balooctl6 purge` rebuilds it.
         baloofilerc.General = {
           "only basic indexing" = true;
           "exclude folders" = "${config.home.homeDirectory}/Desktop/workspace/";
