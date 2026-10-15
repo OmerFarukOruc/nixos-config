@@ -9,6 +9,7 @@ _: {
       };
       init.defaultBranch = "main";
       pull.rebase = false;
+      fetch.prune = true;
       # The first push of a new branch sets its upstream.
       push.autoSetupRemote = true;
       include.path = "~/.config/git/local-signing.inc";
