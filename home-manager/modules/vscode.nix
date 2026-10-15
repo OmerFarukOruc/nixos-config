@@ -181,6 +181,7 @@ in
       "editor.fontFamily" = "${ghosttyFonts}, monospace";
       "extensions.autoCheckUpdates" = false;
       "extensions.autoUpdate" = false;
+      "remote.SSH.defaultExtensions" = [ "mhutchie.git-graph" ];
       # Every folder opens trusted, without the Restricted Mode prompt.
       "security.workspace.trust.enabled" = false;
       "telemetry.telemetryLevel" = "off";
