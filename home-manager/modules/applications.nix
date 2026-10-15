@@ -37,6 +37,7 @@ in
       fd
       file
       firefox
+      gitleaks
       google-chrome
       infisical
       jq
