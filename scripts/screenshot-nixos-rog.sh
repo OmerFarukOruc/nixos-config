@@ -1,20 +1,42 @@
 #!/usr/bin/env bash
-# usage: scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png
+# usage: scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png
 # Takes a full-screen screenshot of the Plasma session on nixos-rog and copies
 # it to OUTPUT. --window first opens a Ghostty window that is not maximized,
 # so the shot shows the Glass blur and edges around it, and closes it after.
+# --crop keeps only the area of W by H pixels at X, Y, in the screen's pixels;
+# 2560x60+0+0 holds the top bar on nixos-rog's 2560x1600 screen.
 set -euo pipefail
 
+usage="usage: scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png"
 window=false
-if [[ ${1:-} == --window ]]; then
-  window=true
+crop=
+while [[ ${1:-} == --* ]]; do
+  case $1 in
+    --window) window=true ;;
+    --crop)
+      if [[ ! ${2:-} =~ ^[0-9]+x[0-9]+\+[0-9]+\+[0-9]+$ ]]; then
+        echo "$usage" >&2
+        exit 2
+      fi
+      crop=$2
+      shift
+      ;;
+    *)
+      echo "$usage" >&2
+      exit 2
+      ;;
+  esac
   shift
+done
+if (($# != 1)); then
+  echo "$usage" >&2
+  exit 2
 fi
-out=${1:?usage: scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png}
+out=$1
 
 # stdout carries the PNG, so everything else on the host writes to stderr.
 status=0
-ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s -- "$window" <<'EOF' >"$out" || status=$?
+ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog "bash -s -- $(printf '%q ' "$window" "$crop")" <<'EOF' >"$out" || status=$?
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
@@ -36,6 +58,12 @@ if [[ $1 == true ]]; then
   fi
 fi
 spectacle --background --nonotify --fullscreen --output "$dir/shot.png" >&2
+if [[ -n ${2:-} ]]; then
+  # The flake registry pins nixpkgs to the running system's, so this needs no
+  # download of nixpkgs, only of ImageMagick on its first use.
+  nix run nixpkgs#imagemagick -- "$dir/shot.png" -crop "$2" +repage "$dir/crop.png" </dev/null >&2
+  mv -- "$dir/crop.png" "$dir/shot.png"
+fi
 cat "$dir/shot.png"
 EOF
 if ((status)); then

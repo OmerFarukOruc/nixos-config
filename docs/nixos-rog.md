@@ -473,7 +473,8 @@ scripts/screenshot-nixos-rog.sh --window /tmp/nixos-rog.png
 
 The script opens the Ghostty window on the running session, takes the shot and
 closes the window. Without `--window` it takes the screen as it is. Crop the
-window's edges at full size before you judge them.
+window's edges at full size before you judge them, with `--crop WxH+X+Y` in
+the screen's pixels.
 
 Glass's `WindowClasses` list is a blacklist. A window it names gets no blur,
 and each entry must match the window's resource class or resource name exactly.
@@ -532,8 +533,9 @@ lasts only until then, so write a lasting change in the Nix file.
   ```
 
 Prove a panel or effect change with `scripts/screenshot-nixos-rog.sh` before and
-after it. [Check a visual change](#check-a-visual-change) says how to see the
-blur.
+after it. For a top bar change, `--crop 2560x60+0+0` keeps only the bar, so the
+shot leaves out the windows below it.
+[Check a visual change](#check-a-visual-change) says how to see the blur.
 
 ## Deskflow
 

@@ -5,8 +5,9 @@ usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC
 EXPECTED.json is /etc/oruc/verify-plasma-panels.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
 APPLETSRC is ~/.config/plasma-org.kde.plasma.desktop-appletsrc. Prints one line
-per setting that differs and exits 1, or prints nothing and exits 0. Exits 2
-when a file cannot be read or compared.
+per setting that differs and per widget that the Nix file does not declare,
+and exits 1, or prints nothing and exits 0. Exits 2 when a file cannot be read
+or compared.
 
 A widget that keeps its settings in profiles (kVitals' profileList) reads
 only its active profile, so the declared keys found in that profile are
@@ -49,41 +50,64 @@ def text(value):
     return str(value)
 
 
-def difference(want, got, path=""):
-    """The first place where got does not hold want, as (path, want, got), or
-    None. Numbers match by value, a JSON object as a subset, a list in order."""
+def differences(want, got, path=""):
+    """Yields each place where got does not hold want, as (path, detail).
+    Numbers match by value and a JSON object as a subset. A list of plain
+    values, or a comma-separated string, reports each value it lacks, each
+    value it holds beyond want, and then a change of order; any other list
+    matches item by item."""
     if isinstance(want, str) and want.startswith("{") and isinstance(got, str):
         try:
-            return difference(json.loads(want), json.loads(got), path)
+            want, got = json.loads(want), json.loads(got)
         except ValueError:
             pass
     if isinstance(want, dict):
         if not isinstance(got, dict):
-            return path, want, got
+            yield path, mismatch(want, got)
+            return
         for key, value in want.items():
-            found = difference(value, got.get(key), f"{path}.{key}" if path else key)
-            if found:
-                return found
-        return None
-    if isinstance(want, list):
-        items = got if isinstance(got, list) else (got.split(",") if got else [])
-        for index, value in enumerate(want):
-            if index >= len(items):
-                return f"{path}[{index}]", value, None
-            found = difference(value, items[index], f"{path}[{index}]")
-            if found:
-                return found
-        if len(items) > len(want):
-            return f"{path}[{len(want)}]", None, items[len(want)]
-        return None
+            yield from differences(value, got.get(key), f"{path}.{key}" if path else key)
+        return
+    if isinstance(want, list) or (isinstance(want, str) and "," in want and isinstance(got, str)):
+        wants = want if isinstance(want, list) else want.split(",")
+        items = got if isinstance(got, list) else (got.split(",") if isinstance(got, str) and got else [])
+        if all(not isinstance(value, (dict, list)) for value in wants):
+            yield from list_differences(wants, items, path)
+            return
+        for index, value in enumerate(wants):
+            got_item = items[index] if index < len(items) else None
+            yield from differences(value, got_item, f"{path}[{index}]")
+        for index in range(len(wants), len(items)):
+            yield f"{path}[{index}]", mismatch(None, items[index])
+        return
     if isinstance(want, (int, float)) and not isinstance(want, bool):
         try:
             if not isinstance(got, bool) and abs(float(got) - float(want)) < 1e-9:
-                return None
+                return
         except (TypeError, ValueError):
             pass
-        return path, want, got
-    return None if got is not None and text(want) == text(got) else (path, want, got)
+        yield path, mismatch(want, got)
+        return
+    if got is None or text(want) != text(got):
+        yield path, mismatch(want, got)
+
+
+def list_differences(wants, items, path):
+    want_texts = [text(value) for value in wants]
+    got_texts = [text(value) for value in items]
+    # A list item is shown whole, because a cut name hides which item it is.
+    for value in want_texts:
+        if value not in got_texts:
+            yield path, f"lacks {value}"
+    for value in got_texts:
+        if value not in want_texts:
+            yield path, f"also holds {value}"
+    if set(want_texts) == set(got_texts) and want_texts != got_texts:
+        yield path, f"holds another order or count: {mismatch(wants, items)}"
+
+
+def mismatch(want, got):
+    return f"want {short(want)}, got {short(got)}"
 
 
 def short(value):
@@ -92,9 +116,9 @@ def short(value):
 
 
 def problem(where, name, key, found):
-    path, want, got = found
+    path, detail = found
     place = f"{key}{'.' if path and not path.startswith('[') else ''}{path}"
-    return f"{where} panel: {name} {place}: want {short(want)}, got {short(got)}"
+    return f"{where} panel: {name} {place}: {detail}"
 
 
 def applets_in_order(groups, containment):
@@ -148,6 +172,7 @@ def compare(panels, groups):
         used.add(match)
         applets = applets_in_order(groups, match)
         seen = {}
+        matched = set()
         for widget in panel["widgets"]:
             name = widget["name"]
             candidates = [
@@ -160,19 +185,23 @@ def compare(panels, groups):
             if index >= len(candidates):
                 problems.append(f"{where} panel: {name} missing")
                 continue
+            matched.add(candidates[index])
             base = ("Containments", match, "Applets", candidates[index], "Configuration")
             for group, settings in (widget.get("config") or {}).items():
                 stored = groups.get(base + tuple(group.split("/")), {})
                 for key, want in settings.items():
-                    found = difference(want, stored.get(key))
-                    if found:
+                    for found in differences(want, stored.get(key)):
                         problems.append(problem(where, name, key, found))
             profile = active_profile(groups.get(base + ("General",), {}))
             if profile is not None:
                 for key, want in ((widget.get("config") or {}).get("General") or {}).items():
-                    found = key in profile and difference(want, profile[key])
-                    if found:
-                        problems.append(problem(where, name, f"profile {key}", found))
+                    if key in profile:
+                        for found in differences(want, profile[key]):
+                            problems.append(problem(where, name, f"profile {key}", found))
+        for aid in applets:
+            if aid not in matched:
+                plugin = groups[("Containments", match, "Applets", aid)].get("plugin")
+                problems.append(f"{where} panel: {plugin} is not in plasma-panels.nix")
     return problems
 
 

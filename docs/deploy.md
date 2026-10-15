@@ -21,8 +21,11 @@ to `main`, run `./deploy.sh <host> switch` for each host it affects without
 asking again. A host is affected when its system `drvPath` differs between the
 merged change and the `main` it merged onto. Before the merge, print both as
 [AGENTS.md](../AGENTS.md#lookups) describes. After the merge,
-[Deploy a merged commit](#deploy-a-merged-commit) says how to compare the merge
-commit with its parent. When a host is unreachable, report it as the blocker.
+`scripts/affected-hosts.sh <sha>` compares the merge commit with its parent
+([Deploy a merged commit](#deploy-a-merged-commit)). When a host is unreachable,
+report it as the blocker. `scripts/affected-hosts.sh --running` lists each host
+whose running system differs from `main`, such as one that was offline at the
+last deploy, so run it before you end a session that deployed.
 
 This guide uses these terms:
 
@@ -156,20 +159,17 @@ git worktree add --detach ../nixos-config.worktrees/deploy-<short-sha> <sha>
 or `origin/main` after the fetch.
 
 Before you deploy, find the hosts that the commit affects. A squash merge makes
-one commit on `main`, so compare the merge commit with its parent `<sha>^`, the
-`main` it merged onto. `scripts/eval-on-rog.sh` copies the checkout it lives in,
-so evaluate the parent in a detached worktree of its own and the merge commit in
-the worktree above:
+one commit on `main`, so the script compares the system `drvPath` of every host
+at the merge commit with the one at its parent `<sha>^`, the `main` it merged
+onto. nixos-rog evaluates both from GitHub, in about 90 seconds (measured on
+2026-10-15):
 
 ```sh
-git worktree add --detach ../nixos-config.worktrees/base-<short-sha> <sha>^
-(cd ../nixos-config.worktrees/base-<short-sha> && scripts/eval-on-rog.sh '.#nixosConfigurations.<host>.config.system.build.toplevel.drvPath')
-(cd ../nixos-config.worktrees/deploy-<short-sha> && scripts/eval-on-rog.sh '.#nixosConfigurations.<host>.config.system.build.toplevel.drvPath')
+scripts/affected-hosts.sh <sha>
 ```
 
-A host whose two paths differ is affected, and a host whose paths match needs no
-deploy. Run the pair for each host, then remove the `base-<short-sha>` worktree
-with `git worktree remove`.
+Deploy each host that it prints as `affected`. A host it prints as `unchanged`
+needs no deploy.
 
 Then run the deploy in the deploy worktree as a background task, with its
 output in a log, and with nothing after it:

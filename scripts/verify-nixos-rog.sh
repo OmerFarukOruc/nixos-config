@@ -38,7 +38,8 @@ system; an older session is listed as manual.
 After a panel build from the current system's panel script, the panel file
 must hold every widget setting in plasma-panels.nix, which the system writes
 to /etc/oruc/verify-plasma-panels.json. After an older build the check is
-listed as manual.
+listed as manual. Each dock launcher in that file must name a desktop file
+that the Plasma session can find.
 
 Exit status: 0 when no check fails (the manual checks are for a person to
 do), 1 when one fails, 64 for a usage error.
@@ -477,6 +478,55 @@ case $build in
     ;;
   *) record plasma-panel-settings fail "could not read the panel build state on $host" ;;
 esac
+
+# A dock launcher whose desktop file is missing shows no icon. Plasma looks
+# for the file in the session's XDG data directories, which hold the Home
+# Manager profile and the web apps that Brave writes to ~/.local/share.
+launchers=()
+if ssh "${ssh_opts[@]}" "$host" cat /etc/oruc/verify-plasma-panels.json >"$work/launchers.json" 2>/dev/null; then
+  mapfile -t launchers < <(python3 -I -c '
+import json, sys
+for panel in json.load(open(sys.argv[1])):
+    for widget in panel["widgets"]:
+        for launcher in ((widget.get("config") or {}).get("General") or {}).get("launchers") or []:
+            if launcher.startswith("applications:"):
+                print(launcher.removeprefix("applications:"))
+' "$work/launchers.json")
+fi
+if ((${#launchers[@]} == 0)); then
+  record dock-launchers-installed manual "no applications: launcher in $host's /etc/oruc/verify-plasma-panels.json"
+else
+  launcher_status=0
+  missing=$(
+    # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
+    ssh "${ssh_opts[@]}" "$host" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
+environment=$(systemctl --user show-environment) || exit 3
+dirs=$(sed -n 's/^XDG_DATA_DIRS=//p' <<<"$environment")
+[[ -n $dirs ]] || exit 3
+data_home=$(sed -n 's/^XDG_DATA_HOME=//p' <<<"$environment")
+IFS=: read -ra search <<<"${data_home:-$HOME/.local/share}:$dirs"
+for id; do
+  found=false
+  for dir in "${search[@]}"; do
+    if [[ -e $dir/applications/$id ]]; then
+      found=true
+      break
+    fi
+  done
+  $found || printf '%s\n' "$id"
+done
+REMOTE
+  ) || launcher_status=$?
+  case $launcher_status in
+    0) if [[ -z $missing ]]; then
+      record dock-launchers-installed pass "${#launchers[@]} desktop files found"
+    else
+      record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from plasma-panels.nix"
+    fi ;;
+    3) record dock-launchers-installed manual "the user manager on $host has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
+    *) record dock-launchers-installed fail "SSH to $host failed (exit $launcher_status)" ;;
+  esac
+fi
 
 if [[ -n $lan_ip ]]; then
   # Only a refusal or a timeout shows that nothing answers; any other error
