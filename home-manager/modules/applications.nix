@@ -121,9 +121,9 @@ in
     enable = true;
     enableZshIntegration = true;
     settings = {
-      # Matches fedora-desktop. The bars use oruc.theme.fonts.mono instead.
+      # The family matches fedora-desktop. The bars use oruc.theme.fonts.mono instead.
       font-family = "CaskaydiaCove Nerd Font Mono";
-      font-size = 11;
+      font-size = 12;
       font-feature = [
         "-calt"
         "-liga"
