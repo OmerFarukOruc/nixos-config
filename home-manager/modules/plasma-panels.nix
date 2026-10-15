@@ -37,7 +37,7 @@ let
   # kVitals colors its own text, so the top bar's accent color reaches it only
   # through fontColor. Its threshold colors still take precedence.
   kvitalsSettings = {
-    pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,bat/power,uptime/uptime";
+    pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,uptime/uptime";
     layoutType = "vertical";
     iconSize = 8;
     fontBold = true;
@@ -194,7 +194,8 @@ in
           lengthMode = "fill";
           widgets = [
             "org.kde.plasma.kickerdash"
-            "org.kde.plasma.pager"
+            # Plasma sizes two expanding spacers so the widget between them sits
+            # in the middle of the panel.
             "org.kde.plasma.panelspacer"
             "org.kde.plasma.digitalclock"
             "org.kde.plasma.panelspacer"
@@ -215,15 +216,12 @@ in
           widgets = [
             {
               # The Teams and WhatsApp Web entries are web apps that Brave
-              # writes to ~/.local/share/applications. Chrome's
-              # com.google.Chrome.desktop is hidden from menus, so the dock
-              # names google-chrome.desktop.
+              # writes to ~/.local/share/applications.
               iconTasks.launchers = [
                 "preferred://filemanager"
-                "applications:systemsettings.desktop"
+                "applications:io.missioncenter.MissionCenter.desktop"
                 "preferred://browser"
-                "applications:google-chrome.desktop"
-                "applications:firefox.desktop"
+                "applications:com.mitchellh.ghostty.desktop"
                 "applications:SourceGit.desktop"
                 "applications:chatgpt.desktop"
                 "applications:com.anthropic.Claude.desktop"
