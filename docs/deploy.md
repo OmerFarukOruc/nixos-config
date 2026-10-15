@@ -161,7 +161,7 @@ or `origin/main` after the fetch.
 Before you deploy, find the hosts that the commit affects. A squash merge makes
 one commit on `main`, so the script compares the system `drvPath` of every host
 at the merge commit with the one at its parent `<sha>^`, the `main` it merged
-onto. nixos-rog evaluates both from GitHub, in about 90 seconds (measured on
+onto. nixos-rog evaluates both from GitHub, in 70 to 90 seconds (measured on
 2026-10-15):
 
 ```sh

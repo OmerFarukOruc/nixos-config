@@ -53,9 +53,10 @@ def text(value):
 def differences(want, got, path=""):
     """Yields each place where got does not hold want, as (path, detail).
     Numbers match by value and a JSON object as a subset. A list of plain
-    values, or a comma-separated string, reports each value it lacks, each
-    value it holds beyond want, and then a change of order; any other list
-    matches item by item."""
+    values, or a comma-separated string that is not a JSON object, reports
+    each value it lacks and each value it holds beyond want, and, when both
+    hold the same values, a change of order or count. Any other list matches
+    item by item."""
     if isinstance(want, str) and want.startswith("{") and isinstance(got, str):
         try:
             want, got = json.loads(want), json.loads(got)
@@ -68,7 +69,9 @@ def differences(want, got, path=""):
         for key, value in want.items():
             yield from differences(value, got.get(key), f"{path}.{key}" if path else key)
         return
-    if isinstance(want, list) or (isinstance(want, str) and "," in want and isinstance(got, str)):
+    if isinstance(want, list) or (
+        isinstance(want, str) and "," in want and not want.startswith("{") and isinstance(got, str)
+    ):
         wants = want if isinstance(want, list) else want.split(",")
         items = got if isinstance(got, list) else (got.split(",") if isinstance(got, str) and got else [])
         if all(not isinstance(value, (dict, list)) for value in wants):
@@ -92,17 +95,27 @@ def differences(want, got, path=""):
         yield path, mismatch(want, got)
 
 
+def value_key(value):
+    """Numbers match by value, as in differences."""
+    if not isinstance(value, bool):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pass
+    return text(value)
+
+
 def list_differences(wants, items, path):
-    want_texts = [text(value) for value in wants]
-    got_texts = [text(value) for value in items]
+    want_keys = [value_key(value) for value in wants]
+    got_keys = [value_key(value) for value in items]
     # A list item is shown whole, because a cut name hides which item it is.
-    for value in want_texts:
-        if value not in got_texts:
-            yield path, f"lacks {value}"
-    for value in got_texts:
-        if value not in want_texts:
-            yield path, f"also holds {value}"
-    if set(want_texts) == set(got_texts) and want_texts != got_texts:
+    for value, key in zip(wants, want_keys):
+        if key not in got_keys:
+            yield path, f"lacks {text(value)}"
+    for value, key in zip(items, got_keys):
+        if key not in want_keys:
+            yield path, f"also holds {text(value)}"
+    if set(want_keys) == set(got_keys) and want_keys != got_keys:
         yield path, f"holds another order or count: {mismatch(wants, items)}"
 
 

@@ -61,7 +61,14 @@ spectacle --background --nonotify --fullscreen --output "$dir/shot.png" >&2
 if [[ -n ${2:-} ]]; then
   # The flake registry pins nixpkgs to the running system's, so this needs no
   # download of nixpkgs, only of ImageMagick on its first use.
-  nix run nixpkgs#imagemagick -- "$dir/shot.png" -crop "$2" +repage "$dir/crop.png" </dev/null >&2
+  size=$(nix run nixpkgs#imagemagick -- "$dir/shot.png" -crop "$2" +repage \
+    -write "$dir/crop.png" -format '%wx%h' info: </dev/null)
+  # ImageMagick only warns about an area outside the screen and exits 0, so
+  # the size of the result is checked.
+  if [[ $size != "${2%%+*}" ]]; then
+    echo "The crop $2 got $size pixels; it must lie inside the screen." >&2
+    exit 1
+  fi
   mv -- "$dir/crop.png" "$dir/shot.png"
 fi
 cat "$dir/shot.png"

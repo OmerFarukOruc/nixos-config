@@ -500,20 +500,21 @@ else
   missing=$(
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
     ssh "${ssh_opts[@]}" "$host" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
-environment=$(systemctl --user show-environment) || exit 3
+environment=$(systemctl --user show-environment) || exit 4
 dirs=$(sed -n 's/^XDG_DATA_DIRS=//p' <<<"$environment")
 [[ -n $dirs ]] || exit 3
 data_home=$(sed -n 's/^XDG_DATA_HOME=//p' <<<"$environment")
 IFS=: read -ra search <<<"${data_home:-$HOME/.local/share}:$dirs"
+# A desktop file's id is its path under applications/ with each / as a -.
+declare -A ids=()
+for dir in "${search[@]}"; do
+  [[ -d $dir/applications ]] || continue
+  while IFS= read -r -d '' path; do
+    ids[${path//\//-}]=1
+  done < <(find -L "$dir/applications" -name '*.desktop' -printf '%P\0' 2>/dev/null)
+done
 for id; do
-  found=false
-  for dir in "${search[@]}"; do
-    if [[ -e $dir/applications/$id ]]; then
-      found=true
-      break
-    fi
-  done
-  $found || printf '%s\n' "$id"
+  [[ -n ${ids[$id]:-} ]] || printf '%s\n' "$id"
 done
 REMOTE
   ) || launcher_status=$?
@@ -524,6 +525,7 @@ REMOTE
       record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from plasma-panels.nix"
     fi ;;
     3) record dock-launchers-installed manual "the user manager on $host has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
+    4) record dock-launchers-installed fail "systemctl --user show-environment failed on $host" ;;
     *) record dock-launchers-installed fail "SSH to $host failed (exit $launcher_status)" ;;
   esac
 fi

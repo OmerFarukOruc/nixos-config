@@ -7,7 +7,8 @@
 # With --running it compares the system each host runs with REV's system.
 # STATUS is current, behind (the release the host runs is an ancestor of REV,
 # so it needs a deploy), other (the host runs a release that is not an
-# ancestor of REV, or one with no release record) or unreachable.
+# ancestor of REV, one from a dirty tree, or one with no release record) or
+# unreachable.
 # REV defaults to origin/main and must be pushed, because nixos-rog evaluates
 # it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
 # usage error.
@@ -56,7 +57,11 @@ new=$(systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
 
 if ! $running; then
-  old=$(systems "$(git rev-parse "$sha^")")
+  if ! parent=$(git rev-parse --verify -q "$sha^"); then
+    echo "$sha has no parent to compare with." >&2
+    exit 1
+  fi
+  old=$(systems "$parent")
   for host in "${hosts[@]}"; do
     before=$(jq -r --arg h "$host" '.[$h].drv // "none"' <<<"$old")
     after=$(jq -r --arg h "$host" '.[$h].drv' <<<"$new")
@@ -71,15 +76,16 @@ fi
 
 for host in "${hosts[@]}"; do
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
-  # The first line is the running system, the second the commit of the
-  # release record that names it (docs/deploy.md, Release records and cleanup).
+  # The first line is the running system. The second holds the commit and the
+  # dirty flag of the release record that names it (docs/deploy.md, Release
+  # records and cleanup).
   if ! state=$(
     ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
 system=$(readlink -f /run/current-system)
 echo "$system"
 for record in ~/.local/state/nixos-config-deploy/releases/*.source; do
   if grep -qxF "system=$system" "$record" 2>/dev/null; then
-    sed -n 's/^revision=//p' "$record"
+    printf '%s %s\n' "$(sed -n 's/^revision=//p' "$record")" "$(sed -n 's/^dirty=//p' "$record")"
   fi
 done | tail -n 1
 REMOTE
@@ -88,9 +94,11 @@ REMOTE
     continue
   fi
   system=$(sed -n 1p <<<"$state")
-  revision=$(sed -n 2p <<<"$state")
+  read -r revision dirty <<<"$(sed -n 2p <<<"$state")" || true
   if [[ $system == "$want" ]]; then
     printf '%s\tcurrent\t%s\n' "$host" "$system"
+  elif [[ $dirty == true ]]; then
+    printf '%s\tother\truns %s from a dirty tree at %s\n' "$host" "$system" "$revision"
   elif [[ -n $revision ]] && git merge-base --is-ancestor "$revision" "$sha" 2>/dev/null; then
     printf '%s\tbehind\truns %s; deploy %s\n' "$host" "$revision" "$sha"
   else
