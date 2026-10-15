@@ -604,6 +604,7 @@ sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-rollback \
   "$previous/bin/switch-to-configuration" test || exit 71
 
 # The unit records its own exit status, which --wait loses when SSH drops.
+started=$(date +%s)
 sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-activate \
   --service-type=exec --wait "$BASH" -c '
 "$1/bin/switch-to-configuration" test
@@ -611,9 +612,9 @@ status=$?
 printf "%s %s\n" "$2" "$status" >/run/deploy-activate.status
 exit "$status"' _ "$new" "$release"
 status=$?
-# Only the activation's output; systemd's lines for the unit repeat its whole
+# Only this activation's output; systemd's lines for the unit repeat its whole
 # command line.
-sudo journalctl --no-pager -o cat _SYSTEMD_UNIT=deploy-activate.service --since '-15min' | tail -n 30
+sudo journalctl --no-pager -o cat _SYSTEMD_UNIT=deploy-activate.service --since "@$started" | tail -n 30
 
 exit "$status"
 REMOTE
