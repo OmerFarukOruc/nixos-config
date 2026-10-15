@@ -17,7 +17,8 @@ for host in $hosts; do
   # systemd-analyze exits 0 also when it finds a cycle, so only its message
   # counts; any other status means it did not check.
   rc=0
-  analysis=$(SYSTEMD_UNIT_PATH=$units "$systemd/bin/systemd-analyze" verify default.target 2>&1) || rc=$?
+  # --man=no: a unit's man page lookup fails where man is not on PATH.
+  analysis=$(SYSTEMD_UNIT_PATH=$units "$systemd/bin/systemd-analyze" verify --man=no default.target 2>&1) || rc=$?
   if ((rc != 0)); then
     printf '%s\n' "$analysis" "$host: systemd-analyze could not check the units (exit $rc)."
     status=1

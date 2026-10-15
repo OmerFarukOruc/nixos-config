@@ -474,8 +474,10 @@ fi
 # A unit ordered after a service that itself starts after the target that
 # wants the unit forms an ordering cycle; the next boot then waits on it and
 # never reaches that target. The candidate's systemd-analyze reads only the
-# candidate's units; it exits 0 also when it finds a cycle.
-analysis=$(SYSTEMD_UNIT_PATH="$new/etc/systemd/system" "$new/sw/bin/systemd-analyze" verify default.target 2>&1) ||
+# candidate's units; it exits 0 also when it finds a cycle. Without --man=no it
+# looks up each unit's man pages and fails where man is not on PATH, as in the
+# updater's service.
+analysis=$(SYSTEMD_UNIT_PATH="$new/etc/systemd/system" "$new/sw/bin/systemd-analyze" verify --man=no default.target 2>&1) ||
   printf '%s\n' "$analysis" 'systemd-analyze could not check the new units for an ordering cycle.' >&2
 if grep -q 'Found ordering cycle' <<<"$analysis"; then
   printf '%s\n' "$analysis" 'The new system would not finish booting. Nothing on the target changed.' >&2
@@ -609,7 +611,9 @@ status=$?
 printf "%s %s\n" "$2" "$status" >/run/deploy-activate.status
 exit "$status"' _ "$new" "$release"
 status=$?
-sudo journalctl --no-pager -o cat -u deploy-activate.service --since '-15min' | tail -n 30
+# Only the activation's output; systemd's lines for the unit repeat its whole
+# command line.
+sudo journalctl --no-pager -o cat _SYSTEMD_UNIT=deploy-activate.service --since '-15min' | tail -n 30
 
 exit "$status"
 REMOTE

@@ -49,7 +49,9 @@ unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN token
 mkdir -p -- "$RUNTIME_DIRECTORY/gh"
 token=$(<"$CREDENTIALS_DIRECTORY/github-token")
 [[ $token =~ ^[a-zA-Z0-9_]+$ ]]
-printf 'access-tokens = github.com=%s\n' "$token" >"$RUNTIME_DIRECTORY/nix.conf"
+# The run edits flake.lock before it commits, so Nix would call the checkout
+# dirty on every evaluation.
+printf 'access-tokens = github.com=%s\nwarn-dirty = false\n' "$token" >"$RUNTIME_DIRECTORY/nix.conf"
 printf 'github.com:\n    oauth_token: %s\n    git_protocol: https\n' "$token" >"$RUNTIME_DIRECTORY/gh/hosts.yml"
 unset token
 chmod 600 "$RUNTIME_DIRECTORY/nix.conf" "$RUNTIME_DIRECTORY/gh/hosts.yml"
