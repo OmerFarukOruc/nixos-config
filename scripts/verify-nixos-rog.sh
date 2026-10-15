@@ -511,7 +511,7 @@ for dir in "${search[@]}"; do
   [[ -d $dir/applications ]] || continue
   while IFS= read -r -d '' path; do
     ids[${path//\//-}]=1
-  done < <(find -L "$dir/applications" -name '*.desktop' -printf '%P\0' 2>/dev/null)
+  done < <(find -L "$dir/applications" -name '*.desktop' -type f -printf '%P\0' 2>/dev/null)
 done
 for id; do
   [[ -n ${ids[$id]:-} ]] || printf '%s\n' "$id"

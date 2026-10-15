@@ -15,6 +15,7 @@ compared there too.
 """
 
 import json
+import math
 import re
 import sys
 
@@ -99,9 +100,12 @@ def value_key(value):
     """Numbers match by value, as in differences."""
     if not isinstance(value, bool):
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            number = float(value)
+        except (TypeError, ValueError, OverflowError):
             pass
+        else:
+            if math.isfinite(number):
+                return number
     return text(value)
 
 

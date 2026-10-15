@@ -53,14 +53,14 @@ nix eval --json --no-write-lock-file "$1#nixosConfigurations" --apply \
 REMOTE
 }
 
+if ! $running && ! parent=$(git rev-parse --verify -q "$sha^"); then
+  echo "$sha has no parent to compare with." >&2
+  exit 1
+fi
 new=$(systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
 
 if ! $running; then
-  if ! parent=$(git rev-parse --verify -q "$sha^"); then
-    echo "$sha has no parent to compare with." >&2
-    exit 1
-  fi
   old=$(systems "$parent")
   for host in "${hosts[@]}"; do
     before=$(jq -r --arg h "$host" '.[$h].drv // "none"' <<<"$old")
