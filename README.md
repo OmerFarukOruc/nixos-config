@@ -108,8 +108,9 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
+| `scripts/affected-hosts.sh [--running] [REV]` | list the hosts whose system a merged commit changes, or with `--running` the hosts whose running system differs from `main` |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
-| `scripts/screenshot-nixos-rog.sh [--window] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog |
+| `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
 | `scripts/panels-rebuild-on-rog.sh` | build the Plasma panels on nixos-rog as the next login would, without a logout |
 | `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
