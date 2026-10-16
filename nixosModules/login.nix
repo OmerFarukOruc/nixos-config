@@ -8,52 +8,61 @@
 let
   themed = sessions.hasDesktop config.oruc.machine "niri";
   scheme = config.scheme.withHashtag;
-  # The package links this as Themes/jake_the_dog.conf.user, which SDDM reads
-  # over the theme's own file, so the fonts, layout and video stay Jake's. The
-  # values are quoted as in the theme's own file.
-  jake = pkgs.sddm-astronaut.override {
-    embeddedTheme = "jake_the_dog";
-    themeConfig = lib.mapAttrs (_: color: ''"${color}"'') {
-      HeaderTextColor = scheme.base05;
-      DateTextColor = scheme.base05;
-      TimeTextColor = scheme.base05;
+  # Themes/jake_the_dog.conf.user, which SDDM reads over the theme's own file,
+  # so the fonts, layout and video stay Jake's. The values are quoted as in the
+  # theme's own file.
+  colors = lib.mapAttrs (_: color: ''"${color}"'') {
+    HeaderTextColor = scheme.base05;
+    DateTextColor = scheme.base05;
+    TimeTextColor = scheme.base05;
 
-      FormBackgroundColor = scheme.base00;
-      BackgroundColor = scheme.base00;
-      DimBackgroundColor = scheme.base00;
+    FormBackgroundColor = scheme.base00;
+    BackgroundColor = scheme.base00;
+    DimBackgroundColor = scheme.base00;
 
-      # The theme draws these backgrounds at 20 percent opacity, in the color
-      # of the text on them.
-      LoginFieldBackgroundColor = scheme.base05;
-      PasswordFieldBackgroundColor = scheme.base05;
-      LoginFieldTextColor = scheme.base05;
-      PasswordFieldTextColor = scheme.base05;
-      UserIconColor = scheme.base05;
-      PasswordIconColor = scheme.base05;
+    # The theme draws these backgrounds at 20 percent opacity, in the color
+    # of the text on them.
+    LoginFieldBackgroundColor = scheme.base05;
+    PasswordFieldBackgroundColor = scheme.base05;
+    LoginFieldTextColor = scheme.base05;
+    PasswordFieldTextColor = scheme.base05;
+    UserIconColor = scheme.base05;
+    PasswordIconColor = scheme.base05;
 
-      PlaceholderTextColor = scheme.base03;
-      WarningColor = scheme.base08;
+    PlaceholderTextColor = scheme.base03;
+    WarningColor = scheme.base08;
 
-      LoginButtonTextColor = scheme.base00;
-      LoginButtonBackgroundColor = scheme.base0D;
-      SystemButtonsIconsColor = scheme.base05;
-      SessionButtonTextColor = scheme.base05;
-      VirtualKeyboardButtonTextColor = scheme.base05;
+    LoginButtonTextColor = scheme.base00;
+    LoginButtonBackgroundColor = scheme.base0D;
+    SystemButtonsIconsColor = scheme.base05;
+    SessionButtonTextColor = scheme.base05;
+    VirtualKeyboardButtonTextColor = scheme.base05;
 
-      DropdownTextColor = scheme.base05;
-      DropdownSelectedBackgroundColor = scheme.base02;
-      DropdownBackgroundColor = scheme.base01;
+    DropdownTextColor = scheme.base05;
+    DropdownSelectedBackgroundColor = scheme.base02;
+    DropdownBackgroundColor = scheme.base01;
 
-      HighlightTextColor = scheme.base00;
-      HighlightBackgroundColor = scheme.base0D;
+    HighlightTextColor = scheme.base00;
+    HighlightBackgroundColor = scheme.base0D;
 
-      HoverUserIconColor = scheme.base0D;
-      HoverPasswordIconColor = scheme.base0D;
-      HoverSystemButtonsIconsColor = scheme.base0D;
-      HoverSessionButtonTextColor = scheme.base0D;
-      HoverVirtualKeyboardButtonTextColor = scheme.base0D;
-    };
+    HoverUserIconColor = scheme.base0D;
+    HoverPasswordIconColor = scheme.base0D;
+    HoverSystemButtonsIconsColor = scheme.base0D;
+    HoverSessionButtonTextColor = scheme.base0D;
+    HoverVirtualKeyboardButtonTextColor = scheme.base0D;
   };
+  # A copy inside the package instead of themeConfig's link to a separate
+  # file, because the public cache takes the package only when cache.nixos.org
+  # holds the rest of its closure (ci/host-packages.sh).
+  jake = (pkgs.sddm-astronaut.override { embeddedTheme = "jake_the_dog"; }).overrideAttrs (old: {
+    jakeColors = lib.generators.toINI { } { General = colors; };
+    passAsFile = [ "jakeColors" ];
+    postInstall = (old.postInstall or "") + ''
+      themes=$out/share/sddm/themes/sddm-astronaut-theme/Themes
+      chmod u+w "$themes"
+      cp "$jakeColorsPath" "$themes/jake_the_dog.conf.user"
+    '';
+  });
 in
 {
   options.oruc.login.video = lib.mkOption {
