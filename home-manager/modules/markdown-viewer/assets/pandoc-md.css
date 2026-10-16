@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
    Typewriter — Pandoc Markdown Viewer
    Based on Obsidian Typewriter theme by crashmoney
-   Warm sepia dark palette, clean typographic aesthetic
+   Clean typographic aesthetic; the colors come from the active
+   scheme through pandoc-md-theme.css
    ═══════════════════════════════════════════════════════════════ */
 
 /* Fonts resolved locally (ttf-jetbrains-mono + inter packages) — no network needed. */
@@ -23,25 +24,9 @@
 }
 
 :root {
-  --bg:           #1e1e1e;
-  --bg-secondary: #171717;
-  --bg-code:      #151515;
-  --border:       #333;
-  --border-hover: #5e5e5e;
-  --fg:           rgb(197, 184, 161);
-  --fg-muted:     #7d7567;
-  --fg-faint:     #5c5549;
-  --yellow:       #e5b567;
-  --green:        #b4d273;
-  --orange:       #e87d3e;
-  --purple:       #9e86c8;
-  --pink:         #b05279;
-  --blue:         #6c99bb;
-  --row-even:     rgba(255, 255, 255, 0.02);
-  --row-hover:    rgba(255, 255, 255, 0.04);
-  --select:       rgba(23, 48, 77, 0.99);
-  --mark-bg:      rgba(229, 181, 103, 0.30);
-  color-scheme:   dark;
+  --row-even:     color-mix(in srgb, var(--fg) 3%, transparent);
+  --row-hover:    color-mix(in srgb, var(--fg) 5%, transparent);
+  --mark-bg:      color-mix(in srgb, var(--yellow) 22%, transparent);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -109,7 +94,7 @@ blockquote p:last-child { margin-bottom: 0; }
 blockquote blockquote { margin-top: 0.5rem; }
 
 code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9em; }
-:not(pre) > code { background: var(--bg-secondary); color: var(--blue); padding: 0.15em 0.4em; border-radius: 2px; border: 1px solid var(--border); }
+:not(pre) > code { background: color-mix(in srgb, var(--bg-secondary) 60%, var(--bg)); color: var(--blue); padding: 0.15em 0.4em; border-radius: 2px; border: 1px solid var(--border); }
 
 pre {
   background: var(--bg-code) !important;
@@ -178,16 +163,16 @@ code span.do { color: var(--fg-muted); font-style: italic; }
 code span.an { color: var(--fg-muted); font-style: italic; }
 code span.in { color: var(--fg-muted); font-style: italic; }
 code span.wa { color: var(--orange); }
-code span.er { color: #e06c75; }
-code span.al { color: #e06c75; }
+code span.er { color: var(--red); }
+code span.al { color: var(--red); }
 
 ::selection { background: var(--select); }
 
 @media print {
-  body { background: white; color: #222; max-width: none; padding: 1cm; }
-  h1, h2, h3 { color: #222; }
-  pre, blockquote { background: #f5f5f5; border-color: #ddd; }
-  a { color: #0066cc; }
+  body { background: white; color: #222; max-width: none; padding: 1cm; } /* theme-drift-ok: print is white paper */
+  h1, h2, h3 { color: #222; } /* theme-drift-ok: print is white paper */
+  pre, blockquote { background: #f5f5f5; border-color: #ddd; } /* theme-drift-ok: print is white paper */
+  a { color: #0066cc; } /* theme-drift-ok: print is white paper */
   .copy-btn, .header-anchor { display: none; }
 }
 
@@ -199,7 +184,7 @@ code span.al { color: #e06c75; }
 html { scroll-behavior: smooth; }
 :target { scroll-margin-top: 2rem; animation: target-flash 1.3s ease-out; }
 @keyframes target-flash {
-  0%   { background: rgba(229, 181, 103, 0.22); }
+  0%   { background: color-mix(in srgb, var(--yellow) 22%, transparent); }
   100% { background: transparent; }
 }
 
@@ -297,64 +282,4 @@ pre.mermaid {
   nav#TOC ul { list-style: none; }
   nav#TOC > ul { padding-left: 0; }
   nav#TOC ul ul { padding-left: 0.85rem; }
-}
-
-/* ─── Theme toggle (manual override of OS preference) ──────────── */
-.theme-toggle {
-  position: fixed; top: 1rem; right: 1rem; z-index: 50;
-  width: 2.3rem; height: 2.3rem; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--bg-secondary); border: 1px solid var(--border);
-  color: var(--fg-muted); font-size: 1rem; line-height: 1; cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.theme-toggle:hover { color: var(--fg); border-color: var(--border-hover); }
-@media print { .theme-toggle { display: none; } }
-
-/* ─── Light theme — auto via OS preference, or forced by the toggle.
-   Dark stays the default in :root; both light selectors carry the same
-   tokens (incl. row/select/mark, so no per-property theme overrides). */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg:           #faf8f3;
-    --bg-secondary: #f1ece1;
-    --bg-code:      #f3eee3;
-    --border:       #e3dccc;
-    --border-hover: #c0b49c;
-    --fg:           #403a2e;
-    --fg-muted:     #8a8170;
-    --fg-faint:     #b0a690;
-    --yellow:       #b07d1a;
-    --green:        #6f8c2a;
-    --orange:       #c0561f;
-    --purple:       #6b4ea0;
-    --pink:         #a83563;
-    --blue:         #356b9c;
-    --row-even:     rgba(0, 0, 0, 0.025);
-    --row-hover:    rgba(0, 0, 0, 0.05);
-    --select:       rgba(53, 107, 156, 0.25);
-    --mark-bg:      rgba(176, 125, 26, 0.25);
-    color-scheme:   light;
-  }
-}
-:root[data-theme="light"] {
-  --bg:           #faf8f3;
-  --bg-secondary: #f1ece1;
-  --bg-code:      #f3eee3;
-  --border:       #e3dccc;
-  --border-hover: #c0b49c;
-  --fg:           #403a2e;
-  --fg-muted:     #8a8170;
-  --fg-faint:     #b0a690;
-  --yellow:       #b07d1a;
-  --green:        #6f8c2a;
-  --orange:       #c0561f;
-  --purple:       #6b4ea0;
-  --pink:         #a83563;
-  --blue:         #356b9c;
-  --row-even:     rgba(0, 0, 0, 0.025);
-  --row-hover:    rgba(0, 0, 0, 0.05);
-  --select:       rgba(53, 107, 156, 0.25);
-  --mark-bg:      rgba(176, 125, 26, 0.25);
-  color-scheme:   light;
 }

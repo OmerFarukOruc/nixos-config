@@ -4,15 +4,10 @@
 (function () {
   'use strict';
 
-  function schemeNow() {
-    return document.documentElement.getAttribute('data-theme') ||
-      (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-  }
-  function mermaidThemeFor(scheme) { return scheme === 'light' ? 'default' : 'dark'; }
-
   /* ── 1. Mermaid diagrams: convert ```mermaid fences, lazy-load renderer.
-     Each node keeps its source in data-src so the theme toggle can re-render. ── */
-  var mermaidWraps = [], seen = new Set();
+     The theme variables come from the page's CSS tokens, so the diagrams
+     use the active scheme. ── */
+  var mermaidNodes = [], seen = new Set();
   document.querySelectorAll('pre.mermaid, code.mermaid, code.language-mermaid').forEach(function (el) {
     var wrapper = el.closest('div.sourceCode') || (el.tagName === 'PRE' ? el : el.closest('pre'));
     if (!wrapper || seen.has(wrapper)) return;
@@ -20,24 +15,115 @@
     var pre = document.createElement('pre');
     pre.className = 'mermaid';
     pre.textContent = el.textContent;
-    pre.dataset.src = el.textContent;
     wrapper.replaceWith(pre);
-    mermaidWraps.push(pre);
+    mermaidNodes.push(pre);
   });
-  if (mermaidWraps.length) {
+  if (mermaidNodes.length) {
+    var css = getComputedStyle(document.documentElement);
+    function token(name) { return css.getPropertyValue('--' + name).trim(); }
+    /* The tokens are #rrggbb. Mermaid's base theme derives its category colors
+       (pie slices, git branches, journey and timeline sections) from the
+       primary, secondary and tertiary colors, which are page backgrounds here.
+       The category variables below come from the accent tokens instead. */
+    function rgb(c) { return [1, 3, 5].map(function (i) { return parseInt(c.substr(i, 2), 16); }); }
+    function lum(c) {
+      var v = rgb(c).map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    }
+    function contrast(a, b) {
+      var x = lum(a), y = lum(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    }
+    function mix(a, b, share) {
+      var x = rgb(a), y = rgb(b);
+      return '#' + x.map(function (v, i) {
+        return ('0' + Math.round(v * share + y[i] * (1 - share)).toString(16)).slice(-2);
+      }).join('');
+    }
+    /* Journey text uses the page text color on every fill, so its fills are the
+       accents faded into the page background until that text reads. */
+    function fadedFor(accent) {
+      for (var share = 0.6; share > 0.1; share -= 0.05) {
+        var c = mix(accent, token('bg'), share);
+        if (contrast(c, token('fg')) >= 4.5) return c;
+      }
+      return mix(accent, token('bg'), 0.1);
+    }
+    function readableOn(fills) {
+      var best = null, bestMin = 0;
+      [token('bg'), token('fg')].forEach(function (c) {
+        var min = Math.min.apply(null, fills.map(function (f) { return contrast(c, f); }));
+        if (min > bestMin) { best = c; bestMin = min; }
+      });
+      return best;
+    }
+    var accents = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'cyan'].map(token);
+    var cats = accents.concat(accents.slice(0, 5).map(function (a) { return mix(a, token('fg'), 0.6); }));
+    var vars = {
+      darkMode: css.colorScheme === 'dark',
+      background: token('bg'),
+      fontFamily: getComputedStyle(document.body).fontFamily,
+      primaryColor: token('bg-secondary'),
+      primaryTextColor: token('fg'),
+      primaryBorderColor: token('border-hover'),
+      secondaryColor: token('bg-code'),
+      tertiaryColor: token('bg'),
+      lineColor: token('fg-muted'),
+      arrowheadColor: token('fg-muted'),
+      textColor: token('fg'),
+      mainBkg: token('bg-secondary'),
+      nodeBorder: token('border-hover'),
+      clusterBkg: token('bg'),
+      clusterBorder: token('border'),
+      titleColor: token('fg'),
+      edgeLabelBackground: token('bg'),
+      noteBkgColor: token('bg-secondary'),
+      noteTextColor: token('fg'),
+      noteBorderColor: token('border-hover'),
+      errorBkgColor: token('bg-secondary'),
+      errorTextColor: token('red'),
+      pieOpacity: '1',
+      pieStrokeColor: token('bg'),
+      pieOuterStrokeColor: token('border'),
+      pieSectionTextColor: readableOn(cats),
+      xyChart: {
+        backgroundColor: token('bg'),
+        titleColor: token('fg'),
+        dataLabelColor: token('fg'),
+        legendTextColor: token('fg'),
+        xAxisTitleColor: token('fg'),
+        xAxisLabelColor: token('fg'),
+        xAxisTickColor: token('fg-muted'),
+        xAxisLineColor: token('fg-muted'),
+        yAxisTitleColor: token('fg'),
+        yAxisLabelColor: token('fg'),
+        yAxisTickColor: token('fg-muted'),
+        yAxisLineColor: token('fg-muted'),
+        plotColorPalette: cats.join(',')
+      }
+    };
+    cats.forEach(function (c, i) {
+      vars['pie' + (i + 1)] = c;
+      vars['cScale' + i] = c;
+      vars['cScalePeer' + i] = mix(c, token('fg'), 0.8);
+      vars['cScaleLabel' + i] = readableOn([c]);
+      vars['cScaleInv' + i] = readableOn([c]);
+      if (i < 8) {
+        vars['git' + i] = c;
+        vars['gitInv' + i] = readableOn([c]);
+        vars['gitBranchLabel' + i] = readableOn([c]);
+        vars['fillType' + i] = fadedFor(c);
+        vars['venn' + (i + 1)] = c;
+      }
+    });
     var m = document.createElement('script');
     m.type = 'module';
     m.textContent =
       "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';\n" +
-      "window.__mermaidRender = function (theme) {\n" +
-      "  var nodes = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));\n" +
-      "  nodes.forEach(function (n) { n.removeAttribute('data-processed'); n.textContent = n.dataset.src; });\n" +
-      "  try {\n" +
-      "    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });\n" +
-      "    mermaid.run({ nodes: nodes });\n" +
-      "  } catch (e) {}\n" +
-      "};\n" +
-      "window.__mermaidRender('" + mermaidThemeFor(schemeNow()) + "');";
+      "try {\n" +
+      "  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base', themeVariables: " + JSON.stringify(vars) + " });\n" +
+      "  mermaid.run({ nodes: Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')) });\n" +
+      "} catch (e) {}";
     document.body.appendChild(m);
   }
 
@@ -97,33 +183,5 @@
   });
   /* GitHub-style alerts (> [!NOTE] etc.) are rendered natively by pandoc's
      gfm reader into div.note/.tip/.important/.warning/.caution and styled in CSS. */
-
-  /* ── 5. Theme toggle: override OS light/dark, remembered per browser ── */
-  (function () {
-    var root = document.documentElement, KEY = 'pandoc-md-theme', saved = null;
-    try { saved = localStorage.getItem(KEY); } catch (e) {}
-    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
-    function current() {
-      return root.getAttribute('data-theme') ||
-        (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-    }
-    var tbtn = document.createElement('button');
-    tbtn.className = 'theme-toggle';
-    tbtn.type = 'button';
-    function paint() {
-      var c = current();
-      tbtn.textContent = c === 'light' ? '☾' : '☀';
-      tbtn.setAttribute('aria-label', 'Switch to ' + (c === 'light' ? 'dark' : 'light') + ' theme');
-    }
-    paint();
-    tbtn.addEventListener('click', function () {
-      var next = current() === 'light' ? 'dark' : 'light';
-      root.setAttribute('data-theme', next);
-      try { localStorage.setItem(KEY, next); } catch (e) {}
-      paint();
-      if (window.__mermaidRender) window.__mermaidRender(mermaidThemeFor(next));
-    });
-    document.body.appendChild(tbtn);
-  })();
 })();
 </script>
