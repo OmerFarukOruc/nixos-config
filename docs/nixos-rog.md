@@ -676,9 +676,13 @@ Ghostty (which `theme` tells to reload its config) and new Neovim windows take
 the new colors at once, and so does Claude Code on nixos-rog, where the dotfiles
 `settings.json` selects `custom:scheme`. VS Code takes its theme extension and
 its window background at its next start. The KDE colors
-load at the next login, as with `plasma-look`. The login screen, the boot menu,
-the console and niri keep the record's scheme, and apps with fixed colors of
-their own, such as Starship and Spotify, do not change. The choice lasts across
+and the Plasma splash load at the next login, as with `plasma-look`. The login
+screen, the boot menu, the console and niri keep the record's scheme. So does
+Spotify, because Spicetify builds its colors into the package, which a variant
+cannot replace. The login form assumes a dark record scheme, because it draws
+the form at 30 % opacity over the dark Jake video, where a light scheme's dark
+text loses contrast. Apps with fixed colors of their own, such as Starship, do not
+change. The choice lasts across
 deploys and reboots, and `theme <record's scheme>` goes back. Because each
 deploy and boot activates the record's scheme before the stored one, apps that
 follow the scheme show the record's colors for a moment then.
