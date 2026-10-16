@@ -1,0 +1,25 @@
+# Written from the palette of github:felipefdl/warm-burnout v1.8.0
+# (nvim/lua/warm-burnout/palette.lua). base02 is the VS Code theme's
+# translucent selection drawn over the background; base06 lies halfway between
+# base05 and base07.
+system: "base16"
+name: "Warm Burnout Light"
+author: "Felipe Lima (https://github.com/felipefdl/warm-burnout)"
+variant: "light"
+palette:
+  base00: "#f5ede0" # background
+  base01: "#ede6da" # side bar
+  base02: "#cdd3d1" # selection
+  base03: "#8a8070" # line numbers
+  base04: "#5c5750" # dim foreground
+  base05: "#3a3630" # foreground
+  base06: "#2a2520"
+  base07: "#1a1510" # dark background
+  base08: "#b03434" # errors
+  base09: "#924800" # keywords
+  base0A: "#855700" # functions
+  base0B: "#4d5c1a" # strings
+  base0C: "#286a48" # regex and escapes
+  base0D: "#285464" # types
+  base0E: "#7e4060" # constants
+  base0F: "#8e4632" # tags

@@ -1,0 +1,26 @@
+# Written from the palette of github:felipefdl/warm-burnout v1.8.0
+# (nvim/lua/warm-burnout/palette.lua, and its Home Assistant theme for
+# base07). base02 is the translucent selection and base03 the gutter color,
+# each drawn over the background; base06 lies halfway between base05 and
+# base07.
+system: "base16"
+name: "Warm Burnout Dark"
+author: "Felipe Lima (https://github.com/felipefdl/warm-burnout)"
+variant: "dark"
+palette:
+  base00: "#1a1510" # background
+  base01: "#14120f" # side bar
+  base02: "#363a3a" # selection
+  base03: "#746f67" # line numbers
+  base04: "#ada69c" # dim foreground
+  base05: "#bfbdb6" # foreground
+  base06: "#dcd9d3"
+  base07: "#faf6f0" # text on accent
+  base08: "#f49090" # errors
+  base09: "#ff8f40" # keywords
+  base0A: "#ffb454" # functions
+  base0B: "#b4bc78" # strings
+  base0C: "#96b898" # regex and escapes
+  base0D: "#90aec0" # types
+  base0E: "#d4a8b8" # constants
+  base0F: "#dc9e92" # tags

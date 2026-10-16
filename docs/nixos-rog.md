@@ -55,7 +55,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the

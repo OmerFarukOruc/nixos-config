@@ -7,6 +7,7 @@
 let
   inherit (lib) mkOption types;
   schemeName = config.oruc.machine.theme.scheme;
+  schemes = import ../machines/schemes.nix { inherit inputs lib; };
   isLight = config.scheme.scheme-variant == "light";
 
   readOnly =
@@ -37,7 +38,7 @@ in
   };
 
   config = {
-    scheme = "${inputs.base16-schemes}/base16/${schemeName}.yaml";
+    scheme = schemes.${schemeName};
 
     oruc.theme = {
       inherit isLight;
