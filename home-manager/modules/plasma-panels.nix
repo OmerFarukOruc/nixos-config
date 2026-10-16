@@ -274,6 +274,13 @@ let
     src = inputs.mac-tahoe;
   };
 
+  # The launcher's default icon, view-app-grid, is in no installed icon theme;
+  # Papirus has only its symbolic form.
+  tahoeLauncher = {
+    name = "org.kde.mac-tahoe-liquid-kde.launcher";
+    config.General.icon = "view-app-grid-symbolic";
+  };
+
   dock = {
     location = "bottom";
     height = 80;
@@ -339,7 +346,7 @@ in
               height = 36;
               floating = true;
               widgets = [
-                "org.kde.mac-tahoe-liquid-kde.launcher"
+                tahoeLauncher
                 (titleBar 6)
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
