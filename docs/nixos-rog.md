@@ -687,8 +687,8 @@ record's scheme. So does
 Spotify, because Spicetify builds its colors into the package, which a variant
 cannot replace. The login form assumes a dark record scheme, because it draws
 the form at 30 % opacity over the dark Jake video, where a light scheme's dark
-text loses contrast. Starship draws with the terminal's colors, so it changes
-with Ghostty. [Theme](architecture.md#theme) lists the apps that keep fixed
+text loses contrast. Starship reads its colors at each prompt, so it changes in
+open shells too. [Theme](architecture.md#theme) lists the apps that keep fixed
 colors. The choice lasts across
 deploys and reboots, and `theme <record's scheme>` goes back. Because each
 deploy and boot activates the record's scheme before the stored one, apps that

@@ -258,5 +258,43 @@ in
     enable = true;
     enableZshIntegration = true;
   };
-  xdg.configFile."starship.toml".source = ../starship.toml;
+  # Starship reads its config at each prompt, so `theme` recolors open shells.
+  # The surfaces blend base00 toward base05, because schemes disagree on
+  # whether base01 is lighter or darker than base00.
+  xdg.configFile."starship.toml".text =
+    let
+      slot =
+        name:
+        map (c: lib.toInt config.scheme."${name}-rgb-${c}") [
+          "r"
+          "g"
+          "b"
+        ];
+      surface =
+        percent:
+        lib.zipListsWith (bg: fg: (bg * (100 - percent) + fg * percent) / 100) (slot "base00") (
+          slot "base05"
+        );
+      hex = color: "#" + lib.concatMapStrings (c: lib.fixedWidthString 2 "0" (lib.toHexString c)) color;
+      palette = {
+        surface1 = hex (surface 8);
+        surface2 = hex (surface 16);
+      }
+      # Starship lowercases a style before it looks a name up in the palette.
+      // lib.listToAttrs (
+        map (name: lib.nameValuePair (lib.toLower name) scheme.${name}) [
+          "base05"
+          "base0A"
+          "base0B"
+          "base0C"
+          "base0D"
+          "base0E"
+        ]
+      );
+    in
+    ''
+      palette = "scheme"
+      ${builtins.readFile ../starship.toml}
+      [palettes.scheme]
+      ${lib.concatStrings (lib.mapAttrsToList (name: color: "${name} = \"${color}\"\n") palette)}'';
 }

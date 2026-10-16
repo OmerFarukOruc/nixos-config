@@ -1,19 +1,20 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Based on Starship's pastel-powerline preset. Colors are ANSI names, so the
-# terminal palette (oruc.theme.ansi) sets them and a scheme change recolors the
-# prompt. Starship calls ANSI magenta purple.
+# Based on Starship's pastel-powerline preset. The segments sit on two grey
+# surfaces and only their text takes an accent. home-manager/modules/shell.nix
+# selects the `scheme` palette and appends it from the active Base16 scheme, so
+# a scheme change recolors the prompt.
 
 format = """
-[](purple)\
+[](surface2)\
 $os\
 $username\
-[](bg:red fg:purple)\
+[](fg:surface2 bg:surface1)\
 $directory\
-[](fg:red bg:yellow)\
+[](fg:surface1 bg:surface2)\
 $git_branch\
 $git_status\
-[](fg:yellow bg:blue)\
+[](fg:surface2 bg:surface1)\
 $c\
 $cpp\
 $elixir\
@@ -27,11 +28,11 @@ $nodejs\
 $nim\
 $rust\
 $scala\
-[](fg:blue bg:cyan)\
+[](fg:surface1 bg:surface2)\
 $docker_context\
-[](fg:cyan bg:white)\
+[](fg:surface2 bg:surface1)\
 $time\
-[ ](fg:white)\
+[ ](fg:surface1)\
 """
 
 # Disable the blank line at the start of the prompt.
@@ -39,17 +40,17 @@ add_newline = false
 
 [username]
 show_always = true
-style_user = "fg:black bg:purple"
-style_root = "fg:black bg:purple"
+style_user = "fg:base0e bg:surface2"
+style_root = "fg:base0e bg:surface2"
 format = '[$user ]($style)'
 disabled = false
 
 [os]
-style = "fg:black bg:purple"
+style = "fg:base0e bg:surface2"
 disabled = true
 
 [directory]
-style = "fg:black bg:red"
+style = "fg:base0d bg:surface1"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
@@ -62,84 +63,84 @@ truncation_symbol = "…/"
 
 [c]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [cpp]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [docker_context]
 symbol = " "
-style = "fg:black bg:cyan"
+style = "fg:base0c bg:surface2"
 format = '[ $symbol $context ]($style)'
 
 [elixir]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [elm]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [git_branch]
 symbol = ""
-style = "fg:black bg:yellow"
+style = "fg:base0a bg:surface2"
 format = '[ $symbol $branch ]($style)'
 
 [git_status]
-style = "fg:black bg:yellow"
+style = "fg:base0a bg:surface2"
 format = '[$all_status$ahead_behind ]($style)'
 
 [golang]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [gradle]
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [haskell]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [java]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [julia]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [nodejs]
 symbol = ""
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [nim]
 symbol = "󰆥 "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [rust]
 symbol = ""
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [scala]
 symbol = " "
-style = "fg:black bg:blue"
+style = "fg:base0b bg:surface1"
 format = '[ $symbol ($version) ]($style)'
 
 [time]
 disabled = false
 time_format = "%R"
-style = "fg:black bg:white"
+style = "fg:base05 bg:surface1"
 format = '[ ♥ $time ]($style)'
