@@ -14,6 +14,7 @@
     ./desktop-sync.nix
     ./easyeffects.nix
     ./hdr.nix
+    ./heavy.nix
     ./hushmic.nix
     ./mpv.nix
     ./oled-care.nix

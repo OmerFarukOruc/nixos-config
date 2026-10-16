@@ -13,8 +13,15 @@ ROG_COPY=
 # the arguments go through printf %q. Data goes to the host in its own call,
 # never beside a script, because the script already uses the call's stdin: bash
 # drops a piped input and zsh merges it into the script.
+#
+# Every call runs under heavy when the host has it (machines/nixos-rog/heavy.nix),
+# so the Nix evaluations of several agents wait for a slot instead of running
+# the laptop out of memory together.
 rog_remote() {
-  "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
+  local args
+  args=$(printf '%q ' "$ROG_COPY" "$@")
+  "${ROG_SSH[@]}" "$ROG_HOST" \
+    "if command -v heavy >/dev/null; then exec heavy bash -s -- $args; else exec bash -s -- $args; fi"
 }
 
 # Makes the copy and sets the EXIT trap that removes it, so a caller sets no

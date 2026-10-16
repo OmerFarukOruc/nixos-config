@@ -5,6 +5,7 @@
 - [Secrets](#secrets)
 - [DNS](#dns)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
+- [Heavy commands](#heavy-commands)
 - [Power and heat](#power-and-heat)
 - [Microphone](#microphone)
 - [Check the running laptop](#check-the-running-laptop)
@@ -246,6 +247,21 @@ Home Manager keeps the shell and tools, and adds one entry,
 server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
+
+## Heavy commands
+
+`heavy <command> [argument...]` (`machines/nixos-rog/heavy.nix`) runs a heavy
+command in one of two slots, at nice 10, in a systemd user scope that the
+kernel slows above 10 GiB and stops above 14 GiB. A third command waits for a
+slot. `scripts/lib/rog-copy.sh` runs every remote call of the `*-on-rog.sh`
+scripts under it, and a repository whose test script follows infra's `heavy`
+contract, such as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run
+any other Nix evaluation of this flake on nixos-rog as `heavy nix ...`.
+
+On 16-10-2026, Nix evaluations from several agents at once left under 3 GiB of
+the 30 GiB free: the kernel failed a page allocation, and Claude Code stopped
+the background shells of idle sessions, which it does only when free memory is
+under 10% and under 4 GiB.
 
 ## Power and heat
 
