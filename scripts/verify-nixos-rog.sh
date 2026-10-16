@@ -329,6 +329,9 @@ check public-name-resolves "resolvectl query nixos.org" resolvectl query nixos.o
 risoluto_answer=$(resolvectl query --cache=no --legend=no openchamber.risoluto.dev 2>/dev/null | awk 'NR == 1 { print $2 }')
 check risoluto-dev-allowlisted "openchamber.risoluto.dev -> ${risoluto_answer:-no answer}" \
   bash -c '[[ $1 == 100.* ]]' _ "$risoluto_answer"
+statuslantern_answer=$(resolvectl query --cache=no --legend=no signoz.statuslantern.com 2>/dev/null | awk 'NR == 1 { print $2 }')
+check statuslantern-com-allowlisted "signoz.statuslantern.com -> ${statuslantern_answer:-no answer}" \
+  bash -c '[[ $1 == 100.* ]]' _ "$statuslantern_answer"
 tailnet_name=$(tailscale status --json --peers=false 2>/dev/null |
   sed -n 's/^ *"DNSName": "\(.*\)\.",$/\1/p')
 check tailscale-running "${tailnet_name:-not logged in}" test -n "$tailnet_name"
