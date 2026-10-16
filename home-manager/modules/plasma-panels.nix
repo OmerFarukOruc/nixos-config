@@ -196,6 +196,21 @@ let
     };
   };
 
+  # The song that an MPRIS player such as Spotify or Brave plays, with its
+  # album cover and a play/pause button. The widget hides while no player has
+  # a song loaded; a paused song keeps it.
+  # plasma-manager's plasmusicToolbar writes some keys that Plasmusic 4 no
+  # longer reads, so the keys come from its contents/config/main.xml.
+  music = {
+    name = "plasmusic-toolbar";
+    config.General = {
+      useAlbumCoverAsPanelIcon = true;
+      fallbackToIconWhenArtNotAvailable = true;
+      skipBackwardControlInPanel = false;
+      skipForwardControlInPanel = false;
+    };
+  };
+
   # A floating top panel as long as its widgets, on one blurred, rounded
   # background with an outline in the accent color.
   islandStyle = padding: {
@@ -255,7 +270,10 @@ in
   # plasma-org.kde.plasma.desktop-appletsrc at the next login and builds the
   # panels again, so a panel or widget change made in Plasma lasts only until then.
   config = lib.mkIf isPlasma {
-    home.packages = [ kvitalsPackage ];
+    home.packages = [
+      kvitalsPackage
+      pkgs.plasmusic-toolbar
+    ];
 
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
@@ -298,7 +316,8 @@ in
             # settings window allows no negative padding, so a change made
             # there resets it. The system monitor is as wide as its numbers,
             # so the right panel's left side moves when the CPU usage gains or
-            # loses a digit.
+            # loses a digit. The left panel grows by the song widget while a
+            # player has a song loaded.
             (island "left"
               {
                 left = 8;
@@ -307,6 +326,7 @@ in
               [
                 "org.kde.plasma.kickerdash"
                 titleBar
+                music
               ]
             )
             (island "center" {
