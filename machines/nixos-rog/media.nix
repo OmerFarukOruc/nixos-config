@@ -165,6 +165,8 @@ in
   # HushMic's source exists, this hook turns that choice into HushMic; every
   # other source stays a valid choice.
   services.pipewire.wireplumber.extraScripts."hushmic-default.lua" = ''
+    -- Runs on a new choice and when HushMic's source appears, because at
+    -- WirePlumber's start the saved choice can come back before that source.
     SimpleEventHook {
       name = "custom/hushmic-default",
       interests = {
@@ -173,20 +175,24 @@ in
           Constraint { "metadata.name", "=", "default" },
           Constraint { "event.subject.key", "=", "default.configured.audio.source" },
         },
+        EventInterest {
+          Constraint { "event.type", "=", "node-added" },
+          Constraint { "node.name", "=", "hushmic_source" },
+        },
       },
       execute = function (event)
-        local value = event:get_properties () ["event.subject.value"]
-        if not value or Json.Raw (value):parse () ["name"] ~= "${mic}" then
+        local source = event:get_source ()
+        local metadata = source:call ("get-object-manager", "metadata"):lookup {
+          Constraint { "metadata.name", "=", "default" },
+        }
+        local value = metadata and metadata:find (0, "default.configured.audio.source")
+        if not value or Json.Raw (value):parse ().name ~= "${mic}" then
           return
         end
-        local source = event:get_source ()
         local nodes = source:call ("get-object-manager", "node")
         if not nodes:lookup { Constraint { "node.name", "=", "hushmic_source" } } then
           return
         end
-        local metadata = source:call ("get-object-manager", "metadata"):lookup {
-          Constraint { "metadata.name", "=", "default" },
-        }
         metadata:set (0, "default.configured.audio.source", "Spa:String:JSON",
           Json.Object { ["name"] = "hushmic_source" }:to_string ())
       end
