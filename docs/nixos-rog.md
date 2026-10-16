@@ -652,7 +652,7 @@ theme                      # prints the active scheme and the others
 theme gruvbox-dark-medium
 ```
 
-Ghostty (which `theme` tells to reload its config), VS Code and new Neovim
+Ghostty (which `theme` tells to reload its config), Claude Code, VS Code and new Neovim
 windows take the new colors at once, except VS Code's window background, which
 it reads at start. The KDE colors
 load at the next login, as with `plasma-look`. The login screen, the boot menu,
