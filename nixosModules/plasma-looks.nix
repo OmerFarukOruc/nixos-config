@@ -96,9 +96,11 @@ let
             usage >&2
             exit 64
           fi
-          activate "$look"
+          # Stored first, because the activation reads it (leaveTahoe in
+          # home-manager/modules/plasma-looks/tahoe.nix).
           mkdir -p "$(dirname "$state")"
           echo "$look" >"$state"
+          activate "$look"
           echo "Log out and in to load the $look look's colors, Plasma style, panels and KWin effects."
           ;;
       esac

@@ -75,6 +75,8 @@ in
             iconTheme = lib.mkForce null;
             splashScreen.theme = lib.mkForce null;
           };
+          # The value the theme switcher writes.
+          configFile.kwinrc."org.kde.kdecoration2".BorderSize = lib.mkForce "Tiny";
           kwin = {
             effects.blur.enable = false;
             titlebarButtons = {
@@ -93,30 +95,46 @@ in
         };
       })
 
-      # The theme switcher points GTK at its own theme and links GTK 4's
-      # stylesheet to its files, which outlast the look. When another look is
-      # active, this puts back what Plasma writes. It acts only on those traces.
+      # The theme switcher points GTK at its own theme and copies its GTK 4
+      # stylesheet and assets, which outlast the look. When another look is
+      # stored, this puts back what Plasma writes. It skips the activation of the
+      # default look that comes before a stored Tahoe look on each deploy, and
+      # it acts only on Tahoe's traces. A failed step warns instead of failing
+      # the activation, which would roll back a deploy.
       (lib.mkIf (!active) {
         home.activation.leaveTahoe = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          gtk4=$HOME/.config/gtk-4.0
-          if [[ -L $gtk4/gtk.css && $(readlink "$gtk4/gtk.css") == gtk-*.css ]]; then
-            run rm -rf "$gtk4/gtk.css" "$gtk4/gtk-Dark.css" "$gtk4/gtk-Light.css" \
-              "$gtk4/assets" "$gtk4/windows-assets"
-            run install -m 644 ${plasmaGtkCss} "$gtk4/gtk.css"
-          fi
-          for settings in "$HOME/.config/gtk-3.0/settings.ini" "$gtk4/settings.ini"; do
-            if [[ $(${kreadconfig} --file "$settings" --group Settings --key gtk-theme-name) == MacTahoe* ]]; then
-              run ${kwriteconfig} --file "$settings" --group Settings --key gtk-theme-name --delete
+          leaveTahoe() {
+            local gtk4=$HOME/.config/gtk-4.0 settings
+            if [[ $(cat "${config.xdg.stateHome}/oruc/plasma-look" 2>/dev/null) == tahoe ]]; then
+              return 0
             fi
-          done
-          if [[ $(${dconf} read /org/gnome/desktop/interface/gtk-theme 2>/dev/null) == *MacTahoe* ]]; then
+            if [[ -L $gtk4/gtk.css && $(readlink "$gtk4/gtk.css") == gtk-*.css ]]; then
+              # The copies keep the read-only mode of the store files.
+              run chmod -R u+w "$gtk4/assets" "$gtk4/windows-assets" 2>/dev/null || true
+              run rm -rf "$gtk4/gtk.css" "$gtk4/gtk-Dark.css" "$gtk4/gtk-Light.css" \
+                "$gtk4/assets" "$gtk4/windows-assets" || return 1
+              run install -m 644 ${plasmaGtkCss} "$gtk4/gtk.css" || return 1
+            fi
+            for settings in "$HOME/.config/gtk-3.0/settings.ini" "$gtk4/settings.ini"; do
+              if [[ $(${kreadconfig} --file "$settings" --group Settings --key gtk-theme-name) == MacTahoe* ]]; then
+                run ${kwriteconfig} --file "$settings" --group Settings --key gtk-theme-name --delete || return 1
+              fi
+            done
+            if [[ -f $HOME/.gtkrc-2.0 ]] && grep -q '^gtk-theme-name="MacTahoe' "$HOME/.gtkrc-2.0"; then
+              run sed -i '/^gtk-theme-name="MacTahoe/d' "$HOME/.gtkrc-2.0" || return 1
+            fi
+            if [[ $(${kreadconfig} --file kdeglobals --group KDE --key LookAndFeelPackage) == *mac-tahoe* ]]; then
+              run ${kwriteconfig} --file kdeglobals --group KDE --key LookAndFeelPackage --delete || return 1
+            fi
             # dconf writes through the session bus, which a boot has not started.
-            run ${dconf} reset /org/gnome/desktop/interface/gtk-theme \
-              || warnEcho "dconf still names the Tahoe GTK theme; run plasma-look again in the session."
-          fi
-          if [[ $(${kreadconfig} --file kdeglobals --group KDE --key LookAndFeelPackage) == *MacTahoe* ]]; then
-            run ${kwriteconfig} --file kdeglobals --group KDE --key LookAndFeelPackage --delete
-          fi
+            if [[ $(${dconf} read /org/gnome/desktop/interface/gtk-theme 2>/dev/null) == *MacTahoe* ]]; then
+              run ${dconf} reset /org/gnome/desktop/interface/gtk-theme || return 1
+            fi
+            if [[ $(${dconf} read /org/gnome/desktop/wm/preferences/button-layout 2>/dev/null) == "'close,minimize,maximize:'" ]]; then
+              run ${dconf} reset /org/gnome/desktop/wm/preferences/button-layout || return 1
+            fi
+          }
+          leaveTahoe || warnEcho "Some of the Tahoe look's GTK settings stayed; run plasma-look again in the Plasma session."
         '';
       })
     ]

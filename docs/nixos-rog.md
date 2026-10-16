@@ -562,13 +562,15 @@ names the default look. The looks are:
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
 - `tiling`: `glass` with rounded corners, Krohnkite tiling with 8 px gaps and
   three floating top panels. Krohnkite's shortcuts are in System Settings,
-  Shortcuts; its Meta+Return loses to the Ghostty shortcut.
+  Shortcuts. Its default Meta+Return is also the Ghostty shortcut in
+  `plasma-manager.nix`; which of the two wins is not tested.
 - `tahoe`: the macOS Tahoe theme from
   [macos-tahoe-liquid-kde](https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde),
   with its own colors, icons, cursor, top bar with the global menu, and dock.
   Its theme switcher, `mac-tahoe-theme.service`, applies it at login. It also
-  changes the GTK theme; a look other than `tahoe` puts back Plasma's GTK
-  settings when it activates (`leaveTahoe` in `plasma-looks/tahoe.nix`).
+  changes GTK's theme, stylesheet and title bar buttons and KWin's border
+  size. When another look is stored, its activation removes those
+  (`leaveTahoe` in `plasma-looks/tahoe.nix`) and warns when a step fails.
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:
@@ -583,10 +585,10 @@ the next login. A live color scheme change can crash Electron apps such as
 Discord, so neither `plasma-look` nor a deploy changes it.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `plasma-look --reapply` after it activates
-the default look. When that fails, the look can be half applied, and
+the default look. When that step fails, the look can be half applied, and
 `journalctl -u home-manager-oruc` shows the error; run `plasma-look <look>`
-again. The deploy goes on, because a failed unit would make it roll back the
-whole system.
+again. That failure does not fail the unit, because a failed unit makes the
+deploy roll back the whole system.
 `plasma-look glass` goes back to the default look.
 
 Settings made in a look's own settings app, such as Klassy's, last until that
