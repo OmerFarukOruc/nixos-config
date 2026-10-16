@@ -165,38 +165,38 @@ in
   # HushMic's source exists, this hook turns that choice into HushMic; every
   # other source stays a valid choice.
   services.pipewire.wireplumber.extraScripts."hushmic-default.lua" = ''
-    -- Runs on a new choice and when HushMic's source appears, because at
-    -- WirePlumber's start the saved choice can come back before that source.
-    SimpleEventHook {
-      name = "custom/hushmic-default",
-      interests = {
-        EventInterest {
-          Constraint { "event.type", "=", "metadata-changed" },
-          Constraint { "metadata.name", "=", "default" },
-          Constraint { "event.subject.key", "=", "default.configured.audio.source" },
-        },
-        EventInterest {
-          Constraint { "event.type", "=", "node-added" },
-          Constraint { "node.name", "=", "hushmic_source" },
-        },
-      },
-      execute = function (event)
-        local source = event:get_source ()
-        local metadata = source:call ("get-object-manager", "metadata"):lookup {
-          Constraint { "metadata.name", "=", "default" },
-        }
-        local value = metadata and metadata:find (0, "default.configured.audio.source")
-        if not value or Json.Raw (value):parse ().name ~= "${mic}" then
-          return
-        end
-        local nodes = source:call ("get-object-manager", "node")
-        if not nodes:lookup { Constraint { "node.name", "=", "hushmic_source" } } then
-          return
-        end
-        metadata:set (0, "default.configured.audio.source", "Spa:String:JSON",
-          Json.Object { ["name"] = "hushmic_source" }:to_string ())
+    -- WirePlumber can restore the saved choice before it loads this script,
+    -- so the script checks when the metadata or HushMic's source appears and
+    -- on every later change.
+    local key = "default.configured.audio.source"
+    local metadata_om = ObjectManager {
+      Interest { type = "metadata", Constraint { "metadata.name", "=", "default" } },
+    }
+    local hushmic_om = ObjectManager {
+      Interest { type = "node", Constraint { "node.name", "=", "hushmic_source" } },
+    }
+
+    local function redirect ()
+      local metadata = metadata_om:lookup ()
+      local value = metadata and metadata:find (0, key)
+      if value and hushmic_om:lookup ()
+          and Json.Raw (value):parse ().name == "${mic}" then
+        metadata:set (0, key, "Spa:String:JSON",
+          Json.Object { name = "hushmic_source" }:to_string ())
       end
-    }:register ()
+    end
+
+    metadata_om:connect ("object-added", function (_, metadata)
+      metadata:connect ("changed", function (_, subject, changed_key)
+        if subject == 0 and changed_key == key then
+          redirect ()
+        end
+      end)
+      redirect ()
+    end)
+    hushmic_om:connect ("object-added", redirect)
+    metadata_om:activate ()
+    hushmic_om:activate ()
   '';
   services.pipewire.wireplumber.extraConfig."90-hushmic-default" = {
     "wireplumber.components" = [
