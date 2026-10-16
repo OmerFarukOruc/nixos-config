@@ -651,6 +651,9 @@ On nixos-rog:
   portal, which Plasma has and niri does not. The service exits 5 when another
   Deskflow already runs, such as a copy that Plasma's autostart or the menu
   started. The unit treats 5 as success and does not restart.
+- The unit sets `RefuseManualStart`, so a deploy never starts a client you
+  quit and never restarts a running one. `systemctl --user start deskflow`
+  fails for the same reason; open Deskflow from the menu instead.
 - `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
   With an older libportal, Deskflow builds without clipboard code and the laptop
   never sends what you copy. The overlay's install check fails the build in that
@@ -679,9 +682,10 @@ On fedora-desktop, outside this repository:
   fingerprint prompt on the laptop that you did not cause is suspicious, so
   decline it.
 
-After a deploy that changes Deskflow, the service restarts the client, and Plasma
-may ask on the laptop to allow remote control with clipboard access. Approve it
-with the laptop's own keyboard or touchpad.
+After a deploy that changes Deskflow, the running client stays on the old build
+until you quit it and open it from the menu, or log in again. The new client
+may make Plasma ask on the laptop to allow remote control with clipboard
+access. Approve it with the laptop's own keyboard or touchpad.
 
 To check the clipboard, move the cursor onto the laptop and copy there. Then
 look for `computer "nixos-rog" updated clipboard 0` in `~/deskflow.log` on

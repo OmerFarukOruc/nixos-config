@@ -54,6 +54,17 @@ in
       Hidden=true
     '';
   };
+  # Opening Blueman Manager starts the applet over D-Bus, so in Plasma it puts
+  # a second Bluetooth icon next to bluedevil's. Plasma's menu leaves it out.
+  # Its adapters entry already shows only in XFCE and MATE.
+  xdg.dataFile."applications/blueman-manager.desktop" = lib.mkIf isNiri {
+    source = pkgs.runCommand "blueman-manager.desktop" { } ''
+      cp ${pkgs.blueman}/share/applications/blueman-manager.desktop $out
+      chmod u+w $out
+      echo 'NotShowIn=KDE;' >> $out
+      grep -qx 'NotShowIn=KDE;' $out
+    '';
+  };
 
   home.packages = lib.optionals isNiri [
     pkgs.brightnessctl
