@@ -11,6 +11,7 @@
 - [Check a visual change](#check-a-visual-change)
 - [Plasma panels](#plasma-panels)
 - [Plasma looks](#plasma-looks)
+- [Switch the scheme](#switch-the-scheme)
 - [Deskflow](#deskflow)
 - [Keyboard keys](#keyboard-keys)
 - [Known faults](#known-faults)
@@ -608,8 +609,8 @@ The color scheme, the panels, the Plasma style and the KWin effects load at
 the next login. A live color scheme change can crash Electron apps such as
 Discord, so neither `plasma-look` nor a deploy changes it.
 The choice lasts across deploys and reboots, because the Home Manager service
-(`home-manager-oruc.service`) runs `plasma-look --reapply` after it activates
-the default look. When that step fails, the look can be half applied, and
+(`home-manager-oruc.service`) runs `theme --reapply` after it activates the
+default look and scheme. When that step fails, the look can be half applied, and
 `journalctl -u home-manager-oruc` shows the error; run `plasma-look <look>`
 again. That failure does not fail the unit, because a failed unit makes the
 deploy roll back the whole system.
@@ -629,7 +630,8 @@ To add a look:
    every switch.
 2. Install its packages whenever Plasma runs, not only while the look is
    active. A look other than the default is a Home Manager specialisation, and
-   a specialisation cannot install packages on this setup.
+   a specialisation cannot install packages on this setup; the evaluation
+   fails when it tries.
 3. Write each KWin plugin switch the look owns as false while another look is
    active, because plasma-manager never removes a key that a look leaves out. The evaluation
    fails while two looks write different `kwinrc` Plugins switches, and the
@@ -637,6 +639,29 @@ To add a look:
 
 `scripts/verify-nixos-rog.sh` checks the widgets, KWin effects and panels of
 the stored look.
+
+
+## Switch the scheme
+
+`theme` switches the Base16 scheme of the Home Manager apps without a rebuild,
+on both hosts. It offers the record's `theme.scheme` and the schemes in
+`theme.schemes` (`machines/inventory.nix`):
+
+```sh
+theme                      # prints the active scheme and the others
+theme gruvbox-dark-medium
+```
+
+New Ghostty and Neovim windows take the new colors at once, and so does VS
+Code, except its window background, which it reads at start. The KDE colors
+load at the next login, as with `plasma-look`. The login screen, the boot menu,
+the console and niri keep the record's scheme, and apps with fixed colors of
+their own, such as Starship and Spotify, do not change. The choice lasts across
+deploys and reboots, and `theme <record's scheme>` goes back.
+
+To offer another scheme, add its name to `theme.schemes`. A name from the
+tinted-theming collection needs nothing else; a scheme it lacks goes in
+`assets/schemes` ([architecture.md](architecture.md#theme)).
 
 ## Deskflow
 

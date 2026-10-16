@@ -2,17 +2,16 @@
 # window decoration, the Qt style, the color scheme and the KWin effects that
 # belong together. The machine record names the default look
 # (theme.plasmaLook). Every other look is a Home Manager specialisation of the
-# same generation, which `plasma-look` (nixosModules/plasma-looks.nix)
-# activates without a rebuild.
+# same generation (machines/variants.nix), which `plasma-look`
+# (nixosModules/hm-variants.nix) activates without a rebuild.
 #
 # A look writes its keys only while it is active, and plasma-manager never
 # removes a key that a look leaves out. So a look writes its own KWin plugin switches
 # as false while another look is active, and nixosModules/plasma-looks.nix
 # rejects looks that name different plugin switches.
 #
-# A specialisation cannot install packages, because NixOS installs the
-# packages of the default look only (useUserPackages). So each look installs
-# its packages while any look is active.
+# A specialisation cannot install packages (home-manager/modules/variants.nix),
+# so each look installs its packages while any look is active.
 {
   lib,
   osConfig,
@@ -83,10 +82,6 @@ in
   };
 
   config = lib.mkIf isPlasma {
-    specialisation = lib.genAttrs (lib.remove defaultLook selectors.plasmaLookNames) (look: {
-      configuration.oruc.plasma.look = look;
-    });
-
     # The units that run once per login (once-per-login.nix) would still run
     # at the first switch into a session that started before their marker
     # existed, so the activation marks the running login for them before

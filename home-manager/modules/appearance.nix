@@ -8,8 +8,8 @@
 }:
 let
   cfg = osConfig.oruc.machine;
-  scheme = osConfig.scheme.withHashtag;
-  theme = osConfig.oruc.theme;
+  scheme = config.scheme.withHashtag;
+  theme = config.oruc.theme;
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
 
@@ -59,8 +59,10 @@ in
   # session leaves them to Plasma and its niri session inherits them.
   config = lib.mkMerge [
     (lib.mkIf (hasNiri && !hasPlasma) {
+      # The cursor follows the machine record's scheme, because its theme is a
+      # package that `theme` cannot switch (variants.nix).
       home.pointerCursor = {
-        inherit (theme.cursor) name size;
+        inherit (osConfig.oruc.theme.cursor) name size;
         package = pkgs.bibata-cursors;
         enable = true;
         gtk.enable = true;

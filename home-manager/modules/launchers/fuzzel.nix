@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -10,8 +11,8 @@ let
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "fuzzel";
   helpers = import ./helpers.nix { inherit lib pkgs; };
   # Hex without "#", which fuzzel expects before the alpha byte.
-  inherit (osConfig) scheme;
-  inherit (osConfig.oruc.theme) fonts;
+  inherit (config) scheme;
+  inherit (config.oruc.theme) fonts;
   commands = {
     app = "exec ${lib.getExe pkgs.fuzzel}";
     command = ''

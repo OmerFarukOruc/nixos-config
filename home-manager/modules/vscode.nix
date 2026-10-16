@@ -6,7 +6,6 @@
   config,
   inputs,
   lib,
-  osConfig,
   pkgs,
   ...
 }:
@@ -16,8 +15,8 @@ let
   runtimeDir = "vscode-vibrancy-runtime-v6";
   workbench = "vs/code/electron-browser/workbench/workbench.html";
 
-  inherit (osConfig) scheme;
-  themeName = if osConfig.oruc.theme.isLight then "Default Light" else "Default Dark";
+  inherit (config) scheme;
+  themeName = if config.oruc.theme.isLight then "Default Light" else "Default Dark";
   theme = builtins.fromJSON (builtins.readFile (vibrancy + "/themes/${themeName}.json"));
 
   # The extension's global.vscode_vibrancy_plugin on Linux, in the shape that
@@ -59,11 +58,15 @@ let
     };
   };
 
+  # VS Code reads the settings from a file at start, because they follow the
+  # scheme and `theme` switches the scheme without a new VS Code package
+  # (home-manager/modules/variants.nix).
+  injectFile = "${config.xdg.configHome}/oruc/vscode-vibrancy.json";
   bootstrapJs = pkgs.writeText "vscode-vibrancy-bootstrap.js" ''
 
     /* !! VSCODE-VIBRANCY-START !! */
     ;(function(){
-    global.vscode_vibrancy_plugin = ${builtins.toJSON injectData}; try{ import("@vibrancyRuntimeUrl@"); } catch (err) {console.error(err)}
+    try{ global.vscode_vibrancy_plugin = JSON.parse(process.getBuiltinModule("node:fs").readFileSync(${builtins.toJSON injectFile}, "utf8")); import("@vibrancyRuntimeUrl@"); } catch (err) {console.error(err)}
     })()
     /* !! VSCODE-VIBRANCY-END !! */
   '';
@@ -196,6 +199,8 @@ in
       "workbench.colorCustomizations" = colorCustomizations;
       "workbench.editorAssociations"."*.md" = "vscode.markdown.preview.editor";
     };
+
+    xdg.configFile."oruc/vscode-vibrancy.json".text = builtins.toJSON injectData;
 
     programs.vscode = {
       enable = true;

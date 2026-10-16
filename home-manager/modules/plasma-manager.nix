@@ -10,7 +10,7 @@
 let
   helpers = import ./launchers/helpers.nix { inherit lib pkgs; };
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
-  inherit (osConfig.oruc) theme;
+  inherit (config.oruc) theme;
 
   inherit (osConfig.oruc.machine) idle;
 

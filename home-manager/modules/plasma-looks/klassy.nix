@@ -26,7 +26,7 @@ in
 
         programs.plasma = {
           workspace = {
-            theme = if osConfig.oruc.theme.isLight then "klassy-light" else "klassy-dark";
+            theme = if config.oruc.theme.isLight then "klassy-light" else "klassy-dark";
             windowDecorations = {
               library = "org.kde.klassy";
               theme = "Klassy";

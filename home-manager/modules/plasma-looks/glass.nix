@@ -73,7 +73,7 @@ in
               BlurStrength = 3;
               EdgeLighting = true;
               # Glass reads #AARRGGBB, so 10 is the alpha.
-              GlowColor = "#10${osConfig.scheme.base0D}";
+              GlowColor = "#10${config.scheme.base0D}";
               # Refraction is off. The zeros are written out because plasma-manager
               # never removes a key it wrote before. RefractionEdgeSize stays,
               # because the edge lighting band reads it even with refraction off.

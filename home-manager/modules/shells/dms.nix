@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -7,12 +8,12 @@
   ...
 }:
 let
-  scheme = osConfig.scheme.withHashtag;
-  theme = osConfig.oruc.theme;
+  scheme = config.scheme.withHashtag;
+  theme = config.oruc.theme;
   inherit (theme) wallpaper;
 
   dmsMode = {
-    name = "Base16 ${osConfig.scheme.scheme-name}";
+    name = "Base16 ${config.scheme.scheme-name}";
     surface = scheme.base00;
     surfaceText = scheme.base05;
     surfaceVariant = scheme.base01;

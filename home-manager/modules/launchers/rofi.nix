@@ -10,7 +10,7 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "rofi";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = osConfig.scheme.withHashtag;
+  scheme = config.scheme.withHashtag;
   rasi = config.lib.formats.rasi;
   commands = {
     app = "exec ${lib.getExe pkgs.rofi} -show drun";

@@ -18,6 +18,7 @@
     ./modules/shell.nix
     ./modules/shells
     ./modules/theme.nix
+    ./modules/variants.nix
     ./modules/vscode.nix
   ];
 
