@@ -14,6 +14,7 @@
     ./desktop-sync.nix
     ./easyeffects.nix
     ./hdr.nix
+    ./heavy.nix
     ./hushmic.nix
     ./mpv.nix
     ./oled-care.nix
@@ -116,9 +117,6 @@
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
-      # Plasma widgets, offered in Add Widgets; the panel layout names neither.
-      (pkgs.callPackage ../../pkgs/plasma-todotask.nix { })
-      (pkgs.callPackage ../../pkgs/plasmallm.nix { })
     ]
     ++ (with agents; [
       agent-browser

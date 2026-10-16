@@ -3,6 +3,7 @@
   imports = [
     ./modules/appearance.nix
     ./modules/applications.nix
+    ./modules/claude-code-theme.nix
     ./modules/editor
     ./modules/git.nix
     ./modules/herdr.nix
