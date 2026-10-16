@@ -655,9 +655,11 @@ theme gruvbox-dark-medium
 Ghostty (which `theme` tells to reload its config), VS Code and new Neovim
 windows take the new colors at once, except VS Code's window background, which
 it reads at start. The KDE colors
-load at the next login, as with `plasma-look`. The login screen, the boot menu,
-the console and niri keep the record's scheme, and apps with fixed colors of
-their own, such as Starship and Spotify, do not change. The choice lasts across
+and the Plasma splash load at the next login, as with `plasma-look`. The login
+screen, the boot menu, the console and niri keep the record's scheme. So does
+Spotify, because Spicetify builds its colors into the package, which a variant
+cannot replace. Apps with fixed colors of their own, such as Starship, do not
+change. The choice lasts across
 deploys and reboots, and `theme <record's scheme>` goes back. Because each
 deploy and boot activates the record's scheme before the stored one, apps that
 follow the scheme show the record's colors for a moment then.

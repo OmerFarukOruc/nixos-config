@@ -1,5 +1,6 @@
 {
   inputs,
+  osConfig,
   pkgs,
   ...
 }:
@@ -11,6 +12,7 @@ let
     config.allowUnfree = true;
   };
   spicePkgs = inputs.spicetify-nix.legacyPackages.${system};
+  inherit (osConfig) scheme;
 in
 {
   imports = [ inputs.spicetify-nix.homeManagerModules.spicetify ];
@@ -30,7 +32,32 @@ in
         }
       '';
     };
-    colorScheme = "RosePine";
+    # Spicetify writes the colors into the Spotify package, which a scheme
+    # variant of Home Manager cannot replace (nixosModules/hm-variants.nix).
+    # Spotify therefore follows the machine record's scheme, not `theme`. The
+    # keys are those of Sleek's color.ini sections.
+    customColorScheme = {
+      text = scheme.base05;
+      subtext = scheme.base04;
+      nav-active-text = scheme.base0D;
+      main = scheme.base00;
+      sidebar = scheme.base00;
+      player = scheme.base00;
+      card = scheme.base01;
+      shadow = scheme.base00;
+      main-secondary = scheme.base01;
+      button = scheme.base0D;
+      button-secondary = scheme.base03;
+      button-active = scheme.base0D;
+      button-disabled = scheme.base02;
+      nav-active = scheme.base01;
+      play-button = scheme.base0D;
+      tab-active = scheme.base01;
+      notification = scheme.base02;
+      notification-error = scheme.base08;
+      playback-bar = scheme.base03;
+      misc = scheme.base05;
+    };
     enabledSnippets = with spicePkgs.snippets; [
       # keep-sorted start
       roundedNowPlaying

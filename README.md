@@ -48,7 +48,7 @@ is an inventory record only; the flake does not build it.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
   colors, cursor, icons and wallpaper of all of them. The login screen and the
-  Plasma lock screen show Jake the dog instead.
+  Plasma lock screen play Jake the dog, and the login form takes the scheme's colors.
 - **🛟 Deploys that roll themselves back.** `deploy.sh` builds on the target,
   activates under a 420 second rollback timer, then checks SSH, Tailscale and
   the user's running services. A deploy that breaks any of them restores the
