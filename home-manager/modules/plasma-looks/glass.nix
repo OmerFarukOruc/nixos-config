@@ -92,6 +92,15 @@ in
           };
         };
 
+        # The opacity and padding of the iglass Frosted theme for Ghostty
+        # (https://github.com/vukkt/iglass), with this flake's Base16 colors.
+        # The niri sessions read the same Ghostty config.
+        programs.ghostty.settings = {
+          background-opacity = 0.66;
+          window-padding-x = 12;
+          window-padding-y = 10;
+        };
+
         # KWin reads Glass's settings only when it loads the effect, and
         # plasma-manager writes kwinrc without telling KWin. With no Plasma session
         # running, KWin is not on the user bus, and the next login reads the file.

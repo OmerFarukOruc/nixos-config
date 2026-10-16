@@ -562,7 +562,8 @@ names the default look. The looks are:
   island holds the launcher and the active app, the middle one the clock, and
   the right one the song with a play/pause button while Spotify or Brave
   has a song loaded, then the system monitor, tray and show-desktop
-  button.
+  button. Ghostty gets the opacity (0.66) and padding (12 x 10 px) of the
+  iglass Frosted theme, also in the niri sessions.
 - `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
 
