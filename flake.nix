@@ -12,9 +12,11 @@
       flake = false;
     };
     # The VS Code and Neovim themes of the warm-burnout-* schemes in
-    # assets/schemes, which color syntax beyond the 16 Base16 slots.
+    # assets/schemes, which color syntax beyond the 16 Base16 slots. The
+    # schemes copy this revision's palette (v1.8.0), so a commit pin keeps the
+    # hourly updater from moving the themes away from them.
     warm-burnout = {
-      url = "github:felipefdl/warm-burnout/v1.8.0";
+      url = "github:felipefdl/warm-burnout/e45c7717e430d8f12a9b9b26145c0456b0c7a319";
       flake = false;
     };
     home-manager = {

@@ -675,8 +675,8 @@
       },
       "original": {
         "owner": "felipefdl",
-        "ref": "v1.8.0",
         "repo": "warm-burnout",
+        "rev": "e45c7717e430d8f12a9b9b26145c0456b0c7a319",
         "type": "github"
       }
     }

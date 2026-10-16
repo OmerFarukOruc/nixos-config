@@ -1,6 +1,6 @@
 # Written from the palette of github:felipefdl/warm-burnout v1.8.0
-# (nvim/lua/warm-burnout/palette.lua, and its Ghostty and Home Assistant
-# themes). base02 is the translucent selection and base03 the gutter color,
+# (nvim/lua/warm-burnout/palette.lua, and its Home Assistant theme for
+# base07). base02 is the translucent selection and base03 the gutter color,
 # each drawn over the background; base06 lies halfway between base05 and
 # base07.
 system: "base16"
@@ -9,7 +9,7 @@ author: "Felipe Lima (https://github.com/felipefdl/warm-burnout)"
 variant: "dark"
 palette:
   base00: "#1a1510" # background
-  base01: "#23211b" # terminal black
+  base01: "#14120f" # side bar
   base02: "#363a3a" # selection
   base03: "#746f67" # line numbers
   base04: "#ada69c" # dim foreground

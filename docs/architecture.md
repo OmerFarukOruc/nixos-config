@@ -116,10 +116,14 @@ variant, the wallpaper named after the scheme, and the ANSI slots. The font
 families are fixed.
 
 `assets/schemes` holds the schemes that tinted-theming lacks. The
-`warm-burnout-dark` and `warm-burnout-light` schemes there come from the
-palette of the `warm-burnout` input, and with either of them
+`warm-burnout-dark` and `warm-burnout-light` schemes there copy the palette of
+the `warm-burnout` input's pinned commit. With either of them,
 `home-manager/modules/theme.nix` also installs that input's own VS Code
-extension and Neovim color scheme in place of the Base16 ones.
+extension and Neovim color scheme in place of the Base16 ones. To move the
+input, change its commit in `flake.nix`, compare the new palette
+(`nvim/lua/warm-burnout/palette.lua`) with the two scheme files, and check that
+the VS Code theme labels and Neovim color scheme names still match
+`home-manager/modules/theme.nix`.
 
 `theme.plasmaLook` names the default Plasma look. Every other look is a Home
 Manager specialisation that `plasma-look` activates at run time
