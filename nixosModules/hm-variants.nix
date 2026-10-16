@@ -142,7 +142,7 @@ let
           fi
           choose scheme "$1"
           activate "$(stored_look)" "$1"
-          echo "Ghostty, new Neovim windows and Claude Code take the $1 colors, VS Code at its next start. Log out and in to load its KDE colors."
+          echo "Ghostty and new Neovim windows take the $1 colors, VS Code at its next start. Log out and in to load its KDE colors."
           ;;
       esac
     '';
