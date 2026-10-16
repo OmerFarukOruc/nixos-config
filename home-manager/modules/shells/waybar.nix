@@ -15,8 +15,8 @@ in
     oruc.shellServices = {
       waybar = "waybar";
       mako = "waybar";
-    }
-    // lib.optionalAttrs (wallpaper != null) { oruc-wallpaper = "waybar"; };
+      oruc-wallpaper = "waybar";
+    };
     programs.waybar = {
       enable = true;
       systemd.enable = true;
@@ -106,7 +106,7 @@ in
       };
     };
 
-    systemd.user.services.oruc-wallpaper = lib.mkIf (wallpaper != null) {
+    systemd.user.services.oruc-wallpaper = {
       Unit = {
         Description = "Base16 desktop wallpaper";
         After = [ "graphical-session.target" ];

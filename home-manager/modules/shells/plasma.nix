@@ -13,7 +13,7 @@ in
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "plasma") {
     home.packages = [ pkgs.kdePackages.spectacle ];
 
-    systemd.user.services.oruc-plasma-wallpaper = lib.mkIf (wallpaper != null) {
+    systemd.user.services.oruc-plasma-wallpaper = {
       Unit = {
         Description = "Apply the selected Plasma wallpaper";
         # Only a Plasma session reaches plasma-workspace.target.

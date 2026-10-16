@@ -166,7 +166,7 @@ in
         # Pinning in the DMS window does not persist, because this file is read-only.
         pinnedApps = import ./pinned-apps.nix;
       }
-      // lib.optionalAttrs (wallpaper != null) {
+      // {
         wallpaperPath = toString wallpaper;
         wallpaperPathDark = toString wallpaper;
         wallpaperPathLight = toString wallpaper;

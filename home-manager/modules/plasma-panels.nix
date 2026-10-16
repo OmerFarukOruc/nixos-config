@@ -324,7 +324,7 @@ in
 
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
-      workspace = lib.mkIf (wallpaper != null) {
+      workspace = {
         inherit wallpaper;
         wallpaperFillMode = "preserveAspectCrop";
       };

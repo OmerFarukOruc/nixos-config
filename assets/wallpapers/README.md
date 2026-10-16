@@ -1,10 +1,12 @@
 # Wallpapers
 
-Add a wallpaper named after the selected Base16 scheme, for example
+A scheme without a wallpaper of its own gets `default.png` recolored to the
+scheme's 16 colors (`nixosModules/theme-module.nix`, the `wallpaper` value). To
+give a scheme its own wallpaper, add a file named after it, for example
 `gruvbox-dark-medium.png`. PNG, JPEG, and WebP files are discovered without
 adding host-specific monitor or layout policy. When several files carry the
 scheme's name, the first extension in the order `.png`, `.jpg`, `.jpeg`, `.webp`
-wins (`nixosModules/theme.nix`, the `wallpaper` value).
+wins.
 
 Noctalia writes a wallpaper picked in its panel to
 `~/.local/state/noctalia/settings.toml`, which overrides the config this

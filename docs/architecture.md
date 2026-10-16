@@ -119,8 +119,7 @@ These rules follow from the list:
 
 `nixosModules/theme-module.nix` derives the read-only `oruc.theme` values from
 a Base16 scheme. The values are whether the scheme is light, the cursor, icons
-and GTK theme that follow that variant, the wallpaper named after the scheme,
-and the ANSI slots. The font families are fixed.
+and GTK theme that follow that variant, the wallpaper, and the ANSI slots. The font families are fixed.
 
 NixOS and Home Manager each import that module with their own scheme:
 
@@ -129,6 +128,12 @@ NixOS and Home Manager each import that module with their own scheme:
 - Home Manager (`home-manager/modules/scheme.nix`) uses `oruc.scheme`, which
   starts as `theme.scheme`. Every app that Home Manager configures reads
   `config.scheme` and `config.oruc.theme`, never the NixOS values.
+
+The wallpaper is the file in `assets/wallpapers` named after the scheme. A scheme
+without one gets `assets/wallpapers/default.png` recolored to the scheme's 16
+colors by lutgen, in a derivation of `theme-module.nix`. The derivation reads a
+file in the repository, so it needs no import from derivation, and the
+recoloring runs in the build of each variant.
 
 `theme.schemes` in the machine record lists other schemes. Each one, with each
 Plasma look, is a Home Manager variant (`machines/variants.nix`): the

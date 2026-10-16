@@ -311,30 +311,25 @@ in
     };
   };
 
-  # The link's name needs the wallpaper, so the whole entry is left out when
-  # there is none.
-  xdg.dataFile =
-    lib.optionalAttrs (theme.wallpaper != null) {
-      # An attribute name cannot carry the store path's context.
-      "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}".source =
-        theme.wallpaper;
-    }
-    // {
-      "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
-        text = opaqueScheme;
-      };
-      "color-schemes/OrucBase16Glass.colors" = lib.mkIf isPlasma {
-        text = glassScheme;
-      };
-
-      # Plasma's translucent desktop theme has no colors file of its own, and
-      # looking one up on every menu and popup slows them down. Plasma only
-      # checks that the file exists and never reads it; the colours come from
-      # kdeglobals.
-      "plasma/desktoptheme/default/translucent/colors" = lib.mkIf isPlasma {
-        text = "";
-      };
+  xdg.dataFile = {
+    # An attribute name cannot carry the store path's context.
+    "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}".source =
+      theme.wallpaper;
+    "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
+      text = opaqueScheme;
     };
+    "color-schemes/OrucBase16Glass.colors" = lib.mkIf isPlasma {
+      text = glassScheme;
+    };
+
+    # Plasma's translucent desktop theme has no colors file of its own, and
+    # looking one up on every menu and popup slows them down. Plasma only
+    # checks that the file exists and never reads it; the colours come from
+    # kdeglobals.
+    "plasma/desktoptheme/default/translucent/colors" = lib.mkIf isPlasma {
+      text = "";
+    };
+  };
 
   # The Plasma platform theme reads the scheme that kdeglobals names. Plasma
   # writes kdeglobals itself, so a machine with a Plasma session gets the

@@ -165,7 +165,7 @@ in
           };
         };
       }
-      // lib.optionalAttrs (wallpaper != null) {
+      // {
         wallpaper = {
           enabled = true;
           default.path = toString wallpaper;
