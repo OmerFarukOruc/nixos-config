@@ -141,12 +141,9 @@ in
       look: lookConfig:
       let
         plasma = lookConfig.programs.plasma;
-        # KWin lists the effects it loaded; a KWin script such as Krohnkite
-        # is not one of them.
-        effects = lib.filterAttrs (
-          key: setting:
-          lib.hasSuffix "Enabled" key && setting.value == true && !(lib.elem key [ "krohnkiteEnabled" ])
-        ) (plasma.configFile.kwinrc.Plugins or { });
+        effects = lib.filterAttrs (key: setting: lib.hasSuffix "Enabled" key && setting.value == true) (
+          plasma.configFile.kwinrc.Plugins or { }
+        );
         widgets = lib.concatMap (panel: map (widget: widget.name) panel.widgets) plasma.panels;
         list = names: lib.concatStringsSep "," (lib.unique names);
       in

@@ -4,7 +4,7 @@
 # it to OUTPUT. --window first opens a Ghostty window that is not maximized,
 # so the shot shows the Glass blur and edges around it, and closes it after.
 # --crop keeps only the area of W by H pixels at X, Y, in the screen's pixels;
-# 2560x60+0+0 holds the top bar on nixos-rog's 2560x1600 screen.
+# 2560x60+0+0 holds the top 60 rows of nixos-rog's 2560x1600 screen.
 set -euo pipefail
 
 usage="usage: scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png"
