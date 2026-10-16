@@ -16,6 +16,7 @@
     ./hdr.nix
     ./hushmic.nix
     ./mpv.nix
+    ./oled-care.nix
     ./sshfs-risoluto-dev-1.nix
     ./warp-launchers.nix
   ];

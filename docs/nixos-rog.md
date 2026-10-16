@@ -499,11 +499,23 @@ a floating top bar of three islands and the dock for the glass look, or a top
 bar and the dock for the klassy look. In the floating bar, Panel Colorizer draws
 each run of widgets that panel spacers separate on one background, so one
 colorizer styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
-`home-manager/modules/plasma-looks/default.nix`. Whenever the layout changes,
+`home-manager/modules/plasma-looks/default.nix`. The dock's task manager and
+the glass look's fullscreen launcher come from the macOS Tahoe theme (the
+`mac-tahoe` flake input). The task manager is Plasma's own with notification
+badges and hover zoom, whose `dockMagnification` key is a percentage from 100
+to 150 (default 110). Whenever the layout changes,
 it deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
 
+- Every 5 minutes, `oled-care.timer` (`machines/nixos-rog/oled-care.nix`) moves
+  each panel by 2 px, up to 8 px, to spare the OLED panel: the top bar grows
+  in height and the dock moves sideways. Each move resizes maximized windows
+  by the same amount. `mac-tahoe-oled-care status` prints each panel's base
+  geometry and the current shift, and `mac-tahoe-oled-care restore` puts the
+  panels back at their base. When a shift fails, `oled-care.service` fails,
+  the panels stay where they are, and no notification shows;
+  `systemctl --user status oled-care` shows the error.
 - Panel Colorizer draws the blurred backgrounds. Its blur area can stay stale in
   the running session. On the night of 2026-10-12 to 2026-10-13, after a live
   change of the dock's height and style, the blur covered only part of the dock,
@@ -560,7 +572,7 @@ names the default look. The looks are:
 
 - `glass`: the Glass decoration, Qt style and blur with the translucent Base16
   scheme, square corners and a floating top bar of three islands. The left
-  island holds the launcher and the active app, the middle one the clock, and
+  island holds the macOS Tahoe theme's fullscreen launcher and the active app, the middle one the clock, and
   the right one the song with a play/pause button while Spotify or Brave
   has a song loaded, then the system monitor, tray and show-desktop
   button.

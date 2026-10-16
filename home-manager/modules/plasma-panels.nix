@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   osConfig,
   pkgs,
@@ -265,6 +266,14 @@ let
     };
   };
 
+  # The dock task manager and fullscreen launcher of the macOS Tahoe theme.
+  # The task manager is Plasma's own with hover zoom (dockMagnification, a
+  # percentage from 100 to 150) and notification badges.
+  tahoe = inputs.mac-tahoe.lib.mkPackages pkgs;
+  tahoePlasmoids = pkgs.callPackage ../../pkgs/mac-tahoe-plasmoids.nix {
+    src = inputs.mac-tahoe;
+  };
+
   dock = {
     location = "bottom";
     height = 80;
@@ -274,7 +283,10 @@ let
     lengthMode = "fit";
     alignment = "center";
     widgets = [
-      { iconTasks.launchers = config.oruc.plasma.dockLaunchers; }
+      {
+        name = "org.kde.mac.tahoe.liquid.icontasks";
+        config.General.launchers = config.oruc.plasma.dockLaunchers;
+      }
       (colorizer dockStyle)
     ];
   };
@@ -287,6 +299,8 @@ in
     home.packages = [
       kvitalsPackage
       pkgs.plasmusic-toolbar
+      tahoe.task-manager
+      tahoePlasmoids
     ];
 
     programs.plasma = {
@@ -325,7 +339,7 @@ in
               height = 36;
               floating = true;
               widgets = [
-                "org.kde.plasma.kickerdash"
+                "org.kde.mac-tahoe-liquid-kde.launcher"
                 (titleBar 6)
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
