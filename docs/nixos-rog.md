@@ -566,9 +566,10 @@ the next login. A live color scheme change can crash Electron apps such as
 Discord, so neither `plasma-look` nor a deploy changes it.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `plasma-look --reapply` after it activates
-the default look. When that fails, the default look stays, and
-`journalctl -u home-manager-oruc` shows the error. The deploy goes on, because
-a failed unit would make it roll back the whole system.
+the default look. When that fails, the look can be half applied, and
+`journalctl -u home-manager-oruc` shows the error; run `plasma-look <look>`
+again. The deploy goes on, because a failed unit would make it roll back the
+whole system.
 `plasma-look glass` goes back to the default look.
 
 Settings made in a look's own settings app, such as Klassy's, last until that

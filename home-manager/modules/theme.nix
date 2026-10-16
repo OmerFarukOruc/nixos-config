@@ -288,9 +288,11 @@ in
         "plasma-plasmashell.service"
       ];
       PartOf = [ "plasma-workspace.target" ];
-      # Stop retrying when Plasma keeps rejecting the scheme.
+      # Stop retrying when Plasma keeps rejecting the scheme. A skipped start
+      # counts too, and a deploy with a stored Plasma look starts the unit
+      # twice, so the limit leaves room for a plasma-look right after it.
       StartLimitIntervalSec = 60;
-      StartLimitBurst = 3;
+      StartLimitBurst = 5;
     };
     Service = {
       Type = "oneshot";

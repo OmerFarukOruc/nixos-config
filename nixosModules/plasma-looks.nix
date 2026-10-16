@@ -127,8 +127,8 @@ in
     environment.systemPackages = [ plasmaLook ];
 
     # The leading "-" keeps a failed look from failing the unit, because a
-    # failed unit makes deploy.sh roll back the whole system. The default
-    # look then stays, and the unit's journal holds the error.
+    # failed unit makes deploy.sh roll back the whole system. The look can
+    # then be half applied, and the unit's journal holds the error.
     systemd.services.home-manager-oruc.serviceConfig.ExecStartPost =
       "-${lib.getExe plasmaLook} --reapply";
 
