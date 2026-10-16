@@ -266,7 +266,7 @@ let
     };
   };
 
-  # The dock task manager and fullscreen launcher of the macOS Tahoe theme.
+  # The dock task manager and the launcher of the macOS Tahoe theme.
   # The task manager is Plasma's own with hover zoom (dockMagnification, a
   # percentage from 100 to 150) and notification badges.
   tahoe = inputs.mac-tahoe.lib.mkPackages pkgs;

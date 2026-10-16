@@ -51,8 +51,9 @@
     };
     # The launcher, dock task manager and OLED pixel shift of the macOS Tahoe
     # Plasma theme. Its task manager is a compiled applet that loads only into
-    # the Plasma it was built for, so it follows our nixpkgs. A commit pin keeps
-    # the hourly updater from rebuilding it for every upstream move.
+    # the Plasma it was built for, so the modules build it with lib.mkPackages
+    # and our pkgs. A commit pin keeps the hourly updater from rebuilding it
+    # for every upstream move.
     mac-tahoe = {
       url = "github:lestercorderomurillo/macos-tahoe-liquid-kde/8fac9286e6687bf3a890edfca68659bb8e576c72";
       inputs.nixpkgs.follows = "nixpkgs";

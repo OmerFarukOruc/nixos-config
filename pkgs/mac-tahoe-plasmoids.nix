@@ -1,6 +1,7 @@
-# The QML parts of the macOS Tahoe Plasma theme that its own packages leave
-# out: the fullscreen launcher, and the icons-only variant of its dock task
-# manager. The variant is only metadata whose X-Plasma-RootPath points at the
+# Two QML plasmoids of the macOS Tahoe Plasma theme: its launcher, and the
+# icons-only variant of its dock task manager. The theme's own theme-assets
+# package also holds them, but with its whole look, icons and a second copy of
+# Panel Colorizer. The variant is only metadata whose X-Plasma-RootPath points at the
 # compiled task manager, as Plasma's own icontasks does. src is the mac-tahoe
 # flake input.
 {
@@ -28,8 +29,12 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Launcher and icons-only dock of the macOS Tahoe Plasma theme";
     homepage = "https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde";
-    # The licence that both metadata.json files name.
-    license = lib.licenses.gpl3Only;
+    # Both metadata.json files name GPL-3.0, and the launcher's directory holds
+    # the GPL-2.0 text.
+    license = [
+      lib.licenses.gpl2Only
+      lib.licenses.gpl3Only
+    ];
     platforms = lib.platforms.linux;
   };
 }
