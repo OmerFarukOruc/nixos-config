@@ -159,4 +159,47 @@ in
       ExecStart = lib.getExe micDefaultSource;
     };
   };
+  # A program that makes the raw microphone the default source takes the
+  # denoising away from every app until the next HushMic start. On 2026-10-16
+  # one did so as a Bluetooth headset connected, and no log named it. While
+  # HushMic's source exists, this hook turns that choice into HushMic; every
+  # other source stays a valid choice.
+  services.pipewire.wireplumber.extraScripts."hushmic-default.lua" = ''
+    SimpleEventHook {
+      name = "custom/hushmic-default",
+      interests = {
+        EventInterest {
+          Constraint { "event.type", "=", "metadata-changed" },
+          Constraint { "metadata.name", "=", "default" },
+          Constraint { "event.subject.key", "=", "default.configured.audio.source" },
+        },
+      },
+      execute = function (event)
+        local value = event:get_properties () ["event.subject.value"]
+        if not value or Json.Raw (value):parse () ["name"] ~= "${mic}" then
+          return
+        end
+        local source = event:get_source ()
+        local nodes = source:call ("get-object-manager", "node")
+        if not nodes:lookup { Constraint { "node.name", "=", "hushmic_source" } } then
+          return
+        end
+        local metadata = source:call ("get-object-manager", "metadata"):lookup {
+          Constraint { "metadata.name", "=", "default" },
+        }
+        metadata:set (0, "default.configured.audio.source", "Spa:String:JSON",
+          Json.Object { ["name"] = "hushmic_source" }:to_string ())
+      end
+    }:register ()
+  '';
+  services.pipewire.wireplumber.extraConfig."90-hushmic-default" = {
+    "wireplumber.components" = [
+      {
+        name = "hushmic-default.lua";
+        type = "script/lua";
+        provides = "custom.hushmic-default";
+      }
+    ];
+    "wireplumber.profiles".main."custom.hushmic-default" = "required";
+  };
 }
