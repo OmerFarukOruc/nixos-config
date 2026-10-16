@@ -1,6 +1,6 @@
 """Compares the Plasma panel file with the panel settings in the Nix file.
 
-usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC
+usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC [DEFAULTS]
 
 EXPECTED.json is /etc/oruc/verify-plasma-panels/LOOK.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
@@ -9,6 +9,12 @@ per setting that differs and per widget that the Nix file does not declare,
 and exits 1, or prints nothing and exits 0. Exits 2 when a file cannot be read
 or compared.
 
+DEFAULTS is a directory that holds WIDGET/main.xml, the settings file of each
+installed widget. Plasma does not store a setting that equals its default, so
+a declared key missing from the panel file is compared with the default in
+WIDGET/main.xml. A compiled widget, such as the clock, ships no main.xml, and
+a key missing from its settings counts as a difference.
+
 A widget that keeps its settings in profiles (kVitals' profileList) reads
 only its active profile, so the declared keys found in that profile are
 compared there too.
@@ -16,8 +22,10 @@ compared there too.
 
 import json
 import math
+import os
 import re
 import sys
+import xml.etree.ElementTree as ElementTree
 
 # Plasma's Types::Location values.
 LOCATIONS = {"floating": "0", "top": "3", "bottom": "4", "left": "5", "right": "6"}
@@ -41,6 +49,40 @@ def read_kconfig(path):
                     r"\\(.)", lambda m: UNESCAPES.get(m.group(1), m.group(0)), value
                 )
     return groups
+
+
+def read_defaults(path):
+    """Returns {group: {key: default}} from a kcfg main.xml. An entry whose
+    default is C++ code has no default here."""
+    defaults = {}
+    for group in ElementTree.parse(path).getroot():
+        if tag(group) != "group":
+            continue
+        for entry in group:
+            if tag(entry) != "entry":
+                continue
+            default = next((item for item in entry if tag(item) == "default"), None)
+            if default is None or default.get("code") == "true":
+                continue
+            value = default.text or ""
+            if entry.get("type") == "Enum" and not value.isdigit():
+                # Plasma stores an Enum as the index of its choice.
+                choices = [
+                    item.get("name")
+                    for element in entry
+                    if tag(element) == "choices"
+                    for item in element
+                    if tag(item) == "choice"
+                ]
+                if value in choices:
+                    value = str(choices.index(value))
+            key = entry.get("key") or entry.get("name")
+            defaults.setdefault(group.get("name"), {})[key] = value
+    return defaults
+
+
+def tag(element):
+    return element.tag.rsplit("}", 1)[-1]
 
 
 def text(value):
@@ -163,7 +205,7 @@ def active_profile(general):
     return profiles[0].get("data") if profiles else None
 
 
-def compare(panels, groups):
+def compare(panels, groups, defaults):
     problems = []
     containments = sorted(
         (path[1] for path in groups if len(path) == 2 and path[0] == "Containments"),
@@ -206,9 +248,16 @@ def compare(panels, groups):
             base = ("Containments", match, "Applets", candidates[index], "Configuration")
             for group, settings in (widget.get("config") or {}).items():
                 stored = groups.get(base + tuple(group.split("/")), {})
+                group_defaults = defaults(name).get(group, {})
                 for key, want in settings.items():
-                    for found in differences(want, stored.get(key)):
-                        problems.append(problem(where, name, key, found))
+                    got = stored.get(key)
+                    implied = got is None and key in group_defaults
+                    if implied:
+                        got = group_defaults[key]
+                    for path, detail in differences(want, got):
+                        if implied:
+                            detail += " (the default; the panel file lacks the key)"
+                        problems.append(problem(where, name, key, (path, detail)))
             profile = active_profile(groups.get(base + ("General",), {}))
             if profile is not None:
                 for key, want in ((widget.get("config") or {}).get("General") or {}).items():
@@ -223,9 +272,17 @@ def compare(panels, groups):
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 2
+    cache = {}
+
+    def defaults(widget):
+        if widget not in cache:
+            path = os.path.join(sys.argv[3], widget, "main.xml") if len(sys.argv) == 4 else None
+            cache[widget] = read_defaults(path) if path and os.path.exists(path) else {}
+        return cache[widget]
+
     try:
         with open(sys.argv[1], encoding="utf-8") as expected:
             panels = json.load(expected)
@@ -234,7 +291,7 @@ def main():
         print(error, file=sys.stderr)
         return 2
     try:
-        problems = compare(panels, groups)
+        problems = compare(panels, groups, defaults)
     except Exception as error:  # A malformed file must not read as a difference.
         print(f"cannot compare: {error!r}", file=sys.stderr)
         return 2
