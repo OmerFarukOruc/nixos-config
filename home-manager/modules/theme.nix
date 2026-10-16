@@ -36,6 +36,47 @@ let
     src = "${inputs.warm-burnout}/nvim";
   };
 
+  # Every other scheme gets the whole VS Code theme that tinted-vscode's
+  # template renders from it. The template is rendered in a build, so the
+  # evaluation reads nothing from it. VS Code finds the extension through a
+  # link that Home Manager writes, so a `theme` switch needs no new VS Code
+  # package.
+  tintedThemeLabel = "Base16 ${rawScheme.scheme-name}";
+  tintedVscode = pkgs.vscode-utils.buildVscodeExtension {
+    pname = "oruc-base16-theme";
+    version = "1.0.0";
+    vscodeExtPublisher = "oruc";
+    vscodeExtName = "base16-theme";
+    vscodeExtUniqueId = "oruc.base16-theme";
+    dontUnpack = true;
+    installPhase = ''
+      mkdir -p "$out/$installPrefix/themes"
+      cp ${
+        pkgs.writeText "package.json" (
+          builtins.toJSON {
+            name = "base16-theme";
+            publisher = "oruc";
+            version = "1.0.0";
+            engines.vscode = "^1.85.0";
+            contributes.themes = [
+              {
+                label = tintedThemeLabel;
+                uiTheme = if theme.isLight then "vs" else "vs-dark";
+                path = "./themes/base16.json";
+              }
+            ];
+          }
+        )
+      } "$out/$installPrefix/package.json"
+      cp ${
+        config.scheme {
+          templateRepo = inputs.tinted-vscode;
+          target = "base16";
+        }
+      } "$out/$installPrefix/themes/base16.json"
+    '';
+  };
+
   vscodeAnsiColors = lib.listToAttrs (
     lib.imap0 (
       index: slot:
@@ -214,24 +255,13 @@ in
 
   oruc.vscodeSettings = {
     "workbench.colorTheme" =
-      if isWarmBurnout then
-        "Warm Burnout ${lib.toSentenceCase warmBurnoutVariant}"
-      else
-        "Default ${if theme.isLight then "Light" else "Dark"} Modern";
+      if isWarmBurnout then "Warm Burnout ${lib.toSentenceCase warmBurnoutVariant}" else tintedThemeLabel;
     # vscode.nix sets the see-through backgrounds. The terminal takes
     # Ghostty's colors.
-    "workbench.colorCustomizations" =
-      lib.optionalAttrs (!isWarmBurnout) {
-        "editor.foreground" = scheme.base05;
-        "editor.selectionBackground" = scheme.base02;
-        "editorCursor.foreground" = scheme.base05;
-        "statusBar.background" = scheme.base02;
-        "statusBar.foreground" = scheme.base05;
-      }
-      // {
-        "terminal.foreground" = scheme.base05;
-      }
-      // vscodeAnsiColors;
+    "workbench.colorCustomizations" = {
+      "terminal.foreground" = scheme.base05;
+    }
+    // vscodeAnsiColors;
     # The default ratio of 4.5 shifts terminal colors away from the palette.
     "terminal.integrated.minimumContrastRatio" = 1;
   };
@@ -253,7 +283,9 @@ in
     };
   };
 
-  programs.vscode.profiles.default.extensions = lib.optional isWarmBurnout warmBurnoutVscode;
+  programs.vscode.profiles.default.extensions = [
+    (if isWarmBurnout then warmBurnoutVscode else tintedVscode)
+  ];
 
   # Neovim loads its colors from a file, because `theme` switches the scheme
   # without a new Neovim package (variants.nix). Both color schemes are installed.
