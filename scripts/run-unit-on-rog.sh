@@ -19,6 +19,8 @@
 # The whole unit runs, ExecStartPre and conditions included, beside the real
 # unit if that runs; %n and the unit's drop-ins differ. A oneshot unit still
 # running at the timeout fails, and so does a unit whose condition was not met.
+# A unit that exits is stopped before the verdict, so its ExecStop counts; the
+# ExecStop of a unit still running at the timeout is not judged.
 # A name Home Manager does not define, or a unit without ExecStart, is refused
 # with exit 3.
 set -euo pipefail
@@ -76,7 +78,7 @@ mkdir -p -- "$dir/$name.service.d"
 awk '
   /^\[/ { install = ($0 == "[Install]") }
   install { next }
-  /^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess|PropagatesStopTo|StopPropagatedFrom|StopWhenUnneeded|Sockets)=/ { next }
+  /^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess|PropagatesStopTo|StopPropagatedFrom|StopWhenUnneeded|RefuseManualStop|Sockets)=/ { next }
   { print }
 ' "$file" >"$dir/$name.service"
 # A oneshot unit's run is its start, so TimeoutStartSec bounds it and systemd
@@ -104,7 +106,9 @@ state=$(show ActiveState)
 # A unit that exited cleanly stays active (exited) here. Stopping it runs its
 # ExecStop now, as the real unit would after ExecStart, so a failing ExecStop
 # shows in the verdict.
+stopped=false
 if [[ $state == active && $(show SubState) == exited ]]; then
+  stopped=true
   status=$(show ExecMainStatus)
   systemctl --user stop "$name.service" </dev/null || true
   state=$(show ActiveState)
@@ -118,7 +122,7 @@ if [[ $state == exited ]]; then
 elif [[ $state == active ]]; then
   echo "still running after $seconds s: a pass for a long-running unit"
 elif [[ $state =~ ^(failed|deactivating)$ && $result == timeout && $limit == RuntimeMaxSec &&
-  $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
+  $stopped == false && $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
   # RuntimeMaxSec ends a long-running unit with a timeout once it is active,
   # and a slow stop leaves it deactivating; a start that timed out never
   # made it active.
