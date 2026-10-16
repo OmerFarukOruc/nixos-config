@@ -14,6 +14,8 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   kreadconfig = lib.getExe' pkgs.kdePackages.kconfig "kreadconfig6";
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
+  dconf = lib.getExe pkgs.dconf;
+  dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
 
   # Named colors of libadwaita, which adw-gtk3 reuses for GTK 3.
   gtkColors = ''
@@ -117,14 +119,19 @@ in
             if [[ -L $gtkCss ]]; then
               warnEcho "$gtkCss is a link, so it cannot import oruc-colors.css."
             elif ! grep -qsF "$gtkImport" "$gtkCss"; then
-              { [[ -s $gtkCss ]] && printf '\n'; printf '%s\n' "$gtkImport"; } >>"$gtkCss"
+              { [[ -s $gtkCss ]] && printf '\n'; printf '%s\n' "$gtkImport"; } >>"$gtkCss" ||
+                warnEcho "$gtkCss is not writable, so it does not import oruc-colors.css."
             fi
           done
           unset gtkDir gtkCss gtkImport
 
           # Only GTK 3 reads the theme name. The name is ours while it is unset
           # or already one of adw-gtk3's, so a theme chosen in System Settings
-          # stays.
+          # stays. GTK 3 on Wayland takes the name from gsettings whenever it
+          # sees the org.gnome.desktop.interface schema, which beats
+          # settings.ini, so both get it. Without a session bus (a deploy at
+          # boot) dconf runs on a private one, as Home Manager's own dconf
+          # step does, and a failed write only warns.
           gtkSettings=${config.xdg.configHome}/gtk-3.0/settings.ini
           case $(${kreadconfig} --file "$gtkSettings" --group Settings --key gtk-theme-name) in
             "" | adw-gtk3 | adw-gtk3-dark)
@@ -132,6 +139,24 @@ in
               ;;
           esac
           unset gtkSettings
+
+          gtkThemeKey=/org/gnome/desktop/interface/gtk-theme
+          gtkThemeNow=$(${dconf} read "$gtkThemeKey" 2>/dev/null) || gtkThemeNow=
+          case $gtkThemeNow in
+            "" | "'adw-gtk3'" | "'adw-gtk3-dark'")
+              if [[ $gtkThemeNow != "'${theme.gtk}'" ]]; then
+                if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
+                  dconfBus=()
+                else
+                  dconfBus=(${dbusRunSession})
+                fi
+                run "''${dconfBus[@]}" ${dconf} write "$gtkThemeKey" "'${theme.gtk}'" ||
+                  warnEcho "Could not set the GTK 3 theme in dconf."
+                unset dconfBus
+              fi
+              ;;
+          esac
+          unset gtkThemeKey gtkThemeNow
         fi
       '';
     })
