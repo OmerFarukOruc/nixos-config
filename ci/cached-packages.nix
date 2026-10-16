@@ -13,6 +13,7 @@ let
   # CUDA build references unfree NVIDIA libraries, and cachix push uploads a
   # whole closure.
   pnames = [
+    "airpods-tui"
     "deskflow"
     "dms-shell"
     "glass-qt6"

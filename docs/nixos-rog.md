@@ -92,7 +92,7 @@ before it restores a generation.
 
 cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
-each host: DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
+each host: airpods-tui, DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
 style, herdr while `pkgs/herdr.nix` builds a newer release than llm-agents,
 the sddm-astronaut login theme, the lock screen's video wallpaper plugin and
 `sops-install-secrets`, plus the newer libportal that Deskflow links. It reads them from the host's own
