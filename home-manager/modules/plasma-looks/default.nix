@@ -16,6 +16,7 @@
 {
   lib,
   osConfig,
+  pkgs,
   sessions,
   ...
 }:
@@ -34,12 +35,51 @@ in
       description = "The Plasma look of this generation.";
     };
     colorScheme = lib.mkOption {
-      type = lib.types.str;
-      description = "Color scheme that oruc-plasma-colors applies at each Plasma login.";
+      type = lib.types.nullOr lib.types.str;
+      description = "Color scheme that oruc-plasma-colors applies at each Plasma login, or null for a look that applies its own.";
     };
     widgetStyle = lib.mkOption {
-      type = lib.types.str;
-      description = "Qt style that oruc-plasma-colors applies at each Plasma login.";
+      type = lib.types.nullOr lib.types.str;
+      description = "Qt style that oruc-plasma-colors applies with the color scheme.";
+    };
+    dockLaunchers = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      # The Teams and WhatsApp Web entries are web apps that Brave writes to
+      # ~/.local/share/applications.
+      default = [
+        "preferred://filemanager"
+        "applications:io.missioncenter.MissionCenter.desktop"
+        "preferred://browser"
+        "applications:com.mitchellh.ghostty.desktop"
+        "applications:SourceGit.desktop"
+        "applications:code.desktop"
+        "applications:chatgpt.desktop"
+        "applications:com.anthropic.Claude.desktop"
+        "applications:grok-bot.desktop"
+        "applications:openchamber.desktop"
+        "applications:cursor.desktop"
+        "applications:org.opengamingcollective.rog-control-center.desktop"
+        "applications:slack.desktop"
+        "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+        "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
+        "applications:discord.desktop"
+        "applications:org.telegram.desktop.desktop"
+        "applications:spotify.desktop"
+        "applications:md.obsidian.Obsidian.desktop"
+      ];
+      description = "Launchers pinned to the dock of every look.";
+    };
+    panelLayout = lib.mkOption {
+      type = lib.types.enum [
+        "bar"
+        "islands"
+        "none"
+      ];
+      default = "bar";
+      description = ''
+        Panels from plasma-panels.nix: one top bar, or three floating top
+        panels, each with the dock; none for a look that brings its own.
+      '';
     };
   };
 
@@ -47,5 +87,23 @@ in
     specialisation = lib.genAttrs (lib.remove defaultLook selectors.plasmaLookNames) (look: {
       configuration.oruc.plasma.look = look;
     });
+
+    # The units that run once per login (once-per-login.nix) would still run
+    # at the first switch into a session that started before their marker
+    # existed, so the activation marks the running login for them before
+    # Home Manager starts units.
+    home.activation.markPlasmaLogin =
+      let
+        systemctl = lib.getExe' pkgs.systemd "systemctl";
+      in
+      lib.hm.dag.entryBefore [ "reloadSystemd" ] ''
+        runtime=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+        login=$(XDG_RUNTIME_DIR=$runtime ${systemctl} --user show -p InvocationID --value plasma-workspace.target 2>/dev/null || true)
+        if [[ -n $login && ! -v DRY_RUN ]]; then
+          for unit in oruc-plasma-colors mac-tahoe-theme; do
+            printf '%s\n' "$login" >"$runtime/$unit.login"
+          done
+        fi
+      '';
   };
 }

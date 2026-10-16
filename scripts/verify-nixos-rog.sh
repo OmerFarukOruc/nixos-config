@@ -385,7 +385,8 @@ if [[ -n ${plasma_widgets:-} ]]; then
   IFS=, read -ra widgets <<<"$plasma_widgets"
   for widget in "${widgets[@]}"; do
     found=false
-    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
+    # The Tahoe look links its widgets into ~/.local/share.
+    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw "$HOME/.local"; do
       if [[ -e $root/share/plasma/plasmoids/$widget || -e $root/lib/qt-6/plugins/plasma/applets/$widget.so ]]; then
         found=true
         break
@@ -414,7 +415,8 @@ if [[ -n ${plasma_widgets:-}${kwin_effects:-} ]]; then
       missing=()
       IFS=, read -ra effects <<<"$kwin_effects"
       for effect in "${effects[@]}"; do
-        [[ $loaded == *\"$effect\"* ]] || missing+=("$effect")
+        # Some builds name a compiled effect kwin4_effect_<name>.
+        [[ $loaded == *\"$effect\"* || $loaded == *\"kwin4_effect_$effect\"* ]] || missing+=("$effect")
       done
       check kwin-effects-loaded "not loaded: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
     fi
@@ -549,7 +551,7 @@ REMOTE
     0) if [[ -z $missing ]]; then
       record dock-launchers-installed pass "${#launchers[@]} desktop files found"
     else
-      record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from plasma-panels.nix"
+      record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from oruc.plasma.dockLaunchers in home-manager/modules/plasma-looks/default.nix"
     fi ;;
     3) record dock-launchers-installed manual "the user manager on $host has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
     4) record dock-launchers-installed fail "systemctl --user show-environment failed on $host" ;;

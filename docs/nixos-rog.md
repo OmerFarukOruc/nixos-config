@@ -55,7 +55,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, mac-tahoe, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -494,8 +494,11 @@ scripts/kwin-windows-on-rog.sh
 
 ## Plasma panels
 
-plasma-manager builds both panels, the top bar and the dock, from
-`home-manager/modules/plasma-panels.nix`. Whenever that layout changes, it
+plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
+the top bar and the dock, or for the tiling look three floating top panels and
+the dock. The dock's launchers are `oruc.plasma.dockLaunchers` in
+`home-manager/modules/plasma-looks/default.nix`. The Tahoe look brings its own
+panels. Whenever the layout changes, it
 deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
@@ -551,7 +554,21 @@ A Plasma look is the Plasma style, window decoration, Qt style, color scheme
 and KWin blur that belong together. Each look is a file in
 `home-manager/modules/plasma-looks/`, and `plasmaLookNames` in
 `machines/selectors.nix` lists them. `theme.plasmaLook` in the machine record
-names the default look.
+names the default look. The looks are:
+
+- `glass`: the Glass decoration, Qt style and blur with the translucent Base16
+  scheme and square corners.
+- `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
+  Base16 scheme. Klassy's settings app changes its buttons and title bars.
+- `tiling`: `glass` with rounded corners, Krohnkite tiling with 8 px gaps and
+  three floating top panels. Krohnkite's shortcuts are in System Settings,
+  Shortcuts; its Meta+Return loses to the Ghostty shortcut.
+- `tahoe`: the macOS Tahoe theme from
+  [macos-tahoe-liquid-kde](https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde),
+  with its own colors, icons, cursor, top bar with the global menu, and dock.
+  Its theme switcher, `mac-tahoe-theme.service`, applies it at login. It also
+  changes the GTK theme; a look other than `tahoe` puts back Plasma's GTK
+  settings when it activates (`leaveTahoe` in `plasma-looks/tahoe.nix`).
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:
@@ -580,7 +597,10 @@ To add a look:
 1. Add its name, in lowercase letters and digits, to `plasmaLookNames` and create
    `home-manager/modules/plasma-looks/<name>.nix`, following `klassy.nix`. It
    sets `oruc.plasma.colorScheme`, `oruc.plasma.widgetStyle`, the Plasma style
-   and the window decoration while it is active.
+   and the window decoration while it is active. A unit of the look that
+   changes colors or styles runs once per login with
+   `plasma-looks/once-per-login.nix`, because Home Manager starts it again at
+   every switch.
 2. Install its packages whenever Plasma runs, not only while the look is
    active. A look other than the default is a Home Manager specialisation, and
    a specialisation cannot install packages on this setup.
