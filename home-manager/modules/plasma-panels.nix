@@ -206,6 +206,12 @@ let
   music = {
     name = "plasmusic-toolbar";
     config.General = {
+      # With the automatic choice, Plasma's media multiplexer, the widget
+      # stayed hidden while Spotify played and Brave had a stopped player
+      # with no song (observed on nixos-rog). These identities come from each
+      # player's MPRIS Identity property.
+      choosePlayerAutomatically = false;
+      preferredPlayerIdentity = "Spotify,Brave Origin";
       useAlbumCoverAsPanelIcon = true;
       fallbackToIconWhenArtNotAvailable = true;
       skipBackwardControlInPanel = false;
