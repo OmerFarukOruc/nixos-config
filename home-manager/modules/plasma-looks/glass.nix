@@ -1,6 +1,6 @@
 # The Glass look: the Glass window decoration, Qt style and KWin effect, the
-# translucent Base16 scheme, a Plasma style with see-through popups and three
-# floating top panels.
+# translucent Base16 scheme, a Plasma style with see-through popups and a
+# floating top bar of three islands.
 {
   config,
   lib,

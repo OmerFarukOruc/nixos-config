@@ -16,9 +16,10 @@ let
   # which current releases ignore.
   # The keys are in package/contents/ui/code/globals.js of plasma-panel-colorizer.
   # sourceType 0 is a custom color, 1 a color from the Plasma color scheme.
-  colorizer = style: {
+  colorizer = colorizerWith { };
+  colorizerWith = general: style: {
     name = "luisbocanegra.panel.colorizer";
-    config.General = {
+    config.General = general // {
       # The widget shows only in the panel's edit mode.
       hideWidget = true;
       globalSettings = builtins.toJSON style;
@@ -211,18 +212,22 @@ let
     };
   };
 
-  # A floating top panel as long as its widgets, on one blurred, rounded
-  # background with an outline in the accent color.
-  islandStyle = padding: {
+  # One floating top panel with no background of its own. Panel Colorizer
+  # draws the widgets on blurred, rounded backgrounds with an outline in the
+  # accent color, and with islandsEnabled it joins the widgets between two
+  # panel spacers into one background (utils.js, updateIslandWidgetTypes), so
+  # the bar shows three islands. The spacers stay clear.
+  islandsStyle = {
     nativePanel = {
       background.opacity = 0;
       floatingDialogs = true;
       floatingDialogsAllowOverride = true;
     };
-    panel.normal = {
+    widgets.normal = {
       enabled = true;
       blurBehind = true;
       backgroundColor = schemeColor "backgroundColor" "Window" 0.5;
+      foregroundColor = schemeColor "highlightColor" "Window" 1;
       radius = {
         enabled = true;
         corner = allCorners 10;
@@ -232,23 +237,7 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      padding = {
-        enabled = true;
-        side = padding;
-      };
     };
-    widgets.normal = {
-      enabled = true;
-      foregroundColor = schemeColor "highlightColor" "Window" 1;
-    };
-  };
-  island = alignment: padding: widgets: {
-    location = "top";
-    height = 36;
-    floating = true;
-    lengthMode = "fit";
-    inherit alignment;
-    widgets = widgets ++ [ (colorizer (islandStyle padding)) ];
   };
 
   dock = {
@@ -306,44 +295,23 @@ in
             dock
           ];
           islands = [
-            # Plasma keeps free space after the last widget of a panel that
-            # fits its widgets, and each widget keeps its own margins. These
-            # paddings were measured on a screenshot of nixos-rog so that each
-            # panel shows 14 to 18 logical px on both sides of what it draws.
-            # The negative right padding moves the last widget up to 6 px past
-            # the panel's length, into the 8 px floating margin of the panel
-            # window, which the background also covers. Panel Colorizer's
-            # settings window allows no negative padding, so a change made
-            # there resets it. The system monitor is as wide as its numbers,
-            # so the right panel's left side moves when the CPU usage gains or
-            # loses a digit. The left panel grows by the song widget while a
-            # player has a song loaded.
-            (island "left"
-              {
-                left = 8;
-                right = -6;
-              }
-              [
+            {
+              location = "top";
+              height = 36;
+              floating = true;
+              widgets = [
                 "org.kde.plasma.kickerdash"
                 titleBar
                 music
-              ]
-            )
-            (island "center" {
-              left = 12;
-              right = -8;
-            } [ "org.kde.plasma.digitalclock" ])
-            (island "right"
-              {
-                left = 8;
-                right = -10;
-              }
-              [
+                "org.kde.plasma.panelspacer"
+                "org.kde.plasma.digitalclock"
+                "org.kde.plasma.panelspacer"
                 kvitals
                 "org.kde.plasma.systemtray"
                 "org.kde.plasma.showdesktop"
-              ]
-            )
+                (colorizerWith { islandsEnabled = true; } islandsStyle)
+              ];
+            }
             dock
           ];
         }

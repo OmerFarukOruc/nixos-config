@@ -495,8 +495,10 @@ scripts/kwin-windows-on-rog.sh
 ## Plasma panels
 
 plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
-three floating top panels and the dock for the glass look, or a top bar and the
-dock for the klassy look. The dock's launchers are `oruc.plasma.dockLaunchers` in
+a floating top bar of three islands and the dock for the glass look, or a top
+bar and the dock for the klassy look. In the floating bar, Panel Colorizer draws
+the widgets between two panel spacers on one background, so one colorizer
+styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
 `home-manager/modules/plasma-looks/default.nix`. Whenever the layout changes,
 it deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
@@ -543,7 +545,7 @@ lasts only until then, so write a lasting change in the Nix file.
   ```
 
 Prove a panel or effect change with `scripts/screenshot-nixos-rog.sh` before and
-after it. For a change to the top panels, `--crop 2560x60+0+0` keeps only the
+after it. For a change to the top bar, `--crop 2560x60+0+0` keeps only the
 top 60 pixels, so the shot leaves out the windows below them.
 [Check a visual change](#check-a-visual-change) says how to see the blur.
 
@@ -556,10 +558,11 @@ and KWin blur that belong together. Each look is a file in
 names the default look. The looks are:
 
 - `glass`: the Glass decoration, Qt style and blur with the translucent Base16
-  scheme, square corners and three floating top panels. The left panel holds
-  the launcher, the active app and, while a player such as Spotify has a song
-  loaded, the song with a play/pause button. The middle one holds the clock, and the right
-  one the system monitor, tray and show-desktop button.
+  scheme, square corners and a floating top bar of three islands. The left
+  island holds the launcher, the active app and, while a player such as Spotify
+  has a song loaded, the song with a play/pause button. The middle one holds
+  the clock, and the right one the system monitor, tray and show-desktop
+  button.
 - `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
 
