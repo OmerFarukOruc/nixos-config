@@ -325,10 +325,13 @@ in
               widgets = [
                 "org.kde.plasma.kickerdash"
                 (titleBar 6)
-                music
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
                 "org.kde.plasma.panelspacer"
+                # At the end of the left island, Panel Colorizer drew the song
+                # as a box of its own with a double border; here it joins the
+                # island.
+                music
                 kvitals
                 "org.kde.plasma.systemtray"
                 "org.kde.plasma.showdesktop"

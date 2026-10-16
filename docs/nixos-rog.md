@@ -559,9 +559,9 @@ names the default look. The looks are:
 
 - `glass`: the Glass decoration, Qt style and blur with the translucent Base16
   scheme, square corners and a floating top bar of three islands. The left
-  island holds the launcher, the active app and, while a player such as Spotify
-  has a song loaded, the song with a play/pause button. The middle one holds
-  the clock, and the right one the system monitor, tray and show-desktop
+  island holds the launcher and the active app, the middle one the clock, and
+  the right one the song with a play/pause button while a player such as
+  Spotify has a song loaded, then the system monitor, tray and show-desktop
   button.
 - `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
