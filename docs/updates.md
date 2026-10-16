@@ -144,7 +144,7 @@ repository that its `passthru.aptIndex` names.
 | App | Release source |
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
-| Antigravity, OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
+| Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 
 The updater on nixos-rog builds each moved app on its own first. A version that
 does not build stays out of the update and sends one notification, which

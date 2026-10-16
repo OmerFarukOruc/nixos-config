@@ -27,6 +27,11 @@ newbuild=
   echo "$file names no version" >&2
   exit 1
 }
+# shellcheck disable=SC2016 # the Nix ${buildId}, not a shell expansion
+if [[ -z $build ]] && grep -qF '${buildId}' "$file"; then
+  echo "$file uses \${buildId} but has no buildId line" >&2
+  exit 1
+fi
 
 if [[ -n $index ]]; then
   entry=$(curl -fsSL --max-time 20 --retry 2 "$index" |
@@ -41,9 +46,10 @@ else
   sha=$(sed -n 's/^sha512: //p' <<<"$yml")
   path=$(sed -n 's/^path: //p' <<<"$yml")
   if [[ -n $build ]]; then
-    # The build ID comes from the <version>-<digits> segment of the URL that
-    # the feed lists for the file at path.
-    url=$(awk -v path="$path" '$1 == "-" && $2 == "url:" { n = split($3, part, "/"); if (part[n] == path) print $3 }' <<<"$yml")
+    # The build ID comes from the -<digits> segment of the URL that the feed
+    # lists for the file at path; the comparison with the expanded url below
+    # ties that segment to the version.
+    url=$(awk -v path="$path" '$1 == "-" && $2 == "url:" { n = split($3, part, "/"); if (part[n] == path) { print $3; exit } }' <<<"$yml")
     segment='/[^/]*-([0-9]+)/'
     [[ $url =~ $segment ]] && newbuild=${BASH_REMATCH[1]}
     want=$(sed -n 's|^    url = "\(.*\)";$|\1|p' "$file")
