@@ -116,8 +116,9 @@ let
       Usage: theme [SCHEME | --reapply]
 
       With no argument, prints the active Base16 scheme and the schemes to choose from.
-      SCHEME activates that scheme and keeps it across deploys. Ghostty, VS Code and new
-      Neovim windows take its colors at once; log out and in to load its KDE colors.
+      SCHEME activates that scheme and keeps it across deploys. Ghostty, new Neovim
+      windows and a Claude Code that selects custom:scheme take its colors at once,
+      VS Code at its next start; log out and in to load its KDE colors.
       --reapply activates the stored scheme and Plasma look again. The Home Manager
       service runs it after it activates the default ones.
       The login screen, the boot menu, the console and niri keep the scheme of the
@@ -141,7 +142,7 @@ let
           fi
           choose scheme "$1"
           activate "$(stored_look)" "$1"
-          echo "Ghostty, VS Code and new Neovim windows take the $1 colors. Log out and in to load its KDE colors."
+          echo "Ghostty and new Neovim windows take the $1 colors, VS Code at its next start. Log out and in to load its KDE colors."
           ;;
       esac
     '';
