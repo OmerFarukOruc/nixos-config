@@ -13,7 +13,12 @@ let
 in
 {
   # json-config.py and the Claude Code hooks in settings.json run under python3.
-  home.packages = [ pkgs.python3 ];
+  # The checkout's pre-commit hook installs ruff and shellcheck through mise at
+  # the versions the checkout pins, for commits typed in a shell too.
+  home.packages = [
+    pkgs.python3
+    pkgs.mise
+  ];
 
   systemd.user.services.desktop-sync-config = {
     Unit = {
@@ -24,8 +29,8 @@ in
       Type = "oneshot";
       ExecStart = "${dotfiles}/desktop/bin/desktop-sync.sh --config";
       WorkingDirectory = dotfiles;
-      # ruff and shellcheck run the checkout's pre-commit hook when a run
-      # commits recorded config.
+      # The pre-commit hook falls back to this ruff and shellcheck when mise
+      # cannot download the pinned versions.
       Environment = [
         "PATH=${
           lib.makeBinPath [
