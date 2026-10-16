@@ -10,15 +10,15 @@
 let
   cfg = osConfig.oruc.machine;
   # base00 and the other slots are hex without "#"; withHashtag adds it.
-  rawScheme = osConfig.scheme;
-  scheme = osConfig.scheme.withHashtag;
-  theme = osConfig.oruc.theme;
+  rawScheme = config.scheme;
+  scheme = config.scheme.withHashtag;
+  theme = config.oruc.theme;
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
 
   # A warm-burnout-* scheme brings Warm Burnout's own VS Code and Neovim
   # themes, which color syntax beyond the 16 Base16 slots.
-  isWarmBurnout = lib.hasPrefix "warm-burnout-" cfg.theme.scheme;
+  isWarmBurnout = lib.hasPrefix "warm-burnout-" config.oruc.scheme;
   warmBurnoutVariant = if theme.isLight then "light" else "dark";
   warmBurnoutVersion = (lib.importJSON "${inputs.warm-burnout}/vscode/package.json").version;
   warmBurnoutVscode = pkgs.vscode-utils.buildVscodeExtension {
@@ -255,19 +255,28 @@ in
 
   programs.vscode.profiles.default.extensions = lib.optional isWarmBurnout warmBurnoutVscode;
 
-  programs.nvf.settings.vim.extraPlugins = lib.mkIf isWarmBurnout {
-    warm-burnout = {
-      package = warmBurnoutNvim;
-      setup = "vim.cmd.colorscheme('warm-burnout-${warmBurnoutVariant}')";
-    };
-  };
+  # Neovim loads its colors from a file, because `theme` switches the scheme
+  # without a new Neovim package (variants.nix). Both color schemes are installed.
+  xdg.configFile."oruc/nvim-theme.lua".text =
+    if isWarmBurnout then
+      "vim.cmd.colorscheme('warm-burnout-${warmBurnoutVariant}')"
+    else
+      "require('base16-colorscheme').setup({ ${
+        lib.concatMapStringsSep ", " (slot: "${slot} = '${scheme.${slot}}'") (
+          map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF")
+        )
+      } })";
 
-  programs.nvf.settings.vim.theme = lib.mkIf (!isWarmBurnout) {
-    enable = true;
-    name = "base16";
-    base16-colors = lib.genAttrs (map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF")) (
-      slot: scheme.${slot}
-    );
+  programs.nvf.settings.vim = {
+    # nvf's own base16 plugin, which its base16 theme would start.
+    startPlugins = [ "base16" ];
+    extraPlugins.oruc-theme = {
+      package = warmBurnoutNvim;
+      setup = ''
+        local ok, err = pcall(dofile, ${builtins.toJSON "${config.xdg.configHome}/oruc/nvim-theme.lua"})
+        if not ok then vim.notify(err, vim.log.levels.WARN) end
+      '';
+    };
   };
 
   # The link's name needs the wallpaper, so the whole entry is left out when

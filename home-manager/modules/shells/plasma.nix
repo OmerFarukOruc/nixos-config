@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -6,7 +7,7 @@
   ...
 }:
 let
-  inherit (osConfig.oruc.theme) wallpaper;
+  inherit (config.oruc.theme) wallpaper;
 in
 {
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "plasma") {

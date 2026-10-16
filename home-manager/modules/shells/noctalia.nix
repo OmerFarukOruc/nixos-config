@@ -6,8 +6,8 @@
   ...
 }:
 let
-  scheme = osConfig.scheme.withHashtag;
-  theme = osConfig.oruc.theme;
+  scheme = config.scheme.withHashtag;
+  theme = config.oruc.theme;
   inherit (theme) isLight wallpaper;
 
   ansiRow =

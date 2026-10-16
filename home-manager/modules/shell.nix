@@ -1,12 +1,11 @@
 {
   config,
   lib,
-  osConfig,
   pkgs,
   ...
 }:
 let
-  scheme = osConfig.scheme.withHashtag;
+  scheme = config.scheme.withHashtag;
 
   batPreview = "bat --color=always --style=numbers --line-range=:200 {}";
   treePreview = "eza --tree --level=2 --color=always --icons=always {}";
@@ -33,6 +32,9 @@ let
   ];
 in
 {
+  # root imports this file alone, so it brings the scheme along.
+  imports = [ ./scheme.nix ];
+
   programs.zsh = {
     enable = true;
     enableCompletion = true;
@@ -181,30 +183,40 @@ in
     };
   };
 
+  home.sessionVariables.FZF_DEFAULT_OPTS_FILE = "${config.xdg.configHome}/fzf/fzfrc";
+  # Colors in the slots of the tinted-theming fzf template.
+  xdg.configFile."fzf/fzfrc".text = lib.concatStringsSep "\n" [
+    "--height=40%"
+    "--layout=reverse"
+    "--border=rounded"
+    "--color=${
+      lib.concatStringsSep "," (
+        lib.mapAttrsToList (name: slot: "${name}:${scheme.${slot}}") {
+          "bg+" = "base01";
+          bg = "base00";
+          spinner = "base0C";
+          hl = "base0D";
+          fg = "base04";
+          header = "base0D";
+          info = "base0A";
+          pointer = "base0C";
+          marker = "base0C";
+          "fg+" = "base06";
+          prompt = "base0A";
+          "hl+" = "base0D";
+        }
+      )
+    }"
+  ];
+
   programs.fzf = {
     enable = true;
     enableZshIntegration = false;
     defaultCommand = "${lib.getExe pkgs.fd} --type f --hidden --exclude .git";
-    defaultOptions = [
-      "--height=40%"
-      "--layout=reverse"
-      "--border=rounded"
-    ];
-    # Slots as in the tinted-theming fzf template.
-    colors = {
-      "bg+" = scheme.base01;
-      bg = scheme.base00;
-      spinner = scheme.base0C;
-      hl = scheme.base0D;
-      fg = scheme.base04;
-      header = scheme.base0D;
-      info = scheme.base0A;
-      pointer = scheme.base0C;
-      marker = scheme.base0C;
-      "fg+" = scheme.base06;
-      prompt = scheme.base0A;
-      "hl+" = scheme.base0D;
-    };
+    # The options live in a file, because `theme` switches the colors without
+    # a new session-variables package (variants.nix).
+    defaultOptions = [ ];
+    colors = { };
     fileWidget.options = [
       "--preview '${pathPreview}'"
       previewWindow

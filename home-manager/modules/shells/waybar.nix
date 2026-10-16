@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -6,8 +7,8 @@
   ...
 }:
 let
-  scheme = osConfig.scheme.withHashtag;
-  inherit (osConfig.oruc.theme) fonts wallpaper;
+  scheme = config.scheme.withHashtag;
+  inherit (config.oruc.theme) fonts wallpaper;
 in
 {
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "waybar") {

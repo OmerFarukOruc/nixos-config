@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -9,8 +10,8 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "walker";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = osConfig.scheme.withHashtag;
-  inherit (osConfig.oruc.theme) fonts;
+  scheme = config.scheme.withHashtag;
+  inherit (config.oruc.theme) fonts;
   commands = {
     app = "exec ${lib.getExe pkgs.walker} --provider desktopapplications";
     command = "exec ${lib.getExe pkgs.walker} --provider runner";

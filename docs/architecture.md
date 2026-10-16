@@ -44,6 +44,8 @@ The other files in `machines/` define what a record may hold:
 - `schemes.nix` maps each Base16 scheme name to its file, from the pinned
   tinted-theming input or `assets/schemes`.
 - `sessions.nix` has the `sessions` helpers.
+- `variants.nix` lists the Home Manager variants of a record: one per Plasma
+  look and scheme ([Theme](#theme)).
 
 Every session reads the same idle and touchpad settings. Plasma reads the idle
 settings through powerdevil (`home-manager/modules/plasma-manager.nix`). It reads
@@ -109,11 +111,37 @@ These rules follow from the list:
 
 ## Theme
 
-`nixosModules/theme.nix` derives the read-only `oruc.theme` values from the
-selected Base16 scheme (`theme.scheme` in the machine record). The values are
-whether the scheme is light, the cursor, icons and GTK theme that follow that
-variant, the wallpaper named after the scheme, and the ANSI slots. The font
-families are fixed.
+`nixosModules/theme-module.nix` derives the read-only `oruc.theme` values from
+a Base16 scheme. The values are whether the scheme is light, the cursor, icons
+and GTK theme that follow that variant, the wallpaper named after the scheme,
+and the ANSI slots. The font families are fixed.
+
+NixOS and Home Manager each import that module with their own scheme:
+
+- NixOS (`nixosModules/theme.nix`) uses `theme.scheme` from the machine record.
+  The login screen, the boot menu, the console and niri read it.
+- Home Manager (`home-manager/modules/scheme.nix`) uses `oruc.scheme`, which
+  starts as `theme.scheme`. Every app that Home Manager configures reads
+  `config.scheme` and `config.oruc.theme`, never the NixOS values.
+
+`theme.schemes` in the machine record lists other schemes. Each one, with each
+Plasma look, is a Home Manager variant (`machines/variants.nix`): the
+generation itself for the record's scheme and default look, and a
+specialisation for each other pair (`home-manager/modules/variants.nix`).
+`theme <scheme>` activates one at run time and keeps it across deploys
+([Switch the scheme](nixos-rog.md#switch-the-scheme)). Every variant adds a
+Home Manager evaluation to each deploy. With two looks and four schemes,
+`scripts/eval-on-rog.sh` took 59 to 66 seconds for nixos-rog's system in 3
+runs, against 29 to 46 seconds in 4 runs with one scheme (measured
+2026-10-16).
+
+NixOS installs only the generation's own packages, so a specialisation
+cannot change one. A color therefore reaches an app through a file that Home
+Manager writes, never through a package built with it. Neovim, the VS Code
+window and fzf read their colors from files for this reason. kVitals' package
+defaults and, on a host without Plasma, the cursor keep the record's scheme. `nixosModules/hm-variants.nix`
+fails the evaluation when a variant's packages differ from the generation's,
+and names them.
 
 `assets/schemes` holds the schemes that tinted-theming lacks. The
 `warm-burnout-dark` and `warm-burnout-light` schemes there copy the palette of
@@ -125,8 +153,8 @@ input, change its commit in `flake.nix`, compare the new palette
 the VS Code theme labels and Neovim color scheme names still match
 `home-manager/modules/theme.nix`.
 
-`theme.plasmaLook` names the default Plasma look. Every other look is a Home
-Manager specialisation that `plasma-look` activates at run time
+`theme.plasmaLook` names the default Plasma look. `plasma-look` activates
+another look at run time, with the same variants
 ([Plasma looks](nixos-rog.md#plasma-looks)).
 
 ## Home Manager

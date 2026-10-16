@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -9,8 +10,8 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "vicinae";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = osConfig.scheme.withHashtag;
-  inherit (osConfig.oruc.theme) isLight;
+  scheme = config.scheme.withHashtag;
+  inherit (config.oruc.theme) isLight;
   commands = {
     app = "exec ${lib.getExe pkgs.vicinae} toggle";
     command = "exec ${lib.getExe pkgs.vicinae} deeplink vicinae://launch/system/run";

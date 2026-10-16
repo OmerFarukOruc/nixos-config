@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -9,7 +10,7 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "anyrun";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = osConfig.scheme.withHashtag;
+  scheme = config.scheme.withHashtag;
   anyrunLib = "${pkgs.anyrun}/lib";
   stdinPicker = "${lib.getExe pkgs.anyrun} --plugins ${anyrunLib}/libstdin.so";
   commands = {

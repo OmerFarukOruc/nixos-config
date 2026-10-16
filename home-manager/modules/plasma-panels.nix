@@ -9,7 +9,7 @@
 }:
 let
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
-  inherit (osConfig.oruc.theme) wallpaper;
+  inherit (config.oruc.theme) wallpaper;
 
   # Panel Colorizer keeps its whole style in one JSON value, globalSettings,
   # and fills every key left out here from its own defaults. Its typed
@@ -49,7 +49,7 @@ let
     labelOpacity = 0.5;
     separatorOpacity = 1;
     useCustomColors = true;
-    fontColor = osConfig.scheme.withHashtag.base0D;
+    fontColor = config.scheme.withHashtag.base0D;
   }
   // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
     gpuSelection = "gpu1";
@@ -78,9 +78,15 @@ let
             xmlstarlet ed -L -N k=http://www.kde.org/standards/kcfg/1.0 -u "${entry}" -v ${text} "$xml"
             [ "$(xmlstarlet sel -N k=http://www.kde.org/standards/kcfg/1.0 -t -v "${entry}" "$xml")" = ${text} ]
           ''
-        ) kvitalsSettings
+        ) packageDefaults
       );
   });
+  # The package takes the machine record's color, because `theme` cannot
+  # switch packages (variants.nix); the widget's own settings carry the active
+  # scheme's color.
+  packageDefaults = kvitalsSettings // {
+    fontColor = osConfig.scheme.withHashtag.base0D;
+  };
 
   allCorners = value: {
     topLeft = value;
