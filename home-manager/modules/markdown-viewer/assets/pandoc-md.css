@@ -26,7 +26,7 @@
 :root {
   --row-even:     color-mix(in srgb, var(--fg) 3%, transparent);
   --row-hover:    color-mix(in srgb, var(--fg) 5%, transparent);
-  --mark-bg:      color-mix(in srgb, var(--yellow) 30%, transparent);
+  --mark-bg:      color-mix(in srgb, var(--yellow) 22%, transparent);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -94,7 +94,7 @@ blockquote p:last-child { margin-bottom: 0; }
 blockquote blockquote { margin-top: 0.5rem; }
 
 code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.9em; }
-:not(pre) > code { background: var(--bg-secondary); color: var(--blue); padding: 0.15em 0.4em; border-radius: 2px; border: 1px solid var(--border); }
+:not(pre) > code { background: color-mix(in srgb, var(--bg-secondary) 60%, var(--bg)); color: var(--blue); padding: 0.15em 0.4em; border-radius: 2px; border: 1px solid var(--border); }
 
 pre {
   background: var(--bg-code) !important;

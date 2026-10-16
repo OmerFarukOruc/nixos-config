@@ -21,6 +21,44 @@
   if (mermaidNodes.length) {
     var css = getComputedStyle(document.documentElement);
     function token(name) { return css.getPropertyValue('--' + name).trim(); }
+    /* The tokens are #rrggbb. Mermaid's base theme derives its category colors
+       (pie slices, git branches, journey and timeline sections) from the
+       primary, secondary and tertiary colors, which are page backgrounds here.
+       The category variables below come from the accent tokens instead. */
+    function rgb(c) { return [1, 3, 5].map(function (i) { return parseInt(c.substr(i, 2), 16); }); }
+    function lum(c) {
+      var v = rgb(c).map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+    }
+    function contrast(a, b) {
+      var x = lum(a), y = lum(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    }
+    function mix(a, b, share) {
+      var x = rgb(a), y = rgb(b);
+      return '#' + x.map(function (v, i) {
+        return ('0' + Math.round(v * share + y[i] * (1 - share)).toString(16)).slice(-2);
+      }).join('');
+    }
+    /* Journey text uses the page text color on every fill, so its fills are the
+       accents faded into the page background until that text reads. */
+    function fadedFor(accent) {
+      for (var share = 0.6; share > 0.1; share -= 0.05) {
+        var c = mix(accent, token('bg'), share);
+        if (contrast(c, token('fg')) >= 4.5) return c;
+      }
+      return mix(accent, token('bg'), 0.1);
+    }
+    function readableOn(fills) {
+      var best = null, bestMin = 0;
+      [token('bg'), token('fg')].forEach(function (c) {
+        var min = Math.min.apply(null, fills.map(function (f) { return contrast(c, f); }));
+        if (min > bestMin) { best = c; bestMin = min; }
+      });
+      return best;
+    }
+    var accents = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'cyan'].map(token);
+    var cats = accents.concat(accents.slice(0, 5).map(function (a) { return mix(a, token('fg'), 0.6); }));
     var vars = {
       darkMode: css.colorScheme === 'dark',
       background: token('bg'),
@@ -43,8 +81,41 @@
       noteTextColor: token('fg'),
       noteBorderColor: token('border-hover'),
       errorBkgColor: token('bg-secondary'),
-      errorTextColor: token('red')
+      errorTextColor: token('red'),
+      pieOpacity: '1',
+      pieStrokeColor: token('bg'),
+      pieOuterStrokeColor: token('border'),
+      pieSectionTextColor: readableOn(cats),
+      xyChart: {
+        backgroundColor: token('bg'),
+        titleColor: token('fg'),
+        dataLabelColor: token('fg'),
+        legendTextColor: token('fg'),
+        xAxisTitleColor: token('fg'),
+        xAxisLabelColor: token('fg'),
+        xAxisTickColor: token('fg-muted'),
+        xAxisLineColor: token('fg-muted'),
+        yAxisTitleColor: token('fg'),
+        yAxisLabelColor: token('fg'),
+        yAxisTickColor: token('fg-muted'),
+        yAxisLineColor: token('fg-muted'),
+        plotColorPalette: cats.join(',')
+      }
     };
+    cats.forEach(function (c, i) {
+      vars['pie' + (i + 1)] = c;
+      vars['cScale' + i] = c;
+      vars['cScalePeer' + i] = mix(c, token('fg'), 0.8);
+      vars['cScaleLabel' + i] = readableOn([c]);
+      vars['cScaleInv' + i] = readableOn([c]);
+      if (i < 8) {
+        vars['git' + i] = c;
+        vars['gitInv' + i] = readableOn([c]);
+        vars['gitBranchLabel' + i] = readableOn([c]);
+        vars['fillType' + i] = fadedFor(c);
+        vars['venn' + (i + 1)] = c;
+      }
+    });
     var m = document.createElement('script');
     m.type = 'module';
     m.textContent =
