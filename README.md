@@ -68,7 +68,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
   colors, cursor, icons and wallpaper of all of them. The login screen and the
-  Plasma lock screen show Jake the dog instead.
+  Plasma lock screen play Jake the dog, and the login form takes the scheme's colors.
   [`nixosModules/theme.nix`](nixosModules/theme.nix),
   [`home-manager/modules/theme.nix`](home-manager/modules/theme.nix)
 - **🎨 Schemes and Plasma looks without a rebuild.** `theme catppuccin-mocha`

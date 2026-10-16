@@ -178,10 +178,12 @@ in
     # asusd reads every field here; a missing one makes it start from its
     # own defaults, which switch profiles. It copies this file into /etc and
     # may rewrite it at runtime; the next activation restores it.
+    # The 80% charge limit is ASUS's Balanced mode; `asusctl battery oneshot`
+    # charges to 100% once, such as before a trip.
     asusdConfig.text = ''
       (
-          charge_control_end_threshold: 100,
-          base_charge_control_end_threshold: 100,
+          charge_control_end_threshold: 80,
+          base_charge_control_end_threshold: 80,
           disable_nvidia_powerd_on_battery: true,
           ac_command: "",
           bat_command: "",

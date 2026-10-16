@@ -26,6 +26,46 @@ let
       TurnOffDisplayIdleTimeoutSec = screenOffSeconds;
     };
   noAutoSuspend.AutoSuspendAction = 0;
+
+  # ksplashqml finds a look-and-feel package by its id under
+  # ~/.local/share/plasma/look-and-feel. The files come from the scheme of this
+  # Home Manager generation, so each scheme variant carries its own colors.
+  splashId = "oruc.splash";
+  scheme = config.scheme.withHashtag;
+  # ksplashqml sets `stage` from 1 to 5 while the session starts, and quits at 6.
+  splashQml = ''
+    import QtQuick
+
+    Rectangle {
+        id: root
+        color: "${scheme.base00}"
+
+        property int stage: 0
+
+        Rectangle {
+            id: track
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: Math.round(parent.height * 0.62)
+            width: Math.min(Math.round(parent.width * 0.25), 480)
+            height: 6
+            radius: height / 2
+            color: "${scheme.base01}"
+
+            Rectangle {
+                height: parent.height
+                radius: parent.radius
+                color: "${scheme.base0D}"
+                width: Math.round(parent.width * Math.min(root.stage, 5) / 5)
+                Behavior on width {
+                    NumberAnimation {
+                        duration: 600
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+        }
+    }
+  '';
 in
 {
   imports = [ inputs.plasma-manager.homeModules.plasma-manager ];
@@ -45,7 +85,7 @@ in
           theme = theme.cursor.name;
         };
         iconTheme = theme.icons;
-        splashScreen.theme = "org.kde.breeze.desktop";
+        splashScreen.theme = splashId;
       };
 
       # Plasma's default sizes, in the scheme's fonts.
@@ -201,6 +241,18 @@ in
           "LowBattery/SuspendAndShutdown" = noAutoSuspend;
         };
       };
+    };
+
+    xdg.dataFile = {
+      "plasma/look-and-feel/${splashId}/metadata.json".text = builtins.toJSON {
+        KPackageStructure = "Plasma/LookAndFeel";
+        KPlugin = {
+          Id = splashId;
+          Name = "Oruc splash";
+          Description = "Splash screen in the colors of the Base16 scheme";
+        };
+      };
+      "plasma/look-and-feel/${splashId}/contents/splash/Splash.qml".text = splashQml;
     };
 
     # The lock screen finds the wallpaper plugin of kscreenlocker's settings
