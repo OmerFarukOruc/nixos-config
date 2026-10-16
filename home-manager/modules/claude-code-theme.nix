@@ -23,6 +23,11 @@ let
     lib.zipListsWith (x: y: (x * (100 - percent) + y * percent) / 100) a b;
   bg = slot "base00";
   fg = slot "base05";
+  # Some schemes (Catppuccin) keep base03 and base04 as surface colors, so the
+  # dim text pulls them toward the text color: hints stay above 4.5:1 and
+  # subtle text above 3:1 in the schemes on the machine record.
+  inactive = mix (slot "base04") fg 40;
+  subtle = mix (slot "base03") fg 25;
   # Claude Code's own themes draw a shimmer lighter than its color in both
   # variants, so it moves toward the lightest slot.
   shimmer = color: mix color (slot (if isLight then "base00" else "base07")) 35;
@@ -42,11 +47,10 @@ let
   colors = {
     text = slot "base06";
     inverseText = bg;
-    inactive = slot "base04";
-    inactiveShimmer = shimmer (slot "base04");
-    subtle = slot "base03";
-    promptBorder = slot "base04";
-    promptBorderShimmer = shimmer (slot "base04");
+    inherit inactive subtle;
+    inactiveShimmer = shimmer inactive;
+    promptBorder = inactive;
+    promptBorderShimmer = shimmer inactive;
     claude = slot "base09";
     claudeShimmer = shimmer (slot "base09");
     permission = slot "base0A";
