@@ -10,6 +10,7 @@
 - [Check the running laptop](#check-the-running-laptop)
 - [Check a visual change](#check-a-visual-change)
 - [Plasma panels](#plasma-panels)
+- [Plasma looks](#plasma-looks)
 - [Deskflow](#deskflow)
 - [Keyboard keys](#keyboard-keys)
 - [Known faults](#known-faults)
@@ -543,6 +544,48 @@ Prove a panel or effect change with `scripts/screenshot-nixos-rog.sh` before and
 after it. For a top bar change, `--crop 2560x60+0+0` keeps only the bar, so the
 shot leaves out the windows below it.
 [Check a visual change](#check-a-visual-change) says how to see the blur.
+
+## Plasma looks
+
+A Plasma look is the Plasma style, window decoration, Qt style, color scheme
+and KWin blur that belong together. Each look is a file in
+`home-manager/modules/plasma-looks/`, and `plasmaLookNames` in
+`machines/selectors.nix` lists them. `theme.plasmaLook` in the machine record
+names the default look.
+
+To try another look without a rebuild, run this in the Plasma session on
+nixos-rog, then log out and in:
+
+```sh
+plasma-look            # prints the active look and the others
+plasma-look klassy
+```
+
+The panels, the Plasma style and the KWin effects load at the next login.
+The choice lasts across deploys and reboots, because the Home Manager service
+(`home-manager-oruc.service`) runs `plasma-look --reapply` after it activates
+the default look. When that fails, the unit fails and the deploy reports it.
+`plasma-look glass` goes back to the default look.
+
+Settings made in a look's own settings app, such as Klassy's, last until that
+app changes them, because no look writes them.
+
+To add a look:
+
+1. Add its name to `plasmaLookNames` and create
+   `home-manager/modules/plasma-looks/<name>.nix`, following `klassy.nix`. It
+   sets `oruc.plasma.colorScheme`, `oruc.plasma.widgetStyle`, the Plasma style
+   and the window decoration while it is active.
+2. Install its packages whenever Plasma runs, not only while the look is
+   active. A look other than the default is a Home Manager specialisation, and
+   a specialisation cannot install packages on this setup.
+3. Write each KWin plugin switch the look owns as false while another look is
+   active, because plasma-manager never removes a key it wrote. The evaluation
+   fails while two looks write different `kwinrc` Plugins switches, and the
+   error names the missing ones.
+
+`scripts/verify-nixos-rog.sh` checks the widgets, KWin effects and panels of
+the stored look.
 
 ## Deskflow
 

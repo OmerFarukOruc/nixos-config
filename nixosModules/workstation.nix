@@ -10,6 +10,7 @@
     ./multimedia.nix
     ./peripherals.nix
     ./desktop.nix
+    ./plasma-looks.nix
     ./remote-desktop.nix
   ];
 }

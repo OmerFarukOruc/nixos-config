@@ -44,9 +44,21 @@ let
     plasma.desktops = [ "plasma" ];
     waybar.desktops = [ "niri" ];
   };
+
+  # Each Plasma look is a file of the same name in
+  # home-manager/modules/plasma-looks/.
+  plasmaLookNames = [
+    "glass"
+    "klassy"
+  ];
 in
 {
-  inherit kernelSpecs launcherSpecs shellSpecs;
+  inherit
+    kernelSpecs
+    launcherSpecs
+    plasmaLookNames
+    shellSpecs
+    ;
   kernelNames = builtins.attrNames kernelSpecs;
   launcherNames = builtins.attrNames launcherSpecs;
   shellNames = builtins.attrNames shellSpecs;

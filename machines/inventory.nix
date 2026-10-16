@@ -49,7 +49,10 @@ let
         }
       ];
       launcher = "rofi";
-      theme.scheme = "gruvbox-dark-medium";
+      theme = {
+        scheme = "gruvbox-dark-medium";
+        plasmaLook = "glass";
+      };
       kernel.profile = "cachyos-latest-lto-zen4";
       bootloader = "limine";
       gpu = "hybrid";

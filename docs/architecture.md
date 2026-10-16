@@ -114,6 +114,10 @@ whether the scheme is light, the cursor, icons and GTK theme that follow that
 variant, the wallpaper named after the scheme, and the ANSI slots. The font
 families are fixed.
 
+`theme.plasmaLook` names the default Plasma look. Every other look is a Home
+Manager specialisation that `plasma-look` activates at run time
+([Plasma looks](nixos-rog.md#plasma-looks)).
+
 ## Home Manager
 
 `nixosModules/home-manager.nix` integrates Home Manager and loads

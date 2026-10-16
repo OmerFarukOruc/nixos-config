@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -262,10 +263,10 @@ in
   };
 
   # Each session applies its own scheme and Qt style at login, because both
-  # sessions read the same kdeglobals.
+  # sessions read the same kdeglobals. The Plasma look names them.
   systemd.user.services.oruc-plasma-colors = lib.mkIf isPlasma {
     Unit = {
-      Description = "Apply the translucent Base16 Plasma color scheme and the Glass style";
+      Description = "Apply the color scheme and Qt style of the Plasma look";
       # Only a Plasma session reaches plasma-workspace.target.
       After = [
         "plasma-workspace.target"
@@ -278,9 +279,12 @@ in
     };
     Service = {
       Type = "oneshot";
-      ExecStart = "${applyColorScheme} OrucBase16Glass";
+      ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
       # The niri session reads the same kdeglobals, so it needs the icon theme too.
-      ExecStartPost = [ (setWidgetStyle "Glass") ] ++ lib.optional isNiri iconTheme;
+      ExecStartPost = [
+        (setWidgetStyle config.oruc.plasma.widgetStyle)
+      ]
+      ++ lib.optional isNiri iconTheme;
       Restart = "on-failure";
       RestartSec = 5;
     };
