@@ -8,11 +8,12 @@
   ...
 }:
 let
-  # #ff5200
+  # base09, the orange or nearest warm slot of the machine record's scheme.
+  # asusd's config is a system file, so it follows the record, not `theme`.
   auraColour = {
-    r = 255;
-    g = 82;
-    b = 0;
+    r = lib.toInt config.scheme."base09-rgb-r";
+    g = lib.toInt config.scheme."base09-rgb-g";
+    b = lib.toInt config.scheme."base09-rgb-b";
   };
 
   ronTuple = values: "(${lib.concatMapStringsSep ", " toString values})";

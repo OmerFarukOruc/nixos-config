@@ -34,24 +34,24 @@ let
     }, ${alpha})";
   themeColors = {
     "Default Dark" = {
-      "rgba(37, 37, 37,0.3)" = rgbOf "base01" "0.3";
-      "rgb(37, 37, 37,0.6)" = rgbOf "base01" "0.6";
-      "rgba(41, 41, 41,0.2)" = rgbOf "base02" "0.2";
-      "rgba(58, 61, 65,0.6)" = rgbOf "base02" "0.6";
-      "rgba(38, 79, 120,0.6)" = rgbOf "base02" "0.6";
-      "rgba(37, 37, 38, 0.3)" = rgbOf "base01" "0.3";
+      "rgba(37, 37, 37,0.3)" = rgbOf "base01" "0.3"; # theme-drift-ok: the upstream literal it replaces
+      "rgb(37, 37, 37,0.6)" = rgbOf "base01" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(41, 41, 41,0.2)" = rgbOf "base02" "0.2"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(58, 61, 65,0.6)" = rgbOf "base02" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(38, 79, 120,0.6)" = rgbOf "base02" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(37, 37, 38, 0.3)" = rgbOf "base01" "0.3"; # theme-drift-ok: the upstream literal it replaces
       "color: white" = "color: #${scheme.base05}";
     };
     "Default Light" = {
-      "rgba(228, 230, 241,0.3)" = rgbOf "base01" "0.3";
-      "rgba(228, 230, 241,0.6)" = rgbOf "base01" "0.6";
-      "rgb(228, 230, 241,0.6)" = rgbOf "base01" "0.6";
-      "rgba(228, 230, 241,0.2)" = rgbOf "base01" "0.2";
-      "rgba(228, 230, 241, 0.3)" = rgbOf "base01" "0.3";
-      "hsla(210, 100%, 80%, 0.4)" = rgbOf "base02" "0.4";
-      "hsla(210, 100%, 80%, 0.6)" = rgbOf "base02" "0.6";
-      "hsla(210, 100%, 80%, 0.3)" = rgbOf "base02" "0.3";
-      "#616161" = "#${scheme.base04}";
+      "rgba(228, 230, 241,0.3)" = rgbOf "base01" "0.3"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(228, 230, 241,0.6)" = rgbOf "base01" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "rgb(228, 230, 241,0.6)" = rgbOf "base01" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(228, 230, 241,0.2)" = rgbOf "base01" "0.2"; # theme-drift-ok: the upstream literal it replaces
+      "rgba(228, 230, 241, 0.3)" = rgbOf "base01" "0.3"; # theme-drift-ok: the upstream literal it replaces
+      "hsla(210, 100%, 80%, 0.4)" = rgbOf "base02" "0.4"; # theme-drift-ok: the upstream literal it replaces
+      "hsla(210, 100%, 80%, 0.6)" = rgbOf "base02" "0.6"; # theme-drift-ok: the upstream literal it replaces
+      "hsla(210, 100%, 80%, 0.3)" = rgbOf "base02" "0.3"; # theme-drift-ok: the upstream literal it replaces
+      "#616161" = "#${scheme.base04}"; # theme-drift-ok: the upstream literal it replaces
       "#000 " = "#${scheme.base05} ";
       "color: white" = "color: #${scheme.base05}";
     };

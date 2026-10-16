@@ -1,0 +1,1 @@
+# One entry per line: a tracked path or glob, a tab, and why its colors stay fixed.

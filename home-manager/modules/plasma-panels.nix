@@ -39,6 +39,8 @@ let
   # (0000:65:00.0) comes first, so gpu1 is the Radeon 890M.
   # kVitals colors its own text, so the top bar's accent color reaches it only
   # through fontColor. Its threshold colors still take precedence.
+  # warningColor is base09 and criticalColor base08, as in the other warning
+  # and error states.
   kvitalsSettings = {
     pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,uptime/uptime";
     layoutType = "vertical";
@@ -50,6 +52,8 @@ let
     separatorOpacity = 1;
     useCustomColors = true;
     fontColor = config.scheme.withHashtag.base0D;
+    warningColor = config.scheme.withHashtag.base09;
+    criticalColor = config.scheme.withHashtag.base08;
   }
   // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
     gpuSelection = "gpu1";
@@ -86,6 +90,8 @@ let
   # scheme's color.
   packageDefaults = kvitalsSettings // {
     fontColor = osConfig.scheme.withHashtag.base0D;
+    warningColor = osConfig.scheme.withHashtag.base09;
+    criticalColor = osConfig.scheme.withHashtag.base08;
   };
 
   allCorners = value: {

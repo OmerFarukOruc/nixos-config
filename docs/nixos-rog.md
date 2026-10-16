@@ -682,12 +682,14 @@ the old colors until it restarts. That file is
 `~/.config/gtk-4.0/oruc-colors.css` on nixos-rog and `gtk.css` on
 nixos-latitude. The KDE colors
 and the Plasma splash load at the next login, as with `plasma-look`. The login
-screen, the boot menu, the console and niri keep the record's scheme. So does
+screen, the boot menu, the console, niri and the keyboard's Aura color keep the
+record's scheme. So does
 Spotify, because Spicetify builds its colors into the package, which a variant
 cannot replace. The login form assumes a dark record scheme, because it draws
 the form at 30 % opacity over the dark Jake video, where a light scheme's dark
-text loses contrast. Apps with fixed colors of their own, such as Starship, do not
-change. The choice lasts across
+text loses contrast. Starship draws with the terminal's colors, so it changes
+with Ghostty. [Theme](architecture.md#theme) lists the apps that keep fixed
+colors. The choice lasts across
 deploys and reboots, and `theme <record's scheme>` goes back. Because each
 deploy and boot activates the record's scheme before the stored one, apps that
 follow the scheme show the record's colors for a moment then.
