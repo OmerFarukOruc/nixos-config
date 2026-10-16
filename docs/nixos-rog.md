@@ -509,19 +509,22 @@ lasts only until then, so write a lasting change in the Nix file.
 
 - Every 5 minutes in a Plasma session, `oled-care.timer`
   (`machines/nixos-rog/oled-care.nix`) moves each panel by 2 px, up to 8 px,
-  to spare the OLED panel. The top bar grows in height, and the dock moves
-  sideways. `mac-tahoe-oled-care status` prints each panel's base geometry
-  and the current shift. To keep the panels at their base, run
-  `systemctl --user stop oled-care.timer`, then `mac-tahoe-oled-care restore`;
-  the timer's next run would start the shifts again.
+  to spare the OLED panel. The top bar grows in height, which resizes
+  maximized windows by the same amount, and the dock moves sideways.
+  `mac-tahoe-oled-care status` prints each panel's base geometry and the
+  current shift. To keep the panels at their base until the next login, run
+  `systemctl --user stop oled-care.timer`, then `mac-tahoe-oled-care restore`.
 - A shift that fails can leave a guard file. While it exists, every later
-  shift does nothing and `oled-care.service` still succeeds, so only the
-  journal (`journalctl --user -u oled-care`) and the `oled-care-state` check of
-  `scripts/verify-nixos-rog.sh` show it. `mac-tahoe-oled-care restore` clears
-  the guard. When `restore` fails, stop the timer, delete `oled-care.disabled`
-  and `oled-care-transition.json` in `~/.local/state/mac-tahoe-liquid-kde/`,
-  run `scripts/panels-rebuild-on-rog.sh` to put the panels back at the sizes in
-  the Nix file, and start the timer again.
+  shift does nothing and `oled-care.service` still succeeds. Then
+  `mac-tahoe-oled-care status` prints `recovery pending` and exits 1, and the
+  `oled-care-state` check of `scripts/verify-nixos-rog.sh` fails.
+  `mac-tahoe-oled-care restore` clears the guard. When `restore` fails, stop
+  the timer and delete `oled-care.disabled` and `oled-care-transition.json` in
+  `~/.local/state/mac-tahoe-liquid-kde/`. When its error was `uncertain
+  geometry has no persisted panel bases`, no panel moved. After any other
+  error, a panel may sit a few pixels off, and `scripts/panels-rebuild-on-rog.sh`
+  puts it back at its size in the Nix file; that rebuild also drops panel
+  changes made in Plasma's settings, so ask Omer first. Then start the timer.
 - Panel Colorizer draws the blurred backgrounds. Its blur area can stay stale in
   the running session. On the night of 2026-10-12 to 2026-10-13, after a live
   change of the dock's height and style, the blur covered only part of the dock,

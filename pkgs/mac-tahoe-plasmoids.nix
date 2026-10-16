@@ -29,10 +29,10 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Launcher and icons-only dock of the macOS Tahoe Plasma theme";
     homepage = "https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde";
-    # Both metadata.json files name GPL-3.0, and the launcher's directory holds
-    # the GPL-2.0 text.
+    # Both metadata.json files name GPL-3.0. The launcher comes from
+    # EliverLara/TahoeLauncher, which is GPL-2.0 or later.
     license = [
-      lib.licenses.gpl2Only
+      lib.licenses.gpl2Plus
       lib.licenses.gpl3Only
     ];
     platforms = lib.platforms.linux;
