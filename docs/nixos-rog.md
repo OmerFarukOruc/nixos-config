@@ -571,6 +571,9 @@ names the default look. The looks are:
   changes GTK's theme, stylesheet and title bar buttons and KWin's border
   size. When another look is stored, its activation removes those
   (`leaveTahoe` in `plasma-looks/tahoe.nix`) and warns when a step fails.
+  `tahoe.nix` turns off the upstream module's links into `~/.local/share`,
+  its session script and its Qt path variables, because with them Plasma
+  loaded no Tahoe widget and no desktop.
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:
@@ -602,10 +605,16 @@ To add a look:
    and the window decoration while it is active. A unit of the look that
    changes colors or styles runs once per login with
    `plasma-looks/once-per-login.nix`, because Home Manager starts it again at
-   every switch.
+   every switch. Such a unit is wanted by and starts after
+   `plasma-workspace.target`, whose invocation ID tells one login from the
+   next.
 2. Install its packages whenever Plasma runs, not only while the look is
    active. A look other than the default is a Home Manager specialisation, and
-   a specialisation cannot install packages on this setup.
+   a specialisation cannot install packages on this setup. Install a Plasma
+   widget through `home.packages`, which links its directory as one link.
+   Plasma rejects a widget whose files are linked one by one, as
+   `xdg.dataFile` with `recursive = true` links them, and the journal shows
+   `Path traversal attempt detected`.
 3. Write each KWin plugin switch the look owns as false while another look is
    active, because plasma-manager never removes a key that a look leaves out. The evaluation
    fails while two looks write different `kwinrc` Plugins switches, and the

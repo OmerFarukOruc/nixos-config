@@ -21,6 +21,25 @@ let
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
   dconf = lib.getExe pkgs.dconf;
   plasmaGtkCss = pkgs.writeText "gtk.css" "@import 'colors.css';";
+
+  # The theme assets without their copy of Panel Colorizer, which the profile
+  # already holds. Each widget stays one directory link, because Plasma
+  # rejects a widget whose files link into another directory ("Path traversal
+  # attempt detected"), as Home Manager's file-by-file links in
+  # ~/.local/share and the upstream package's symlinkJoin do.
+  tahoeShare = pkgs.runCommandLocal "mac-tahoe-share" { } ''
+    src=${tahoe.theme-assets}/share
+    mkdir -p $out/share/plasma/plasmoids
+    for d in "$src"/*; do
+      [[ ''${d##*/} == plasma ]] || ln -s "$d" $out/share/
+    done
+    for d in "$src"/plasma/*; do
+      [[ ''${d##*/} == plasmoids ]] || ln -s "$d" $out/share/plasma/
+    done
+    for d in "$src"/plasma/plasmoids/*; do
+      [[ ''${d##*/} == luisbocanegra.panel.colorizer ]] || ln -s "$d" $out/share/plasma/plasmoids/
+    done
+  '';
 in
 {
   imports = [
@@ -33,10 +52,9 @@ in
       {
         # The look's own module installs these only in its generation, which
         # is a specialisation, so they are installed here, named one by one so
-        # that ci/cached-packages.nix finds the compiled ones. The theme assets
-        # stay out, because they hold their own copy of Panel Colorizer; the
-        # look links them into ~/.local/share itself.
+        # that ci/cached-packages.nix finds the compiled ones.
         home.packages = with tahoe; [
+          tahoeShare
           global-menu
           task-manager
           acrylic-glass
@@ -67,6 +85,32 @@ in
           };
         };
 
+        # The upstream module links the theme assets into ~/.local/share file
+        # by file and adds a session script that puts its package first in
+        # XDG_DATA_DIRS, so Plasma rejects every Tahoe widget; tahoeShare holds
+        # them instead. Its session variables replace QT_PLUGIN_PATH and
+        # QML2_IMPORT_PATH with its own plugins, which drops Plasma's QML
+        # modules and leaves an empty desktop. The profile already holds those
+        # plugins, so the variables keep the value they had.
+        xdg.dataFile =
+          lib.genAttrs
+            [
+              "plasma/desktoptheme"
+              "plasma/look-and-feel"
+              "plasma/plasmoids"
+              "aurorae/themes"
+              "color-schemes"
+              "icons"
+            ]
+            (_: {
+              enable = lib.mkForce false;
+            });
+        xdg.configFile."plasma-workspace/env/mac-tahoe-plugin-paths.sh".enable = lib.mkForce false;
+        home.sessionVariables = {
+          QT_PLUGIN_PATH = lib.mkForce "$QT_PLUGIN_PATH";
+          QML2_IMPORT_PATH = lib.mkForce "$QML2_IMPORT_PATH";
+        };
+
         # The theme switcher sets the cursor, icons, splash and title bar
         # buttons, so plasma-manager leaves them alone in this look.
         programs.plasma = {
@@ -86,12 +130,20 @@ in
           };
         };
 
+        # The unit starts after plasma-workspace.target, so the condition reads
+        # this login's invocation ID; started with plasmashell, it read the
+        # last login's ID and skipped.
         systemd.user.services.mac-tahoe-theme = {
           Service = {
             ExecCondition = themeOnce.condition;
             ExecStartPost = themeOnce.mark;
           };
-          Unit.Description = lib.mkForce "Apply the macOS Tahoe look once per Plasma login";
+          Unit = {
+            Description = lib.mkForce "Apply the macOS Tahoe look once per Plasma login";
+            After = [ "plasma-workspace.target" ];
+            PartOf = lib.mkForce [ "plasma-workspace.target" ];
+          };
+          Install.WantedBy = lib.mkForce [ "plasma-workspace.target" ];
         };
       })
 
