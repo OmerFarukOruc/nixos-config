@@ -132,14 +132,15 @@ in
       ];
       font-shaping-break = "cursor";
       # At 0.65 a white window behind turned the background mid-gray, and the
-      # text fell to 3:1 contrast. At 0.90 the base04 gray keeps 5:1.
-      background-opacity = 0.9;
+      # text fell to 3:1 contrast. At 0.90 the base04 gray keeps 5:1. The Glass
+      # look sets 0.66; its contrast over a white window is not measured.
+      background-opacity = lib.mkDefault 0.9;
       background-blur = true;
       notify-on-command-finish = "unfocused";
       notify-on-command-finish-action = "notify";
       notify-on-command-finish-after = "10s";
-      window-padding-x = 6;
-      window-padding-y = 4;
+      window-padding-x = lib.mkDefault 6;
+      window-padding-y = lib.mkDefault 4;
       window-padding-balance = true;
       window-padding-color = "extend";
       window-decoration = "server";

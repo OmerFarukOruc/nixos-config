@@ -536,6 +536,7 @@ lasts only until then, so write a lasting change in the Nix file.
 - Glass settings are the `Effect-blurplus` keys in `plasma-looks/glass.nix`.
   Ghostty's opacity and blur are `programs.ghostty.settings` in
   `home-manager/modules/applications.nix`, and its colors are in `theme.nix`.
+  The Glass look sets its own opacity and padding in `plasma-looks/glass.nix`.
   To read Glass's option names at the revision `flake.lock` pins, run this in
   the repository root:
 
@@ -563,6 +564,10 @@ names the default look. The looks are:
   the right one the song with a play/pause button while Spotify or Brave
   has a song loaded, then the system monitor, tray and show-desktop
   button.
+
+  While Glass is the active look, Ghostty gets the opacity (0.66) and
+  padding (12 x 10 px) of the iglass Frosted theme in every session,
+  niri included.
 - `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
 
