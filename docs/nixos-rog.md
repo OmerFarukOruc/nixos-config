@@ -453,10 +453,12 @@ microphone, so pick one of the two sources in an app, never both. In the
 2026-10-13 A/B take, HushMic cut silence and typing by 73 to 75 dB and
 DeepFilterNet by 5 to 8 dB, and both kept speech within 1 dB.
 
-EasyEffects' bypass switch resets to off at each EasyEffects start. Leave it
-off: EasyEffects unlinks its input pipeline 10 s after the last app stops
-recording, and with bypass on it does not link it again, so the next app that
-records gets silence.
+EasyEffects' bypass switch resets to off at each start of
+`easyeffects.service`, and the unit starts again after a quit from the tray or
+the window. Leave bypass off. EasyEffects unlinks its input pipeline 10 s after
+the last app stops recording, and with bypass on it does not link it again, so
+the next app that records gets silence. Run `easyeffects -b 2` to turn bypass
+off. EasyEffects has no output effects, so apps play to the speakers directly.
 
 From fedora-desktop, in the repository root, compare the microphone level or the
 two denoisers. Someone at the laptop follows the prompts:
