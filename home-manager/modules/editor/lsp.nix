@@ -27,8 +27,9 @@
         type = [ "nixfmt" ];
       };
     };
-    # nil asks to archive each flake input on open; this answers no.
-    lsp.servers.nil.settings.nil.nix.flake.autoArchive = false;
+    # nil asks to archive each flake input on open; this answers no. nvf's nil
+    # preset sets true, so this needs mkForce.
+    lsp.servers.nil.settings.nil.nix.flake.autoArchive = lib.mkForce false;
     # <leader>lf formats through nil, which needs a formatter command.
     lsp.servers.nil.settings.nil.formatting.command = [ (lib.getExe pkgs.nixfmt) ];
 
