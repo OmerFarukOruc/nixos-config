@@ -33,7 +33,7 @@ for flake in . ./kernel-cache; do
 done
 EOF
   # shellcheck disable=SC2016 # the remote bash expands $1
-  changed=$(rog_remote <<<'cd "$1" && git diff --name-only')
+  changed=$(rog_remote_light <<<'cd "$1" && git diff --name-only')
   if [[ -n $changed ]]; then
     printf '%s\n' "$changed" | rsync -a --files-from=- "$ROG_HOST:$ROG_COPY/" ./
     while read -r file; do echo "fixed: $file"; done <<<"$changed"

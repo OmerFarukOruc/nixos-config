@@ -5,6 +5,7 @@
 - [Secrets](#secrets)
 - [DNS](#dns)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
+- [Heavy commands](#heavy-commands)
 - [Power and heat](#power-and-heat)
 - [Microphone](#microphone)
 - [Check the running laptop](#check-the-running-laptop)
@@ -246,6 +247,24 @@ Home Manager keeps the shell and tools, and adds one entry,
 server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
+
+## Heavy commands
+
+`heavy <command> [argument...]` (`machines/nixos-rog/heavy.nix`) runs a heavy
+command in one of two slots, at nice 10, in a systemd user scope that the
+kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of swap. A
+third command waits for a slot. `scripts/lib/rog-copy.sh` runs the Nix calls of
+the `*-on-rog.sh` scripts under it, and a repository whose test script follows
+infra's `heavy` contract, such as gastrodili's `scripts/heavy.ts`, picks it up
+from PATH. Run any other Nix evaluation of this flake on nixos-rog as
+`heavy nix ...`. The cap covers evaluation only: Nix builds run in
+`nix-daemon.service`, outside the scope.
+
+On 2026-10-16, Nix evaluations from several agents at once filled the 30 GiB:
+the kernel failed a page allocation, and Claude Code stopped the background
+shells of idle sessions. That day `nix flake check` of this flake peaked at
+4.9 GiB and nixos-rog's toplevel `drvPath` evaluation at 7.3 GiB, which the
+10 GiB and 14 GiB caps leave room for.
 
 ## Power and heat
 
