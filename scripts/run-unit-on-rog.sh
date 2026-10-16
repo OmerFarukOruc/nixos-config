@@ -76,7 +76,7 @@ mkdir -p -- "$dir/$name.service.d"
 awk '
   /^\[/ { install = ($0 == "[Install]") }
   install { next }
-  /^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess|PropagatesStopTo|StopPropagatedFrom|Sockets)=/ { next }
+  /^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess|PropagatesStopTo|StopPropagatedFrom|StopWhenUnneeded|Sockets)=/ { next }
   { print }
 ' "$file" >"$dir/$name.service"
 # A oneshot unit's run is its start, so TimeoutStartSec bounds it and systemd
@@ -100,27 +100,40 @@ while [[ $(show ActiveState) =~ ^(activating|deactivating|reloading)$ ||
   ($(show ActiveState) == active && $(show SubState) != exited) ]] && ((SECONDS < deadline)); do
   sleep 1
 done
-journalctl --user -u "$name.service" --since "@$since" -o cat --no-pager
 state=$(show ActiveState)
-result=$(show Result)
+# A unit that exited cleanly stays active (exited) here. Stopping it runs its
+# ExecStop now, as the real unit would after ExecStart, so a failing ExecStop
+# shows in the verdict.
 if [[ $state == active && $(show SubState) == exited ]]; then
-  echo "exit status: $(show ExecMainStatus)"
+  status=$(show ExecMainStatus)
+  systemctl --user stop "$name.service" </dev/null || true
+  state=$(show ActiveState)
+  [[ $state == failed ]] || state=exited
+fi
+journal=$(journalctl --user -u "$name.service" --since "@$since" -o cat --no-pager)
+printf '%s\n' "$journal"
+result=$(show Result)
+if [[ $state == exited ]]; then
+  echo "exit status: $status"
 elif [[ $state == active ]]; then
   echo "still running after $seconds s: a pass for a long-running unit"
-elif [[ $state == failed ]]; then
-  # RuntimeMaxSec ends a long-running unit with a timeout once it is active; a
-  # start that times out never made it active.
-  if [[ $result == timeout && $limit == RuntimeMaxSec && $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
-    echo "still running after $seconds s: a pass for a long-running unit"
-  else
-    echo "failed: $result, exit status $(show ExecMainStatus)"
-    exit 1
-  fi
+elif [[ $state =~ ^(failed|deactivating)$ && $result == timeout && $limit == RuntimeMaxSec &&
+  $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
+  # RuntimeMaxSec ends a long-running unit with a timeout once it is active,
+  # and a slow stop leaves it deactivating; a start that timed out never
+  # made it active.
+  echo "still running after $seconds s: a pass for a long-running unit"
+elif [[ $state =~ ^(failed|deactivating)$ ]]; then
+  echo "failed: $result, exit status $(show ExecMainStatus)"
+  exit 1
 elif ((start != 0)); then
   echo "the user manager did not start $unit (systemctl exit $start)" >&2
   exit 1
-else
+elif grep -q -E "unmet condition check|Skipped due to 'exec-condition'" <<<"$journal"; then
   echo "$unit did not run: a condition of the unit was not met" >&2
+  exit 1
+else
+  echo "$unit stopped without a result to read; its journal is above" >&2
   exit 1
 fi
 REMOTE
