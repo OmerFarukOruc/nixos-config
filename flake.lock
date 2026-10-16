@@ -516,7 +516,8 @@
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",
         "spicetify-nix": "spicetify-nix",
-        "vscode-vibrancy": "vscode-vibrancy"
+        "vscode-vibrancy": "vscode-vibrancy",
+        "warm-burnout": "warm-burnout"
       }
     },
     "sops-nix": {
@@ -659,6 +660,23 @@
         "owner": "illixion",
         "ref": "v1.4.0",
         "repo": "vscode-vibrancy-continued",
+        "type": "github"
+      }
+    },
+    "warm-burnout": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779819377,
+        "narHash": "sha256-EtAPdh+voNf+z4dDq38jKwbniEJu2htlQNYaqH3lcQI=",
+        "owner": "felipefdl",
+        "repo": "warm-burnout",
+        "rev": "e45c7717e430d8f12a9b9b26145c0456b0c7a319",
+        "type": "github"
+      },
+      "original": {
+        "owner": "felipefdl",
+        "ref": "v1.8.0",
+        "repo": "warm-burnout",
         "type": "github"
       }
     }

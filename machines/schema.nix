@@ -3,7 +3,7 @@ let
   inherit (lib) mkOption types;
   selectors = import ./selectors.nix;
   sessions = import ./sessions.nix { inherit lib; };
-  schemeNames = import ./schemes.nix { inherit inputs lib; };
+  schemeNames = lib.attrNames (import ./schemes.nix { inherit inputs lib; });
 
   mkFeature =
     description:
@@ -91,7 +91,7 @@ let
     theme.scheme = mkOption {
       type = types.enum schemeNames;
       default = "gruvbox-dark-medium";
-      description = "Base16 scheme selected by this machine, named as in the pinned schemes input.";
+      description = "Base16 scheme selected by this machine, named as in the pinned schemes input or assets/schemes.";
     };
 
     theme.plasmaLook = mkOption {

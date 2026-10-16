@@ -41,7 +41,8 @@ The other files in `machines/` define what a record may hold:
   invalid record. For example, only a workstation offers a desktop session.
 - `selectors.nix` lists the valid launchers, shells and kernel profiles, and the
   desktops that each launcher and shell supports.
-- `schemes.nix` lists the Base16 scheme names.
+- `schemes.nix` maps each Base16 scheme name to its file, from the pinned
+  tinted-theming input or `assets/schemes`.
 - `sessions.nix` has the `sessions` helpers.
 
 Every session reads the same idle and touchpad settings. Plasma reads the idle
@@ -113,6 +114,12 @@ selected Base16 scheme (`theme.scheme` in the machine record). The values are
 whether the scheme is light, the cursor, icons and GTK theme that follow that
 variant, the wallpaper named after the scheme, and the ANSI slots. The font
 families are fixed.
+
+`assets/schemes` holds the schemes that tinted-theming lacks. The
+`warm-burnout-dark` and `warm-burnout-light` schemes there come from the
+palette of the `warm-burnout` input, and with either of them
+`home-manager/modules/theme.nix` also installs that input's own VS Code
+extension and Neovim color scheme in place of the Base16 ones.
 
 `theme.plasmaLook` names the default Plasma look. Every other look is a Home
 Manager specialisation that `plasma-look` activates at run time

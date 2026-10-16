@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   osConfig,
   pkgs,
@@ -14,6 +15,26 @@ let
   theme = osConfig.oruc.theme;
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
+
+  # A warm-burnout-* scheme brings Warm Burnout's own VS Code and Neovim
+  # themes, which color syntax beyond the 16 Base16 slots.
+  isWarmBurnout = lib.hasPrefix "warm-burnout-" cfg.theme.scheme;
+  warmBurnoutVariant = if theme.isLight then "light" else "dark";
+  warmBurnoutVersion = (lib.importJSON "${inputs.warm-burnout}/vscode/package.json").version;
+  warmBurnoutVscode = pkgs.vscode-utils.buildVscodeExtension {
+    pname = "felip3fdl-warm-burnout";
+    version = warmBurnoutVersion;
+    src = inputs.warm-burnout;
+    sourceRoot = "source/vscode";
+    vscodeExtPublisher = "felip3fdl";
+    vscodeExtName = "warm-burnout";
+    vscodeExtUniqueId = "felip3fdl.warm-burnout";
+  };
+  warmBurnoutNvim = pkgs.vimUtils.buildVimPlugin {
+    pname = "warm-burnout";
+    version = warmBurnoutVersion;
+    src = "${inputs.warm-burnout}/nvim";
+  };
 
   vscodeAnsiColors = lib.listToAttrs (
     lib.imap0 (
@@ -192,17 +213,25 @@ in
   '';
 
   oruc.vscodeSettings = {
-    "workbench.colorTheme" = "Default ${if theme.isLight then "Light" else "Dark"} Modern";
-    # vscode.nix sets the see-through backgrounds.
-    "workbench.colorCustomizations" = {
-      "editor.foreground" = scheme.base05;
-      "editor.selectionBackground" = scheme.base02;
-      "editorCursor.foreground" = scheme.base05;
-      "statusBar.background" = scheme.base02;
-      "statusBar.foreground" = scheme.base05;
-      "terminal.foreground" = scheme.base05;
-    }
-    // vscodeAnsiColors;
+    "workbench.colorTheme" =
+      if isWarmBurnout then
+        "Warm Burnout ${lib.toSentenceCase warmBurnoutVariant}"
+      else
+        "Default ${if theme.isLight then "Light" else "Dark"} Modern";
+    # vscode.nix sets the see-through backgrounds. The terminal takes
+    # Ghostty's colors.
+    "workbench.colorCustomizations" =
+      lib.optionalAttrs (!isWarmBurnout) {
+        "editor.foreground" = scheme.base05;
+        "editor.selectionBackground" = scheme.base02;
+        "editorCursor.foreground" = scheme.base05;
+        "statusBar.background" = scheme.base02;
+        "statusBar.foreground" = scheme.base05;
+      }
+      // {
+        "terminal.foreground" = scheme.base05;
+      }
+      // vscodeAnsiColors;
     # The default ratio of 4.5 shifts terminal colors away from the palette.
     "terminal.integrated.minimumContrastRatio" = 1;
   };
@@ -224,7 +253,16 @@ in
     };
   };
 
-  programs.nvf.settings.vim.theme = {
+  programs.vscode.profiles.default.extensions = lib.optional isWarmBurnout warmBurnoutVscode;
+
+  programs.nvf.settings.vim.extraPlugins = lib.mkIf isWarmBurnout {
+    warm-burnout = {
+      package = warmBurnoutNvim;
+      setup = "vim.cmd.colorscheme('warm-burnout-${warmBurnoutVariant}')";
+    };
+  };
+
+  programs.nvf.settings.vim.theme = lib.mkIf (!isWarmBurnout) {
     enable = true;
     name = "base16";
     base16-colors = lib.genAttrs (map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF")) (

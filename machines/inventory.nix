@@ -16,7 +16,7 @@ let
         }
       ];
       launcher = "vicinae";
-      theme.scheme = "gruvbox-dark-medium";
+      theme.scheme = "warm-burnout-dark";
       kernel.profile = "cachyos-latest-lto-x86_64-v3";
       gpu = "intel";
       hasBattery = true;
@@ -50,7 +50,7 @@ let
       ];
       launcher = "rofi";
       theme = {
-        scheme = "gruvbox-dark-medium";
+        scheme = "warm-burnout-dark";
         plasmaLook = "glass";
       };
       kernel.profile = "cachyos-latest-lto-zen4";

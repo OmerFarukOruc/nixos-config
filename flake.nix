@@ -11,6 +11,12 @@
       url = "github:tinted-theming/schemes/spec-0.11";
       flake = false;
     };
+    # The VS Code and Neovim themes of the warm-burnout-* schemes in
+    # assets/schemes, which color syntax beyond the 16 Base16 slots.
+    warm-burnout = {
+      url = "github:felipefdl/warm-burnout/v1.8.0";
+      flake = false;
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
