@@ -133,7 +133,7 @@ in
       font-shaping-break = "cursor";
       # At 0.65 a white window behind turned the background mid-gray, and the
       # text fell to 3:1 contrast. At 0.90 the base04 gray keeps 5:1. The Glass
-      # look lowers it, because Glass blurs what is behind the window.
+      # look sets 0.66; its contrast over a white window is not measured.
       background-opacity = lib.mkDefault 0.9;
       background-blur = true;
       notify-on-command-finish = "unfocused";
