@@ -184,13 +184,21 @@ let
       windowTitle = {
         source = "appName";
         hideEmptyTitle = true;
+        # The widget's default leaves 10 px after the name too, which made the
+        # left panel wider on the right of its widgets.
+        margins = {
+          left = 10;
+          right = 0;
+          top = 0;
+          bottom = 0;
+        };
       };
     };
   };
 
   # A floating top panel as long as its widgets, on one blurred, rounded
   # background with an outline in the accent color.
-  islandStyle = {
+  islandStyle = padding: {
     nativePanel = {
       background.opacity = 0;
       floatingDialogs = true;
@@ -211,10 +219,7 @@ let
       };
       padding = {
         enabled = true;
-        side = {
-          left = 8;
-          right = 8;
-        };
+        side = padding;
       };
     };
     widgets.normal = {
@@ -222,13 +227,13 @@ let
       foregroundColor = schemeColor "highlightColor" "Window" 1;
     };
   };
-  island = alignment: widgets: {
+  island = alignment: padding: widgets: {
     location = "top";
     height = 36;
     floating = true;
     lengthMode = "fit";
     inherit alignment;
-    widgets = widgets ++ [ (colorizer islandStyle) ];
+    widgets = widgets ++ [ (colorizer (islandStyle padding)) ];
   };
 
   dock = {
@@ -283,16 +288,42 @@ in
             dock
           ];
           islands = [
-            (island "left" [
-              "org.kde.plasma.kickerdash"
-              titleBar
-            ])
-            (island "center" [ "org.kde.plasma.digitalclock" ])
-            (island "right" [
-              kvitals
-              "org.kde.plasma.systemtray"
-              "org.kde.plasma.showdesktop"
-            ])
+            # Plasma keeps free space after the last widget of a panel that
+            # fits its widgets, and each widget keeps its own margins. These
+            # paddings were measured on a screenshot of nixos-rog so that each
+            # panel shows 14 to 18 logical px on both sides of what it draws.
+            # The negative right padding moves the last widget up to 6 px past
+            # the panel's length, into the 8 px floating margin of the panel
+            # window, which the background also covers. Panel Colorizer's
+            # settings window allows no negative padding, so a change made
+            # there resets it. The system monitor is as wide as its numbers,
+            # so the right panel's left side moves when the CPU usage gains or
+            # loses a digit.
+            (island "left"
+              {
+                left = 8;
+                right = -6;
+              }
+              [
+                "org.kde.plasma.kickerdash"
+                titleBar
+              ]
+            )
+            (island "center" {
+              left = 12;
+              right = -8;
+            } [ "org.kde.plasma.digitalclock" ])
+            (island "right"
+              {
+                left = 8;
+                right = -10;
+              }
+              [
+                kvitals
+                "org.kde.plasma.systemtray"
+                "org.kde.plasma.showdesktop"
+              ]
+            )
             dock
           ];
         }
