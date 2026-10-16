@@ -10,8 +10,8 @@ fedora-desktop has no Nix. `update-kernel.sh` needs none, so it runs there.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
 Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
-and `jq`. `update-app.sh openchamber` needs no Nix. The hourly updater on
-nixos-rog runs all four scripts ([nixos-rog.md](nixos-rog.md#hourly-updater)).
+and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
+no Nix. The hourly updater on nixos-rog runs all four scripts ([nixos-rog.md](nixos-rog.md#hourly-updater)).
 
 Each script changes files in that checkout and commits nothing. Commit the
 change on a branch from a fresh `origin/main`, merge it, then deploy as
@@ -132,7 +132,8 @@ release, with no waiting period, and prints the new version. It
 prints nothing when the app is current or when the package names no release
 source.
 
-ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their release source.
+Antigravity, ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their
+release source.
 herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
 them and their version and hash move by hand.
 
@@ -143,7 +144,7 @@ repository that its `passthru.aptIndex` names.
 | App | Release source |
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
-| OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed` |
+| Antigravity, OpenChamber | its electron-builder feed (`latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 
 The updater on nixos-rog builds each moved app on its own first. A version that
 does not build stays out of the update and sends one notification, which
