@@ -1,10 +1,10 @@
 # PlasmaLLM, a Plasma panel widget that chats with Ollama, LM Studio, Claude,
 # OpenAI, Gemini or any OpenAI-compatible API, and lets the model call tools
-# such as read_file and write_file after the user approves each call. The
+# such as read_file and write_file; by default it asks before each call. The
 # widget is QML and JavaScript, and the repository commits the compiled
 # translations, so the package copies package/ as upstream's release zip does,
-# without the .po sources. Tools run their commands through plasmashell's PATH
-# (curl, bash, notify-send, xdg-open). It names no release source, so
+# without the .po sources. It runs its commands, such as curl, bash and
+# notify-send, through plasmashell's PATH. It names no release source, so
 # scripts/update-app.sh skips it; move version and hash by hand.
 {
   lib,
