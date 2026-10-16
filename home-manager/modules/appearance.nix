@@ -59,8 +59,9 @@ in
   # session leaves them to Plasma and its niri session inherits them.
   config = lib.mkMerge [
     (lib.mkIf (hasNiri && !hasPlasma) {
-      # The cursor follows the machine record's scheme, because its theme is a
-      # package that `theme` cannot switch (variants.nix).
+      # The cursor follows the machine record's scheme, because its name goes
+      # into XCURSOR_THEME in the session-variables package, which `theme`
+      # cannot switch (variants.nix).
       home.pointerCursor = {
         inherit (osConfig.oruc.theme.cursor) name size;
         package = pkgs.bibata-cursors;

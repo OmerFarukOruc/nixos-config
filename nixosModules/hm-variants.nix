@@ -49,6 +49,7 @@ let
       if [[ -n $choice && " $* " == *" $choice "* ]]; then
         echo "$choice"
       else
+        [[ -z $choice ]] || echo "$file: the stored $choice no longer exists; $default stays" >&2
         echo "$default"
       fi
     }
@@ -71,6 +72,10 @@ let
         )"
       fi
       "$dir/activate" --driver-version ${driverVersion}
+      ${lib.optionalString hm.programs.ghostty.enable ''
+        # Ghostty reloads its config, theme included, on SIGUSR2.
+        pkill -USR2 -u "$(id -u)" -f "^${hm.programs.ghostty.package}/bin/ghostty" || true
+      ''}
     }
 
     # choose FILE CHOICE: stores the choice for the next activations.
@@ -91,6 +96,7 @@ let
       runtimeInputs = with pkgs; [
         coreutils
         gnused
+        procps
         systemd
       ];
       text = ''
@@ -110,7 +116,7 @@ let
       Usage: theme [SCHEME | --reapply]
 
       With no argument, prints the active Base16 scheme and the schemes to choose from.
-      SCHEME activates that scheme and keeps it across deploys. New terminal, VS Code and
+      SCHEME activates that scheme and keeps it across deploys. Ghostty, VS Code and new
       Neovim windows take its colors at once; log out and in to load its KDE colors.
       --reapply activates the stored scheme and Plasma look again. The Home Manager
       service runs it after it activates the default ones.
@@ -135,7 +141,7 @@ let
           fi
           choose scheme "$1"
           activate "$(stored_look)" "$1"
-          echo "New windows take the $1 colors. Log out and in to load its KDE colors."
+          echo "Ghostty, VS Code and new Neovim windows take the $1 colors. Log out and in to load its KDE colors."
           ;;
       esac
     '';

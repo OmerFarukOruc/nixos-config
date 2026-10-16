@@ -138,8 +138,8 @@ runs, against 29 to 46 seconds in 4 runs with one scheme (measured
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, the VS Code
-window and fzf read their colors from files for this reason, and kVitals'
-package defaults keep the record's scheme. `nixosModules/hm-variants.nix`
+window and fzf read their colors from files for this reason. kVitals' package
+defaults and, on a host without Plasma, the cursor keep the record's scheme. `nixosModules/hm-variants.nix`
 fails the evaluation when a variant's packages differ from the generation's,
 and names them.
 

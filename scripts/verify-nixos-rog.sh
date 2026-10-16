@@ -38,9 +38,9 @@ a Plasma session that started after the current system and the last
 plasma-look; an older session is listed as manual.
 
 After a panel build from the current system's panel script, the panel file
-must hold every widget setting of the look's panels, which the system writes
-to /etc/oruc/verify-plasma-panels/LOOK.json. After an older build the check is
-listed as manual. Each dock launcher in that file must name a desktop file
+must hold every widget setting of the look's panels with the stored scheme,
+which the system writes to /etc/oruc/verify-plasma-panels/LOOK_SCHEME.json.
+After an older build the check is listed as manual. Each dock launcher in that file must name a desktop file
 that the Plasma session can find. Each panel widget's General icon setting,
 or the default in its main.xml file, must name an icon that the icon theme
 holds. The OLED pixel shift must hold no
@@ -455,7 +455,9 @@ missing_widget_icons() {
     [[ -z $icon ]] || icon_found "$icon" || printf '%s: %s\n' "$name" "$icon"
   done < <(jq -r '.[].widgets[] | [.name, (.config.General.icon? // "")] | @tsv' "$1")
 }
-panels_file=/etc/oruc/verify-plasma-panels/${plasma_look:-}.json
+# Widget colors follow the scheme that theme stored, so the file is the variant's.
+scheme=$(cat "$HOME/.local/state/oruc/scheme" 2>/dev/null || echo "${scheme_default:-}")
+panels_file=/etc/oruc/verify-plasma-panels/${plasma_look:-}_$scheme.json
 if [[ -r $panels_file ]]; then
   icon_theme_dirs "$(kreadconfig6 --file kdeglobals --group Icons --key Theme --default breeze)"
   # One line per check in the report, so the names go on one line.
@@ -545,11 +547,15 @@ case $status in
   *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
 esac
 
-# The panel settings of the look that plasma-look stored, or of the default look.
+# The panel settings of the look that plasma-look stored and the scheme that
+# theme stored, or of the defaults.
 plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
-panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
+scheme=$(ssh "${ssh_opts[@]}" "$host" \
+  'cat .local/state/oruc/scheme 2>/dev/null || sed -n "s/^scheme_default=//p" /etc/oruc/verify-facts' || true)
+[[ $scheme =~ ^[a-z0-9-]+$ ]] || scheme=none
+panels_json=/etc/oruc/verify-plasma-panels/${plasma_look}_$scheme.json
 
 # The panel file holds the settings of the last panel build, so it is compared
 # only after a build from this system's panel script, at a login or by

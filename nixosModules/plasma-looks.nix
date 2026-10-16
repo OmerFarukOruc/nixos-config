@@ -13,12 +13,14 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.oruc;
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
-  lookConfigs = lib.genAttrs (lib.remove null variants.looks) (
-    look:
-    if look == variants.defaultLook then
+  variantConfig =
+    look: scheme:
+    if look == variants.defaultLook && scheme == variants.defaultScheme then
       hm
     else
-      hm.specialisation.${variants.name look variants.defaultScheme}.configuration
+      hm.specialisation.${variants.name look scheme}.configuration;
+  lookConfigs = lib.genAttrs (lib.remove null variants.looks) (
+    look: variantConfig look variants.defaultScheme
   );
   looks = lib.attrNames lookConfigs;
 
@@ -53,6 +55,7 @@ in
     # look is installed, and that each KWin effect it turns on is loaded.
     oruc.verifyFacts = {
       plasma_look_default = variants.defaultLook;
+      scheme_default = variants.defaultScheme;
     }
     // lib.concatMapAttrs (
       look: lookConfig:
@@ -71,18 +74,28 @@ in
     ) lookConfigs;
 
     # scripts/verify-nixos-rog.sh compares the panel file after a panel build
-    # with the settings of the stored look (scripts/lib/plasma-panel-settings.py).
+    # with the settings of the stored look and scheme, because widget colors
+    # follow the scheme (scripts/lib/plasma-panel-settings.py).
     # The values hold slashes and JSON, which verify-facts does not allow.
-    environment.etc = lib.mapAttrs' (
-      look: lookConfig:
-      lib.nameValuePair "oruc/verify-plasma-panels/${look}.json" {
-        text = builtins.toJSON (
-          map (panel: {
-            inherit (panel) location;
-            widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
-          }) lookConfig.programs.plasma.panels
-        );
-      }
-    ) lookConfigs;
+    environment.etc = lib.listToAttrs (
+      map
+        (
+          variant:
+          lib.nameValuePair "oruc/verify-plasma-panels/${variants.name variant.look variant.scheme}.json" {
+            text = builtins.toJSON (
+              map (panel: {
+                inherit (panel) location;
+                widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
+              }) (variantConfig variant.look variant.scheme).programs.plasma.panels
+            );
+          }
+        )
+        (
+          lib.cartesianProduct {
+            look = looks;
+            scheme = variants.schemes;
+          }
+        )
+    );
   };
 }

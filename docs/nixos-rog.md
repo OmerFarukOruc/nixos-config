@@ -652,12 +652,15 @@ theme                      # prints the active scheme and the others
 theme gruvbox-dark-medium
 ```
 
-New Ghostty and Neovim windows take the new colors at once, and so does VS
-Code, except its window background, which it reads at start. The KDE colors
+Ghostty (which `theme` tells to reload its config), VS Code and new Neovim
+windows take the new colors at once, except VS Code's window background, which
+it reads at start. The KDE colors
 load at the next login, as with `plasma-look`. The login screen, the boot menu,
 the console and niri keep the record's scheme, and apps with fixed colors of
 their own, such as Starship and Spotify, do not change. The choice lasts across
-deploys and reboots, and `theme <record's scheme>` goes back.
+deploys and reboots, and `theme <record's scheme>` goes back. Because each
+deploy and boot activates the record's scheme before the stored one, apps that
+follow the scheme show the record's colors for a moment then.
 
 To offer another scheme, add its name to `theme.schemes`. A name from the
 tinted-theming collection needs nothing else; a scheme it lacks goes in
