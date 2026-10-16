@@ -1,6 +1,9 @@
 { lib, pkgs, ... }:
 {
-  imports = [ ../modules/spicetify.nix ];
+  imports = [
+    ../modules/airpods.nix
+    ../modules/spicetify.nix
+  ];
 
   xdg.mimeApps.defaultApplications = {
     "inode/directory" = [ "org.kde.dolphin.desktop" ];
