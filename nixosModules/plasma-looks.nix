@@ -49,13 +49,21 @@ let
 
       With no argument, prints the active Plasma look and the looks to choose from.
       LOOK activates that look and keeps it across deploys; log out and in to
-      load its Plasma style, panels and KWin effects.
+      load its colors, Plasma style, panels and KWin effects.
       --reapply activates the stored look again. The Home Manager service runs it
       after it activates the default look.
       EOF
       }
 
       activate() {
+        # The session's display and bus, as Home Manager's own service imports
+        # them, so the activation reaches KWin from SSH or a system unit too.
+        if [[ -z ''${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
+          eval "$(
+            XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user show-environment 2>/dev/null |
+              sed -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p'
+          )"
+        fi
         if [[ $1 == "$default" ]]; then
           "$base/activate" --driver-version ${driverVersion}
         else
@@ -80,12 +88,6 @@ let
             echo "plasma-look: the stored look $look no longer exists; the default look $default stays" >&2
             exit 0
           fi
-          # The session's display and bus, as Home Manager's own service
-          # imports them, so the activation can reach KWin.
-          eval "$(
-            XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user show-environment 2>/dev/null |
-              sed -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p'
-          )"
           activate "$look"
           ;;
         *)
@@ -97,7 +99,7 @@ let
           activate "$look"
           mkdir -p "$(dirname "$state")"
           echo "$look" >"$state"
-          echo "Log out and in to load the $look look's Plasma style, panels and KWin effects."
+          echo "Log out and in to load the $look look's colors, Plasma style, panels and KWin effects."
           ;;
       esac
     '';
@@ -107,10 +109,15 @@ in
   config = lib.mkIf hasPlasma {
     assertions = [
       {
+        # The names become shell variable names in /etc/oruc/verify-facts.
+        assertion = lib.all (look: builtins.match "[a-z0-9]+" look != null) looks;
+        message = "Plasma look names may hold only lowercase letters and digits: ${toString looks}";
+      }
+      {
         assertion = missingSwitches == { };
         message =
           "Every Plasma look must write the same kwinrc Plugins switches, because plasma-manager "
-          + "never removes a key that the previous look wrote. Missing: "
+          + "never removes a key that a look leaves out. Missing: "
           + lib.concatStringsSep "; " (
             lib.mapAttrsToList (look: missing: "${look}: ${lib.concatStringsSep ", " missing}") missingSwitches
           );
@@ -119,9 +126,11 @@ in
 
     environment.systemPackages = [ plasmaLook ];
 
-    # A failure here fails the unit, so the deploy reports it.
+    # The leading "-" keeps a failed look from failing the unit, because a
+    # failed unit makes deploy.sh roll back the whole system. The default
+    # look then stays, and the unit's journal holds the error.
     systemd.services.home-manager-oruc.serviceConfig.ExecStartPost =
-      "${lib.getExe plasmaLook} --reapply";
+      "-${lib.getExe plasmaLook} --reapply";
 
     # scripts/verify-nixos-rog.sh checks that each panel widget of the stored
     # look is installed, and that each KWin effect it turns on is loaded.

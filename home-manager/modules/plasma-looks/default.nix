@@ -6,7 +6,7 @@
 # activates without a rebuild.
 #
 # A look writes its keys only while it is active, and plasma-manager never
-# removes a key it wrote before. So a look writes its own KWin plugin switches
+# removes a key that a look leaves out. So a look writes its own KWin plugin switches
 # as false while another look is active, and nixosModules/plasma-looks.nix
 # rejects looks that name different plugin switches.
 #

@@ -65,6 +65,21 @@ let
   setWidgetStyle = style: "${kwriteconfig} --file kdeglobals --group KDE --key widgetStyle ${style}";
   iconTheme = "${kwriteconfig} --file kdeglobals --group Icons --key Theme ${theme.icons}";
 
+  # Home Manager starts each inactive unit that an active target wants at every
+  # switch, and a live scheme change crashed Discord (an Electron app) on
+  # 2026-10-16. So oruc-plasma-colors applies the scheme once per Plasma login.
+  # It stores the invocation ID of plasma-workspace.target, which each login
+  # renews, and skips a start that finds the same ID.
+  systemctl = lib.getExe' pkgs.systemd "systemctl";
+  loginMarker = "%t/oruc-plasma-colors.login";
+  newLogin = pkgs.writeShellScript "oruc-plasma-colors-new-login" ''
+    login=$(${systemctl} --user show -p InvocationID --value plasma-workspace.target)
+    [[ -n $login && $(cat "$1" 2>/dev/null) != "$login" ]]
+  '';
+  markLogin = pkgs.writeShellScript "oruc-plasma-colors-mark-login" ''
+    ${systemctl} --user show -p InvocationID --value plasma-workspace.target >"$1"
+  '';
+
   # The glass scheme makes the window and view backgrounds translucent.
   kdeColorScheme = glass: ''
     [ColorEffects:Disabled]
@@ -279,12 +294,14 @@ in
     };
     Service = {
       Type = "oneshot";
+      ExecCondition = "${newLogin} ${loginMarker}";
       ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
       # The niri session reads the same kdeglobals, so it needs the icon theme too.
       ExecStartPost = [
         (setWidgetStyle config.oruc.plasma.widgetStyle)
       ]
-      ++ lib.optional isNiri iconTheme;
+      ++ lib.optional isNiri iconTheme
+      ++ [ "${markLogin} ${loginMarker}" ];
       Restart = "on-failure";
       RestartSec = 5;
     };
