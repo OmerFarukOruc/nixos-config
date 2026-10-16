@@ -156,6 +156,12 @@ input, change its commit in `flake.nix`, compare the new palette
 the VS Code theme labels and Neovim color scheme names still match
 `home-manager/modules/theme.nix`.
 
+Every other scheme gets a VS Code theme that `theme.nix` renders from the
+`tinted-vscode` input's pinned `base16` template, and `vscode.nix` rewrites the
+fixed colors in the vibrancy input's stylesheet with the scheme's.
+Evaluation fails when that stylesheet no longer holds a color that
+`vscode.nix` rewrites.
+
 `theme.plasmaLook` names the default Plasma look. `plasma-look` activates
 another look at run time, with the same variants
 ([Plasma looks](nixos-rog.md#plasma-looks)).

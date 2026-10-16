@@ -56,7 +56,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -652,11 +652,12 @@ theme                      # prints the active scheme and the others
 theme gruvbox-dark-medium
 ```
 
-Ghostty (which `theme` tells to reload its config), VS Code and new Neovim
-windows take the new colors at once, except VS Code's window background, which
-it reads at start. GTK 4 and libadwaita apps (Mission Center, for example) read
-`~/.config/gtk-4.0/oruc-colors.css` when they start, so a running one may keep the
-old colors until it restarts. The KDE colors
+Ghostty (which `theme` tells to reload its config) and new Neovim windows take
+the new colors at once. VS Code takes its theme extension and its window
+background at its next start. GTK 4 and libadwaita apps (Mission Center, for
+example) read their colors file when they start, so a running one may keep the
+old colors until it restarts. That file is `~/.config/gtk-4.0/oruc-colors.css`
+on nixos-rog and `gtk.css` on nixos-latitude. The KDE colors
 load at the next login, as with `plasma-look`. The login screen, the boot menu,
 the console and niri keep the record's scheme, and apps with fixed colors of
 their own, such as Starship and Spotify, do not change. The choice lasts across
