@@ -4,6 +4,8 @@
 # hash from the vendor's checksum. The file names one source:
 #   passthru.aptIndex     an APT Packages index that lists package NAME
 #   passthru.releaseFeed  an electron-builder latest-linux.yml feed
+# A package whose url also embeds a build ID names it in a buildId line, and
+# the script moves it to the build ID in the feed's URL for the new version.
 # Prints the new version, or nothing when the package is already current or
 # names no source.
 # On a failure it exits non-zero and prints the problem as the last line on
@@ -18,11 +20,18 @@ attr() { sed -n "s/^  $1 = \"\(.*\)\";$/\1/p" "$file"; }
 index=$(attr passthru.aptIndex)
 feed=$(attr passthru.releaseFeed)
 current=$(attr version)
+build=$(attr buildId)
+newbuild=
 [[ -n $index$feed ]] || exit 0
 [[ -n $current ]] || {
   echo "$file names no version" >&2
   exit 1
 }
+# shellcheck disable=SC2016 # the Nix ${buildId}, not a shell expansion
+if [[ -z $build ]] && grep -qF '${buildId}' "$file"; then
+  echo "$file uses \${buildId} but has no buildId line" >&2
+  exit 1
+fi
 
 if [[ -n $index ]]; then
   entry=$(curl -fsSL --max-time 20 --retry 2 "$index" |
@@ -36,33 +45,56 @@ else
   latest=$(sed -n 's/^version: //p' <<<"$yml")
   sha=$(sed -n 's/^sha512: //p' <<<"$yml")
   path=$(sed -n 's/^path: //p' <<<"$yml")
-  asset=$(sed -n 's|^    url = ".*/\(.*\)";$|\1|p' "$file")
-  # shellcheck disable=SC2016 # the Nix ${version}, not a shell expansion
-  asset=${asset//'${version}'/$latest}
-  if [[ -n $latest && $path != "$asset" ]]; then
-    echo "$feed points at $path, not $asset" >&2
-    exit 1
+  if [[ -n $build ]]; then
+    # The build ID comes from the -<digits> segment of the URL that the feed
+    # lists for the file at path; the comparison with the expanded url below
+    # ties that segment to the version.
+    url=$(awk -v path="$path" '$1 == "-" && $2 == "url:" { n = split($3, part, "/"); if (part[n] == path) { print $3; exit } }' <<<"$yml")
+    segment='/[^/]*-([0-9]+)/'
+    [[ $url =~ $segment ]] && newbuild=${BASH_REMATCH[1]}
+    want=$(sed -n 's|^    url = "\(.*\)";$|\1|p' "$file")
+    # shellcheck disable=SC2016 # the Nix ${version} and ${buildId}, not shell expansions
+    want=${want//'${version}'/$latest}
+    # shellcheck disable=SC2016
+    want=${want//'${buildId}'/$newbuild}
+    if [[ -n $latest && -z $url ]]; then
+      echo "$feed lists no URL for $path" >&2
+      exit 1
+    elif [[ -n $latest && $url != "$want" ]]; then
+      echo "$feed points at $url, not $want" >&2
+      exit 1
+    fi
+  else
+    asset=$(sed -n 's|^    url = ".*/\(.*\)";$|\1|p' "$file")
+    # shellcheck disable=SC2016 # the Nix ${version}, not a shell expansion
+    asset=${asset//'${version}'/$latest}
+    if [[ -n $latest && $path != "$asset" ]]; then
+      echo "$feed points at $path, not $asset" >&2
+      exit 1
+    fi
   fi
 fi
 [[ -n $latest && -n $sha ]] || {
   echo "could not read $name from ${index:-$feed}" >&2
   exit 1
 }
-[[ $latest == "$current" ]] && exit 0
+[[ $latest == "$current" && $newbuild == "$build" ]] && exit 0
 
 if [[ -n $index ]]; then
   sri=$(nix hash convert --hash-algo sha256 --to sri "$sha")
 else
   sri=sha512-$sha
 fi
-# The edit lands only when both lines changed, so a failed match leaves the
+# The edit lands only when every line changed, so a failed match leaves the
 # file as it was.
 edited=$(mktemp)
 trap 'rm -f -- "$edited"' EXIT
 sed -e "s|^  version = \".*\";|  version = \"$latest\";|" \
-  -e "s|^    hash = \"sha[0-9]*-.*\";|    hash = \"$sri\";|" "$file" >"$edited"
-if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \"$sri\";" "$edited"; then
-  echo "could not set version $latest and its hash in $file" >&2
+  -e "s|^    hash = \"sha[0-9]*-.*\";|    hash = \"$sri\";|" \
+  -e "s|^  buildId = \".*\";|  buildId = \"$newbuild\";|" "$file" >"$edited"
+if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \"$sri\";" "$edited" ||
+  { [[ -n $build ]] && ! grep -qxF "  buildId = \"$newbuild\";" "$edited"; }; then
+  echo "could not set version $latest and its hash${build:+ and build ID} in $file" >&2
   exit 1
 fi
 cat "$edited" >"$file"

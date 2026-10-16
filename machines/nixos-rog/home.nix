@@ -82,7 +82,6 @@
     [
       amdgpu_top
       android-tools
-      antigravity-ide
       apkeep
       chromium
       code-cursor
@@ -109,6 +108,7 @@
       vlc
     ]
     ++ [
+      (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
