@@ -185,11 +185,11 @@ let
       windowTitle = {
         source = "appName";
         hideEmptyTitle = true;
-        # The widget's default leaves 10 px after the name too, which made the
-        # left panel wider on the right of its widgets.
+        # The widget's default leaves 10 px after the name; 6 matches the
+        # space left of the launcher in the floating bar's left island.
         margins = {
           left = 10;
-          right = 0;
+          right = 6;
           top = 0;
           bottom = 0;
         };
@@ -236,6 +236,21 @@ let
         enabled = true;
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
+      };
+      # The title bar fills the panel's height and the other widgets keep
+      # 4 px free above and below, so the vertical margins give every
+      # background the same height. With spacing 0 and side margins instead, the
+      # backgrounds of an island meet without a seam and leave 6 px inside
+      # each end.
+      spacing = 0;
+      margin = {
+        enabled = true;
+        side = {
+          top = 4;
+          bottom = 4;
+          left = 6;
+          right = 6;
+        };
       };
     };
   };
