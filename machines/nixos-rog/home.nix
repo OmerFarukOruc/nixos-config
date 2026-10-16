@@ -116,9 +116,6 @@
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
-      # Plasma widgets, offered in Add Widgets; the panel layout names neither.
-      (pkgs.callPackage ../../pkgs/plasma-todotask.nix { })
-      (pkgs.callPackage ../../pkgs/plasmallm.nix { })
     ]
     ++ (with agents; [
       agent-browser
