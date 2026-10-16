@@ -6,6 +6,7 @@ schemeOf:
   config,
   inputs,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -36,7 +37,7 @@ in
       mono = readOnly types.str "Nerd Font family of the shell bars.";
     };
     gtk = readOnly types.str "GTK theme that follows the scheme variant.";
-    wallpaper = readOnly (types.nullOr types.path) "Wallpaper named after the selected scheme in assets/wallpapers, or null when none exists.";
+    wallpaper = readOnly types.path "Wallpaper named after the selected scheme in assets/wallpapers, or the default wallpaper recolored with the scheme.";
     ansi = readOnly (types.listOf types.str) "Scheme slots of the 16 ANSI colors: black, red, green, yellow, blue, magenta, cyan, white, then the bright row.";
     ansiNames = readOnly (types.listOf types.str) "Capitalized names of the eight ANSI colors, in the order of each row of ansi.";
   };
@@ -58,7 +59,17 @@ in
       gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
       wallpaper =
         let
-          file = lib.findFirst builtins.pathExists null (
+          # A copy of the one file, because a path inside the flake makes every
+          # change to this repository a new wallpaper store path.
+          copyOf =
+            file:
+            "${
+              lib.fileset.toSource {
+                root = dirOf file;
+                fileset = file;
+              }
+            }/${baseNameOf file}";
+          named = lib.findFirst builtins.pathExists null (
             map (extension: ../assets/wallpapers + "/${schemeName}.${extension}") [
               "png"
               "jpg"
@@ -66,14 +77,14 @@ in
               "webp"
             ]
           );
-          # A copy of the one file, because a path inside the flake makes every
-          # change to this repository a new wallpaper store path.
-          copy = lib.fileset.toSource {
-            root = dirOf file;
-            fileset = file;
-          };
+          # The scheme's 16 colors, base00 to base0F.
+          colors = lib.genList (i: config.scheme.withHashtag."base0${lib.toHexString i}") 16;
+          recolored = pkgs.runCommand "wallpaper-${schemeName}" { nativeBuildInputs = [ pkgs.lutgen ]; } ''
+            mkdir "$out"
+            lutgen apply -R -o "$out/${schemeName}.png" ${copyOf ../assets/wallpapers/default.png} -- ${lib.escapeShellArgs colors}
+          '';
         in
-        if file == null then null else "${copy}/${baseNameOf file}";
+        if named == null then "${recolored}/${schemeName}.png" else copyOf named;
       ansiNames = [
         "Black"
         "Red"

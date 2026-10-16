@@ -674,7 +674,10 @@ theme gruvbox-dark-medium
 
 Ghostty (which `theme` tells to reload its config) and new Neovim windows take
 the new colors at once, and so does Claude Code on nixos-rog, where the dotfiles
-`settings.json` selects `custom:scheme`. VS Code takes its theme extension and
+`settings.json` selects `custom:scheme`. The wallpaper of a scheme without a
+file in `assets/wallpapers` is the default one recolored to that scheme
+([Theme](architecture.md#theme)). On Plasma, `oruc-plasma-wallpaper` sets it
+again at each activation, so the desktop wallpaper changes with the scheme. VS Code takes its theme extension and
 its window background at its next start, and the Markdown viewer takes the
 scheme the next time a file opens. GTK 4 and libadwaita apps (Mission Center,
 for example) read their colors file when they start, so a running one may keep
