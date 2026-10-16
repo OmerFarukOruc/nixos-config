@@ -14,14 +14,19 @@ ROG_COPY=
 # never beside a script, because the script already uses the call's stdin: bash
 # drops a piped input and zsh merges it into the script.
 #
-# Every call runs under heavy when the host has it (machines/nixos-rog/heavy.nix),
-# so the Nix evaluations of several agents wait for a slot instead of running
-# the laptop out of memory together.
+# rog_remote runs under heavy when the host has it (machines/nixos-rog/heavy.nix),
+# so the Nix work of several agents waits for a slot instead of running the
+# laptop out of memory together. rog_remote_light runs at once, for a call that
+# runs no Nix, so a script's setup and cleanup never wait behind other jobs.
 rog_remote() {
   local args
   args=$(printf '%q ' "$ROG_COPY" "$@")
   "${ROG_SSH[@]}" "$ROG_HOST" \
     "if command -v heavy >/dev/null; then exec heavy bash -s -- $args; else exec bash -s -- $args; fi"
+}
+
+rog_remote_light() {
+  "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
 }
 
 # Makes the copy and sets the EXIT trap that removes it, so a caller sets no
@@ -35,7 +40,7 @@ rog_copy_open() {
     exit 1
   fi
   # shellcheck disable=SC2016 # the remote bash expands $1
-  trap 'rog_remote <<<"rm -rf -- \"\$1\"" || true' EXIT
+  trap 'rog_remote_light <<<"rm -rf -- \"\$1\"" || true' EXIT
 
   # A tracked file deleted in the working tree is listed but missing; the copy
   # leaves it out, as the working tree does.
@@ -43,7 +48,7 @@ rog_copy_open() {
     rsync -a --from0 --ignore-missing-args --files-from=- ./ "$ROG_HOST:$ROG_COPY/"
   # A git flake, like CI's checkout. Without git add, Nix would leave the new
   # files out of it.
-  rog_remote <<'REMOTE'
+  rog_remote_light <<'REMOTE'
 set -e
 cd "$1"
 git init -q
