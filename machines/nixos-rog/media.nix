@@ -46,6 +46,10 @@ let
       # its own source, past a blocklist entry for it, so HushMic heard
       # EasyEffects' output.
       set_key EffectsPipelines processAllInputs --type bool false
+      # No output effects, so apps play to the speakers directly. An empty
+      # output pipeline is the default.
+      set_key EffectsPipelines processAllOutputs --type bool false
+      set_key StreamOutputs plugins --delete
       set_key EffectsPipelines bypass --type bool false
       # The pipeline unlinks 10 s after the last app stops recording. Linked
       # all the time, DeepFilterNet took 19 % of a core with nothing
@@ -141,9 +145,13 @@ in
     whisper-v3
   ];
 
-  systemd.user.services.easyeffects.serviceConfig.ExecStartPre = [
-    (lib.getExe easyeffectsSettings)
-  ];
+  systemd.user.services.easyeffects.serviceConfig = {
+    ExecStartPre = [ (lib.getExe easyeffectsSettings) ];
+    # A quit from the tray or the window exits 0, and only a start of this
+    # unit resets bypass. While the unit runs, a launch from the app menu
+    # opens the running instance's window.
+    Restart = lib.mkForce "always";
+  };
   # Apps that record from the default source get HushMic's denoised
   # microphone. In the 2026-10-13 A/B take, HushMic cut silence and typing by
   # 73 to 75 dB and EasyEffects' DeepFilterNet by 5 to 8 dB, and both kept
