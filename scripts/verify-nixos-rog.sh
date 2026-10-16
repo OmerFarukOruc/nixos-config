@@ -41,7 +41,8 @@ After a panel build from the current system's panel script, the panel file
 must hold every widget setting of the look's panels, which the system writes
 to /etc/oruc/verify-plasma-panels/LOOK.json. After an older build the check is
 listed as manual. Each dock launcher in that file must name a desktop file
-that the Plasma session can find.
+that the Plasma session can find. The OLED pixel shift must hold no guard that
+a failed shift left, and its timer must run in a Plasma session.
 
 Exit status: 0 when no check fails (the manual checks are for a person to
 do), 1 when one fails, 64 for a usage error.
@@ -394,6 +395,21 @@ if [[ -n ${plasma_widgets:-} ]]; then
     $found || missing+=("$widget")
   done
   check plasma-widgets-installed "missing: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
+fi
+# A failed OLED shift can leave a guard that stops every later shift while
+# oled-care.service still succeeds; mac-tahoe-oled-care status reports it.
+oled_care=/etc/profiles/per-user/$USER/bin/mac-tahoe-oled-care
+if [[ ! -x $oled_care ]]; then
+  report oled-care-state fail "$oled_care is missing; machines/nixos-rog/oled-care.nix installs it"
+elif oled_status=$("$oled_care" status 2>&1); then
+  report oled-care-state pass "no failed shift stopped the panel shifts"
+else
+  report oled-care-state fail "$(head -n 1 <<<"$oled_status"); docs/nixos-rog.md, Plasma panels, says how to recover"
+fi
+# The timer runs only in a Plasma session, and stays off after a stop by hand.
+if systemctl --user -q is-active plasma-workspace.target; then
+  check oled-care-timer "oled-care.timer runs in the Plasma session" \
+    systemctl --user -q is-active oled-care.timer
 fi
 # A running session keeps the plugins it loaded at login, so a deploy or a
 # plasma-look that drops or adds one shows only after the next login.

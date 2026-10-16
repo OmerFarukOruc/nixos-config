@@ -49,6 +49,16 @@
       url = "github:4v3ngR/Glass/81edfa7f7f0d74997ab730598fa32805b20e4040";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # The launcher, dock task manager and OLED pixel shift of the macOS Tahoe
+    # Plasma theme. Its task manager is a compiled applet that loads only into
+    # the Plasma it was built for, so the modules build it with lib.mkPackages
+    # and our pkgs. A commit pin keeps the hourly updater from rebuilding it
+    # for every upstream move.
+    mac-tahoe = {
+      url = "github:lestercorderomurillo/macos-tahoe-liquid-kde/8fac9286e6687bf3a890edfca68659bb8e576c72";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
     # HushMic builds from source with no binary cache, so a commit pin keeps
     # the hourly updater from rebuilding it on rog for every upstream move.
     hushmic = {
