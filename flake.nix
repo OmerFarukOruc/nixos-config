@@ -19,6 +19,13 @@
       url = "github:felipefdl/warm-burnout/e45c7717e430d8f12a9b9b26145c0456b0c7a319";
       flake = false;
     };
+    # The VS Code theme template that home-manager/modules/theme.nix renders
+    # with the scheme for every scheme but the warm-burnout-* ones. A commit
+    # pin keeps the hourly updater from changing the template.
+    tinted-vscode = {
+      url = "github:tinted-theming/tinted-vscode/3beb4614b6eea1ce60524a404977ee16ff931bfb";
+      flake = false;
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
