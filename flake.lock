@@ -541,6 +541,7 @@
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",
         "spicetify-nix": "spicetify-nix",
+        "tinted-vscode": "tinted-vscode",
         "vscode-vibrancy": "vscode-vibrancy",
         "warm-burnout": "warm-burnout"
       }
@@ -629,6 +630,23 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "tinted-vscode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791091887,
+        "narHash": "sha256-xVGzSSFsORJoL8/9ABYSNDg56OdbRjJqSjfGkABPxu0=",
+        "owner": "tinted-theming",
+        "repo": "tinted-vscode",
+        "rev": "3beb4614b6eea1ce60524a404977ee16ff931bfb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-vscode",
+        "rev": "3beb4614b6eea1ce60524a404977ee16ff931bfb",
         "type": "github"
       }
     },
