@@ -16,9 +16,11 @@
 # oruc's Home Manager files, copies the unit file under a new name into the
 # user manager's runtime unit directory without its dependencies, [Install]
 # section and restarts, starts it in oruc's user manager and prints its journal.
-# The whole unit runs, ExecStartPre included. A oneshot unit still running at
-# the timeout fails. A name Home Manager does not define, or a unit without
-# ExecStart, is refused with exit 3.
+# The whole unit runs, ExecStartPre and conditions included, beside the real
+# unit if that runs; %n and the unit's drop-ins differ. A oneshot unit still
+# running at the timeout fails, and so does a unit whose condition was not met.
+# A name Home Manager does not define, or a unit without ExecStart, is refused
+# with exit 3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -69,51 +71,58 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p -- "$dir/$name.service.d"
-# The copy starts no other unit, stops with no target and runs once.
-sed -E '/^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess)=/d; /^\[Install\]/,$d' \
-  "$file" >"$dir/$name.service"
+# The copy starts and stops no other unit and runs once. Home Manager writes
+# [Install] first, so only that section's lines go.
+awk '
+  /^\[/ { install = ($0 == "[Install]") }
+  install { next }
+  /^(Requires|Requisite|Wants|BindsTo|PartOf|Upholds|Conflicts|OnFailure|OnSuccess|PropagatesStopTo|StopPropagatedFrom|Sockets)=/ { next }
+  { print }
+' "$file" >"$dir/$name.service"
 # A oneshot unit's run is its start, so TimeoutStartSec bounds it and systemd
-# ignores RuntimeMaxSec with a warning.
+# ignores RuntimeMaxSec with a warning. RemainAfterExit keeps a unit that ran
+# and exited cleanly loaded as active (exited); one whose condition failed
+# never runs, stays inactive and unloads.
 limit=RuntimeMaxSec
 grep -qx 'Type=oneshot' "$file" && limit=TimeoutStartSec
-printf '[Service]\nRestart=no\n%s=%s\n' "$limit" "$seconds" >"$dir/$name.service.d/run-unit-on-rog.conf"
+printf '[Service]\nRestart=no\nRemainAfterExit=yes\n%s=%s\n' "$limit" "$seconds" \
+  >"$dir/$name.service.d/run-unit-on-rog.conf"
 systemctl --user daemon-reload
 
 echo "running $unit in the user manager of $(id -un) for up to $seconds s; it acts on this laptop" >&2
 since=$(date +%s)
-# start waits for a oneshot unit's end, and for any other unit's start; a
-# failed unit stays loaded, so its result can be read. A unit that ended
-# cleanly is unloaded at once and reads as success.
+# start waits for a oneshot unit's end, and for any other unit's start.
 start=0
 systemctl --user start "$name.service" </dev/null || start=$?
+show() { systemctl --user show -P "$1" "$name.service"; }
 deadline=$((SECONDS + seconds + 15))
-while [[ $(systemctl --user show -P ActiveState "$name.service") =~ ^(active|activating|deactivating|reloading)$ ]] &&
-  ((SECONDS < deadline)); do
+while [[ $(show ActiveState) =~ ^(activating|deactivating|reloading)$ ||
+  ($(show ActiveState) == active && $(show SubState) != exited) ]] && ((SECONDS < deadline)); do
   sleep 1
 done
 journalctl --user -u "$name.service" --since "@$since" -o cat --no-pager
-result=$(systemctl --user show -P Result "$name.service")
-code=$(systemctl --user show -P ExecMainStatus "$name.service")
-case $result in
-  success)
-    if ((start != 0)); then
-      echo "the user manager did not start $unit (systemctl exit $start)" >&2
-      exit 1
-    fi
-    echo "exit status: 0"
-    ;;
-  timeout)
-    if [[ $limit == TimeoutStartSec ]]; then
-      echo "failed: the oneshot unit still ran after $seconds s"
-      exit 1
-    fi
+state=$(show ActiveState)
+result=$(show Result)
+if [[ $state == active && $(show SubState) == exited ]]; then
+  echo "exit status: $(show ExecMainStatus)"
+elif [[ $state == active ]]; then
+  echo "still running after $seconds s: a pass for a long-running unit"
+elif [[ $state == failed ]]; then
+  # RuntimeMaxSec ends a long-running unit with a timeout once it is active; a
+  # start that times out never made it active.
+  if [[ $result == timeout && $limit == RuntimeMaxSec && $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
     echo "still running after $seconds s: a pass for a long-running unit"
-    ;;
-  *)
-    echo "failed: $result, exit status $code"
+  else
+    echo "failed: $result, exit status $(show ExecMainStatus)"
     exit 1
-    ;;
-esac
+  fi
+elif ((start != 0)); then
+  echo "the user manager did not start $unit (systemctl exit $start)" >&2
+  exit 1
+else
+  echo "$unit did not run: a condition of the unit was not met" >&2
+  exit 1
+fi
 REMOTE
   exit
 fi

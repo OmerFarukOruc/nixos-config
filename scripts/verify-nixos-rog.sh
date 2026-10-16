@@ -41,8 +41,9 @@ After a panel build from the current system's panel script, the panel file
 must hold every widget setting of the look's panels, which the system writes
 to /etc/oruc/verify-plasma-panels/LOOK.json. After an older build the check is
 listed as manual. Each dock launcher in that file must name a desktop file
-that the Plasma session can find. Each icon a panel widget names, or takes as
-its default, must be in the icon theme. The OLED pixel shift must hold no
+that the Plasma session can find. Each panel widget's General icon setting,
+or the default in its main.xml file, must name an icon that the icon theme
+holds. The OLED pixel shift must hold no
 guard that a failed shift left, and its timer must run in a Plasma session.
 
 Exit status: 0 when no check fails (the manual checks are for a person to
@@ -403,7 +404,8 @@ fi
 icon_roots=("$HOME/.local/share/icons" "/etc/profiles/per-user/$USER/share/icons" /run/current-system/sw/share/icons)
 icon_dirs=()
 icon_theme_dirs() {
-  local -a queue=("$@" hicolor) more
+  # KIconLoader looks in breeze, its fallback theme, before hicolor.
+  local -a queue=("$@" breeze hicolor) more
   local -A seen=()
   local theme root index subdir
   while ((${#queue[@]})); do
@@ -423,7 +425,7 @@ icon_theme_dirs() {
   done
 }
 icon_found() {
-  local name=$1 dir ext
+  local name=${1#file://} dir ext
   [[ $name == /* ]] && { [[ -e $name ]]; return; }
   while [[ -n $name ]]; do
     for dir in "${icon_dirs[@]}" /run/current-system/sw/share/pixmaps; do
@@ -446,7 +448,7 @@ missing_widget_icons() {
       for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
         xml=$root/share/plasma/plasmoids/$name/contents/config/main.xml
         [[ -r $xml ]] || continue
-        icon=$(awk '/<entry name="icon"/ { found = 1 } found && /<default>/ { sub(/.*<default>/, ""); sub(/<\/default>.*/, ""); print; exit }' "$xml")
+        icon=$(awk '/<entry name="icon"/ { found = 1 } found && /<default>/ { sub(/.*<default>/, ""); sub(/<\/default>.*/, ""); print; exit } /<\/entry>/ { found = 0 }' "$xml")
         break
       done
     fi
@@ -459,6 +461,8 @@ if [[ -r $panels_file ]]; then
   # One line per check in the report, so the names go on one line.
   missing_icons=$(missing_widget_icons "$panels_file" | paste -sd , -)
   check plasma-widget-icons "not found: ${missing_icons:-none}" test -z "$missing_icons"
+else
+  report plasma-widget-icons manual "no $panels_file; deploy a system that writes it, then rerun"
 fi
 # A failed OLED shift can leave a guard that stops every later shift while
 # oled-care.service still succeeds; mac-tahoe-oled-care status reports it.

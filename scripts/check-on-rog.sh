@@ -51,7 +51,7 @@ git add -A
 # fmt writes the lock file, so this check runs first.
 for flake in . ./kernel-cache; do
   nix flake metadata --no-update-lock-file "$flake" >/dev/null ||
-    { echo "flake.lock of $flake lacks an input; run scripts/check-on-rog.sh --fix" >&2; exit 1; }
+    { echo "flake.lock of $flake does not match its flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check-on-rog.sh --fix relocks" >&2; exit 1; }
 done
 nix fmt -- --ci
 log=$(mktemp)

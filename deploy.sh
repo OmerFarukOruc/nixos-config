@@ -284,8 +284,10 @@ merged_pr_of_release() {
       printf '%s\n' "$pr"
       return 0
     fi
-  done < <(cd "$repo_dir" && timeout 30 gh pr list --state merged --search "$revision" \
-    --json number,mergeCommit --jq '.[] | "\(.number) \(.mergeCommit.oid // "")"' 2>/dev/null)
+    # The commit's own PR list; a search would also match a PR that only cites
+    # the SHA in its text.
+  done < <(cd "$repo_dir" && timeout 30 gh api "repos/{owner}/{repo}/commits/$revision/pulls" \
+    --jq '.[] | select(.merged_at) | "\(.number) \(.merge_commit_sha // "")"' 2>/dev/null)
   return 1
 }
 
