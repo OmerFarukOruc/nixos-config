@@ -497,8 +497,8 @@ scripts/kwin-windows-on-rog.sh
 plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
 a floating top bar of three islands and the dock for the glass look, or a top
 bar and the dock for the klassy look. In the floating bar, Panel Colorizer draws
-the widgets between two panel spacers on one background, so one colorizer
-styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
+each run of widgets that panel spacers separate on one background, so one
+colorizer styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
 `home-manager/modules/plasma-looks/default.nix`. Whenever the layout changes,
 it deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window

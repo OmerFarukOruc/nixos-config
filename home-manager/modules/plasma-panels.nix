@@ -175,8 +175,11 @@ let
     };
   };
 
-  # The icon and name of the active window's app.
-  titleBar = {
+  # The icon and name of the active window's app. The widget's default leaves
+  # 10 px after the name. The top bar ends the title with a spacer, so it
+  # leaves none; in the floating bar's left island, 6 matches the space left
+  # of the launcher.
+  titleBar = rightMargin: {
     applicationTitleBar = {
       layout.elements = [
         "windowIcon"
@@ -185,11 +188,9 @@ let
       windowTitle = {
         source = "appName";
         hideEmptyTitle = true;
-        # The widget's default leaves 10 px after the name; 6 matches the
-        # space left of the launcher in the floating bar's left island.
         margins = {
           left = 10;
-          right = 6;
+          right = rightMargin;
           top = 0;
           bottom = 0;
         };
@@ -214,9 +215,9 @@ let
 
   # One floating top panel with no background of its own. Panel Colorizer
   # draws the widgets on blurred, rounded backgrounds with an outline in the
-  # accent color, and with islandsEnabled it joins the widgets between two
-  # panel spacers into one background (utils.js, updateIslandWidgetTypes), so
-  # the bar shows three islands. The spacers stay clear.
+  # accent color. With islandsEnabled it joins each run of widgets that panel
+  # spacers separate into one background (utils.js, updateIslandWidgetTypes),
+  # so the two spacers make three islands. The spacers stay clear.
   islandsStyle = {
     nativePanel = {
       background.opacity = 0;
@@ -237,9 +238,10 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      # The title bar fills the panel's height and the other widgets keep
-      # 4 px free above and below, so the vertical margins give every
-      # background the same height. With spacing 0 and side margins instead, the
+      # The title bar fills the panel's height (36 px, read through plasmashell
+      # scripting) and the other widgets keep 4 px free above and below
+      # (28 px), so the vertical margins give every background the same
+      # height. With spacing 0 and side margins instead, the
       # backgrounds of an island meet without a seam and leave 6 px inside
       # each end.
       spacing = 0;
@@ -295,7 +297,7 @@ in
               lengthMode = "fill";
               widgets = [
                 "org.kde.plasma.kickerdash"
-                titleBar
+                (titleBar 0)
                 # Plasma sizes two expanding spacers so the widget between them sits
                 # in the middle of the panel.
                 "org.kde.plasma.panelspacer"
@@ -316,7 +318,7 @@ in
               floating = true;
               widgets = [
                 "org.kde.plasma.kickerdash"
-                titleBar
+                (titleBar 6)
                 music
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
