@@ -19,6 +19,54 @@ let
   themeName = if config.oruc.theme.isLight then "Default Light" else "Default Dark";
   theme = builtins.fromJSON (builtins.readFile (vibrancy + "/themes/${themeName}.json"));
 
+  # The fixed colors in the extension's stylesheet for each theme, each with
+  # the scheme color that replaces it at the same alpha. An evaluation fails
+  # when the input no longer holds one of them, so a new release cannot keep
+  # a grey unnoticed.
+  rgbOf =
+    slot: alpha:
+    "rgba(${
+      lib.concatStringsSep ", " [
+        scheme."${slot}-rgb-r"
+        scheme."${slot}-rgb-g"
+        scheme."${slot}-rgb-b"
+      ]
+    }, ${alpha})";
+  themeColors = {
+    "Default Dark" = {
+      "rgba(37, 37, 37,0.3)" = rgbOf "base01" "0.3";
+      "rgb(37, 37, 37,0.6)" = rgbOf "base01" "0.6";
+      "rgba(41, 41, 41,0.2)" = rgbOf "base02" "0.2";
+      "rgba(58, 61, 65,0.6)" = rgbOf "base02" "0.6";
+      "rgba(38, 79, 120,0.6)" = rgbOf "base02" "0.6";
+      "rgba(37, 37, 38, 0.3)" = rgbOf "base01" "0.3";
+      "color: white" = "color: #${scheme.base05}";
+    };
+    "Default Light" = {
+      "rgba(228, 230, 241,0.3)" = rgbOf "base01" "0.3";
+      "rgba(228, 230, 241,0.6)" = rgbOf "base01" "0.6";
+      "rgb(228, 230, 241,0.6)" = rgbOf "base01" "0.6";
+      "rgba(228, 230, 241,0.2)" = rgbOf "base01" "0.2";
+      "rgba(228, 230, 241, 0.3)" = rgbOf "base01" "0.3";
+      "hsla(210, 100%, 80%, 0.4)" = rgbOf "base02" "0.4";
+      "hsla(210, 100%, 80%, 0.6)" = rgbOf "base02" "0.6";
+      "hsla(210, 100%, 80%, 0.3)" = rgbOf "base02" "0.3";
+      "#616161" = "#${scheme.base04}";
+      "#000 " = "#${scheme.base05} ";
+      "color: white" = "color: #${scheme.base05}";
+    };
+  };
+  themeCSS =
+    let
+      colors = themeColors.${themeName};
+      css = builtins.readFile (vibrancy + "/themes/${themeName}.css");
+      missing = lib.filter (literal: !lib.hasInfix literal css) (lib.attrNames colors);
+    in
+    assert lib.assertMsg (
+      missing == [ ]
+    ) "vscode-vibrancy's ${themeName}.css no longer holds ${builtins.toJSON missing}.";
+    builtins.replaceStrings (lib.attrNames colors) (lib.attrValues colors) css;
+
   # The extension's global.vscode_vibrancy_plugin on Linux, in the shape that
   # buildMainJS in v1.4.0's extension/index.js builds; a new release can
   # change that shape. The settings are the defaults, except that the
@@ -51,7 +99,7 @@ let
       disableColorCustomizations = false;
     };
     inherit theme;
-    themeCSS = builtins.readFile (vibrancy + "/themes/${themeName}.css");
+    inherit themeCSS;
     imports = {
       css = "";
       js = "";
