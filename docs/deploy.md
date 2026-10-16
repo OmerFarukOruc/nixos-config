@@ -97,9 +97,15 @@ instead of after the deploy. It refuses, with exit 3, a unit that runs as
 another user or has no `script`. A unit still running at the timeout passes, as
 a long-running unit should.
 
+For a new or changed Home Manager user unit, such as `oled-care`, add `--user`.
+It runs the unit as built, ExecStartPre and environment included, in oruc's user
+manager under another name, and prints its journal. A oneshot unit still
+running at the timeout fails.
+
 ```sh
 scripts/eval-on-rog.sh 'systemd.services."oruc-cpu-limits".environment.PATH'
 scripts/run-unit-on-rog.sh oruc-cpu-limits 40
+scripts/run-unit-on-rog.sh --user oled-care
 ```
 
 ## Deploy
@@ -351,9 +357,12 @@ deploy exits 78 when one of them meets both of these conditions:
 
 The deploy then prints that release's record and the files the deploy would
 drop. A squash-merged branch passes when the version it deployed is the version
-that merged, because the merge puts that version in `main`'s history. The
-check compares the candidate files first and reads Git history only for files
-that differ.
+that merged, because the merge puts that version in `main`'s history. A clean
+release of an earlier commit of the branch also passes once its PR merged:
+GitHub must list a merged PR that holds the release's commit, and that PR's
+merge commit must be in this checkout's history. Without GitHub, such a release
+makes the deploy exit 78. The check compares the candidate files first and
+reads Git history only for files that differ.
 
 A system with no release record, such as one built by hand, is reported and not
 checked. `--replace` skips the check.

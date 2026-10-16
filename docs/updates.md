@@ -82,6 +82,11 @@ move it, change its commit in `flake.nix`, then run
 `nix flake update kwin-effects-glass` and check that `git diff flake.lock` shows
 the new revision.
 
+To add an input, write it in `flake.nix` and run `scripts/check-on-rog.sh --fix`.
+It locks each input that `flake.lock` lacks or whose URL changed, and copies
+`flake.lock` back. Without `--fix`, the check fails while `flake.lock` lacks an
+input, and so does CI.
+
 `move-inputs.sh` never moves the kernel or llm-agents, because each of them
 moves only once a cache holds its builds. It takes the same arguments as
 `update-release-tags.sh`. The updater on nixos-rog and the host-packages-cache

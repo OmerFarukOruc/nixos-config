@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # usage: scripts/check-on-rog.sh [--fix]
-# Runs the formatter check and nix flake check --no-build on nixos-rog, for a
-# copy of this checkout (scripts/lib/rog-copy.sh), because fedora-desktop has
-# no Nix. With --fix, it first formats the copy, copies the files the
-# formatter changed back here, and then checks.
+# Runs the formatter check, the lock file check and nix flake check --no-build
+# on nixos-rog, for a copy of this checkout (scripts/lib/rog-copy.sh), because
+# fedora-desktop has no Nix. With --fix, it first formats the copy and locks
+# each input that flake.lock lacks, copies the files that changed back here,
+# and then checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,12 +26,17 @@ if [[ $fix == true ]]; then
   rog_remote <<'EOF'
 cd "$1"
 nix fmt || echo "nix fmt reported problems; the check below shows them." >&2
+# Locks each input that flake.lock lacks or whose URL changed, and drops a
+# removed one; it moves no other input.
+for flake in . ./kernel-cache; do
+  nix flake lock "$flake" || echo "nix flake lock $flake failed; the check below shows why." >&2
+done
 EOF
   # shellcheck disable=SC2016 # the remote bash expands $1
   changed=$(rog_remote <<<'cd "$1" && git diff --name-only')
   if [[ -n $changed ]]; then
     printf '%s\n' "$changed" | rsync -a --files-from=- "$ROG_HOST:$ROG_COPY/" ./
-    while read -r file; do echo "formatted: $file"; done <<<"$changed"
+    while read -r file; do echo "fixed: $file"; done <<<"$changed"
   fi
 fi
 
@@ -40,6 +46,13 @@ rog_remote <<'EOF'
 set -eo pipefail
 cd "$1"
 git add -A
+# With --no-write-lock-file, nix flake check passes an input that flake.lock
+# lacks and only warns, and the input then follows its upstream unpinned. nix
+# fmt writes the lock file, so this check runs first.
+for flake in . ./kernel-cache; do
+  nix flake metadata --no-update-lock-file "$flake" >/dev/null ||
+    { echo "flake.lock of $flake lacks an input; run scripts/check-on-rog.sh --fix" >&2; exit 1; }
+done
 nix fmt -- --ci
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
