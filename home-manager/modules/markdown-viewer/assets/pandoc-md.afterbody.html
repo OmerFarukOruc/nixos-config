@@ -116,14 +116,45 @@
         vars['venn' + (i + 1)] = c;
       }
     });
+    /* Gantt: bars are accents faded into the page background, so the page
+       text color reads on every bar, inside and outside. Mermaid draws the
+       section bands at 0.2 opacity and the weekend ranges at full opacity. */
+    Object.assign(vars, {
+      sectionBkgColor: token('blue'),
+      altSectionBkgColor: token('fg'),
+      sectionBkgColor2: token('purple'),
+      excludeBkgColor: mix(token('fg'), token('bg'), 0.12),
+      gridColor: token('border-hover'),
+      todayLineColor: token('red'),
+      vertLineColor: token('cyan'),
+      taskBkgColor: fadedFor(token('blue')),
+      taskBorderColor: token('blue'),
+      activeTaskBkgColor: fadedFor(token('green')),
+      activeTaskBorderColor: token('green'),
+      doneTaskBkgColor: fadedFor(token('fg-muted')),
+      doneTaskBorderColor: token('fg-muted'),
+      critBkgColor: fadedFor(token('red')),
+      critBorderColor: token('red'),
+      taskTextColor: token('fg'),
+      taskTextOutsideColor: token('fg'),
+      taskTextLightColor: token('fg'),
+      taskTextDarkColor: token('fg'),
+      taskTextClickableColor: token('fg')
+    });
+    /* Version 11.17.2 is the release whose theme variable names this block
+       uses. A new release gets a new URL and a new integrity value, so a
+       rename cannot reach the viewer unchecked. The integrity value is the
+       SHA-384 of mermaid.min.js at that version. */
     var m = document.createElement('script');
-    m.type = 'module';
-    m.textContent =
-      "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';\n" +
-      "try {\n" +
-      "  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base', themeVariables: " + JSON.stringify(vars) + " });\n" +
-      "  mermaid.run({ nodes: Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')) });\n" +
-      "} catch (e) {}";
+    m.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js';
+    m.integrity = 'sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2';
+    m.crossOrigin = 'anonymous';
+    m.onload = function () {
+      try {
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base', themeVariables: vars });
+        window.mermaid.run({ nodes: Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')) });
+      } catch (e) {}
+    };
     document.body.appendChild(m);
   }
 

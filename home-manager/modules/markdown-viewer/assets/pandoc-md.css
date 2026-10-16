@@ -140,31 +140,31 @@ nav#TOC a:hover { color: var(--fg); }
 
 kbd { background: var(--bg-secondary); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0.1em 0.4em; font-family: 'JetBrains Mono', monospace; font-size: 0.85em; }
 
-code span.kw { color: var(--purple); }
-code span.bu { color: var(--purple); }
-code span.ex { color: var(--green); }
-code span.fu { color: var(--blue); }
-code span.co { color: var(--fg-muted); font-style: italic; }
-code span.st { color: var(--yellow); }
-code span.dv { color: var(--orange); }
-code span.bn { color: var(--orange); }
-code span.fl { color: var(--orange); }
-code span.ch { color: var(--yellow); }
-code span.sc { color: var(--yellow); }
-code span.vs { color: var(--yellow); }
-code span.ss { color: var(--yellow); }
+code span.kw { color: var(--code-purple); }
+code span.bu { color: var(--code-purple); }
+code span.ex { color: var(--code-green); }
+code span.fu { color: var(--code-blue); }
+code span.co { color: var(--code-muted); font-style: italic; }
+code span.st { color: var(--code-yellow); }
+code span.dv { color: var(--code-orange); }
+code span.bn { color: var(--code-orange); }
+code span.fl { color: var(--code-orange); }
+code span.ch { color: var(--code-yellow); }
+code span.sc { color: var(--code-yellow); }
+code span.vs { color: var(--code-yellow); }
+code span.ss { color: var(--code-yellow); }
 code span.va { color: var(--fg); }
-code span.cf { color: var(--purple); }
+code span.cf { color: var(--code-purple); }
 code span.op { color: var(--fg); }
-code span.dt { color: var(--blue); }
-code span.at { color: var(--green); }
-code span.pp { color: var(--orange); }
-code span.do { color: var(--fg-muted); font-style: italic; }
-code span.an { color: var(--fg-muted); font-style: italic; }
-code span.in { color: var(--fg-muted); font-style: italic; }
-code span.wa { color: var(--orange); }
-code span.er { color: var(--red); }
-code span.al { color: var(--red); }
+code span.dt { color: var(--code-blue); }
+code span.at { color: var(--code-green); }
+code span.pp { color: var(--code-orange); }
+code span.do { color: var(--code-muted); font-style: italic; }
+code span.an { color: var(--code-muted); font-style: italic; }
+code span.in { color: var(--code-muted); font-style: italic; }
+code span.wa { color: var(--code-orange); }
+code span.er { color: var(--code-red); }
+code span.al { color: var(--code-red); }
 
 ::selection { background: var(--select); }
 
@@ -271,6 +271,8 @@ pre.mermaid {
   background: transparent !important; border: none !important;
   text-align: center; padding: 0.5rem 0 !important; overflow-x: auto;
 }
+/* Mermaid draws Gantt grid lines with stroke="currentColor", so its gridColor variable never reaches them. */
+pre.mermaid .grid .tick line { stroke: var(--border-hover); }
 
 /* ─── TOC as a sticky sidebar on wide screens ──────────────────── */
 @media (min-width: 1800px) {
