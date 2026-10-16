@@ -84,6 +84,13 @@ in
             "scripts/auto-update.sh"
           ];
         };
+        # A fixed color in a tracked file. The script skips Markdown, lock files
+        # and assets/ itself.
+        theme-drift = {
+          command = lib.getExe pkgs.bash;
+          options = [ "scripts/check-theme-drift.sh" ];
+          includes = [ "*" ];
+        };
         # A document whose first list is a contents list names each of its headings.
         doc-contents = {
           command = lib.getExe pkgs.bash;

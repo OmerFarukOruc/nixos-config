@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -9,6 +10,17 @@ let
   isNiri = sessions.hasDesktop osConfig.oruc.machine "niri";
   # Brave uses KWallet in every session of such a machine; see applications.nix.
   needsKwallet = isNiri && sessions.hasDesktop osConfig.oruc.machine "plasma";
+
+  scheme = config.scheme.withHashtag;
+  inherit (config.oruc.theme) isLight;
+  # The icons are light lavender images, so a light scheme draws its buttons
+  # in the darkest slots.
+  button = {
+    background = if isLight then scheme.base05 else scheme.base01;
+    color = if isLight then scheme.base00 else scheme.base05;
+    active = if isLight then scheme.base04 else scheme.base02;
+  };
+  wlogoutIcons = "${pkgs.wlogout}/share/wlogout/icons";
 in
 {
   services.gnome-keyring = lib.mkIf isNiri {
@@ -70,6 +82,53 @@ in
     pkgs.brightnessctl
     pkgs.libsecret
     pkgs.wireplumber
-    pkgs.wlogout
   ];
+
+  programs.wlogout = lib.mkIf isNiri {
+    enable = true;
+    style = ''
+      * {
+        background-image: none;
+        box-shadow: none;
+      }
+
+      window {
+        background-color: rgba(${config.scheme."base00-rgb-r"}, ${config.scheme."base00-rgb-g"}, ${config.scheme."base00-rgb-b"}, 0.9);
+      }
+
+      button {
+        border-radius: 0;
+        border-color: ${scheme.base03};
+        color: ${button.color};
+        background-color: ${button.background};
+        border-style: solid;
+        border-width: 1px;
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 25%;
+      }
+
+      button:focus, button:active, button:hover {
+        background-color: ${button.active};
+        border-color: ${scheme.base0D};
+        outline-style: none;
+      }
+    ''
+    +
+      lib.concatMapStrings
+        (name: ''
+
+          #${name} {
+            background-image: image(url("${wlogoutIcons}/${name}.png"));
+          }
+        '')
+        [
+          "lock"
+          "logout"
+          "suspend"
+          "hibernate"
+          "shutdown"
+          "reboot"
+        ];
+  };
 }

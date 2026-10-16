@@ -157,6 +157,35 @@ the VS Code theme labels and Neovim color scheme names still match
 another look at run time, with the same variants
 ([Plasma looks](nixos-rog.md#plasma-looks)).
 
+`scripts/check-theme-drift.sh` runs inside `nix fmt` and fails on a fixed color
+in a tracked file: `#RRGGBB`, `#RRGGBBAA` (and `#RGB` in CSS), or a number
+inside `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` or `oklab(`. `#000000` and
+`#00000000` pass, because black and full transparency carry no hue. A line that
+holds `theme-drift-ok: <reason>` passes. A file listed in
+`scripts/theme-drift-allow.txt` (`path-or-glob`, a tab, a reason) passes, and
+the check fails when an entry matches no tracked file, so the list cannot go
+stale. It cannot see a hex string without `#`, a decimal triple, a color name
+or a default inside a package, so a new package or module whose UI has colors
+takes them from `config.scheme` or `oruc.theme.ansi`, or lands in the list
+below with its reason.
+
+These stay fixed on purpose, and the check does not cover them:
+
+- Web pages and Electron app interiors follow only the dark or light variant,
+  through the desktop portal.
+- niri's hotkey overlay, screenshot UI and error banner.
+- The Bibata cursor and the Papirus icons (the variant follows the scheme), and
+  the icons of wlogout.
+- The Breeze desktop theme SVGs (their colors come from kdeglobals at run time)
+  and the Glass Qt style.
+- mpv subtitles.
+- The print stylesheet of the Markdown viewer.
+- Spotify follows only the machine record's scheme, because Spicetify builds
+  the colors into its package.
+- Brave keeps its synced theme, because a managed theme policy would lock the
+  setting and override the synced one (`nixosModules/brave.nix`).
+- Grok and Codex themes live outside this repository.
+
 ## Home Manager
 
 `nixosModules/home-manager.nix` integrates Home Manager and loads

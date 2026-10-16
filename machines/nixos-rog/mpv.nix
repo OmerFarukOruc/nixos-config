@@ -6,6 +6,8 @@
   ...
 }:
 let
+  scheme = config.scheme.withHashtag;
+
   # Opening the RTX 4070 wakes it, and the Vulkan loader opens every driver it
   # finds, VA-API the first render node. Plain mpv sees only the Radeon's
   # Vulkan driver and render node; mpv-nvidia sees only NVIDIA's driver.
@@ -62,6 +64,36 @@ in
       hwdec = "vulkan-copy,vaapi-copy";
       # ModernZ draws the on-screen controller instead.
       osc = false;
+      osd-color = scheme.base05;
+      osd-border-color = scheme.base00;
+    };
+    # Subtitles keep mpv's white, which stays readable on any video.
+    scriptOpts.modernz = {
+      osc_color = scheme.base00;
+      window_title_color = scheme.base05;
+      window_controls_color = scheme.base05;
+      windowcontrols_close_hover = scheme.base08;
+      windowcontrols_max_hover = scheme.base0A;
+      windowcontrols_min_hover = scheme.base0B;
+      title_color = scheme.base05;
+      cache_info_color = scheme.base05;
+      seekbar_cache_color = scheme.base03;
+      seekbarfg_color = scheme.base0D;
+      seekbarbg_color = scheme.base02;
+      seek_handle_color = scheme.base0D;
+      seek_handle_border_color = scheme.base05;
+      time_color = scheme.base05;
+      chapter_title_color = scheme.base05;
+      side_buttons_color = scheme.base05;
+      middle_buttons_color = scheme.base05;
+      playpause_color = scheme.base05;
+      held_element_color = scheme.base03;
+      hover_effect_color = scheme.base0D;
+      thumbnail_box_color = scheme.base01;
+      thumbnail_box_outline = scheme.base03;
+      nibble_color = scheme.base0D;
+      nibble_current_color = scheme.base05;
+      ab_loop_color = scheme.base0C;
     };
   };
 

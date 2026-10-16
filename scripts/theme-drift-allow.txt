@@ -1,0 +1,1 @@
+home-manager/modules/markdown-viewer/assets/pandoc-md.css	the Markdown viewer slice replaces it with a stylesheet built from the scheme

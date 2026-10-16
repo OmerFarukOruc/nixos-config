@@ -123,9 +123,11 @@ says when to use either flag. Every deploy command can change boot or running
 system state.
 
 `scripts/auto-update.sh` is the updater that `oruc-auto-update.service` runs.
-`scripts/check-exit-codes.sh` and `scripts/check-doc-contents.sh` run inside
-`nix fmt`, and `scripts/lib/` holds helpers that other scripts source. Nobody
-runs these by hand.
+`scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
+`scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
+helpers that other scripts source. Nobody runs these by hand, except that a
+host without Nix can run `scripts/check-theme-drift.sh` to check a color
+before `scripts/check-on-rog.sh`.
 
 CI runs the formatter, `nix flake check --no-build`, the evaluation of each
 host and of the cached host packages, and a check of each host's units for an
