@@ -397,7 +397,7 @@ if [[ -n ${plasma_widgets:-} ]]; then
   check plasma-widgets-installed "missing: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
 fi
 # A failed OLED shift can leave a guard that stops every later shift while
-# oled-care.service still succeeds, so only this check shows it.
+# oled-care.service still succeeds; mac-tahoe-oled-care status reports it.
 oled_care=/etc/profiles/per-user/$USER/bin/mac-tahoe-oled-care
 if [[ ! -x $oled_care ]]; then
   report oled-care-state fail "$oled_care is missing; machines/nixos-rog/oled-care.nix installs it"
