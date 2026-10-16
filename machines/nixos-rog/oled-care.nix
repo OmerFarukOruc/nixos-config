@@ -8,7 +8,16 @@
 # after plasma-manager builds the panels again.
 { inputs, pkgs, ... }:
 let
-  inherit (inputs.mac-tahoe.lib.mkPackages pkgs) tools;
+  # The shift prints the panel map and then a status word. Plasma 6.7.5 joins
+  # print() calls without a newline, so the map's line ended in "normalized",
+  # the tool could not parse it, and the shift failed. The tools package
+  # copies the script in its installPhase and runs no install hooks.
+  tools = (inputs.mac-tahoe.lib.mkPackages pkgs).tools.overrideAttrs (old: {
+    installPhase = old.installPhase + ''
+      substituteInPlace $out/libexec/oled_care.py \
+        --replace-fail 'print(JSON.stringify(out));' 'print(JSON.stringify(out) + "\\n");'
+    '';
+  });
 in
 {
   # For mac-tahoe-oled-care status and restore by hand. The tools package
