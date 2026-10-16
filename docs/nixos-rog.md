@@ -495,8 +495,8 @@ scripts/kwin-windows-on-rog.sh
 ## Plasma panels
 
 plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
-the top bar and the dock, or for the tiling look three floating top panels and
-the dock. The dock's launchers are `oruc.plasma.dockLaunchers` in
+three floating top panels and the dock for the glass look, or a top bar and the
+dock for the klassy look. The dock's launchers are `oruc.plasma.dockLaunchers` in
 `home-manager/modules/plasma-looks/default.nix`. Whenever the layout changes,
 it deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
@@ -543,8 +543,8 @@ lasts only until then, so write a lasting change in the Nix file.
   ```
 
 Prove a panel or effect change with `scripts/screenshot-nixos-rog.sh` before and
-after it. For a top bar change, `--crop 2560x60+0+0` keeps only the bar, so the
-shot leaves out the windows below it.
+after it. For a change to the top panels, `--crop 2560x60+0+0` keeps only the
+top 60 pixels, so the shot leaves out the windows below them.
 [Check a visual change](#check-a-visual-change) says how to see the blur.
 
 ## Plasma looks
@@ -556,13 +556,11 @@ and KWin blur that belong together. Each look is a file in
 names the default look. The looks are:
 
 - `glass`: the Glass decoration, Qt style and blur with the translucent Base16
-  scheme and square corners.
+  scheme, square corners and three floating top panels. The left panel holds
+  the launcher and the active app, the middle one the clock, and the right one
+  the system monitor, tray and show-desktop button.
 - `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
   Base16 scheme. Klassy's settings app changes its buttons and title bars.
-- `tiling`: `glass` with rounded corners, Krohnkite tiling with 8 px gaps and
-  three floating top panels. Krohnkite's shortcuts are in System Settings,
-  Shortcuts. Its default Meta+Return is also the Ghostty shortcut in
-  `plasma-manager.nix`; which of the two wins is not tested.
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:
