@@ -478,6 +478,11 @@ closes the window. Without `--window` it takes the screen as it is. Crop the
 window's edges at full size before you judge them, with `--crop WxH+X+Y` in
 the screen's pixels.
 
+Text contrast in Ghostty depends on what shows through the blur, and a white
+window behind it is the worst case. Before you judge a change to Ghostty's
+opacity or colors, or to a terminal app's theme, ask Omer to put a white
+window where the Ghostty window opens.
+
 Glass's `WindowClasses` list is a blacklist. A window it names gets no blur,
 and each entry must match the window's resource class or resource name exactly.
 To read both for each open window in the Plasma session, run:
