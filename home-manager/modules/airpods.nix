@@ -31,6 +31,9 @@ in
       PartOf = [ "graphical-session.target" ];
       # The daemon reads its config only at start.
       X-Restart-Triggers = [ "${settingsFile}" ];
+      # Without a Bluetooth adapter the daemon exits at start.
+      StartLimitIntervalSec = 60;
+      StartLimitBurst = 3;
     };
     Service = {
       ExecStart = "${lib.getExe airpods-tui} --daemon";
