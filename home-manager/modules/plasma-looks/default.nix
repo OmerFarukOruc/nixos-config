@@ -35,11 +35,11 @@ in
       description = "The Plasma look of this generation.";
     };
     colorScheme = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      description = "Color scheme that oruc-plasma-colors applies at each Plasma login, or null for a look that applies its own.";
+      type = lib.types.str;
+      description = "Color scheme that oruc-plasma-colors applies at each Plasma login.";
     };
     widgetStyle = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
+      type = lib.types.str;
       description = "Qt style that oruc-plasma-colors applies with the color scheme.";
     };
     dockLaunchers = lib.mkOption {
