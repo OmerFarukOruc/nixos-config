@@ -266,40 +266,36 @@ in
 
   # Each session applies its own scheme and Qt style at login, because both
   # sessions read the same kdeglobals. The Plasma look names them.
-  # A look with no color scheme applies its own.
-  systemd.user.services.oruc-plasma-colors =
-    lib.mkIf (isPlasma && config.oruc.plasma.colorScheme != null)
-      {
-        Unit = {
-          Description = "Apply the color scheme and Qt style of the Plasma look";
-          # Only a Plasma session reaches plasma-workspace.target.
-          After = [
-            "plasma-workspace.target"
-            "plasma-plasmashell.service"
-          ];
-          PartOf = [ "plasma-workspace.target" ];
-          # Stop retrying when Plasma keeps rejecting the scheme. A skipped start
-          # counts too, and a deploy with a stored Plasma look starts the unit
-          # twice, so the limit leaves room for a plasma-look right after it.
-          StartLimitIntervalSec = 60;
-          StartLimitBurst = 5;
-        };
-        Service = {
-          Type = "oneshot";
-          ExecCondition = colorsOnce.condition;
-          ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
-          # The niri session reads the same kdeglobals, so it needs the icon theme too.
-          ExecStartPost =
-            lib.optional (config.oruc.plasma.widgetStyle != null) (
-              setWidgetStyle config.oruc.plasma.widgetStyle
-            )
-            ++ lib.optional isNiri iconTheme
-            ++ [ colorsOnce.mark ];
-          Restart = "on-failure";
-          RestartSec = 5;
-        };
-        Install.WantedBy = [ "plasma-workspace.target" ];
-      };
+  systemd.user.services.oruc-plasma-colors = lib.mkIf isPlasma {
+    Unit = {
+      Description = "Apply the color scheme and Qt style of the Plasma look";
+      # Only a Plasma session reaches plasma-workspace.target.
+      After = [
+        "plasma-workspace.target"
+        "plasma-plasmashell.service"
+      ];
+      PartOf = [ "plasma-workspace.target" ];
+      # Stop retrying when Plasma keeps rejecting the scheme. A skipped start
+      # counts too, and a deploy with a stored Plasma look starts the unit
+      # twice, so the limit leaves room for a plasma-look right after it.
+      StartLimitIntervalSec = 60;
+      StartLimitBurst = 5;
+    };
+    Service = {
+      Type = "oneshot";
+      ExecCondition = colorsOnce.condition;
+      ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
+      # The niri session reads the same kdeglobals, so it needs the icon theme too.
+      ExecStartPost = [
+        (setWidgetStyle config.oruc.plasma.widgetStyle)
+      ]
+      ++ lib.optional isNiri iconTheme
+      ++ [ colorsOnce.mark ];
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
+    Install.WantedBy = [ "plasma-workspace.target" ];
+  };
 
   # niri blurs only the windows that niri/config.kdl lists, so its sessions
   # put back the opaque scheme and Breeze.

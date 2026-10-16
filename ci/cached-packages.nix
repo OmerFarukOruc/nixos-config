@@ -19,11 +19,6 @@ let
     # pkgs/herdr.nix, until llm-agents packages its version; it leaves with that file.
     "herdr"
     "kwin-glass"
-    # The compiled parts of the macOS Tahoe Plasma look.
-    "mac-tahoe-acrylic-glass"
-    "mac-tahoe-global-menu"
-    "mac-tahoe-rounded-corners"
-    "mac-tahoe-task-manager"
     # The login screen theme.
     "sddm-astronaut"
     # The lock screen's video wallpaper plugin.

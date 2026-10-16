@@ -50,7 +50,6 @@ let
   plasmaLookNames = [
     "glass"
     "klassy"
-    "tahoe"
     "tiling"
   ];
 in

@@ -55,7 +55,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
-| kwin-effects-glass, glass-style, mac-tahoe, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -497,9 +497,8 @@ scripts/kwin-windows-on-rog.sh
 plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
 the top bar and the dock, or for the tiling look three floating top panels and
 the dock. The dock's launchers are `oruc.plasma.dockLaunchers` in
-`home-manager/modules/plasma-looks/default.nix`. The Tahoe look brings its own
-panels. Whenever the layout changes, it
-deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
+`home-manager/modules/plasma-looks/default.nix`. Whenever the layout changes,
+it deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
 
@@ -564,13 +563,6 @@ names the default look. The looks are:
   three floating top panels. Krohnkite's shortcuts are in System Settings,
   Shortcuts. Its default Meta+Return is also the Ghostty shortcut in
   `plasma-manager.nix`; which of the two wins is not tested.
-- `tahoe`: the macOS Tahoe theme from
-  [macos-tahoe-liquid-kde](https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde),
-  with its own colors, icons, cursor, top bar with the global menu, and dock.
-  Its theme switcher, `mac-tahoe-theme.service`, applies it at login. It also
-  changes GTK's theme, stylesheet and title bar buttons and KWin's border
-  size. When another look is stored, its activation removes those
-  (`leaveTahoe` in `plasma-looks/tahoe.nix`) and warns when a step fails.
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:

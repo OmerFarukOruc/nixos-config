@@ -116,9 +116,6 @@ in
           Number = 4;
           Rows = 1;
         };
-        # KWin's default border size. The Tahoe look sets its own, and the other
-        # looks would keep it without this.
-        "org.kde.kdecoration2".BorderSize = "Normal";
         # 9 is no screen edge, so the top-left corner no longer opens Overview.
         Effect-overview.BorderActivate = 9;
         Effect-slide.SlideBackground = false;

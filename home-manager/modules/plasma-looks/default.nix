@@ -35,11 +35,11 @@ in
       description = "The Plasma look of this generation.";
     };
     colorScheme = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      description = "Color scheme that oruc-plasma-colors applies at each Plasma login, or null for a look that applies its own.";
+      type = lib.types.str;
+      description = "Color scheme that oruc-plasma-colors applies at each Plasma login.";
     };
     widgetStyle = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
+      type = lib.types.str;
       description = "Qt style that oruc-plasma-colors applies with the color scheme.";
     };
     dockLaunchers = lib.mkOption {
@@ -73,12 +73,11 @@ in
       type = lib.types.enum [
         "bar"
         "islands"
-        "none"
       ];
       default = "bar";
       description = ''
         Panels from plasma-panels.nix: one top bar, or three floating top
-        panels, each with the dock; none for a look that brings its own.
+        panels, each with the dock.
       '';
     };
   };
@@ -100,7 +99,7 @@ in
         runtime=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
         login=$(XDG_RUNTIME_DIR=$runtime ${systemctl} --user show -p InvocationID --value plasma-workspace.target 2>/dev/null || true)
         if [[ -n $login && ! -v DRY_RUN ]]; then
-          for unit in oruc-plasma-colors mac-tahoe-theme; do
+          for unit in oruc-plasma-colors; do
             printf '%s\n' "$login" >"$runtime/$unit.login"
           done
         fi
