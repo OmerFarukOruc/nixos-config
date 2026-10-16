@@ -40,14 +40,17 @@
 
   # Deskflow runs here as the client of fedora-desktop's server. A client on
   # Wayland types through the remote desktop portal, which Plasma has and niri
-  # does not, so it starts at a Plasma login only. As a service, a switch that
-  # changes Deskflow restarts it, so the running client is never the old build.
+  # does not, so it starts at a Plasma login only.
   systemd.user.services.deskflow = {
     Unit = {
       Description = "Deskflow client of fedora-desktop";
       # Only a Plasma session reaches plasma-workspace.target.
       After = [ "plasma-workspace.target" ];
       PartOf = [ "plasma-workspace.target" ];
+      # With this, Home Manager's switch neither restarts a running client nor
+      # starts one you quit. A login still starts it, because the target's
+      # Wants is not a manual start.
+      RefuseManualStart = true;
     };
     Service = {
       ExecStart = lib.getExe pkgs.deskflow;
