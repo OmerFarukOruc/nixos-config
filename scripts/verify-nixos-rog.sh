@@ -385,8 +385,7 @@ if [[ -n ${plasma_widgets:-} ]]; then
   IFS=, read -ra widgets <<<"$plasma_widgets"
   for widget in "${widgets[@]}"; do
     found=false
-    # The Tahoe look links its widgets into ~/.local/share.
-    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw "$HOME/.local"; do
+    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
       if [[ -e $root/share/plasma/plasmoids/$widget || -e $root/lib/qt-6/plugins/plasma/applets/$widget.so ]]; then
         found=true
         break

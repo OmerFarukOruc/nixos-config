@@ -96,8 +96,6 @@ let
             usage >&2
             exit 64
           fi
-          # Stored first, because the activation reads it (leaveTahoe in
-          # home-manager/modules/plasma-looks/tahoe.nix).
           mkdir -p "$(dirname "$state")"
           echo "$look" >"$state"
           activate "$look"

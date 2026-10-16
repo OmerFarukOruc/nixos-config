@@ -295,7 +295,6 @@ in
             ])
             dock
           ];
-          none = [ ];
         }
         .${config.oruc.plasma.panelLayout};
     };
