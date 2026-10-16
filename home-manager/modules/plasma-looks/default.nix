@@ -76,8 +76,8 @@ in
       ];
       default = "bar";
       description = ''
-        Panels from plasma-panels.nix: one top bar, or three floating top
-        panels, each with the dock.
+        Panels from plasma-panels.nix: one top bar, or a floating top bar
+        of three islands, each with the dock.
       '';
     };
   };

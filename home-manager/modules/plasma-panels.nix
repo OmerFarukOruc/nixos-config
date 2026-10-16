@@ -16,9 +16,10 @@ let
   # which current releases ignore.
   # The keys are in package/contents/ui/code/globals.js of plasma-panel-colorizer.
   # sourceType 0 is a custom color, 1 a color from the Plasma color scheme.
-  colorizer = style: {
+  colorizer = colorizerWith { };
+  colorizerWith = general: style: {
     name = "luisbocanegra.panel.colorizer";
-    config.General = {
+    config.General = general // {
       # The widget shows only in the panel's edit mode.
       hideWidget = true;
       globalSettings = builtins.toJSON style;
@@ -174,8 +175,12 @@ let
     };
   };
 
-  # The icon and name of the active window's app.
-  titleBar = {
+  # The icon and name of the active window's app. The widget's default leaves
+  # 10 px after the name. The top bar ends the title with a spacer, so it
+  # leaves none. In the floating bar's left island, 6 plus the island's end
+  # margin left as much space after the name as before the launcher icon
+  # (16 px each in a screenshot of nixos-rog).
+  titleBar = rightMargin: {
     applicationTitleBar = {
       layout.elements = [
         "windowIcon"
@@ -184,11 +189,9 @@ let
       windowTitle = {
         source = "appName";
         hideEmptyTitle = true;
-        # The widget's default leaves 10 px after the name too, which made the
-        # left panel wider on the right of its widgets.
         margins = {
           left = 10;
-          right = 0;
+          right = rightMargin;
           top = 0;
           bottom = 0;
         };
@@ -196,18 +199,44 @@ let
     };
   };
 
-  # A floating top panel as long as its widgets, on one blurred, rounded
-  # background with an outline in the accent color.
-  islandStyle = padding: {
+  # The song that Spotify or Brave plays, with its
+  # album cover and a play/pause button. The widget hides while no player has
+  # a song loaded; a paused song keeps it.
+  # plasma-manager's plasmusicToolbar writes some keys that Plasmusic 4 no
+  # longer reads, so the keys come from its contents/config/main.xml.
+  music = {
+    name = "plasmusic-toolbar";
+    config.General = {
+      # With the automatic choice, Plasma's media multiplexer, the widget
+      # stayed hidden while Spotify played and Brave had a stopped player
+      # with no song (observed on nixos-rog). These identities come from each
+      # player's MPRIS Identity property; another player, such as mpv, shows
+      # only once its identity is added here.
+      choosePlayerAutomatically = false;
+      preferredPlayerIdentity = "Spotify,Brave Origin";
+      useAlbumCoverAsPanelIcon = true;
+      fallbackToIconWhenArtNotAvailable = true;
+      skipBackwardControlInPanel = false;
+      skipForwardControlInPanel = false;
+    };
+  };
+
+  # One floating top panel with no background of its own. Panel Colorizer
+  # draws the widgets on blurred, rounded backgrounds with an outline in the
+  # accent color. With islandsEnabled it joins each run of widgets that panel
+  # spacers separate into one background (utils.js, updateIslandWidgetTypes),
+  # so the two spacers make three islands. The spacers stay clear.
+  islandsStyle = {
     nativePanel = {
       background.opacity = 0;
       floatingDialogs = true;
       floatingDialogsAllowOverride = true;
     };
-    panel.normal = {
+    widgets.normal = {
       enabled = true;
       blurBehind = true;
       backgroundColor = schemeColor "backgroundColor" "Window" 0.5;
+      foregroundColor = schemeColor "highlightColor" "Window" 1;
       radius = {
         enabled = true;
         corner = allCorners 10;
@@ -217,23 +246,23 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      padding = {
+      # The title bar fills the panel's height (36 px, read through plasmashell
+      # scripting) and the other widgets keep 4 px free above and below
+      # (28 px), so the vertical margins give every background the same
+      # height. With spacing 0 and side margins instead, the
+      # backgrounds of an island meet without a seam and leave 6 px inside
+      # each end.
+      spacing = 0;
+      margin = {
         enabled = true;
-        side = padding;
+        side = {
+          top = 4;
+          bottom = 4;
+          left = 6;
+          right = 6;
+        };
       };
     };
-    widgets.normal = {
-      enabled = true;
-      foregroundColor = schemeColor "highlightColor" "Window" 1;
-    };
-  };
-  island = alignment: padding: widgets: {
-    location = "top";
-    height = 36;
-    floating = true;
-    lengthMode = "fit";
-    inherit alignment;
-    widgets = widgets ++ [ (colorizer (islandStyle padding)) ];
   };
 
   dock = {
@@ -255,7 +284,10 @@ in
   # plasma-org.kde.plasma.desktop-appletsrc at the next login and builds the
   # panels again, so a panel or widget change made in Plasma lasts only until then.
   config = lib.mkIf isPlasma {
-    home.packages = [ kvitalsPackage ];
+    home.packages = [
+      kvitalsPackage
+      pkgs.plasmusic-toolbar
+    ];
 
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
@@ -273,7 +305,7 @@ in
               lengthMode = "fill";
               widgets = [
                 "org.kde.plasma.kickerdash"
-                titleBar
+                (titleBar 0)
                 # Plasma sizes two expanding spacers so the widget between them sits
                 # in the middle of the panel.
                 "org.kde.plasma.panelspacer"
@@ -288,42 +320,26 @@ in
             dock
           ];
           islands = [
-            # Plasma keeps free space after the last widget of a panel that
-            # fits its widgets, and each widget keeps its own margins. These
-            # paddings were measured on a screenshot of nixos-rog so that each
-            # panel shows 14 to 18 logical px on both sides of what it draws.
-            # The negative right padding moves the last widget up to 6 px past
-            # the panel's length, into the 8 px floating margin of the panel
-            # window, which the background also covers. Panel Colorizer's
-            # settings window allows no negative padding, so a change made
-            # there resets it. The system monitor is as wide as its numbers,
-            # so the right panel's left side moves when the CPU usage gains or
-            # loses a digit.
-            (island "left"
-              {
-                left = 8;
-                right = -6;
-              }
-              [
+            {
+              location = "top";
+              height = 36;
+              floating = true;
+              widgets = [
                 "org.kde.plasma.kickerdash"
-                titleBar
-              ]
-            )
-            (island "center" {
-              left = 12;
-              right = -8;
-            } [ "org.kde.plasma.digitalclock" ])
-            (island "right"
-              {
-                left = 8;
-                right = -10;
-              }
-              [
+                (titleBar 6)
+                "org.kde.plasma.panelspacer"
+                "org.kde.plasma.digitalclock"
+                "org.kde.plasma.panelspacer"
+                # At the end of the left island, Panel Colorizer drew the song
+                # as a box of its own with a double border; here it joins the
+                # island.
+                music
                 kvitals
                 "org.kde.plasma.systemtray"
                 "org.kde.plasma.showdesktop"
-              ]
-            )
+                (colorizerWith { islandsEnabled = true; } islandsStyle)
+              ];
+            }
             dock
           ];
         }
