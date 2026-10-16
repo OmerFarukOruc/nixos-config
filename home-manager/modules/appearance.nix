@@ -12,6 +12,10 @@ let
   theme = config.oruc.theme;
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
+  kreadconfig = lib.getExe' pkgs.kdePackages.kconfig "kreadconfig6";
+  kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
+  dconf = lib.getExe pkgs.dconf;
+  dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
 
   # Named colors of libadwaita, which adw-gtk3 reuses for GTK 3.
   gtkColors = ''
@@ -55,8 +59,9 @@ let
   '';
 in
 {
-  # Plasma writes the GTK and cursor settings itself, so a machine with a Plasma
-  # session leaves them to Plasma and its niri session inherits them.
+  # Plasma writes the GTK settings and the cursor itself, so a machine with a
+  # Plasma session leaves them to Plasma and its niri session inherits them. Only
+  # the scheme's named colors are ours there (the Plasma branch below).
   config = lib.mkMerge [
     (lib.mkIf (hasNiri && !hasPlasma) {
       # The cursor follows the machine record's scheme, because its name goes
@@ -88,11 +93,72 @@ in
     })
 
     (lib.mkIf hasPlasma {
-      # plasma-manager names this cursor and icon theme, and niri's theme.kdl the cursor.
+      # plasma-manager names this cursor and icon theme, and niri's theme.kdl the
+      # cursor. adw-gtk3 is the GTK 3 theme that reads the named colors.
       home.packages = [
+        pkgs.adw-gtk3
         pkgs.bibata-cursors
         pkgs.papirus-icon-theme
       ];
+
+      # kde-gtk-config (kded) owns gtk.css and replaces it with a regular file
+      # each time it applies a color scheme, so gtk.css cannot be a Home Manager
+      # link. It keeps the file's content and only appends its own
+      # `@import 'colors.css';`, so the import below survives. Its colors.css
+      # defines only names that end in `_breeze`, which do not overlap ours, so
+      # the order of the two imports does not matter.
+      xdg.configFile."gtk-3.0/oruc-colors.css".text = gtkColors;
+      xdg.configFile."gtk-4.0/oruc-colors.css".text = gtkColors;
+
+      home.activation.gtkColors = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [[ ! -v DRY_RUN ]]; then
+          for gtkDir in gtk-3.0 gtk-4.0; do
+            gtkCss=${config.xdg.configHome}/$gtkDir/gtk.css
+            gtkImport="@import 'oruc-colors.css';"
+            mkdir -p "''${gtkCss%/*}"
+            if [[ -L $gtkCss ]]; then
+              warnEcho "$gtkCss is a link, so it cannot import oruc-colors.css."
+            elif ! grep -qsF "$gtkImport" "$gtkCss"; then
+              { [[ -s $gtkCss ]] && printf '\n'; printf '%s\n' "$gtkImport"; } >>"$gtkCss" ||
+                warnEcho "$gtkCss is not writable, so it does not import oruc-colors.css."
+            fi
+          done
+          unset gtkDir gtkCss gtkImport
+
+          # Only GTK 3 reads the theme name. The name is ours while it is unset
+          # or already one of adw-gtk3's, so a theme chosen in System Settings
+          # stays. GTK 3 on Wayland takes the name from gsettings whenever it
+          # sees the org.gnome.desktop.interface schema, which beats
+          # settings.ini, so both get it. Without a session bus (a deploy at
+          # boot) dconf runs on a private one, as Home Manager's own dconf
+          # step does, and a failed write only warns.
+          gtkSettings=${config.xdg.configHome}/gtk-3.0/settings.ini
+          case $(${kreadconfig} --file "$gtkSettings" --group Settings --key gtk-theme-name) in
+            "" | adw-gtk3 | adw-gtk3-dark)
+              ${kwriteconfig} --file "$gtkSettings" --group Settings --key gtk-theme-name ${theme.gtk}
+              ;;
+          esac
+          unset gtkSettings
+
+          gtkThemeKey=/org/gnome/desktop/interface/gtk-theme
+          gtkThemeNow=$(${dconf} read "$gtkThemeKey" 2>/dev/null) || gtkThemeNow=
+          case $gtkThemeNow in
+            "" | "'adw-gtk3'" | "'adw-gtk3-dark'")
+              if [[ $gtkThemeNow != "'${theme.gtk}'" ]]; then
+                if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
+                  dconfBus=()
+                else
+                  dconfBus=(${dbusRunSession})
+                fi
+                run "''${dconfBus[@]}" ${dconf} write "$gtkThemeKey" "'${theme.gtk}'" ||
+                  warnEcho "Could not set the GTK 3 theme in dconf."
+                unset dconfBus
+              fi
+              ;;
+          esac
+          unset gtkThemeKey gtkThemeNow
+        fi
+      '';
     })
 
     (lib.mkIf hasNiri {

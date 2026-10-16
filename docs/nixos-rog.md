@@ -676,7 +676,11 @@ Ghostty (which `theme` tells to reload its config) and new Neovim windows take
 the new colors at once, and so does Claude Code on nixos-rog, where the dotfiles
 `settings.json` selects `custom:scheme`. VS Code takes its theme extension and
 its window background at its next start, and the Markdown viewer takes the
-scheme the next time a file opens. The KDE colors
+scheme the next time a file opens. GTK 4 and libadwaita apps (Mission Center,
+for example) read their colors file when they start, so a running one may keep
+the old colors until it restarts. That file is
+`~/.config/gtk-4.0/oruc-colors.css` on nixos-rog and `gtk.css` on
+nixos-latitude. The KDE colors
 and the Plasma splash load at the next login, as with `plasma-look`. The login
 screen, the boot menu, the console and niri keep the record's scheme. So does
 Spotify, because Spicetify builds its colors into the package, which a variant
