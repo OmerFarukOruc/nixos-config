@@ -26,6 +26,52 @@ let
       2
     ];
 
+  # WCAG 2.x contrast ratio of two colors, each six hex digits. Nix has no
+  # power function, so x^2.4 is x^2 times the square of the fifth root of x,
+  # which Newton's method finds.
+  contrast =
+    a: b:
+    let
+      fifthRoot =
+        x: builtins.foldl' (y: _: y - (y * y * y * y * y - x) / (5.0 * y * y * y * y)) 1.0 (lib.range 1 40);
+      linear =
+        value:
+        let
+          v = value / 255.0;
+        in
+        if v <= 0.03928 then
+          v / 12.92
+        else
+          let
+            u = (v + 0.055) / 1.055;
+            r = fifthRoot u;
+          in
+          u * u * r * r;
+      luminance =
+        c:
+        let
+          part = i: linear (lib.fromHexString (builtins.substring (2 * i) 2 c));
+        in
+        0.2126 * part 0 + 0.7152 * part 1 + 0.0722 * part 2;
+      la = luminance a;
+      lb = luminance b;
+    in
+    (lib.max la lb + 0.05) / (lib.min la lb + 0.05);
+
+  # `color` moved toward the text color by the fewest whole percent that gives
+  # it a 4.5:1 contrast on the code background. A color that already reads
+  # keeps its value, and one that needs help keeps close to its hue.
+  onCode =
+    color:
+    let
+      moved = pct: mixHex (100 - pct) color scheme.base05;
+      pct = lib.findFirst (p: contrast (moved p) scheme.base01 >= 4.5) null (lib.range 0 100);
+    in
+    if pct == null then
+      throw "markdown-viewer: ${color} cannot reach 4.5:1 on the code background"
+    else
+      moved pct;
+
   # The viewer reads this file when it renders, so `theme` can change the
   # colors without a new package.
   themeCss = ''
@@ -45,6 +91,13 @@ let
       --blue: #${scheme.base0D};
       --cyan: #${scheme.base0C};
       --purple: #${scheme.base0E};
+      --code-muted: #${onCode (mixHex 80 scheme.base05 scheme.base00)};
+      --code-red: #${onCode scheme.base08};
+      --code-orange: #${onCode scheme.base09};
+      --code-yellow: #${onCode scheme.base0A};
+      --code-green: #${onCode scheme.base0B};
+      --code-blue: #${onCode scheme.base0D};
+      --code-purple: #${onCode scheme.base0E};
       --select: #${scheme.base02};
       color-scheme: ${if config.oruc.theme.isLight then "light" else "dark"};
     }
