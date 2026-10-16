@@ -62,7 +62,15 @@ for f in "${files[@]}"; do
 
   pat="$hex|$fn"
   [[ $f == *.css ]] && pat="$pat|$short"
-  hits=$(grep -nIP -- "$pat" "$f" | grep -vP 'theme-drift-ok:\s*\S' || true)
+  # grep exits 1 when nothing matches and 2 when it cannot read the file.
+  rc=0
+  matches=$(grep -nIP -- "$pat" "$f") || rc=$?
+  if ((rc > 1)); then
+    printf '%s: cannot read\n' "$f" >&2
+    status=1
+    continue
+  fi
+  hits=$(grep -vP 'theme-drift-ok:\s*\S' <<<"$matches" || true)
   [[ -z $hits ]] && continue
   while IFS= read -r hit; do
     printf '%s:%s\n' "$f" "$hit" >&2

@@ -170,7 +170,7 @@ inside `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` or `oklab(`. `#000000` and
 holds `theme-drift-ok: <reason>` passes. A file listed in
 `scripts/theme-drift-allow.txt` (`path-or-glob`, a tab, a reason) passes, and
 the check fails when an entry matches no tracked file, so the list cannot go
-stale. It cannot see a hex string without `#`, a decimal triple, a color name
+stale. It does not read Markdown, lock files or `assets/`. It cannot see a hex string without `#`, a decimal triple, a color name
 or a default inside a package, so a new package or module whose UI has colors
 takes them from `config.scheme` or `oruc.theme.ansi`, or lands in the list
 below with its reason.
@@ -188,6 +188,8 @@ These stay fixed on purpose, and the check does not cover them:
 - The print stylesheet of the Markdown viewer.
 - Spotify follows only the machine record's scheme, because Spicetify builds
   the colors into its package.
+- The keyboard's Aura color follows only the machine record's scheme, because
+  asusd reads it from a system file (`machines/nixos-rog/asus.nix`).
 - Brave keeps its synced theme, because a managed theme policy would lock the
   setting and override the synced one (`nixosModules/brave.nix`).
 - Grok and Codex themes live outside this repository.
