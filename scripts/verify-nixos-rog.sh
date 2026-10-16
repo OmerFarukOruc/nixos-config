@@ -488,10 +488,29 @@ case $build in
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
+    mkdir -p "$work/widget-defaults"
     # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
     if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" &&
-      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
-      differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" 2>&1) || compared=$?
+      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc" &&
+      ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
+# Each widget's main.xml as WIDGET/main.xml, from the roots that the
+# plasma-widgets-installed check reads; the per-user one wins.
+set -euo pipefail
+out=$(mktemp -d)
+trap 'rm -rf -- "$out"' EXIT
+for root in /run/current-system/sw "/etc/profiles/per-user/$USER"; do
+  for file in "$root"/share/plasma/plasmoids/*/contents/config/main.xml; do
+    [[ -e $file ]] || continue
+    widget=${file#"$root/share/plasma/plasmoids/"}
+    widget=${widget%%/*}
+    mkdir -p "$out/$widget"
+    cat "$file" >"$out/$widget/main.xml"
+  done
+done
+tar -c -C "$out" .
+REMOTE
+    then
+      differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" "$work/widget-defaults" 2>&1) || compared=$?
     else
       compared=255
     fi
