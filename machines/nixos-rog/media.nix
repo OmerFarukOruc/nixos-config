@@ -159,4 +159,53 @@ in
       ExecStart = lib.getExe micDefaultSource;
     };
   };
+  # A program that makes the raw microphone the default source takes the
+  # denoising away from every app until the next HushMic start. On 2026-10-16
+  # one did so as a Bluetooth headset connected, and no log named it. While
+  # HushMic's source exists, this hook turns that choice into HushMic; every
+  # other source stays a valid choice.
+  services.pipewire.wireplumber.extraScripts."hushmic-default.lua" = ''
+    -- WirePlumber can restore the saved choice before it loads this script,
+    -- so the script checks when the metadata or HushMic's source appears and
+    -- on every later change.
+    local key = "default.configured.audio.source"
+    local metadata_om = ObjectManager {
+      Interest { type = "metadata", Constraint { "metadata.name", "=", "default" } },
+    }
+    local hushmic_om = ObjectManager {
+      Interest { type = "node", Constraint { "node.name", "=", "hushmic_source" } },
+    }
+
+    local function redirect ()
+      local metadata = metadata_om:lookup ()
+      local value = metadata and metadata:find (0, key)
+      if value and hushmic_om:lookup ()
+          and Json.Raw (value):parse ().name == "${mic}" then
+        metadata:set (0, key, "Spa:String:JSON",
+          Json.Object { name = "hushmic_source" }:to_string ())
+      end
+    end
+
+    metadata_om:connect ("object-added", function (_, metadata)
+      metadata:connect ("changed", function (_, subject, changed_key)
+        if subject == 0 and changed_key == key then
+          redirect ()
+        end
+      end)
+      redirect ()
+    end)
+    hushmic_om:connect ("object-added", redirect)
+    metadata_om:activate ()
+    hushmic_om:activate ()
+  '';
+  services.pipewire.wireplumber.extraConfig."90-hushmic-default" = {
+    "wireplumber.components" = [
+      {
+        name = "hushmic-default.lua";
+        type = "script/lua";
+        provides = "custom.hushmic-default";
+      }
+    ];
+    "wireplumber.profiles".main."custom.hushmic-default" = "required";
+  };
 }

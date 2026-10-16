@@ -440,7 +440,10 @@ Ceva's DPDFNet model on the raw microphone. `mic-default-source.service`, in
 `machines/nixos-rog/media.nix`, makes that source the default and sets the
 microphone level after every HushMic start. While HushMic is not running,
 WirePlumber falls back to an earlier default source it remembers, such as
-"Easy Effects Source", or else to the raw microphone. An app that names the raw
+"Easy Effects Source", or else to the raw microphone. While HushMic runs, a
+WirePlumber hook in `media.nix` turns any choice of the raw microphone as the
+default into "HushMic", so pick another source, or stop `hushmic.service`, to
+record the raw microphone by default. An app that names the raw
 microphone in its own settings skips the denoising; set it to the default
 source or to "HushMic".
 
