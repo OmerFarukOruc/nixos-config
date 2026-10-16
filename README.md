@@ -7,17 +7,19 @@
 **Two NixOS laptops in one flake, deployed from a Fedora desktop over Tailscale,<br>
 with a CachyOS kernel that CI compiles so the laptops never do.**
 
+This is my own setup, not a framework. Read it and copy the parts you need.
+
 [![NixOS unstable](https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white)](https://github.com/NixOS/nixpkgs/tree/nixos-unstable)
 [![check](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/check.yml?branch=main&style=flat-square&label=check&logo=github)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/check.yml)
 [![kernel-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/kernel-cache.yml?branch=main&style=flat-square&label=kernel-cache&logo=linux&logoColor=white)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/kernel-cache.yml)
 [![host-packages-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/host-packages-cache.yml?branch=main&style=flat-square&label=host-packages-cache)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/host-packages-cache.yml)
 [![Cachix](https://img.shields.io/badge/cachix-omerfarukoruc-4E7FC1?style=flat-square)](https://omerfarukoruc.cachix.org)
 
-[Hosts](#hosts) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
+[Hosts](#hosts) · [Stack](#stack) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
 
 <img src="assets/screenshots/nixos-rog-plasma-fastfetch.webp" width="90%" alt="nixos-rog running KDE Plasma with fastfetch in Ghostty">
 
-<sub>nixos-rog · KDE Plasma · Ghostty · Gruvbox Dark Medium from Base16</sub>
+<sub>nixos-rog · KDE Plasma with the Glass look · Ghostty · Warm Burnout Dark from Base16</sub>
 
 </div>
 
@@ -33,34 +35,81 @@ with a CachyOS kernel that CI compiles so the laptops never do.**
 | --- | --- | --- | --- | --- | --- |
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
-| `nixos-desktop` | planned | the PC that runs fedora-desktop today | | | |
 
-`machines/inventory.nix` is the source of truth for this table. `nixos-desktop`
-is an inventory record only; the flake does not build it.
+`machines/inventory.nix` is the source of truth for this table. A third record,
+`nixos-desktop`, is inventory only; the flake does not build it.
+
+## Stack
+
+| Part | Choice |
+| --- | --- |
+| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built by CI |
+| Boot loader | Limine on nixos-rog, systemd-boot on nixos-latitude |
+| Login screen | SDDM with sddm-astronaut's Jake the dog theme |
+| Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
+| Plasma looks | Glass and Klassy on nixos-rog, switched with `plasma-look` |
+| Launcher | Rofi and the macOS Tahoe launcher on nixos-rog, Vicinae on nixos-latitude |
+| Terminal | Ghostty |
+| Login shell | zsh with oh-my-zsh and Starship |
+| Editors | VS Code, and Neovim through nvf |
+| Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
+| Secrets | sops-nix with age on nixos-rog |
+| DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-rog |
+| Remote access | Tailscale, and Sunshine on nixos-latitude |
+| Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 
 ## Highlights
 
 - **🧊 A kernel the laptops download.** The [`kernel-cache`](kernel-cache/README.md)
   flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu and
   turbostat on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
-  cache. `scripts/update-kernel.sh` moves a host only to a revision whose every
-  path is already in that cache.
+  cache. [`scripts/update-kernel.sh`](scripts/update-kernel.sh) moves a host
+  only to a revision whose every path is already in that cache.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
   colors, cursor, icons and wallpaper of all of them. The login screen and the
   Plasma lock screen show Jake the dog instead.
+  [`nixosModules/theme.nix`](nixosModules/theme.nix),
+  [`home-manager/modules/theme.nix`](home-manager/modules/theme.nix)
+- **🎨 Schemes and Plasma looks without a rebuild.** `theme catppuccin-mocha`
+  switches the Base16 scheme and `plasma-look klassy` switches the Plasma look
+  at run time. Every pair of look and scheme other than the default is a Home
+  Manager specialisation of the same generation, and the choice stays across
+  deploys. The login screen, boot menu, console and niri keep the machine's
+  default scheme. A look sets the
+  Plasma style, window decoration, Qt style and KWin effects that belong
+  together; Glass and Klassy are the two looks.
+  [`machines/variants.nix`](machines/variants.nix),
+  [`nixosModules/hm-variants.nix`](nixosModules/hm-variants.nix),
+  [`home-manager/modules/plasma-looks/`](home-manager/modules/plasma-looks)
+- **🔥 One scheme for the editors too.** Both hosts start on `warm-burnout-dark`,
+  a Base16 scheme in [`assets/schemes`](assets/schemes). A `warm-burnout-*`
+  scheme also installs Warm Burnout's own VS Code and Neovim themes, which color
+  syntax beyond the 16 Base16 colors.
+  [`home-manager/modules/theme.nix`](home-manager/modules/theme.nix)
+- **🍎 A macOS Tahoe dock on an OLED screen.** Plasma takes its launcher and dock
+  from the macOS Tahoe theme, with hover zoom and notification badges. To keep
+  the top bar and the dock from burning in, the theme's pixel shift moves each
+  panel by 2 px every 5 minutes, up to 8 px each way and back.
+  [`home-manager/modules/plasma-panels.nix`](home-manager/modules/plasma-panels.nix),
+  [`machines/nixos-rog/oled-care.nix`](machines/nixos-rog/oled-care.nix)
 - **🛟 Deploys that roll themselves back.** `deploy.sh` builds on the target,
   activates under a 420 second rollback timer, then checks SSH, Tailscale and
   the user's running services. A deploy that breaks any of them restores the
   previous system, even when the connection drops.
+  [`deploy.sh`](deploy.sh)
 - **🔄 A laptop that updates itself.** Every hour on AC power, nixos-rog moves its
   inputs and apps, waits for the caches to hold the expensive builds, deploys the
   result to itself and squash-merges it to `main`.
+  [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
+  [`scripts/auto-update.sh`](scripts/auto-update.sh)
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/nixos-rog.yaml`
   with the age key derived from the laptop's SSH host key.
+  [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
 - **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
   sign-in pages.
+  [`machines/nixos-rog/network.nix`](machines/nixos-rog/network.nix)
 
 ## Layout
 
@@ -97,11 +146,17 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `./deploy.sh nixos-rog boot` | set the boot default without activating |
-| `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `upgrade` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main` |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog and list each distinct evaluation warning; `--fix` formats |
+
+<details>
+<summary>More commands</summary>
+
+| Command | What it does |
+| --- | --- |
+| `./deploy.sh nixos-rog boot` | set the boot default without activating |
+| `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
 | `scripts/build-on-rog.sh [ATTRIBUTE...]` | build on nixos-rog from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
@@ -116,6 +171,8 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
 | `scripts/mic-ab-on-rog.sh level VOLUME...` or `ab` | record nixos-rog's microphone to pick its level, or to compare the raw microphone with both denoised sources; the script header lists the steps |
 | `scripts/thermal-test-rog.sh PROFILE [OPTION...]` | load nixos-rog's CPU, GPU or both in a power profile and record temperature, power and fans; the script header lists the options |
+
+</details>
 
 `deploy.sh` takes a `HOST` (nixos-rog or nixos-latitude), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
@@ -150,14 +207,26 @@ ordering cycle on every pull request and push to `main`.
 
 ## Built on
 
-[nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) ·
-[home-manager](https://github.com/nix-community/home-manager) ·
-[plasma-manager](https://github.com/nix-community/plasma-manager) ·
-[base16.nix](https://github.com/SenchoPens/base16.nix) ·
-[sops-nix](https://github.com/Mic92/sops-nix) ·
-[niri](https://github.com/YaLTeR/niri) ·
-[Noctalia](https://github.com/noctalia-dev/noctalia-shell) ·
-[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) ·
-[sddm-astronaut-theme](https://github.com/Keyitdev/sddm-astronaut-theme) ·
-[Smart Video Wallpaper Reborn](https://github.com/luisbocanegra/plasma-smart-video-wallpaper-reborn) ·
-[llm-agents.nix](https://github.com/numtide/llm-agents.nix)
+| Project | Used for |
+| --- | --- |
+| [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) | the CachyOS kernels |
+| [home-manager](https://github.com/nix-community/home-manager) | the user layer |
+| [plasma-manager](https://github.com/nix-community/plasma-manager) | Plasma settings and panels |
+| [base16.nix](https://github.com/SenchoPens/base16.nix) | reading Base16 schemes |
+| [tinted-theming/schemes](https://github.com/tinted-theming/schemes) | the Base16 schemes |
+| [Warm Burnout](https://github.com/felipefdl/warm-burnout) | the VS Code and Neovim themes of the `warm-burnout-*` schemes |
+| [sops-nix](https://github.com/Mic92/sops-nix) | secrets |
+| [niri](https://github.com/YaLTeR/niri) | the scrolling Wayland compositor |
+| [Noctalia](https://github.com/noctalia-dev/noctalia-shell) | a niri shell |
+| [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) | a niri shell |
+| [Glass](https://github.com/4v3ngR/Glass) | the Glass look's window decoration and Qt style |
+| [kwin-effects-glass](https://github.com/4v3ngR/kwin-effects-glass) | the Glass look's KWin effect |
+| [macos-tahoe-liquid-kde](https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde) | the Plasma launcher, dock and OLED pixel shift |
+| [sddm-astronaut-theme](https://github.com/Keyitdev/sddm-astronaut-theme) | the login screen |
+| [Smart Video Wallpaper Reborn](https://github.com/luisbocanegra/plasma-smart-video-wallpaper-reborn) | the video wallpaper of the Plasma lock screen |
+| [nvf](https://github.com/NotAShelf/nvf) | Neovim |
+| [vscode-vibrancy-continued](https://github.com/illixion/vscode-vibrancy-continued) | the see-through VS Code window |
+| [spicetify-nix](https://github.com/Gerg-L/spicetify-nix) | themed Spotify |
+| [hushmic-nix](https://github.com/Fovty/hushmic-nix) | the denoised microphone |
+| [nix-index-database](https://github.com/nix-community/nix-index-database) | comma and command-not-found |
+| [llm-agents.nix](https://github.com/numtide/llm-agents.nix) | coding agent CLIs |
