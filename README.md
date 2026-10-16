@@ -104,7 +104,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 | `scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
 | `scripts/build-on-rog.sh [ATTRIBUTE...]` | build on nixos-rog from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system |
-| `scripts/run-unit-on-rog.sh UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, before a deploy |
+| `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |

@@ -23,6 +23,12 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
             allow-import-from-derivation = false
+      # nix flake check passes an input that flake.lock lacks and only warns,
+      # and nix fmt writes the lock file, so this step runs first.
+      - name: Check lock files
+        run: |
+          nix flake metadata --no-update-lock-file . >/dev/null
+          nix flake metadata --no-update-lock-file ./kernel-cache >/dev/null
       - name: Check formatting
         run: nix fmt -- --ci
       - name: Check flake outputs

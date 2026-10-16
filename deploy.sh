@@ -268,6 +268,29 @@ dropped_paths() {
   ' "$history" "$mismatches"
 }
 
+# Prints the number of a merged PR that holds the release whose record is $1,
+# when the merge is in this checkout's history. A squash merge keeps only the
+# final version of each file, so a test deploy of an earlier commit of that PR
+# holds versions that are in no commit here, though the work merged. A dirty
+# release holds edits no commit has, so it never matches. Without GitHub, the
+# release does not match and the check refuses as before.
+merged_pr_of_release() {
+  local revision pr merge
+  grep -qx 'dirty=false' -- "$1" || return 1
+  revision=$(sed -n 's/^revision=//p' -- "$1")
+  [[ $revision =~ ^[0-9a-f]{40}$ ]] || return 1
+  while read -r pr merge; do
+    if [[ -n $merge ]] && git -C "$repo_dir" merge-base --is-ancestor "$merge" HEAD 2>/dev/null; then
+      printf '%s\n' "$pr"
+      return 0
+    fi
+    # The commit's own PR list; a search would also match a PR that only cites
+    # the SHA in its text.
+  done < <(cd "$repo_dir" && timeout 30 gh api "repos/{owner}/{repo}/commits/$revision/pulls" \
+    --jq '.[] | select(.merged_at) | "\(.number) \(.merge_commit_sha // "")"' 2>/dev/null)
+  return 1
+}
+
 # Prints how to continue after the release check refused. It reads only local
 # refs, so a fetch that has not run yet can leave a stale clone unnamed.
 checkout_hint() {
@@ -294,7 +317,7 @@ checkout_hint() {
 # The current link names only the last promoted release, which a reboot or a
 # later test deploy can leave behind, so the records are matched by system.
 check_live_releases() {
-  local live role id from_host from_dir record_file dropped
+  local live role id from_host from_dir record_file dropped pr
   local -A seen=()
   live=$(
     on_target <<'REMOTE'
@@ -331,6 +354,11 @@ REMOTE
       return $?
     dropped=$(dropped_paths "$deploy_state_dir/$id.blobs") || return $?
     [[ -z $dropped ]] && continue
+    if pr=$(merged_pr_of_release "$record_file"); then
+      printf 'The %s system on %s comes from release %s, a commit of PR #%s, which merged into this checkout.\n' \
+        "$role" "$host" "$id" "$pr" >&2
+      continue
+    fi
     printf 'The %s system on %s comes from release %s:\n' "$role" "$host" "$id" >&2
     sed 's/^/  /' "$record_file" >&2
     printf '%s\n' 'This checkout lacks its version of these files, so this deploy would drop them:' >&2
