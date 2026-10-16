@@ -12,6 +12,10 @@ lib.mkIf (cfg.kind == "workstation") {
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = false;
+    # The Apple vendor ID. AirPods open their control channel, which
+    # airpods-tui (home-manager/modules/airpods.nix) speaks, only to a host
+    # that reports it, and only after pairing with that host again.
+    settings.General.DeviceID = "bluetooth:004C:0000:0000";
   };
   services.blueman.enable = isNiri;
 

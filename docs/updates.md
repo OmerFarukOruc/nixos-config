@@ -134,7 +134,7 @@ source.
 
 Antigravity, ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their
 release source.
-herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
+airpods-tui, herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
 them and their version and hash move by hand.
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s
