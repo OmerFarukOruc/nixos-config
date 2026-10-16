@@ -177,8 +177,9 @@ let
 
   # The icon and name of the active window's app. The widget's default leaves
   # 10 px after the name. The top bar ends the title with a spacer, so it
-  # leaves none; in the floating bar's left island, 6 matches the space left
-  # of the launcher.
+  # leaves none. In the floating bar's left island, 6 plus the island's end
+  # margin left as much space after the name as before the launcher icon
+  # (16 px each in a screenshot of nixos-rog).
   titleBar = rightMargin: {
     applicationTitleBar = {
       layout.elements = [
@@ -198,7 +199,7 @@ let
     };
   };
 
-  # The song that an MPRIS player such as Spotify or Brave plays, with its
+  # The song that Spotify or Brave plays, with its
   # album cover and a play/pause button. The widget hides while no player has
   # a song loaded; a paused song keeps it.
   # plasma-manager's plasmusicToolbar writes some keys that Plasmusic 4 no
@@ -209,7 +210,8 @@ let
       # With the automatic choice, Plasma's media multiplexer, the widget
       # stayed hidden while Spotify played and Brave had a stopped player
       # with no song (observed on nixos-rog). These identities come from each
-      # player's MPRIS Identity property.
+      # player's MPRIS Identity property; another player, such as mpv, shows
+      # only once its identity is added here.
       choosePlayerAutomatically = false;
       preferredPlayerIdentity = "Spotify,Brave Origin";
       useAlbumCoverAsPanelIcon = true;
