@@ -4,15 +4,10 @@
 (function () {
   'use strict';
 
-  function schemeNow() {
-    return document.documentElement.getAttribute('data-theme') ||
-      (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-  }
-  function mermaidThemeFor(scheme) { return scheme === 'light' ? 'default' : 'dark'; }
-
   /* ── 1. Mermaid diagrams: convert ```mermaid fences, lazy-load renderer.
-     Each node keeps its source in data-src so the theme toggle can re-render. ── */
-  var mermaidWraps = [], seen = new Set();
+     The theme variables come from the page's CSS tokens, so the diagrams
+     use the active scheme. ── */
+  var mermaidNodes = [], seen = new Set();
   document.querySelectorAll('pre.mermaid, code.mermaid, code.language-mermaid').forEach(function (el) {
     var wrapper = el.closest('div.sourceCode') || (el.tagName === 'PRE' ? el : el.closest('pre'));
     if (!wrapper || seen.has(wrapper)) return;
@@ -20,24 +15,44 @@
     var pre = document.createElement('pre');
     pre.className = 'mermaid';
     pre.textContent = el.textContent;
-    pre.dataset.src = el.textContent;
     wrapper.replaceWith(pre);
-    mermaidWraps.push(pre);
+    mermaidNodes.push(pre);
   });
-  if (mermaidWraps.length) {
+  if (mermaidNodes.length) {
+    var css = getComputedStyle(document.documentElement);
+    function token(name) { return css.getPropertyValue('--' + name).trim(); }
+    var vars = {
+      darkMode: css.colorScheme === 'dark',
+      background: token('bg'),
+      fontFamily: getComputedStyle(document.body).fontFamily,
+      primaryColor: token('bg-secondary'),
+      primaryTextColor: token('fg'),
+      primaryBorderColor: token('border-hover'),
+      secondaryColor: token('bg-code'),
+      tertiaryColor: token('bg'),
+      lineColor: token('fg-muted'),
+      arrowheadColor: token('fg-muted'),
+      textColor: token('fg'),
+      mainBkg: token('bg-secondary'),
+      nodeBorder: token('border-hover'),
+      clusterBkg: token('bg'),
+      clusterBorder: token('border'),
+      titleColor: token('fg'),
+      edgeLabelBackground: token('bg'),
+      noteBkgColor: token('bg-secondary'),
+      noteTextColor: token('fg'),
+      noteBorderColor: token('border-hover'),
+      errorBkgColor: token('bg-secondary'),
+      errorTextColor: token('red')
+    };
     var m = document.createElement('script');
     m.type = 'module';
     m.textContent =
       "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';\n" +
-      "window.__mermaidRender = function (theme) {\n" +
-      "  var nodes = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));\n" +
-      "  nodes.forEach(function (n) { n.removeAttribute('data-processed'); n.textContent = n.dataset.src; });\n" +
-      "  try {\n" +
-      "    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: theme });\n" +
-      "    mermaid.run({ nodes: nodes });\n" +
-      "  } catch (e) {}\n" +
-      "};\n" +
-      "window.__mermaidRender('" + mermaidThemeFor(schemeNow()) + "');";
+      "try {\n" +
+      "  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base', themeVariables: " + JSON.stringify(vars) + " });\n" +
+      "  mermaid.run({ nodes: Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')) });\n" +
+      "} catch (e) {}";
     document.body.appendChild(m);
   }
 
@@ -97,33 +112,5 @@
   });
   /* GitHub-style alerts (> [!NOTE] etc.) are rendered natively by pandoc's
      gfm reader into div.note/.tip/.important/.warning/.caution and styled in CSS. */
-
-  /* ── 5. Theme toggle: override OS light/dark, remembered per browser ── */
-  (function () {
-    var root = document.documentElement, KEY = 'pandoc-md-theme', saved = null;
-    try { saved = localStorage.getItem(KEY); } catch (e) {}
-    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
-    function current() {
-      return root.getAttribute('data-theme') ||
-        (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-    }
-    var tbtn = document.createElement('button');
-    tbtn.className = 'theme-toggle';
-    tbtn.type = 'button';
-    function paint() {
-      var c = current();
-      tbtn.textContent = c === 'light' ? '☾' : '☀';
-      tbtn.setAttribute('aria-label', 'Switch to ' + (c === 'light' ? 'dark' : 'light') + ' theme');
-    }
-    paint();
-    tbtn.addEventListener('click', function () {
-      var next = current() === 'light' ? 'dark' : 'light';
-      root.setAttribute('data-theme', next);
-      try { localStorage.setItem(KEY, next); } catch (e) {}
-      paint();
-      if (window.__mermaidRender) window.__mermaidRender(mermaidThemeFor(next));
-    });
-    document.body.appendChild(tbtn);
-  })();
 })();
 </script>

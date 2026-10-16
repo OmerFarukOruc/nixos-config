@@ -4,7 +4,9 @@
 # which is not running under Plasma.
 # PANDOC_MD_ASSETS names the directory with the stylesheet, the after-body
 # script and the code highlighting theme. PANDOC_MD_KATEX names the KaTeX dist
-# directory, so math renders without a download.
+# directory, so math renders without a download. The colors come from
+# oruc/pandoc-md-theme.css in the user config directory, which Home Manager
+# writes for the active scheme.
 set -euo pipefail
 
 fail() {
@@ -16,6 +18,9 @@ fail() {
 file="${1:-}"
 [ -n "$file" ] || fail "No file given"
 [ -f "$file" ] || fail "Not a file: $file"
+
+theme_css="${XDG_CONFIG_HOME:-$HOME/.config}/oruc/pandoc-md-theme.css"
+[ -f "$theme_css" ] || fail "Missing theme file: $theme_css"
 
 name="$(basename -- "$file")"
 dir="$(dirname -- "$file")"
@@ -69,6 +74,7 @@ END { if (fm == 1) for (i = 1; i <= n; i++) emit(held[i]) }
     --katex="$PANDOC_MD_KATEX" \
     --resource-path="$dir" \
     --metadata pagetitle="$name" \
+    -c "$theme_css" \
     -c "$PANDOC_MD_ASSETS/pandoc-md.css" \
     -A "$PANDOC_MD_ASSETS/pandoc-md.afterbody.html" \
     -o "$out" || fail "pandoc failed on $name"
