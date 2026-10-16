@@ -223,6 +223,7 @@ in
                 "preferred://browser"
                 "applications:com.mitchellh.ghostty.desktop"
                 "applications:SourceGit.desktop"
+                "applications:code.desktop"
                 "applications:chatgpt.desktop"
                 "applications:com.anthropic.Claude.desktop"
                 "applications:grok-bot.desktop"
