@@ -654,7 +654,9 @@ theme gruvbox-dark-medium
 
 Ghostty (which `theme` tells to reload its config), VS Code and new Neovim
 windows take the new colors at once, except VS Code's window background, which
-it reads at start. The KDE colors
+it reads at start. GTK 4 and libadwaita apps (Mission Center, for example) read
+`~/.config/gtk-4.0/oruc-colors.css` when they start, so a running one may keep the
+old colors until it restarts. The KDE colors
 load at the next login, as with `plasma-look`. The login screen, the boot menu,
 the console and niri keep the record's scheme, and apps with fixed colors of
 their own, such as Starship and Spotify, do not change. The choice lasts across

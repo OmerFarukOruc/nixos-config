@@ -87,7 +87,10 @@ These rules follow from the list:
   launcher. [Deploy](deploy.md#deploy) says how to tell and what to do.
 - **Plasma owns the shared look.** With Plasma present, Plasma owns
   `kdeglobals`, the GTK settings and the cursor, and the niri session inherits
-  them. A niri-only machine keeps the files that Home Manager writes.
+  them. A niri-only machine keeps the files that Home Manager writes. The GTK
+  colors are the exception. Plasma's `gtk.css` is a regular file that kded
+  rewrites, so Home Manager writes `oruc-colors.css` beside it and an
+  activation step adds the `@import` line to `gtk.css`.
 
 ## Add a host, launcher, shell or kernel profile
 
