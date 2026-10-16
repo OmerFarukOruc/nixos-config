@@ -672,8 +672,9 @@ theme gruvbox-dark-medium
 ```
 
 Ghostty (which `theme` tells to reload its config) and new Neovim windows take
-the new colors at once. VS Code takes its theme extension and its window
-background at its next start. The KDE colors
+the new colors at once, and so does Claude Code on nixos-rog, where the dotfiles
+`settings.json` selects `custom:scheme`. VS Code takes its theme extension and
+its window background at its next start. The KDE colors
 load at the next login, as with `plasma-look`. The login screen, the boot menu,
 the console and niri keep the record's scheme, and apps with fixed colors of
 their own, such as Starship and Spotify, do not change. The choice lasts across
