@@ -205,14 +205,16 @@ Public names go only to NextDNS over TLS. Tailnet names go to Tailscale's
 MagicDNS.
 
 The public names under `risoluto.dev` (`openchamber.risoluto.dev`,
-`cliproxy.risoluto.dev`) point at Tailscale addresses. The NextDNS profile's
-DNS-rebinding protection answers those names with `0.0.0.0`. So the NextDNS
-profile's Allowlist in the dashboard holds `risoluto.dev`. That entry also turns
-off NextDNS filtering for that one domain.
+`cliproxy.risoluto.dev`) and `signoz.statuslantern.com` point at Tailscale
+addresses. The NextDNS profile's DNS-rebinding protection answers those names
+with `0.0.0.0`. So the NextDNS profile's Allowlist in the dashboard holds
+`risoluto.dev` and `statuslantern.com`. Each entry also turns off NextDNS
+filtering for that one domain.
 
-Without the entry, OpenChamber and cliproxy fail to connect as if the server
-were down. The `risoluto-dev-allowlisted` check in `scripts/verify-nixos-rog.sh`
-also fails.
+Without the entries, OpenChamber, cliproxy and SigNoz fail to connect as if the
+server were down. The `risoluto-dev-allowlisted` or
+`statuslantern-com-allowlisted` check in `scripts/verify-nixos-rog.sh` also
+fails.
 
 When a Wi-Fi sign-in page does not load, switch to the network's own plain DNS
 until you are logged in. Then switch back. The first command switches, and the
