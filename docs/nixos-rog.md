@@ -276,6 +276,7 @@ Six services share the laptop's power settings. Each setting has one owner:
 | power limits, NVIDIA limits, fan curves | `machines/nixos-rog/asus.nix`, `machines/nixos-rog/fan-curves.json` | asusd, on each profile change |
 | CPU temperature limit, top clock | `machines/nixos-rog/cpu-limits.nix` | `oruc-cpu-limits` |
 | power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
+| battery charge limit (80%) | `machines/nixos-rog/asus.nix` | asusd, when it starts |
 | NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
 | scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd `--autopower` |
 
