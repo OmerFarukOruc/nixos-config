@@ -124,14 +124,16 @@ in
     settings = {
       # The family matches fedora-desktop. The bars use oruc.theme.fonts.mono instead.
       font-family = "CaskaydiaCove Nerd Font Mono";
-      font-size = 12;
+      font-size = 13;
       font-feature = [
         "-calt"
         "-liga"
         "-dlig"
       ];
       font-shaping-break = "cursor";
-      background-opacity = 0.65;
+      # At 0.65 a white window behind turned the background mid-gray, and the
+      # text fell to 3:1 contrast. At 0.90 the base04 gray keeps 5:1.
+      background-opacity = 0.9;
       background-blur = true;
       notify-on-command-finish = "unfocused";
       notify-on-command-finish-action = "notify";
