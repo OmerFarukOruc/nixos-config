@@ -94,6 +94,12 @@ let
       description = "Base16 scheme selected by this machine, named as in the pinned schemes input.";
     };
 
+    theme.plasmaLook = mkOption {
+      type = types.enum selectors.plasmaLookNames;
+      default = "glass";
+      description = "Plasma look that a login uses until `plasma-look` selects another one.";
+    };
+
     kernel.profile = mkOption {
       type = types.enum selectors.kernelNames;
       default = "cachyos-latest-lto-x86_64-v3";

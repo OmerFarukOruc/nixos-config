@@ -2,7 +2,7 @@
 
 usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC
 
-EXPECTED.json is /etc/oruc/verify-plasma-panels.json: a list of panels, each
+EXPECTED.json is /etc/oruc/verify-plasma-panels/LOOK.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
 APPLETSRC is ~/.config/plasma-org.kde.plasma.desktop-appletsrc. Prints one line
 per setting that differs and per widget that the Nix file does not declare,

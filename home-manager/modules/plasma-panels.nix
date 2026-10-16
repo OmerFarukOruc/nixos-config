@@ -194,6 +194,19 @@ in
           lengthMode = "fill";
           widgets = [
             "org.kde.plasma.kickerdash"
+            # The icon and name of the active window's app.
+            {
+              applicationTitleBar = {
+                layout.elements = [
+                  "windowIcon"
+                  "windowTitle"
+                ];
+                windowTitle = {
+                  source = "appName";
+                  hideEmptyTitle = true;
+                };
+              };
+            }
             # Plasma sizes two expanding spacers so the widget between them sits
             # in the middle of the panel.
             "org.kde.plasma.panelspacer"

@@ -165,33 +165,6 @@ in
         # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
       ];
-
-      # scripts/verify-nixos-rog.sh checks that each panel widget that
-      # plasma-manager adds is installed, and that each KWin effect it turns on
-      # is loaded.
-      oruc.verifyFacts =
-        let
-          plasma = config.home-manager.users.oruc.programs.plasma;
-          effects = lib.filterAttrs (key: setting: lib.hasSuffix "Enabled" key && setting.value == true) (
-            plasma.configFile.kwinrc.Plugins or { }
-          );
-          widgets = lib.concatMap (panel: map (widget: widget.name) panel.widgets) plasma.panels;
-          list = names: lib.concatStringsSep "," (lib.unique names);
-        in
-        lib.optionalAttrs (widgets != [ ]) { plasma_widgets = list widgets; }
-        // lib.optionalAttrs (effects != { }) {
-          kwin_effects = list (map (lib.removeSuffix "Enabled") (lib.attrNames effects));
-        };
-
-      # scripts/verify-nixos-rog.sh compares the panel file after a panel build
-      # with these settings (scripts/lib/plasma-panel-settings.py). The values
-      # hold slashes and JSON, which verify-facts does not allow.
-      environment.etc."oruc/verify-plasma-panels.json".text = builtins.toJSON (
-        map (panel: {
-          inherit (panel) location;
-          widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
-        }) config.home-manager.users.oruc.programs.plasma.panels
-      );
     })
   ];
 }

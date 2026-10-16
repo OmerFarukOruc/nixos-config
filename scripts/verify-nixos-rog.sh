@@ -30,14 +30,16 @@ listed in the report as manual.
 The facts the checks expect (the NVIDIA driver version, the Wi-Fi interface,
 the low-battery threshold, the CPU temperature limit and top clock of each
 profile, the fan curves and asus-armoury limits of each platform profile, the
-Plasma panel widgets and KWin effects) come from /etc/oruc/verify-facts, which
-the deployed system writes (nixosModules/verify-facts.nix). The KWin
-effects are checked only in a Plasma session that started after the current
-system; an older session is listed as manual.
+Plasma panel widgets and KWin effects of each Plasma look) come from
+/etc/oruc/verify-facts, which the deployed system writes
+(nixosModules/verify-facts.nix). The Plasma checks use the look that
+plasma-look stored, or the default look. The KWin effects are checked only in
+a Plasma session that started after the current system and the last
+plasma-look; an older session is listed as manual.
 
 After a panel build from the current system's panel script, the panel file
-must hold every widget setting in plasma-panels.nix, which the system writes
-to /etc/oruc/verify-plasma-panels.json. After an older build the check is
+must hold every widget setting of the look's panels, which the system writes
+to /etc/oruc/verify-plasma-panels/LOOK.json. After an older build the check is
 listed as manual. Each dock launcher in that file must name a desktop file
 that the Plasma session can find.
 
@@ -114,6 +116,16 @@ for fact in low_battery_percent nvidia_version wifi \
     exit 66
   fi
 done
+# The widgets and KWin effects of the look that plasma-look stored, or of the
+# default look.
+plasma_look_file=$HOME/.local/state/oruc/plasma-look
+plasma_look=$(cat "$plasma_look_file" 2>/dev/null || echo "${plasma_look_default:-}")
+if [[ $plasma_look =~ ^[a-z0-9]+$ ]]; then
+  widgets_fact=plasma_widgets_$plasma_look
+  effects_fact=kwin_effects_$plasma_look
+  plasma_widgets=${!widgets_fact:-}
+  kwin_effects=${!effects_fact:-}
+fi
 # The CPU temperature limit in the SMU and the top clock of policy0, a full
 # Zen 5 core, as TEMP/KHZ.
 cpu_limits() {
@@ -366,7 +378,7 @@ for shell in noctalia dms; do
     grep -qx "ConditionEnvironment=ORUC_SHELL=$shell" "$units/$shell.service"
 done
 
-# The panel widgets and KWin effects that the deployed config turns on. A
+# The panel widgets and KWin effects that the stored look turns on. A
 # widget is QML under share/plasma/plasmoids or a compiled applet plugin.
 if [[ -n ${plasma_widgets:-} ]]; then
   missing=()
@@ -383,15 +395,18 @@ if [[ -n ${plasma_widgets:-} ]]; then
   done
   check plasma-widgets-installed "missing: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
 fi
-# A running session keeps the plugins it loaded at login, so a deploy that
-# drops or adds one shows only after the next login.
+# A running session keeps the plugins it loaded at login, so a deploy or a
+# plasma-look that drops or adds one shows only after the next login.
 if [[ -n ${plasma_widgets:-}${kwin_effects:-} ]]; then
   plasma_pid=$(systemctl --user show -p MainPID --value plasma-plasmashell 2>/dev/null)
+  changed=$(stat -c %Y /run/current-system)
+  look_changed=$(stat -c %Y "$plasma_look_file" 2>/dev/null || echo 0)
+  ((look_changed > changed)) && changed=$look_changed
   if [[ ${plasma_pid:-0} == 0 ]]; then
     report plasma-session manual "No Plasma session runs; log in to Plasma and rerun"
-  elif (($(date +%s) - $(ps -o etimes= -p "$plasma_pid") < $(stat -c %Y /run/current-system))); then
+  elif (($(date +%s) - $(ps -o etimes= -p "$plasma_pid") < changed)); then
     report plasma-session manual \
-      "plasmashell started before the current system; log out and in to load it, then rerun"
+      "plasmashell started before the current system or the last plasma-look; log out and in to load it, then rerun"
   else
     report plasma-session pass "plasmashell started after the current system"
     if [[ -n ${kwin_effects:-} ]]; then
@@ -445,13 +460,20 @@ case $status in
   *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
 esac
 
+# The panel settings of the look that plasma-look stored, or of the default look.
+plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
+  'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
+[[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
+panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
+
 # The panel file holds the settings of the last panel build, so it is compared
 # only after a build from this system's panel script, at a login or by
 # scripts/panels-rebuild-on-rog.sh.
 build=$(
-  ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE' || true
+  # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
+  ssh "${ssh_opts[@]}" "$host" "bash -s -- $panels_json" <<'REMOTE' || true
 manager=$HOME/.local/share/plasma-manager
-if [[ ! -r /etc/oruc/verify-plasma-panels.json ]]; then
+if [[ ! -r $1 ]]; then
   echo none
 elif [[ $(sha256sum "$manager/data/desktop_script_panels.js" 2>/dev/null) == "$(cat "$manager/last_run_desktop_script_panels" 2>/dev/null)" ]]; then
   echo current
@@ -461,18 +483,19 @@ fi
 REMOTE
 )
 case $build in
-  none) record plasma-panel-settings manual "$host has no /etc/oruc/verify-plasma-panels.json; deploy a system that writes it, then rerun" ;;
+  none) record plasma-panel-settings manual "$host has no $panels_json; deploy a system that writes it, then rerun" ;;
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
-    if ssh "${ssh_opts[@]}" "$host" cat /etc/oruc/verify-plasma-panels.json >"$work/expected.json" &&
+    # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
+    if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" &&
       ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
       differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" 2>&1) || compared=$?
     else
       compared=255
     fi
     case $compared in
-      0) record plasma-panel-settings pass "the panel file holds every setting in plasma-panels.nix" ;;
+      0) record plasma-panel-settings pass "the panel file holds every setting of the $plasma_look look's panels" ;;
       # A difference is usually a change made in Plasma's settings, which the
       # next panel build drops, so the detail asks before a rebuild.
       1) record plasma-panel-settings fail "${differences//$'\n'/; }. A change made in Plasma lasts only until the next panel build; ask Omer whether to write it into plasma-panels.nix before you rebuild the panels" ;;
@@ -486,7 +509,8 @@ esac
 # for the file in the session's XDG data directories, which hold the Home
 # Manager profile and the web apps that Brave writes to ~/.local/share.
 launchers=()
-if ssh "${ssh_opts[@]}" "$host" cat /etc/oruc/verify-plasma-panels.json >"$work/launchers.json" 2>/dev/null; then
+# shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
+if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/launchers.json" 2>/dev/null; then
   mapfile -t launchers < <(python3 -I -c '
 import json, sys
 for panel in json.load(open(sys.argv[1])):
@@ -497,7 +521,7 @@ for panel in json.load(open(sys.argv[1])):
 ' "$work/launchers.json")
 fi
 if ((${#launchers[@]} == 0)); then
-  record dock-launchers-installed manual "no applications: launcher in $host's /etc/oruc/verify-plasma-panels.json"
+  record dock-launchers-installed manual "no applications: launcher in $host's $panels_json"
 else
   launcher_status=0
   missing=$(
