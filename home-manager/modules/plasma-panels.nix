@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   pkgs,
@@ -172,6 +173,77 @@ let
       foregroundColor = schemeColor "textColor" "View" 1;
     };
   };
+
+  # The icon and name of the active window's app.
+  titleBar = {
+    applicationTitleBar = {
+      layout.elements = [
+        "windowIcon"
+        "windowTitle"
+      ];
+      windowTitle = {
+        source = "appName";
+        hideEmptyTitle = true;
+      };
+    };
+  };
+
+  # A floating top panel as long as its widgets, on one blurred, rounded
+  # background with an outline in the accent color.
+  islandStyle = {
+    nativePanel = {
+      background.opacity = 0;
+      floatingDialogs = true;
+      floatingDialogsAllowOverride = true;
+    };
+    panel.normal = {
+      enabled = true;
+      blurBehind = true;
+      backgroundColor = schemeColor "backgroundColor" "Window" 0.5;
+      radius = {
+        enabled = true;
+        corner = allCorners 10;
+      };
+      border = {
+        enabled = true;
+        width = 1;
+        color = schemeColor "highlightColor" "Window" 1;
+      };
+      padding = {
+        enabled = true;
+        side = {
+          left = 8;
+          right = 8;
+        };
+      };
+    };
+    widgets.normal = {
+      enabled = true;
+      foregroundColor = schemeColor "highlightColor" "Window" 1;
+    };
+  };
+  island = alignment: widgets: {
+    location = "top";
+    height = 36;
+    floating = true;
+    lengthMode = "fit";
+    inherit alignment;
+    widgets = widgets ++ [ (colorizer islandStyle) ];
+  };
+
+  dock = {
+    location = "bottom";
+    height = 80;
+    floating = true;
+    # The dock hides only while a window overlaps it.
+    hiding = "dodgewindows";
+    lengthMode = "fit";
+    alignment = "center";
+    widgets = [
+      { iconTasks.launchers = config.oruc.plasma.dockLaunchers; }
+      (colorizer dockStyle)
+    ];
+  };
 in
 {
   # plasma-manager owns the panels. Whenever this layout changes, it deletes
@@ -187,75 +259,45 @@ in
         wallpaperFillMode = "preserveAspectCrop";
       };
 
-      panels = [
+      panels =
         {
-          location = "top";
-          height = 44;
-          lengthMode = "fill";
-          widgets = [
-            "org.kde.plasma.kickerdash"
-            # The icon and name of the active window's app.
+          bar = [
             {
-              applicationTitleBar = {
-                layout.elements = [
-                  "windowIcon"
-                  "windowTitle"
-                ];
-                windowTitle = {
-                  source = "appName";
-                  hideEmptyTitle = true;
-                };
-              };
-            }
-            # Plasma sizes two expanding spacers so the widget between them sits
-            # in the middle of the panel.
-            "org.kde.plasma.panelspacer"
-            "org.kde.plasma.digitalclock"
-            "org.kde.plasma.panelspacer"
-            kvitals
-            "org.kde.plasma.systemtray"
-            "org.kde.plasma.showdesktop"
-            (colorizer topBarStyle)
-          ];
-        }
-        {
-          location = "bottom";
-          height = 80;
-          floating = true;
-          # The dock hides only while a window overlaps it.
-          hiding = "dodgewindows";
-          lengthMode = "fit";
-          alignment = "center";
-          widgets = [
-            {
-              # The Teams and WhatsApp Web entries are web apps that Brave
-              # writes to ~/.local/share/applications.
-              iconTasks.launchers = [
-                "preferred://filemanager"
-                "applications:io.missioncenter.MissionCenter.desktop"
-                "preferred://browser"
-                "applications:com.mitchellh.ghostty.desktop"
-                "applications:SourceGit.desktop"
-                "applications:code.desktop"
-                "applications:chatgpt.desktop"
-                "applications:com.anthropic.Claude.desktop"
-                "applications:grok-bot.desktop"
-                "applications:openchamber.desktop"
-                "applications:cursor.desktop"
-                "applications:org.opengamingcollective.rog-control-center.desktop"
-                "applications:slack.desktop"
-                "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
-                "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
-                "applications:discord.desktop"
-                "applications:org.telegram.desktop.desktop"
-                "applications:spotify.desktop"
-                "applications:md.obsidian.Obsidian.desktop"
+              location = "top";
+              height = 44;
+              lengthMode = "fill";
+              widgets = [
+                "org.kde.plasma.kickerdash"
+                titleBar
+                # Plasma sizes two expanding spacers so the widget between them sits
+                # in the middle of the panel.
+                "org.kde.plasma.panelspacer"
+                "org.kde.plasma.digitalclock"
+                "org.kde.plasma.panelspacer"
+                kvitals
+                "org.kde.plasma.systemtray"
+                "org.kde.plasma.showdesktop"
+                (colorizer topBarStyle)
               ];
             }
-            (colorizer dockStyle)
+            dock
           ];
+          islands = [
+            (island "left" [
+              "org.kde.plasma.kickerdash"
+              titleBar
+            ])
+            (island "center" [ "org.kde.plasma.digitalclock" ])
+            (island "right" [
+              kvitals
+              "org.kde.plasma.systemtray"
+              "org.kde.plasma.showdesktop"
+            ])
+            dock
+          ];
+          none = [ ];
         }
-      ];
+        .${config.oruc.plasma.panelLayout};
     };
   };
 }

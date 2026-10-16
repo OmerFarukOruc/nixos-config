@@ -96,9 +96,11 @@ let
             usage >&2
             exit 64
           fi
-          activate "$look"
+          # Stored first, because the activation reads it (leaveTahoe in
+          # home-manager/modules/plasma-looks/tahoe.nix).
           mkdir -p "$(dirname "$state")"
           echo "$look" >"$state"
+          activate "$look"
           echo "Log out and in to load the $look look's colors, Plasma style, panels and KWin effects."
           ;;
       esac
@@ -141,9 +143,12 @@ in
       look: lookConfig:
       let
         plasma = lookConfig.programs.plasma;
-        effects = lib.filterAttrs (key: setting: lib.hasSuffix "Enabled" key && setting.value == true) (
-          plasma.configFile.kwinrc.Plugins or { }
-        );
+        # KWin lists the effects it loaded; a KWin script such as Krohnkite
+        # is not one of them.
+        effects = lib.filterAttrs (
+          key: setting:
+          lib.hasSuffix "Enabled" key && setting.value == true && !(lib.elem key [ "krohnkiteEnabled" ])
+        ) (plasma.configFile.kwinrc.Plugins or { });
         widgets = lib.concatMap (panel: map (widget: widget.name) panel.widgets) plasma.panels;
         list = names: lib.concatStringsSep "," (lib.unique names);
       in

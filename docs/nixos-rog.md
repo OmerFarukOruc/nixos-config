@@ -55,7 +55,7 @@ something, or with a manual `./deploy.sh nixos-rog switch`.
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, mac-tahoe, hushmic, nixpkgs-spotify and spicetify-nix | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
@@ -494,8 +494,11 @@ scripts/kwin-windows-on-rog.sh
 
 ## Plasma panels
 
-plasma-manager builds both panels, the top bar and the dock, from
-`home-manager/modules/plasma-panels.nix`. Whenever that layout changes, it
+plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
+the top bar and the dock, or for the tiling look three floating top panels and
+the dock. The dock's launchers are `oruc.plasma.dockLaunchers` in
+`home-manager/modules/plasma-looks/default.nix`. The Tahoe look brings its own
+panels. Whenever the layout changes, it
 deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
@@ -551,7 +554,23 @@ A Plasma look is the Plasma style, window decoration, Qt style, color scheme
 and KWin blur that belong together. Each look is a file in
 `home-manager/modules/plasma-looks/`, and `plasmaLookNames` in
 `machines/selectors.nix` lists them. `theme.plasmaLook` in the machine record
-names the default look.
+names the default look. The looks are:
+
+- `glass`: the Glass decoration, Qt style and blur with the translucent Base16
+  scheme and square corners.
+- `klassy`: Klassy's decoration, Qt style and Plasma style with the opaque
+  Base16 scheme. Klassy's settings app changes its buttons and title bars.
+- `tiling`: `glass` with rounded corners, Krohnkite tiling with 8 px gaps and
+  three floating top panels. Krohnkite's shortcuts are in System Settings,
+  Shortcuts. Its default Meta+Return is also the Ghostty shortcut in
+  `plasma-manager.nix`; which of the two wins is not tested.
+- `tahoe`: the macOS Tahoe theme from
+  [macos-tahoe-liquid-kde](https://github.com/lestercorderomurillo/macos-tahoe-liquid-kde),
+  with its own colors, icons, cursor, top bar with the global menu, and dock.
+  Its theme switcher, `mac-tahoe-theme.service`, applies it at login. It also
+  changes GTK's theme, stylesheet and title bar buttons and KWin's border
+  size. When another look is stored, its activation removes those
+  (`leaveTahoe` in `plasma-looks/tahoe.nix`) and warns when a step fails.
 
 To try another look without a rebuild, run this in the Plasma session on
 nixos-rog, then log out and in:
@@ -566,10 +585,10 @@ the next login. A live color scheme change can crash Electron apps such as
 Discord, so neither `plasma-look` nor a deploy changes it.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `plasma-look --reapply` after it activates
-the default look. When that fails, the look can be half applied, and
+the default look. When that step fails, the look can be half applied, and
 `journalctl -u home-manager-oruc` shows the error; run `plasma-look <look>`
-again. The deploy goes on, because a failed unit would make it roll back the
-whole system.
+again. That failure does not fail the unit, because a failed unit makes the
+deploy roll back the whole system.
 `plasma-look glass` goes back to the default look.
 
 Settings made in a look's own settings app, such as Klassy's, last until that
@@ -580,7 +599,10 @@ To add a look:
 1. Add its name, in lowercase letters and digits, to `plasmaLookNames` and create
    `home-manager/modules/plasma-looks/<name>.nix`, following `klassy.nix`. It
    sets `oruc.plasma.colorScheme`, `oruc.plasma.widgetStyle`, the Plasma style
-   and the window decoration while it is active.
+   and the window decoration while it is active. A unit of the look that
+   changes colors or styles runs once per login with
+   `plasma-looks/once-per-login.nix`, because Home Manager starts it again at
+   every switch.
 2. Install its packages whenever Plasma runs, not only while the look is
    active. A look other than the default is a Home Manager specialisation, and
    a specialisation cannot install packages on this setup.

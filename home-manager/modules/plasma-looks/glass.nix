@@ -1,5 +1,6 @@
 # The Glass look: the Glass window decoration, Qt style and KWin effect, the
-# translucent Base16 scheme and a Plasma style with see-through popups.
+# translucent Base16 scheme and a Plasma style with see-through popups. Another
+# look can build on the same parts through oruc.plasma.glass.
 {
   config,
   lib,
@@ -10,9 +11,20 @@
 }:
 let
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
-  active = config.oruc.plasma.look == "glass";
+  glass = config.oruc.plasma.glass;
+  active = glass.enable;
+  radius = glass.cornerRadius;
 in
 {
+  options.oruc.plasma.glass = {
+    enable = lib.mkEnableOption "the Glass decoration, Qt style, KWin effect and Plasma style";
+    cornerRadius = lib.mkOption {
+      type = lib.types.ints.unsigned;
+      default = 0;
+      description = "Corner radius of windows, menus and buttons, in pixels.";
+    };
+  };
+
   config = lib.mkIf isPlasma (
     lib.mkMerge [
       {
@@ -25,6 +37,8 @@ in
         # KWin names the effect after its plugin file, glass.so.
         programs.plasma.configFile.kwinrc.Plugins.glassEnabled = active;
       }
+
+      (lib.mkIf (config.oruc.plasma.look == "glass") { oruc.plasma.glass.enable = true; })
 
       (lib.mkIf active {
         oruc.plasma = {
@@ -78,15 +92,15 @@ in
               RefractionStrength = 0;
               RefractionEdgeSize = 3;
               RefractionRGBFringing = 0;
-              # Square window and menu corners, written out because plasma-manager
-              # never removes a key it wrote before.
-              TopCornerRadius = 0;
-              BottomCornerRadius = 0;
-              MenuCornerRadius = 0;
+              # Written out even when 0, because plasma-manager never removes a
+              # key it wrote before.
+              TopCornerRadius = radius;
+              BottomCornerRadius = radius;
+              MenuCornerRadius = radius;
             };
             # The Glass style and decoration share this radius, so buttons and
-            # menus are square too.
-            glassrc.Common.CornerRadius = 0;
+            # menus follow the windows.
+            glassrc.Common.CornerRadius = radius;
           };
         };
 

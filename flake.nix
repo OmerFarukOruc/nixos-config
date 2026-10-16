@@ -41,6 +41,14 @@
       url = "github:4v3ngR/Glass/81edfa7f7f0d74997ab730598fa32805b20e4040";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # The macOS Tahoe Plasma look. Its widgets and KWin effects load only into
+    # the KWin they were built for, so it follows our nixpkgs, and the
+    # repository has no tags, so this pins a commit.
+    mac-tahoe = {
+      url = "github:lestercorderomurillo/macos-tahoe-liquid-kde/8fac9286e6687bf3a890edfca68659bb8e576c72";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
     # HushMic builds from source with no binary cache, so a commit pin keeps
     # the hourly updater from rebuilding it on rog for every upstream move.
     hushmic = {
