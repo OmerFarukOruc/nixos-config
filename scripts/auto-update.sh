@@ -41,6 +41,28 @@ trap 'notify critical "Update failed" "See: journalctl -u oruc-auto-update" || t
 # system shuts down, and SIGTERM skips the ERR trap.
 trap 'notify critical "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
 
+# The run holds one of the two slots of heavy (machines/nixos-rog/heavy.nix), so
+# its Nix evaluations never run beside two other heavy commands. sem runs a
+# placeholder job in the slot that ends when this script's process does. The
+# script stays outside sem, because sem answers SIGTERM by killing its job
+# within about 350 ms, too soon for the TERM trap above to notify.
+export HEAVY_ACTIVE=1
+slot=$RUNTIME_DIRECTORY/heavy-slot
+# shellcheck disable=SC2016 # the placeholder's bash expands $1 and $2
+sem --will-cite --id heavy -j 2 --fg -q \
+  bash -c ': >"$1"; while [[ -e /proc/$2 ]]; do sleep 5; done' heavy-slot "$slot" "$$" &
+sem_pid=$!
+until [[ -e $slot ]]; do
+  # bash reaps a finished background job, so its /proc entry goes away.
+  if [[ ! -e /proc/$sem_pid ]]; then
+    status=0
+    wait "$sem_pid" || status=$?
+    notify critical "Update failed" "The run could not take a heavy slot (exit $status). See: journalctl -u oruc-auto-update" || true
+    exit 1
+  fi
+  sleep 2
+done
+
 # Config files live only for this service run. Shell builtins keep the token
 # out of argv, and exported variables carry paths only.
 umask 077
