@@ -134,7 +134,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
 | The deploy fails with another status, or another host no longer evaluates (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
-| Any other step of the script fails, such as a Nix evaluation, `git push` or `gh pr merge` | The next run tries again. | Critical |
+| Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |

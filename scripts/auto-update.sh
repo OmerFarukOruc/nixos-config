@@ -36,10 +36,29 @@ notify() {
   [[ -S $bus ]] || return 1
   DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$2" "$3"
 }
-trap 'notify critical "Update failed" "See: journalctl -u oruc-auto-update" || true' ERR
+# fail TITLE BODY: the critical popup of a failed run. on_exit sends a generic
+# one for a failed exit that sent none, such as an unset variable under set -u,
+# which skips the ERR trap.
+reported=false
+fail() {
+  reported=true
+  notify critical "$1" "$2" || true
+}
+held=
+on_exit() {
+  local status=$?
+  if ((status != 0)) && ! $reported; then
+    notify critical "Update failed" "Exit $status. See: journalctl -u oruc-auto-update" || true
+  fi
+  [[ -z $held ]] || rm -rf -- "$held" || true
+}
+trap on_exit EXIT
+# A failure inside $(...) runs this trap in the subshell and again in the main
+# shell, so only the main shell reports.
+trap '[[ $BASHPID != "$$" ]] || fail "Update failed" "See: journalctl -u oruc-auto-update"' ERR
 # systemd ends the run with SIGTERM at the unit's TimeoutStartSec or when the
 # system shuts down, and SIGTERM skips the ERR trap.
-trap 'notify critical "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
+trap 'fail "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update"; exit 143' TERM
 
 # The run holds one of the two slots of heavy (machines/nixos-rog/heavy.nix), so
 # its Nix evaluations never run beside two other heavy commands. sem runs a
@@ -57,7 +76,7 @@ until [[ -e $slot ]]; do
   if [[ ! -e /proc/$sem_pid ]]; then
     status=0
     wait "$sem_pid" || status=$?
-    notify critical "Update failed" "The run could not take a heavy slot (exit $status). See: journalctl -u oruc-auto-update" || true
+    fail "Update failed" "The run could not take a heavy slot (exit $status). See: journalctl -u oruc-auto-update"
     exit 1
   fi
   sleep 2
@@ -87,7 +106,7 @@ remote_failed() {
   # Any HTTP answer, even an error status, shows that GitHub is reachable.
   if curl -sS --max-time 20 --retry 2 -o /dev/null https://github.com; then
     echo "git $1 failed while GitHub answers; check the token and the repository access." >&2
-    notify critical "Update failed" "git $1 failed while GitHub is reachable. Check the token. See: journalctl -u oruc-auto-update" || true
+    fail "Update failed" "git $1 failed while GitHub is reachable. Check the token. See: journalctl -u oruc-auto-update"
     exit 1
   fi
   echo "GitHub is unreachable; the next run tries again."
@@ -177,7 +196,6 @@ tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
 scripts/update-kernel.sh || echo "The kernel input stays where it is."
 
 held=$(mktemp -d)
-trap 'rm -rf -- "$held"' EXIT
 hold() { cp flake.nix flake.lock "$held/"; }
 release() { cp "$held/flake.nix" "$held/flake.lock" .; }
 
@@ -327,7 +345,7 @@ if ((status != 0)); then
   if ((status != 70 && status != 71 && status != 74 && status != 79)); then
     echo "$candidate" >"$failed"
   fi
-  notify critical "Update failed" "Exit $status. See: journalctl -u oruc-auto-update" || true
+  fail "Update failed" "Exit $status. See: journalctl -u oruc-auto-update"
   exit 1
 fi
 rm -f -- "$failed" "$waiting"
