@@ -70,12 +70,6 @@ in
       git
       jq
       libnotify
-      # sem, for a heavy slot.
-      parallel
-      # sem names each slot entry after the host. Without hostname it writes
-      # nohostname, and the sem of an agent on nixos-rog never removes such an
-      # entry after its process dies, so the slot stays taken.
-      hostname-debian
       python3
       rsync
       # flock for deploy.sh's lock.
@@ -89,7 +83,7 @@ in
       # compiling the packages of ci/cached-packages.nix when no cache holds
       # them. A kill sends the script SIGTERM, and its trap notifies. A kill
       # during deploy.sh leaves the rollback timer to restore the previous
-      # system. A wait for a heavy slot counts toward the limit.
+      # system.
       TimeoutStartSec = "2h";
       # Slows the run above 10 GiB, as heavy does, and never kills it, so the
       # script's traps still report. A MemoryMax kill would skip them. The

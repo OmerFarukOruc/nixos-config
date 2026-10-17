@@ -45,18 +45,10 @@ fail() {
   notify critical "$1" "$2" || true
 }
 held=
-slot=
-sem_pid=
 on_exit() {
   local status=$?
   if ((status != 0)) && ! $reported; then
     notify critical "Update failed" "Exit $status. See: journalctl -u oruc-auto-update" || true
-  fi
-  # Ends the placeholder and waits for sem, so sem frees the heavy slot itself.
-  # A sem that systemd stops with the unit's other processes leaves the slot
-  # taken until another sem removes the entry of the dead process.
-  if [[ -n $slot && -e $slot ]] && rm -f -- "$slot"; then
-    wait "$sem_pid" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
 }
@@ -67,29 +59,6 @@ trap '[[ $BASHPID != "$$" ]] || fail "Update failed" "See: journalctl -u oruc-au
 # systemd ends the run with SIGTERM at the unit's TimeoutStartSec or when the
 # system shuts down, and SIGTERM skips the ERR trap.
 trap 'fail "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update"; exit 143' TERM
-
-# The run holds one of the two slots of heavy (machines/nixos-rog/heavy.nix), so
-# its Nix evaluations never run beside two other heavy commands. sem runs a
-# placeholder job in the slot that ends when on_exit removes the slot file or
-# when this script's process ends. The script stays outside sem, because sem
-# answers SIGTERM by killing its job within about 350 ms, too soon for the TERM
-# trap above to notify.
-export HEAVY_ACTIVE=1
-slot=$RUNTIME_DIRECTORY/heavy-slot
-# shellcheck disable=SC2016 # the placeholder's bash expands $1 and $2
-sem --will-cite --id heavy -j 2 --fg -q \
-  bash -c ': >"$1"; while [[ -e $1 && -e /proc/$2 ]]; do sleep 1; done' heavy-slot "$slot" "$$" &
-sem_pid=$!
-until [[ -e $slot ]]; do
-  # bash reaps a finished background job, so its /proc entry goes away.
-  if [[ ! -e /proc/$sem_pid ]]; then
-    status=0
-    wait "$sem_pid" || status=$?
-    fail "Update failed" "The run could not take a heavy slot (exit $status). See: journalctl -u oruc-auto-update"
-    exit 1
-  fi
-  sleep 2
-done
 
 # Config files live only for this service run. Shell builtins keep the token
 # out of argv, and exported variables carry paths only.
