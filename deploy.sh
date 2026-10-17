@@ -482,7 +482,11 @@ host=$1
 release_dir=$HOME/$2
 action=$3
 
-new=$(nix build --no-link --print-out-paths \
+# heavy (machines/nixos-rog/heavy.nix) caps the evaluation's memory on a host
+# that has it. The hourly updater's PATH lacks it, so its deploy runs plain nix.
+nix=(nix)
+if command -v heavy >/dev/null; then nix=(heavy nix); fi
+new=$("${nix[@]}" build --no-link --print-out-paths \
   "$release_dir#nixosConfigurations.$host.config.system.build.toplevel")
 
 # What the new system changes, for the deployer to read before it activates.

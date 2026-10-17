@@ -48,7 +48,11 @@ systems() {
   # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
   ssh "${ssh_opts[@]}" nixos-rog "bash -s -- $(printf '%q ' "github:$repo/$1")" <<'REMOTE'
 set -e
-nix eval --json --no-write-lock-file "$1#nixosConfigurations" --apply \
+# heavy (machines/nixos-rog/heavy.nix) caps the memory of this evaluation, which
+# holds every host's system at once.
+nix=(nix)
+if command -v heavy >/dev/null; then nix=(heavy nix); fi
+"${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations" --apply \
   'builtins.mapAttrs (_: c: { drv = c.config.system.build.toplevel.drvPath; out = c.config.system.build.toplevel.outPath; })' </dev/null
 REMOTE
 }
