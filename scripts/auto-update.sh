@@ -41,6 +41,35 @@ trap 'notify critical "Update failed" "See: journalctl -u oruc-auto-update" || t
 # system shuts down, and SIGTERM skips the ERR trap.
 trap 'notify critical "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update" || true; exit 143' TERM
 
+# The run holds one of the two slots of heavy (machines/nixos-rog/heavy.nix), so
+# its Nix evaluations never run beside two other heavy commands. This copy
+# waits for a slot and runs the script again inside it. The copy inside
+# reports its own failures, so this one reports only a failure before the slot.
+if [[ -z ${HEAVY_ACTIVE:-} ]]; then
+  export HEAVY_ACTIVE=1
+  trap - ERR
+  # sem keeps waiting for a slot after SIGTERM and then starts the run, so a
+  # stop during the wait kills it. bash runs the trap only between commands,
+  # hence sem in the background and a wait that the trap interrupts.
+  sem_pid=
+  trap 'if [[ -e $RUNTIME_DIRECTORY/slot ]]; then
+    wait "$sem_pid" || true
+  else
+    [[ -z $sem_pid ]] || kill -KILL "$sem_pid" || true
+    notify critical "Update stopped" "systemd stopped the run while it waited for a heavy slot. See: journalctl -u oruc-auto-update" || true
+  fi
+  exit 143' TERM
+  sem --will-cite --id heavy -j 2 --fg --ungroup -q bash "$0" &
+  sem_pid=$!
+  status=0
+  wait "$sem_pid" || status=$?
+  if ((status != 0)) && [[ ! -e $RUNTIME_DIRECTORY/slot ]]; then
+    notify critical "Update failed" "The run could not take a heavy slot (exit $status). See: journalctl -u oruc-auto-update" || true
+  fi
+  exit "$status"
+fi
+: >"$RUNTIME_DIRECTORY/slot"
+
 # Config files live only for this service run. Shell builtins keep the token
 # out of argv, and exported variables carry paths only.
 umask 077

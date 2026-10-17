@@ -139,6 +139,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |
 | The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
+| The run ends without reporting, such as a kernel kill for memory or a SIGKILL | `oruc-auto-update-died.service` reads the result systemd gives it. | Critical "Update died" with that result |
 
 A clone or fetch fails while GitHub answers when, for example, the token
 expired or was revoked, or the account lost access to the repository.
@@ -255,11 +256,12 @@ command in one of two slots, at nice 10, in a systemd user scope that the
 kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of swap. A
 third command waits for a slot. `scripts/lib/rog-copy.sh` runs the Nix calls of
 the `*-on-rog.sh` scripts under it. `scripts/affected-hosts.sh`,
-`scripts/thermal-test-rog.sh` and `deploy.sh`'s build of the system use it too,
-except in the hourly updater, whose PATH lacks it. A repository whose test
-script follows infra's `heavy` contract, such as gastrodili's
-`scripts/heavy.ts`, picks it up from PATH. Run any other Nix evaluation of this flake on nixos-rog as
-`heavy nix ...`. The cap covers evaluation only: Nix builds run in
+`scripts/thermal-test-rog.sh` and `deploy.sh`'s build of the system use it too.
+The hourly updater holds one slot for its whole run through `sem`, the queue
+under `heavy`, and its unit's `MemoryHigh` slows it above 10 GiB but never
+stops it. A repository whose test script follows infra's `heavy` contract, such
+as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
+evaluation of this flake on nixos-rog as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.
 
 On 2026-10-16, Nix evaluations from several agents at once filled the 30 GiB:

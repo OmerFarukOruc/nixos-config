@@ -70,6 +70,8 @@ in
       git
       jq
       libnotify
+      # sem, for a heavy slot.
+      parallel
       python3
       rsync
       # flock for deploy.sh's lock.
@@ -83,8 +85,13 @@ in
       # compiling the packages of ci/cached-packages.nix when no cache holds
       # them. A kill sends the script SIGTERM, and its trap notifies. A kill
       # during deploy.sh leaves the rollback timer to restore the previous
-      # system.
+      # system. A wait for a heavy slot counts toward the limit.
       TimeoutStartSec = "2h";
+      # Slows the run above 10 GiB, as heavy does, and never kills it, so the
+      # script's traps still report. A MemoryMax kill would skip them. The
+      # highest peak of 65 runs from 2026-10-14 to 2026-10-17 was 7.4G
+      # (journal).
+      MemoryHigh = "10G";
       User = "oruc";
       StateDirectory = "oruc-auto-update";
       RuntimeDirectory = "oruc-auto-update";
@@ -94,6 +101,24 @@ in
       LoadCredential = "github-token:${config.sops.secrets.github-update-token.path}";
       ExecStart = "${pkgs.bash}/bin/bash ${../../scripts/auto-update.sh}";
     };
+    onFailure = [ "oruc-auto-update-died.service" ];
+  };
+
+  # The script's traps report a failed exit and the time limit. A run that ends
+  # another way skips them, such as a kernel kill for memory (oom-kill, which
+  # skips the TERM trap too) or a SIGKILL. This popup goes through
+  # systembus-notify, which machines/nixos-rog/monitoring.nix turns on.
+  systemd.services.oruc-auto-update-died = {
+    description = "Desktop popup for an updater run that ended without reporting";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      case ''${MONITOR_SERVICE_RESULT:-} in
+        exit-code | timeout) exit 0 ;;
+      esac
+      ${pkgs.dbus}/bin/dbus-send --system / net.nuetzlich.SystemNotifications.Notify \
+        "string:Update died" \
+        "string:The run ended with ''${MONITOR_SERVICE_RESULT:-an unknown result} before it could report. See: journalctl -u oruc-auto-update"
+    '';
   };
 
   systemd.timers.oruc-auto-update = {
