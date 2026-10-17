@@ -257,9 +257,8 @@ kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of swap. A
 third command waits for a slot. `scripts/lib/rog-copy.sh` runs the Nix calls of
 the `*-on-rog.sh` scripts under it. `scripts/affected-hosts.sh`,
 `scripts/thermal-test-rog.sh` and `deploy.sh`'s build of the system use it too.
-The hourly updater holds one slot for its whole run through `sem`, the queue
-under `heavy`, and its unit's `MemoryHigh` slows it above 10 GiB but never
-stops it. A repository whose test script follows infra's `heavy` contract, such
+The hourly updater runs outside the slots, so it never makes an agent wait;
+its unit's `MemoryHigh` slows it above 10 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
 evaluation of this flake on nixos-rog as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.
