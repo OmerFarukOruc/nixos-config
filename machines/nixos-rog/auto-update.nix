@@ -72,6 +72,10 @@ in
       libnotify
       # sem, for a heavy slot.
       parallel
+      # sem names each slot entry after the host. Without hostname it writes
+      # nohostname, and the sem of an agent on nixos-rog never removes such an
+      # entry after its process dies, so the slot stays taken.
+      hostname-debian
       python3
       rsync
       # flock for deploy.sh's lock.
