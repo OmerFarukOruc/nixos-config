@@ -15,4 +15,5 @@ lib.mkIf config.oruc.machine.features.docker {
   };
   environment.systemPackages = [ pkgs.docker-compose ];
   users.users.oruc.extraGroups = [ "docker" ];
+  oruc.keptPaths = [ "/var/lib/docker" ];
 }
