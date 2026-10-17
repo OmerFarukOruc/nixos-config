@@ -1,6 +1,10 @@
-_: {
+{ pkgs, ... }:
+{
   programs.git = {
     enable = true;
+    # SourceGit runs git with credential.helper=manager unless told to use
+    # libsecret, and only gitFull ships git-credential-libsecret.
+    package = pkgs.gitFull;
     lfs.enable = true;
     settings = {
       user = {
