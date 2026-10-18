@@ -72,11 +72,13 @@
   # latitude, the lab box, uses idle instead.
   nix.daemonCPUSchedPolicy = "batch";
 
-  # Kernel scheduler from sched_ext. --autopower follows power-profiles-daemon.
+  # Kernel scheduler from sched_ext, fixed in its performance mode. Its
+  # balanced and powersave modes pack tasks onto few cores, which made the
+  # pointer lag (docs/nixos-rog.md, CPU and power profile).
   services.scx = {
     enable = true;
     scheduler = "scx_lavd";
-    extraArgs = [ "--autopower" ];
+    extraArgs = [ "--performance" ];
   };
   # The scheduler's daemon must run when the CPUs are saturated, and comes
   # back after a crash. A crash loop still hits the unit's start limit of 2

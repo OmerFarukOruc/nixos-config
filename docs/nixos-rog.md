@@ -281,7 +281,7 @@ Six services share the laptop's power settings. Each setting has one owner:
 | power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
 | battery charge limit (80%) | `machines/nixos-rog/asus.nix` | asusd, when it starts |
 | NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
-| scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd `--autopower` |
+| scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd, fixed at `--performance` |
 
 Edit the fan curve numbers in `machines/nixos-rog/fan-curves.json`. `asus.nix`
 only reads that file and hands each curve to asusd.
@@ -379,8 +379,17 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
   `drivers/cpufreq/amd-pstate.c`, read 2026-10-12). On the laptop in performance,
   `energy_performance_available_preferences` lists only `performance` (read
   2026-10-13).
-- scx_lavd `--autopower` reads EPP, so an EPP change also changes the
-  scheduler's mode (scx source, read 2026-10-12).
+- scx_lavd runs in its performance mode in every profile. Its balanced and
+  powersave modes use core compaction (packing tasks onto as few cores as the
+  load needs), and with `--autopower` the scheduler picked powersave in
+  power-saver, where the pointer lagged. On 2026-10-18 in power-saver, a
+  bpftrace probe of the wake-to-run delay of KWin's Mesa thread
+  (`kwin_wayla:cs0`) over 20 s showed these worst delays:
+  `--autopower` 101 ms with 14 delays over one 240 Hz frame (4.2 ms),
+  `--balanced` 134 ms with 18, `--performance` 0.9 ms with none, and no
+  sched_ext 0.05 ms with none. Mean SoC power (amdgpu `power1_input`, 30 s,
+  desktop in use) was 15.0 to 16.9 W with `--autopower`, 13.6 W with
+  `--performance` and 13.9 W with no sched_ext.
 - Boost stays on in balanced because `oruc-cpu-limits` caps that profile's top
   clock at 4.0 GHz (`machines/nixos-rog/cpu-limits.nix`). Boost off cuts
   all-core speed by about 45 % and one-core speed by about 60 %. In performance
