@@ -49,6 +49,10 @@
     binfmt = true;
   };
 
+  # Scripts from other repositories run with their `#!/bin/bash` shebangs.
+  # envfs serves /bin and /usr/bin from the PATH of the calling process.
+  services.envfs.enable = true;
+
   # The Windows system partition, read-only, mounted on first access.
   fileSystems."/mnt/windows" = {
     device = "/dev/disk/by-uuid/3818FB0C18FAC7C0";
