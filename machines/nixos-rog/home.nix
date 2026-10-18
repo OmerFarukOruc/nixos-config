@@ -103,6 +103,7 @@
       mitmproxy
       nvtopPackages.full
       obsidian
+      openssl
       pandoc
       podman-desktop
       qbittorrent
