@@ -282,13 +282,6 @@ let
   # The task manager is Plasma's own with hover zoom (dockMagnification, a
   # percentage from 100 to 150) and notification badges.
   tahoe = inputs.mac-tahoe.lib.mkPackages pkgs;
-  # Plasma 6.8 has no PlasmaCore.WindowThumbnail, the X11 window preview, and
-  # the task manager's tooltip names it, so Plasma does not load the dock. The
-  # patch shows the app icon where the X11 preview was; Wayland previews come
-  # from PipeWire. Drop the patch once upstream stops using the type.
-  tahoeTaskManager = tahoe.task-manager.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ../../pkgs/mac-tahoe-task-manager-no-x11-thumbnail.patch ];
-  });
   tahoePlasmoids = pkgs.callPackage ../../pkgs/mac-tahoe-plasmoids.nix {
     src = inputs.mac-tahoe;
   };
@@ -325,7 +318,7 @@ in
     home.packages = [
       kvitalsPackage
       pkgs.plasmusic-toolbar
-      tahoeTaskManager
+      tahoe.task-manager
       tahoePlasmoids
     ];
 
@@ -342,10 +335,10 @@ in
       ExecStartPre=-${pkgs.writeShellScript "tahoe-qmlcache" ''
         set -eu
         stamp="${config.xdg.stateHome}/tahoe-qmlcache/task-manager-path"
-        if [[ "$(cat "$stamp" 2>/dev/null)" != "${tahoeTaskManager}" ]]; then
+        if [[ "$(cat "$stamp" 2>/dev/null)" != "${tahoe.task-manager}" ]]; then
           rm -rf "${config.xdg.cacheHome}/plasmashell/qmlcache"
           mkdir -p "''${stamp%/*}"
-          echo "${tahoeTaskManager}" > "$stamp"
+          echo "${tahoe.task-manager}" > "$stamp"
         fi
       ''}
     '';

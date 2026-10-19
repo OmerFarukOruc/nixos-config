@@ -62,7 +62,7 @@
     # and our pkgs. A commit pin keeps the hourly updater from rebuilding it
     # for every upstream move.
     mac-tahoe = {
-      url = "github:lestercorderomurillo/macos-tahoe-liquid-kde/8fac9286e6687bf3a890edfca68659bb8e576c72";
+      url = "github:lestercorderomurillo/macos-tahoe-liquid-kde/6d7802faae8d306dd00f4a3d1fc0a8c47d46e827";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.home-manager.follows = "home-manager";
     };

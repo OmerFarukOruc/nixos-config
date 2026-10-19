@@ -329,17 +329,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1791921035,
-        "narHash": "sha256-YFQPMBf7pBvxTyILlSWkdvGJG/M77NGCTGL6tye8lRY=",
+        "lastModified": 1792348186,
+        "narHash": "sha256-13JlnsVTmRzGpmci9Ao5t9O7uX++JLgKDvLXDucFpOU=",
         "owner": "lestercorderomurillo",
         "repo": "macos-tahoe-liquid-kde",
-        "rev": "8fac9286e6687bf3a890edfca68659bb8e576c72",
+        "rev": "6d7802faae8d306dd00f4a3d1fc0a8c47d46e827",
         "type": "github"
       },
       "original": {
         "owner": "lestercorderomurillo",
         "repo": "macos-tahoe-liquid-kde",
-        "rev": "8fac9286e6687bf3a890edfca68659bb8e576c72",
+        "rev": "6d7802faae8d306dd00f4a3d1fc0a8c47d46e827",
         "type": "github"
       }
     },
