@@ -41,8 +41,11 @@
 
   # Deskflow runs here as the client of fedora-desktop's server. A client on
   # Wayland types through the remote desktop portal, which Plasma has and niri
-  # does not, so it starts at a Plasma login only.
-  systemd.user.services.deskflow = {
+  # does not, so it starts at a Plasma login only. The portal reads the app ID
+  # from the unit name (app-<ID>.service), and Plasma names the app in its
+  # remote control notice by that ID. Any other unit name shows the notice as
+  # "An unidentifiable application".
+  systemd.user.services."app-org.deskflow.deskflow" = {
     Unit = {
       Description = "Deskflow client of fedora-desktop";
       # Only a Plasma session reaches plasma-workspace.target.

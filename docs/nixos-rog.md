@@ -726,13 +726,15 @@ Tailscale.
 
 On nixos-rog:
 
-- The `deskflow` user service in `machines/nixos-rog/home.nix` starts the client
-  at a Plasma login only. A Wayland client types through the remote desktop
+- The `app-org.deskflow.deskflow` user service in `machines/nixos-rog/home.nix`
+  starts the client at a Plasma login only. Its name carries Deskflow's app ID,
+  so Plasma's remote control notice names Deskflow instead of "An
+  unidentifiable application". A Wayland client types through the remote desktop
   portal, which Plasma has and niri does not. The service exits 5 when another
   Deskflow already runs, such as a copy that Plasma's autostart or the menu
   started. The unit treats 5 as success and does not restart.
 - The unit sets `RefuseManualStart`, so a deploy never starts a client you
-  quit and never restarts a running one. `systemctl --user start deskflow`
+  quit and never restarts a running one. `systemctl --user start app-org.deskflow.deskflow`
   fails for the same reason; open Deskflow from the menu instead.
 - `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
   With an older libportal, Deskflow builds without clipboard code and the laptop
