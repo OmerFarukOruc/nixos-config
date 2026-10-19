@@ -283,17 +283,17 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1790734645,
-        "narHash": "sha256-QMIscGqrEv8X5JbOkHk2SZw+OuyQOFdFzYYsiYgs1MI=",
+        "lastModified": 1792150411,
+        "narHash": "sha256-uOvaroepuM7KwziDo/0fEnk4+hXCi1kJx7rfj2st3O8=",
         "owner": "4v3ngR",
         "repo": "kwin-effects-glass",
-        "rev": "32f1e79f517eef992563856aa06963f6ee8455b9",
+        "rev": "2ef07fa1a2a062da12289ad8de1393e01f5c1d8e",
         "type": "github"
       },
       "original": {
         "owner": "4v3ngR",
         "repo": "kwin-effects-glass",
-        "rev": "32f1e79f517eef992563856aa06963f6ee8455b9",
+        "rev": "2ef07fa1a2a062da12289ad8de1393e01f5c1d8e",
         "type": "github"
       }
     },
