@@ -329,6 +329,21 @@ in
       tahoePlasmoids
     ];
 
+    # plasmashell caches compiled QML in qmlcache and checks a cached file
+    # against the source's modification time. QML built into a store library
+    # always has the same one, so after the task manager changes plasmashell
+    # keeps running its old QML until the cache goes.
+    home.activation.tahoeQmlCache = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      stamp=${config.xdg.stateHome}/mac-tahoe-liquid-kde/task-manager-path
+      if [[ "$(cat "$stamp" 2>/dev/null)" != ${tahoeTaskManager} ]]; then
+        run rm -rf ${config.xdg.cacheHome}/plasmashell/qmlcache
+        if [[ ! -v DRY_RUN ]]; then
+          mkdir -p "$(dirname "$stamp")"
+          echo ${tahoeTaskManager} > "$stamp"
+        fi
+      fi
+    '';
+
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
       workspace = {
