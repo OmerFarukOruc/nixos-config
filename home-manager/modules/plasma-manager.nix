@@ -159,7 +159,37 @@ in
         # 9 is no screen edge, so the top-left corner no longer opens Overview.
         Effect-overview.BorderActivate = 9;
         Effect-slide.SlideBackground = false;
+
+        # plasma-manager deletes a key whose value is null. These keys are left
+        # from the Better Blur DX, tiling and macOS Tahoe looks, which are gone.
+        Plugins = {
+          better_blur_dxEnabled = null;
+          krohnkiteEnabled = null;
+          liquidglassEnabled = null;
+          shapecornersEnabled = null;
+        };
+        Effect-better-blur-dx.WindowClasses = null;
+        Script-krohnkite = lib.genAttrs [
+          "floatingClass"
+          "screenGapBetween"
+          "screenGapBottom"
+          "screenGapLeft"
+          "screenGapRight"
+          "screenGapTop"
+        ] (_: null);
       };
+      # A window rule deleted in System Settings left its name in the order.
+      configFile.kwinrulesrc.General = {
+        Order = null;
+        rules = null;
+      };
+
+      input.keyboard.numlockOnStartup = "on";
+      # Apps that start at login come from Home Manager units, such as the
+      # Deskflow client, not from the last session.
+      session.sessionRestore.restoreOpenApplicationsOnLogin = "startWithEmptySession";
+      # nixos-rog has no disk swap, so it cannot hibernate.
+      powerdevil.batteryLevels.criticalAction = "sleep";
 
       hotkeys.commands =
         let

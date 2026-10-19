@@ -784,7 +784,7 @@ on 2026-10-09, in the niri sessions:
 | Keys | Sends | Effect |
 | --- | --- | --- |
 | Fn+F1 | `KEY_MUTE` | mute |
-| Fn+F4 | `KEY_PROG3` (`XF86Launch3`) | next Aura effect; niri binds it in `machines/nixos-rog/asus.nix` |
+| Fn+F4 | `KEY_PROG3` (`XF86Launch3`) | next Aura effect; niri binds it in `machines/nixos-rog/asus.nix` and Plasma in `machines/nixos-rog/home.nix` |
 | Fn+F5 | `KEY_PROG4` (`XF86Launch4`) | cycles the power profile in the niri shells and in Plasma |
 | Fn+F6 | `Meta+Shift+S` | screenshot in niri; the laptop has no Print key |
 | Fn+F7, Fn+F8 | `KEY_BRIGHTNESSDOWN`, `KEY_BRIGHTNESSUP` | brightness |
