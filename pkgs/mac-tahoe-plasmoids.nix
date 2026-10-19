@@ -17,6 +17,20 @@ stdenvNoCC.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
 
+  # The theme dropped the launcher's power button (lock, log out, restart,
+  # shut down) from the search bar, but kept SessionButtons.qml and its
+  # showSessionActionsButton setting; this puts it back where TahoeLauncher has it.
+  postPatch = ''
+    substituteInPlace src/offline/plasmoids/org.kde.mac-tahoe-liquid-kde.launcher/contents/ui/SearchBar.qml \
+      --replace-fail 'import org.kde.kirigami as Kirigami' 'import org.kde.kirigami as Kirigami
+    import org.kde.plasma.plasmoid' \
+      --replace-fail '    MenuButton {' '    SessionButtons {
+            visible: Plasmoid.configuration.showSessionActionsButton
+        }
+
+        MenuButton {'
+  '';
+
   installPhase = ''
     runHook preInstall
     dir=$out/share/plasma/plasmoids
