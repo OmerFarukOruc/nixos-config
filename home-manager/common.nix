@@ -12,6 +12,7 @@
     ./modules/markdown-viewer
     ./modules/niri-session.nix
     ./modules/oruc-shell.nix
+    ./modules/plasma-apps.nix
     ./modules/plasma-looks
     ./modules/plasma-manager.nix
     ./modules/plasma-panels.nix

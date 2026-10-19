@@ -39,6 +39,13 @@
     NaturalScroll = osConfig.oruc.machine.touchpad.naturalScroll;
   };
 
+  # The Aura key (Fn+F4) sends XF86Launch3, which niri binds in asus.nix.
+  programs.plasma.hotkeys.commands.aura-next = {
+    comment = "Next keyboard light effect";
+    command = "${lib.getExe' osConfig.services.asusd.package "asusctl"} aura effect --next-mode";
+    key = "Launch (3)";
+  };
+
   # Deskflow runs here as the client of fedora-desktop's server. A client on
   # Wayland types through the remote desktop portal, which Plasma has and niri
   # does not, so it starts at a Plasma login only. The portal reads the app ID
