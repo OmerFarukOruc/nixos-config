@@ -329,6 +329,27 @@ in
       tahoePlasmoids
     ];
 
+    # plasmashell caches compiled QML in qmlcache. A cache file is named after
+    # the qrc path only and is checked against the source's timestamp, which
+    # rcc sets to SOURCE_DATE_EPOCH, fixed in every Nix build. After the task
+    # manager changes, plasmashell would keep running its old QML. A running
+    # plasmashell can write old entries back, so the cache is cleared just
+    # before plasmashell starts, while nothing uses it. The leading "-" lets
+    # plasmashell start when the step fails; the stamp then stays old, so the
+    # next start tries again.
+    xdg.configFile."systemd/user/plasma-plasmashell.service.d/tahoe-qmlcache.conf".text = ''
+      [Service]
+      ExecStartPre=-${pkgs.writeShellScript "tahoe-qmlcache" ''
+        set -eu
+        stamp="${config.xdg.stateHome}/tahoe-qmlcache/task-manager-path"
+        if [[ "$(cat "$stamp" 2>/dev/null)" != "${tahoeTaskManager}" ]]; then
+          rm -rf "${config.xdg.cacheHome}/plasmashell/qmlcache"
+          mkdir -p "''${stamp%/*}"
+          echo "${tahoeTaskManager}" > "$stamp"
+        fi
+      ''}
+    '';
+
     programs.plasma = {
       # The panel layout file also holds the wallpaper, so it is set here too.
       workspace = {
