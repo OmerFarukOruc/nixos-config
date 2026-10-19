@@ -553,6 +553,9 @@ hover zoom, whose `dockMagnification` key is a percentage from 100 to 150
 (default 110). Whenever the layout changes, plasma-manager deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
+On nixos-rog, `oruc.plasma.claudeAccountsWidget` adds the Claude accounts
+widget before kVitals in either top bar ([Claude Code and Codex
+setup](#claude-code-and-codex-setup)).
 
 - Every 5 minutes in a Plasma session, `oled-care.timer`
   (`machines/nixos-rog/oled-care.nix`) moves each panel by 2 px, up to 8 px,

@@ -73,6 +73,9 @@ in
     Timer = {
       OnCalendar = "*:0/10";
       RandomizedDelaySec = "30s";
+      # Without it, the widget can show no data for up to 10 minutes after
+      # a login.
+      OnStartupSec = "1min";
     };
     Install.WantedBy = [ "timers.target" ];
   };
