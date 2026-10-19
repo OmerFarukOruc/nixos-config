@@ -293,6 +293,12 @@ let
     config.General.icon = "view-app-grid-symbolic";
   };
 
+  # The Claude accounts widget (org.oruc.claudeaccounts) shows each Claude
+  # Code account's usage and login state. It lives in the dotfiles checkout,
+  # whose desktop-sync.sh links it into ~/.local/share/plasma/plasmoids, so only
+  # a host with that checkout turns it on.
+  claudeAccounts = lib.optional config.oruc.plasma.claudeAccountsWidget "org.oruc.claudeaccounts";
+
   dock = {
     location = "bottom";
     height = 80;
@@ -311,6 +317,8 @@ let
   };
 in
 {
+  options.oruc.plasma.claudeAccountsWidget = lib.mkEnableOption "the Claude accounts widget in the top bar";
+
   # plasma-manager owns the panels. Whenever this layout changes, it deletes
   # plasma-org.kde.plasma.desktop-appletsrc at the next login and builds the
   # panels again, so a panel or widget change made in Plasma lasts only until then.
@@ -365,6 +373,9 @@ in
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
                 "org.kde.plasma.panelspacer"
+              ]
+              ++ claudeAccounts
+              ++ [
                 kvitals
                 "org.kde.plasma.systemtray"
                 "org.kde.plasma.showdesktop"
@@ -388,6 +399,9 @@ in
                 # as a box of its own with a double border; here it joins the
                 # island.
                 music
+              ]
+              ++ claudeAccounts
+              ++ [
                 kvitals
                 "org.kde.plasma.systemtray"
                 "org.kde.plasma.showdesktop"
