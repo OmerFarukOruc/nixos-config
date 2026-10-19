@@ -282,6 +282,13 @@ let
   # The task manager is Plasma's own with hover zoom (dockMagnification, a
   # percentage from 100 to 150) and notification badges.
   tahoe = inputs.mac-tahoe.lib.mkPackages pkgs;
+  # Plasma 6.8 dropped PlasmaCore.WindowThumbnail, the X11 window preview. The
+  # task manager's tooltip still names it, so Plasma refused to load the whole
+  # dock. The patch puts the app icon in its place; Wayland previews come from
+  # PipeWire and stay as they are.
+  tahoeTaskManager = tahoe.task-manager.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ../../pkgs/mac-tahoe-task-manager-wayland.patch ];
+  });
   tahoePlasmoids = pkgs.callPackage ../../pkgs/mac-tahoe-plasmoids.nix {
     src = inputs.mac-tahoe;
   };
@@ -318,7 +325,7 @@ in
     home.packages = [
       kvitalsPackage
       pkgs.plasmusic-toolbar
-      tahoe.task-manager
+      tahoeTaskManager
       tahoePlasmoids
     ];
 
