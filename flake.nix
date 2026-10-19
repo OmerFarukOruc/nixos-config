@@ -47,7 +47,7 @@
     };
     # Most Glass fixes land on main after its latest tag, so this pins a commit.
     kwin-effects-glass = {
-      url = "github:4v3ngR/kwin-effects-glass/32f1e79f517eef992563856aa06963f6ee8455b9";
+      url = "github:4v3ngR/kwin-effects-glass/2ef07fa1a2a062da12289ad8de1393e01f5c1d8e";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # The Qt style and window decoration that match the Glass effect. The
