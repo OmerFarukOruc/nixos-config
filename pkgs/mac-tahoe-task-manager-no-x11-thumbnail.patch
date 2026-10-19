@@ -1,0 +1,14 @@
+--- a/contents/ui/ToolTipInstance.qml
++++ b/contents/ui/ToolTipInstance.qml
+@@ -296,8 +296,9 @@
+             Component {
+                 id: x11Thumbnail
+ 
+-                PlasmaCore.WindowThumbnail {
+-                    winId: thumbnailSourceItem.winId
++                Kirigami.Icon {
++                    source: toolTipDelegate.icon
++                    animated: false
+                 }
+             }
+ 
