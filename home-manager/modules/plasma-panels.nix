@@ -329,19 +329,25 @@ in
       tahoePlasmoids
     ];
 
-    # plasmashell caches compiled QML in qmlcache and checks a cached file
-    # against the source's modification time. QML built into a store library
-    # always has the same one, so after the task manager changes plasmashell
-    # keeps running its old QML until the cache goes.
-    home.activation.tahoeQmlCache = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      stamp=${config.xdg.stateHome}/mac-tahoe-liquid-kde/task-manager-path
-      if [[ "$(cat "$stamp" 2>/dev/null)" != ${tahoeTaskManager} ]]; then
-        run rm -rf ${config.xdg.cacheHome}/plasmashell/qmlcache
-        if [[ ! -v DRY_RUN ]]; then
-          mkdir -p "$(dirname "$stamp")"
-          echo ${tahoeTaskManager} > "$stamp"
+    # plasmashell caches compiled QML in qmlcache. A cache file is named after
+    # the qrc path only and is checked against the source's timestamp, which
+    # rcc sets to SOURCE_DATE_EPOCH, fixed in every Nix build. After the task
+    # manager changes, plasmashell would keep running its old QML. A running
+    # plasmashell can write old entries back, so the cache is cleared just
+    # before plasmashell starts, while nothing uses it. The leading "-" lets
+    # plasmashell start when the step fails; the stamp then stays old, so the
+    # next start tries again.
+    xdg.configFile."systemd/user/plasma-plasmashell.service.d/tahoe-qmlcache.conf".text = ''
+      [Service]
+      ExecStartPre=-${pkgs.writeShellScript "tahoe-qmlcache" ''
+        set -eu
+        stamp="${config.xdg.stateHome}/tahoe-qmlcache/task-manager-path"
+        if [[ "$(cat "$stamp" 2>/dev/null)" != "${tahoeTaskManager}" ]]; then
+          rm -rf "${config.xdg.cacheHome}/plasmashell/qmlcache"
+          mkdir -p "''${stamp%/*}"
+          echo "${tahoeTaskManager}" > "$stamp"
         fi
-      fi
+      ''}
     '';
 
     programs.plasma = {
