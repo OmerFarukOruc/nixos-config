@@ -17,9 +17,10 @@ let
   bold = slot: color slot // { bold = true; };
 
   # A KSyntaxHighlighting theme in the Base16 scheme's colors, after the Base16
-  # styling guidelines. programs.kate.editor.theme.src would read the file
-  # while Nix evaluates, which fails for a file in the store, so the theme is
-  # written here and Kate gets only its name.
+  # styling guidelines. programs.kate.editor.theme.src reads its file while Nix
+  # evaluates, and `nix flake check` failed to read a builtins.toFile path
+  # ("path ... is not valid"), so the theme is written here and Kate gets only
+  # its name.
   kateThemeName = "Oruc Base16";
   kateTheme = builtins.toJSON {
     metadata = {
@@ -110,6 +111,10 @@ in
           pointSize = 10;
         };
         theme.name = kateThemeName;
+        # The module writes every editor setting; these two keep Kate's own
+        # defaults.
+        brackets.automaticallyAddClosing = true;
+        indent.showLines = false;
       };
     };
 

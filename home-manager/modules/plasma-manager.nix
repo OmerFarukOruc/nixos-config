@@ -178,12 +178,6 @@ in
           "screenGapTop"
         ] (_: null);
       };
-      # A window rule deleted in System Settings left its name in the order.
-      configFile.kwinrulesrc.General = {
-        Order = null;
-        rules = null;
-      };
-
       input.keyboard.numlockOnStartup = "on";
       # Apps that start at login come from Home Manager units, such as the
       # Deskflow client, not from the last session.
