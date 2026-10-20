@@ -36,6 +36,26 @@ The script changes `flake.lock` and does not commit it. Commit the lock, then
 deploy as [deploy.md](deploy.md#deploy) describes. The script prints a reminder
 to do so only when its output is a terminal.
 
+### Move the kernel pin
+
+`kernel-cache/flake.nix` pins nix-cachyos-kernel to a commit, and nothing moves
+that pin on its own. To move it, read what changed upstream since the pin:
+
+```sh
+gh api 'repos/xddxdd/nix-cachyos-kernel/compare/<old sha>...<new sha>' --jq '.files[] | "\(.status) +\(.additions) -\(.deletions) \(.filename)"'
+```
+
+A commit from upstream's update workflow changes only `flake.lock` and
+`kernel-cachyos/version.json`. Check that each new URL in `version.json` points
+at a CachyOS repository and each new input in `flake.lock` at its usual owner.
+Read every other changed file in full.
+
+Then change the commit in `kernel-cache/flake.nix`, run
+`scripts/check-on-rog.sh --fix`, which locks the new commit in
+`kernel-cache/flake.lock`, and merge the change. The merge starts the
+kernel-cache workflow, which builds and records the new revision. The hourly
+updater on nixos-rog then moves the hosts with `update-kernel.sh`.
+
 ### When the cache lacks the kernel
 
 When the script reports missing paths because the GitHub runner is slow or

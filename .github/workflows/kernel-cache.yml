@@ -16,9 +16,6 @@ on:
         description: nix-cachyos-kernel revision to build and record (default the locked one)
         required: false
         default: ""
-  # Follows the nix-cachyos-kernel release branch once a day.
-  schedule:
-    - cron: "23 3 * * *"
 
 permissions:
   contents: read
@@ -32,8 +29,7 @@ defaults:
     working-directory: kernel-cache
 
 jobs:
-  # The release branch can move while the jobs run, so this job picks the
-  # revision and every later job locks exactly that one.
+  # This job picks the revision and every later job locks exactly that one.
   lock:
     # Repository variable CACHIX_CACHE names the Cachix cache; the
     # CACHIX_AUTH_TOKEN secret may push to it.
@@ -51,9 +47,6 @@ jobs:
         with:
           ref: main
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-      - name: Follow the release branch
-        if: github.event_name == 'schedule'
-        run: nix flake update nix-cachyos-kernel
       - name: Use the requested revision
         if: inputs.rev != ''
         env:
@@ -87,13 +80,7 @@ jobs:
       # An LTO kernel build needs more than the runner's free disk.
       - uses: wimpysworld/nothing-but-nix@687c797a730352432950c707ab493fcc951818d7 # v10
 
-      # nix-cachyos-kernel's own Hydra cache. A kernel it already built is
-      # downloaded instead of compiled; it keeps outputs for a few days only.
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
-        with:
-          extra_nix_config: |
-            extra-substituters = https://attic.xuyh0120.win/lantian
-            extra-trusted-public-keys = lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=
 
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
