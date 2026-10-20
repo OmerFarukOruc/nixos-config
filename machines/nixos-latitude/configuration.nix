@@ -10,6 +10,8 @@ _:
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKOUg7Q4PwP3sxF4wr9PTY+nu6Pv1EYnUjBPehzs0gBR nixos-rog-auto-update"
   ];
 
+  environment.etc."host-systems-build-probe".text = 1;
+
   nix = {
     daemonCPUSchedPolicy = "idle";
     daemonIOSchedClass = "idle";
