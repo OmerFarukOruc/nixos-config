@@ -411,7 +411,12 @@ changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new 
 [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
 changes+=$apps
 
-git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
+# The commit takes its dates from the base, so the same candidate on the same
+# base gives the same commit each run, and checks that GitHub still runs on it
+# go on counting (see checks_result below).
+base_date=$(git show -s --format=%cI "$base")
+GIT_AUTHOR_DATE=$base_date GIT_COMMITTER_DATE=$base_date \
+  git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
 
 old_system=$(readlink -f /run/current-system)
 status=0
@@ -455,7 +460,13 @@ rm -f -- "$failed" "$waiting"
 
 # deploy.sh copies back a lock that the build completed; keep it in the commit.
 if ! git diff --quiet; then
-  git commit --quiet --amend --no-edit -a
+  GIT_COMMITTER_DATE=$base_date git commit --quiet --amend --no-edit -a
+fi
+# After a run that ended in a retry, the checks of that commit must run again,
+# so the commit gets new dates and GitHub starts them anew.
+retried=$STATE_DIRECTORY/checks-retried
+if [[ -f $retried && $(<"$retried") == "$(git rev-parse HEAD)" ]]; then
+  git commit --quiet --amend --no-edit --reset-author
 fi
 
 # Merge only what this host built. If main moved, the next run rebuilds on it.
@@ -500,37 +511,50 @@ gh pr create --repo "$repo" --base main --head "$branch" \
 # host-systems-build, which builds on this host with the build lock this run
 # let go of above, and any other check GitHub starts. Prints "success",
 # "retry REASON" or "failure NAMES". A rerun of a check counts by its newest
-# run. host-systems-build fails without the commit's fault when this host went
-# on battery or the lock stayed busy; its annotation says so.
+# run. A failed host-systems-build counts against the update only when its
+# annotation says a system does not evaluate or build; it can also fail for
+# reasons outside the commit, such as this host on battery or a busy lock. The
+# wait leaves 45 minutes of the unit's 3 hour limit for the delivery after the
+# merge.
 checks_result() {
-  local sha=$1 deadline=$((SECONDS + 45 * 60)) runs failed id
-  while ((SECONDS < deadline)); do
+  local sha=$1 limit runs failed id errors=0
+  limit=$((3 * 3600 - 45 * 60))
+  ((limit < SECONDS + 45 * 60)) || limit=$((SECONDS + 45 * 60))
+  while ((SECONDS < limit)); do
     sleep 30
-    runs=$(gh api "repos/$repo/commits/$sha/check-runs?per_page=100" \
-      --jq '[.check_runs[] | {id, name, status, conclusion}] | group_by(.name) | map(max_by(.id)) | tostring') || continue
-    jq -e '([.[].name] | contains(["check", "unit-cycles", "host-systems-build"]))
+    if ! runs=$(gh api "repos/$repo/commits/$sha/check-runs?per_page=100" \
+      --jq '[.check_runs[] | {id, name, status, conclusion}] | group_by(.name) | map(max_by(.id)) | tostring'); then
+      if ((++errors >= 5)); then
+        echo "retry GitHub's check-run API failed 5 times in a row"
+        return
+      fi
+      continue
+    fi
+    errors=0
+    jq -e '(["check", "unit-cycles", "host-systems-build"] - [.[].name]) == []
       and all(.[]; .status == "completed")' <<<"$runs" >/dev/null || continue
     failed=$(jq -r '[.[] | select(.conclusion | IN("success", "skipped", "neutral") | not) | .name] | join(" ")' <<<"$runs")
     if [[ -z $failed ]]; then
       echo success
     elif [[ $failed == host-systems-build ]]; then
       id=$(jq -r '.[] | select(.name == "host-systems-build") | .id' <<<"$runs")
-      if [[ $(gh api "repos/$repo/check-runs/$id/annotations" --jq '.[].message') =~ runs\ on\ battery|build\ lock|does\ not\ answer ]]; then
-        echo "retry host-systems-build could not build on this host"
-      else
+      if [[ $(gh api "repos/$repo/check-runs/$id/annotations" --jq '.[].message') =~ does\ not\ evaluate\ or\ build ]]; then
         echo "failure $failed"
+      else
+        echo "retry host-systems-build failed for a reason outside the commit"
       fi
     else
       echo "failure $failed"
     fi
     return
   done
-  echo "retry the checks did not finish in 45 minutes"
+  echo "retry the checks did not finish in time"
 }
 checks=$(checks_result "$(git rev-parse HEAD)")
 case $checks in
-  success) rm -f -- "$waiting" ;;
+  success) rm -f -- "$waiting" "$retried" ;;
   retry*)
+    git rev-parse HEAD >"$retried"
     echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
     # Notifies from the second run in a row that the checks hold back.
     if [[ -f $waiting && $(<"$waiting") == checks ]]; then
@@ -540,6 +564,7 @@ case $checks in
     exit 0
     ;;
   *)
+    rm -f -- "$retried"
     echo "$candidate" >"$failed"
     fail "Update not merged" "The update PR's checks failed: ${checks#failure }. The run does not try this update again until main or an upstream moves."
     exit 1

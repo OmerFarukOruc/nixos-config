@@ -202,12 +202,12 @@ The exit codes below come from `deploy.sh`, except 76. The
 | The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | "HOST update waiting" once, when two runs in a row end with the same status |
 | The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
-| A check of the update PR fails | The run does not try that update again until `main` or an upstream moves. | Critical |
-| The update PR's checks do not finish in 45 minutes, or host-systems-build could not build on nixos-rog | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
+| A check of the update PR fails, or host-systems-build finds a system that does not evaluate or build | nixos-rog keeps running the update, which never reaches `main`. The run does not try that update again until `main` or an upstream moves. | Critical |
+| The update PR's checks do not finish in time, or host-systems-build fails for another reason, such as nixos-rog on battery | The run stops without a failure. The next run pushes the update with new dates, so the checks run again. | "Update waiting" from the second run in a row |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
-| The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |
+| The run reaches 3 hours | The service stops the run (`TimeoutStartSec`). | Critical |
 | The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
 | The run ends without reporting, such as a kernel kill for memory or a SIGKILL | `oruc-auto-update-died.service` reads the result systemd gives it. | Critical "Update died" with that result |
 
