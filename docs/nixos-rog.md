@@ -58,8 +58,8 @@ into one update, and does these steps:
 
 A desktop notification reports each update or failure.
 
-The run holds the build lock that [PR builds](#pr-builds) also take, from its
-start until it pushes the `auto-update` branch. When a PR build holds the lock
+The run holds the build lock that [PR builds](#pr-builds) also take, from the
+checkout of `main` until it pushes the `auto-update` branch. When a PR build holds the lock
 for 30 minutes, the run stops quietly and the next run tries again.
 
 A change merged to `main` reaches nixos-rog with the next update that moves
@@ -152,6 +152,13 @@ The job runs from `main`'s copy of the workflow (`pull_request_target`) and
 never checks out the PR, so a PR cannot change what runs with the tailnet
 login. A change to the workflow takes effect once it is on `main`.
 
+The PR's Nix code still runs on nixos-rog as `oruc`. Pure evaluation can read
+any file `oruc` can read through a `path` flake input or `builtins.fetchTree`,
+and an error message lands in the public job log. The script withholds the SSH
+agent and the Git credential helper, and accepts only PRs whose branch is in
+this repository, so the check trusts the people who can push here, as `main`
+and the updater already do.
+
 The script and the updater hold one lock, `/run/nixos-config-build.lock`, so
 they never evaluate or build at once. The check waits up to an hour for the
 lock. It stops itself after 110 minutes, and when its SSH session ends, such as
@@ -167,10 +174,13 @@ which admits only jobs that run from `main`:
 - `TS_CI_CLIENT_ID` and `TS_CI_AUDIENCE`: the tailnet's federated identity
   (Tailscale admin console, Settings, Trust credentials, "nixos-config
   host-systems-build"). It accepts GitHub's OIDC token with the subject
-  `repo:OmerFarukOruc/nixos-config:environment:host-systems-build` and may
-  create auth keys for `tag:ci` only. The tailnet policy, which lives only in
-  the admin console, lets `tag:ci` reach only nixos-rog's port 22, and its
-  tests check that.
+  `repo:OmerFarukOruc@7347742/nixos-config@1415995737:environment:host-systems-build`.
+  This repository was created after 15 July 2026, so GitHub's subject names
+  the owner and repository IDs; `gh api
+  repos/OmerFarukOruc/nixos-config/actions/oidc/customization/sub` prints the
+  prefix. The identity may create auth keys for `tag:ci` only. The tailnet
+  policy, which lives only in the admin console, lets `tag:ci` reach only
+  nixos-rog's port 22, and its tests check that.
 - `ROG_SSH_HOST`: nixos-rog's MagicDNS name. It is a secret so that public run
   logs show it masked.
 - `ROG_PR_BUILD_KEY`: the private half of the key that `pr-build.nix`
@@ -194,7 +204,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
 | A check of the update PR fails | The run does not try that update again until `main` or an upstream moves. | Critical |
 | The update PR's checks do not finish in 45 minutes, or host-systems-build could not build on nixos-rog | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
-| A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | None |
+| A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |

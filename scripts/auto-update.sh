@@ -132,7 +132,15 @@ git clean -fdxq
 exec {build_lock}>>/run/nixos-config-build.lock
 if ! flock -w 1800 "$build_lock"; then
   echo "A PR build has held the build lock for 30 min; the next run tries again."
+  # Notifies from the second run in a row that the lock holds back.
+  if [[ -f $waiting && $(<"$waiting") == lock ]]; then
+    notify normal "Update waiting" "PR builds have held the build lock for 30 minutes in two runs in a row. See: journalctl -u oruc-auto-update" || true
+  fi
+  echo lock >"$waiting"
   exit 0
+fi
+if [[ -f $waiting && $(<"$waiting") == lock ]]; then
+  rm -f -- "$waiting"
 fi
 
 # Prints the coding agents this host would compile itself because

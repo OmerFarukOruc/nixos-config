@@ -9,7 +9,7 @@
 #
 # Exit status: 0 every changed system builds, 1 a system does not evaluate or
 # build, 2 a malformed SSH command, 3 nixos-rog runs on battery, 4 SHA is not
-# that PR's head, 5 the lock stayed busy, 6 GitHub does not answer, 124 the
+# that PR's head or shares no history with main, 5 the lock stayed busy, 6 GitHub does not answer, 124 the
 # deadline passed or the check's SSH session ended.
 set -Eeuo pipefail
 
@@ -61,14 +61,21 @@ fi
 pr=${BASH_REMATCH[1]}
 sha=${BASH_REMATCH[2]}
 
+# The PR's Nix code runs as oruc, so it gets neither Omer's SSH agent nor the
+# Git config whose credential helper hands out his GitHub token. GitHub serves
+# this public repository without a login.
+unset SSH_AUTH_SOCK
+export GIT_CONFIG_GLOBAL=/dev/null
+
 mkdir -p -- "$cache/logs"
 log=$cache/logs/$(date +%Y%m%dT%H%M%S)-pr$pr-${sha:0:12}.log
+: >"$log"
+# The newest 50 logs stay, this one included.
+find "$cache/logs" -maxdepth 1 -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +51 | cut -d' ' -f2- |
+  xargs -r rm -f --
 # -p keeps writing the log after the SSH session goes away.
 exec > >(tee -p -a "$log") 2>&1
 say "PR $pr at $sha; nixos-rog keeps this log at $log."
-# The newest 50 logs stay.
-find "$cache/logs" -maxdepth 1 -name '*.log' -printf '%T@ %p\n' | sort -rn | tail -n +51 | cut -d' ' -f2- |
-  xargs -r rm -f --
 
 if ! systemd-ac-power; then
   say "nixos-rog runs on battery, so it builds nothing. Rerun the check once it is on AC power."
@@ -89,7 +96,7 @@ fi
 
 exec {lock_fd}>>"$lock"
 if ! flock -n "$lock_fd"; then
-  say "the updater holds the build lock; waiting up to $((lock_wait / 60)) min."
+  say "the updater or another PR build holds the build lock; waiting up to $((lock_wait / 60)) min."
   if ! flock -w "$lock_wait" "$lock_fd"; then
     say "the build lock stayed busy. Rerun the check later."
     exit 5
@@ -98,7 +105,8 @@ fi
 
 git_dir=$cache/repo.git
 [[ -d $git_dir ]] || git init --quiet --bare "$git_dir"
-if ! git -C "$git_dir" fetch --quiet --force "https://github.com/$repo.git" \
+# A detached automatic gc would inherit the lock and hold it after this exits.
+if ! git -C "$git_dir" -c gc.auto=0 -c maintenance.auto=false fetch --quiet --force "https://github.com/$repo.git" \
   "+refs/pull/$pr/head:refs/pr/$pr" "+refs/heads/main:refs/heads/main"; then
   say "fetching PR $pr and main from GitHub failed."
   exit 6
@@ -107,7 +115,10 @@ if [[ $(git -C "$git_dir" rev-parse "refs/pr/$pr") != "$sha" ]]; then
   say "PR $pr moved past $sha while this check started."
   exit 4
 fi
-base=$(git -C "$git_dir" merge-base "$sha" main)
+if ! base=$(git -C "$git_dir" merge-base "$sha" refs/heads/main); then
+  say "$sha shares no history with main."
+  exit 4
+fi
 say "comparing with the merge base $base."
 
 flake() { echo "git+file://$git_dir?rev=$1"; }
@@ -116,13 +127,22 @@ toplevel_drv() {
     "$(flake "$1")#nixosConfigurations.$2.config.system.build.toplevel.drvPath"
 }
 
-if ! hosts=$(heavy nix eval --json --no-update-lock-file "$(flake "$sha")#nixosConfigurations" \
+if ! host_list=$(heavy nix eval --json --no-update-lock-file "$(flake "$sha")#nixosConfigurations" \
   --apply builtins.attrNames | jq -r '.[]'); then
   say "the host list does not evaluate at $sha."
   exit 1
 fi
+mapfile -t hosts <<<"$host_list"
+# heavy passes its arguments through a shell that expands $NAME, and each
+# name becomes part of an argument.
+for host in "${hosts[@]}"; do
+  if [[ ! $host =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; then
+    say "the PR names a host '${host:0:100}', which is not a plain host name."
+    exit 1
+  fi
+done
 failed=()
-for host in $hosts; do
+for host in "${hosts[@]}"; do
   if ! new=$(toplevel_drv "$sha" "$host"); then
     say "$host does not evaluate at $sha."
     failed+=("$host")

@@ -1,7 +1,8 @@
 # The host-systems-build check (.github/workflows/host-systems-build.yml) logs
 # in from GitHub Actions over the tailnet with a key of its own. That key can
 # only run scripts/pr-build.sh, which builds the systems a PR changes;
-# restrict turns off the terminal and every forwarding.
+# restrict turns off the terminal and every forwarding, and from= admits only
+# tailnet addresses, Tailscale's fixed ranges.
 { config, pkgs, ... }:
 let
   prBuild = pkgs.writeShellApplication {
@@ -26,7 +27,7 @@ let
 in
 {
   users.users.oruc.openssh.authorizedKeys.keys = [
-    ''restrict,command="${prBuild}/bin/nixos-config-pr-build" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZnHWnI45v1HEEC9C093pkPhpd0qnvCI33hXxAcyrDj host-systems-build@github-actions''
+    ''restrict,from="100.64.0.0/10,fd7a:115c:a1e0::/48",command="${prBuild}/bin/nixos-config-pr-build" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPZnHWnI45v1HEEC9C093pkPhpd0qnvCI33hXxAcyrDj host-systems-build@github-actions''
   ];
 
   # The lock that the check and the updater (auto-update.nix) take around their

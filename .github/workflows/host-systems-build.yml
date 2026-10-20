@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   host-systems-build:
+    # scripts/pr-build.sh refuses a PR from a fork, so its job would only fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # scripts/pr-build.sh stops itself after 110 min.
     timeout-minutes: 120
@@ -69,7 +71,7 @@ jobs:
           case $status in
             0) ;;
             3) echo "::error::nixos-rog runs on battery. Rerun this check once it is on AC power." ;;
-            5) echo "::error::The updater held nixos-rog's build lock for an hour. Rerun this check." ;;
+            5) echo "::error::Another build held nixos-rog's build lock for an hour. Rerun this check." ;;
             255) echo "::error::nixos-rog does not answer over the tailnet. Rerun this check once it is on." ;;
             *) echo "::error::scripts/pr-build.sh exited $status; its output is above." ;;
           esac
