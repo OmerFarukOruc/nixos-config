@@ -747,9 +747,13 @@ On nixos-rog:
   portal, which Plasma has and niri does not. The service exits 5 when another
   Deskflow already runs, such as a copy that Plasma's autostart or the menu
   started. The unit treats 5 as success and does not restart.
-- The unit sets `RefuseManualStart`, so a deploy never starts a client you
-  quit and never restarts a running one. `systemctl --user start app-org.deskflow.deskflow`
-  fails for the same reason; open Deskflow from the menu instead.
+- The unit sets `RefuseManualStart` and `RefuseManualStop`, so a deploy never
+  starts a client you quit and never stops a running one. With
+  `RefuseManualStart` alone, Home Manager stops a changed client and cannot
+  start it again. If the cursor is on the laptop at that moment, the server
+  keeps fedora-desktop's keyboard and mouse captured. `systemctl --user start`
+  and `stop app-org.deskflow.deskflow` fail for the same reason; open Deskflow
+  from the menu, and quit it from its window.
 - `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
   With an older libportal, Deskflow builds without clipboard code and the laptop
   never sends what you copy. The overlay's install check fails the build in that
