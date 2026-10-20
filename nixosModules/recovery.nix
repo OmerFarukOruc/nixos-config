@@ -18,7 +18,7 @@
   # sorts this entry after the nixos entries.
   config.specialisation.recovery.configuration = {
     boot.kernelPackages = lib.mkForce (
-      config.oruc.recovery.kernelPackages.extend (import ../overlays/kernel-module-certs.nix lib)
+      config.oruc.recovery.kernelPackages.extend (import ../kernel-cache/kernel-module-certs.nix lib)
     );
     boot.loader.systemd-boot.sortKey = "o_recovery";
     services.displayManager.sddm.theme = lib.mkForce "";

@@ -31,7 +31,7 @@
       kernelPackages =
         variant:
         pkgs.cachyosKernels."linuxPackages-cachyos-latest-lto-${variant}".extend (
-          import ../overlays/kernel-module-certs.nix pkgs.lib
+          import ./kernel-module-certs.nix pkgs.lib
         );
       nvidiaOpen =
         variant: ((kernelPackages variant).nvidiaPackages.mkDriver (import ./nvidia-driver.nix)).open;
