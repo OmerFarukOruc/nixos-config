@@ -12,6 +12,7 @@
     inputs.sops-nix.nixosModules.sops
     ./apps.nix
     ./asus.nix
+    ./claude-usage-read.nix
     ./auto-update.nix
     ./cpu-limits.nix
     ./graphics.nix

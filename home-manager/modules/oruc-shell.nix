@@ -12,12 +12,13 @@
         export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/gcr/ssh
       fi
     '';
-    # acct and claude-profiles pick a Claude Code account per terminal, from
-    # the dotfiles checkout when it exists. They need compinit, which runs earlier.
+    # claude rotates between the Claude Code accounts and claude --account NAME
+    # pins one, from the dotfiles checkout when it exists. The completion for
+    # claude-accounts needs compinit, which runs earlier.
     initContent = lib.mkOrder 1500 ''
-      acct_sh=~/Desktop/workspace/dotfiles/desktop/bin/acct.sh
-      [[ -r $acct_sh ]] && . "$acct_sh"
-      unset acct_sh
+      claude_sh=~/Desktop/workspace/dotfiles/desktop/shell/claude-accounts.sh
+      [[ -r $claude_sh ]] && . "$claude_sh"
+      unset claude_sh
       # One line when the last desktop-sync run reported a problem.
       sync_status=~/Desktop/workspace/dotfiles/desktop/shell/sync-status.zsh
       [[ -r $sync_status ]] && . "$sync_status"

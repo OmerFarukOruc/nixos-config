@@ -48,8 +48,8 @@ in
   oruc.plasma.claudeAccountsWidget = true;
 
   # Reads every Claude Code account's usage limits and login state, and the
-  # login state on risoluto-dev-1 over SSH, through the gcr agent in the
-  # user manager's environment.
+  # logins on the hosts that remote_hosts in the checkout's accounts.json names
+  # over SSH, through the gcr agent in the user manager's environment.
   systemd.user.services.claude-usage = {
     Unit = {
       Description = "Read the usage limits and login state of every Claude Code account";

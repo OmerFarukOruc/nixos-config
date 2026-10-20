@@ -252,11 +252,13 @@ The unit does nothing until that checkout exists.
 `claude-usage.timer`, defined in `machines/nixos-rog/desktop-sync.nix`, runs the
 checkout's `desktop/bin/claude-usage` every 10 minutes. It writes each Claude
 Code account's usage limits and login state to
-`~/.cache/claude-usage/usage.json`, and reads risoluto-dev-1's file over SSH.
+`~/.cache/claude-usage/usage.json`, and reads the files of risoluto-dev-1 and
+fedora-desktop over SSH. fedora-desktop reads this host's file with a key that
+`machines/nixos-rog/claude-usage-read.nix` allows only to print it.
 The Claude accounts widget in the top bar shows that file; `desktop-sync.sh`
 links the widget into `~/.local/share/plasma/plasmoids`, and
 `oruc.plasma.claudeAccountsWidget` puts it on the panel. Its Log in button
-opens a Ghostty window that runs `claude-profiles.sh login`.
+opens a Ghostty window that runs `claude-accounts login`.
 
 ## Heavy commands
 
