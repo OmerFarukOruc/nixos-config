@@ -2,11 +2,26 @@
 # until a program is offloaded to it. The firmware must be in Hybrid mode
 # (asus-armoury dgpu_disable=0, gpu_mux_mode=1); in Integrated mode the RTX 4070
 # is not on the PCI bus at all.
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   radeonRenderNode = import ./radeon-render-node.nix;
+  nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (
+    import ../../kernel-cache/nvidia-driver.nix
+  );
+  # The patchelf of the package set that builds the driver.
+  driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
+  # The NVIDIA driver below, and the CUDA packages of media.nix and home.nix
+  # while nixpkgs lacks its own fix, build with patchelf 0.15.2 while their
+  # package set's patchelf is 0.19.2.
+  nixpkgs.overlays = [ (import ../../overlays/nvidia-patchelf.nix) ];
+
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
   # first. When that is the RTX 4070, niri, its shell and Xwayland hold it
   # awake for the whole session. nixosModules/desktop.nix and asus.nix also
@@ -32,9 +47,18 @@ in
     # nvidiaPackages.latest in flake.lock (the kernel overlay's nixpkgs is node
     # nixpkgs_2) is older than this version. Drop this block once it is this
     # version or newer. The cache and host import the same driver arguments.
-    package = config.boot.kernelPackages.nvidiaPackages.mkDriver (
-      import ../../kernel-cache/nvidia-driver.nix
-    );
+    # patchelf 0.15.2 while the driver's package set has 0.19.2
+    # (overlays/nvidia-patchelf.nix); the condition skips the override once
+    # that package set moves to another patchelf. The open kernel module is a
+    # passthru of the driver, so the override keeps the module that the
+    # kernel-cache workflow builds.
+    package =
+      if driverPatchelf.version == "0.19.2" then
+        nvidiaDriver.overrideAttrs (old: {
+          nativeBuildInputs = [ pkgs.patchelf_0_15 ] ++ old.nativeBuildInputs;
+        })
+      else
+        nvidiaDriver;
 
     prime = {
       offload = {
