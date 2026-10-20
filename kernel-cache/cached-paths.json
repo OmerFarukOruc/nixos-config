@@ -9,7 +9,7 @@
     "/nix/store/8xcszd97m967yy6nw2liyskvl4k88y9f-linux-cachyos-latest-lto-zen4-7.2.11-modules",
     "/nix/store/3gdzdjfy3fdv9xy5yqzx4mvicrsrlgns-nvidia-open-615.78.08-7.2.11",
     "/nix/store/1cpk9qnkaacdxbxja497fk16why7nc5y-nvidia-open-615.78.08-7.2.11",
-    "/nix/store/sbxgp8afqyxnzwp7913rm9jm8wcwbr0x-ryzen-smu-7.2.11-0.1.7-unstable-2026-08-15",
+    "/nix/store/brirjf37w14k2vchh78xdm17jq0143p0-ryzen-smu-7.2.11-0.1.7-unstable-2026-08-15",
     "/nix/store/9zjx3xmmqwx5qnn2va47k2sqwcybf6bg-turbostat-7.2.11"
   ],
   "version": "7.2.11"
