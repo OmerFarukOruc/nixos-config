@@ -12,11 +12,28 @@ let
   # under Plasma and in the Secret Service under niri, and neither session
   # can read the other's. On a machine with Plasma it uses KWallet in every
   # session; niri-session.nix opens the wallet at a niri login.
+  #
+  # On nixos-rog's Radeon 890M, a WebRTC receiver decodes none of the frames
+  # that Brave's VA-API H.264 encoder sends, and logs that no PPS arrived, so a
+  # screen share to Teams arrives black or frozen. Turning the encoder off
+  # makes WebRTC use OpenH264. Chromium keeps only the last --disable-features, so the list
+  # repeats the two features the package disables, and a disabled feature wins
+  # over the package's --enable-features.
+  braveArgs =
+    lib.optional (sessions.hasDesktop osConfig.oruc.machine "plasma") "--password-store=kwallet6"
+    ++ lib.optional (osConfig.oruc.machine.gpu == "hybrid") (
+      "--disable-features="
+      + lib.concatStringsSep "," [
+        "OutdatedBuildDetector"
+        "UseChromeOSDirectVideoDecoder"
+        "AcceleratedVideoEncoder"
+      ]
+    );
   brave =
-    if sessions.hasDesktop osConfig.oruc.machine "plasma" then
-      pkgs.brave-origin.override { commandLineArgs = "--password-store=kwallet6"; }
+    if braveArgs == [ ] then
+      pkgs.brave-origin
     else
-      pkgs.brave-origin;
+      pkgs.brave-origin.override { commandLineArgs = lib.concatStringsSep " " braveArgs; };
   # Days a release must age before a package manager installs it.
   releaseAgeDays = 3;
   # OpenCode 2 from llm-agents installs as opencode2, beside version 1. It is
