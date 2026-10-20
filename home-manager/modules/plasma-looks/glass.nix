@@ -60,13 +60,15 @@ in
               # app draws its pet in a clear window 1460x3080 px in size, and the
               # forced blur turned that whole window into a dark pane. Its main
               # window is opaque, so it loses nothing. SourceGit and Telegram stay
-              # unblurred.
+              # unblurred. Telegram's menus are popups, which KWin names after the
+              # executable, so the entry is that name; it also matches the main
+              # window's resource name.
               # Glass splits the list at newlines and matches each entry exactly
               # against the window's resource class or resource name.
               WindowClasses = lib.concatStringsSep "\n" [
                 "Chatgpt"
-                "org.telegram.desktop"
                 "SourceGit"
+                "Telegram"
               ];
               # The values of the dark-glass mode in 4v3ngR/glassOS switcher/theme,
               # with the glow taken from the scheme's blue.
