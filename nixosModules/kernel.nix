@@ -23,7 +23,9 @@ in
     ];
   };
 
-  boot.kernelPackages = lib.getAttrFromPath spec.package pkgs;
+  boot.kernelPackages = (lib.getAttrFromPath spec.package pkgs).extend (
+    import ../overlays/kernel-module-certs.nix lib
+  );
 
   assertions = [
     {

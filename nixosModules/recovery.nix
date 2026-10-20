@@ -17,7 +17,9 @@
   # themed greeter does not come up. Limine ignores the sort key; systemd-boot
   # sorts this entry after the nixos entries.
   config.specialisation.recovery.configuration = {
-    boot.kernelPackages = lib.mkForce config.oruc.recovery.kernelPackages;
+    boot.kernelPackages = lib.mkForce (
+      config.oruc.recovery.kernelPackages.extend (import ../overlays/kernel-module-certs.nix lib)
+    );
     boot.loader.systemd-boot.sortKey = "o_recovery";
     services.displayManager.sddm.theme = lib.mkForce "";
   };
