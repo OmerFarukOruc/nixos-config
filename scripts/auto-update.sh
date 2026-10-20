@@ -3,9 +3,11 @@
 # every app in pkgs/ that names a release source to their newest release,
 # deploys the result to this host with deploy.sh, and squash-merges it to main.
 # The kernel and llm-agents move only while a cache holds the builds they need.
+# Every other host must build here first, and after the merge the run deploys
+# main to each other host that runs another system.
 # nixpkgs, dms and sops-nix wait for the cache for a day at most
 # (see below).
-# A candidate that fails another host's evaluation, the build or the activation
+# A candidate that fails another host's build, this host's build or the activation
 # is not tried again until main or an upstream moves. The run retries after
 # deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the candidate's fault.
 # -E lets the ERR trap below fire inside functions too.
@@ -77,6 +79,24 @@ chmod 600 "$RUNTIME_DIRECTORY/nix.conf" "$RUNTIME_DIRECTORY/gh/hosts.yml"
 export NIX_CONFIG="include $RUNTIME_DIRECTORY/nix.conf"
 export GH_CONFIG_DIR="$RUNTIME_DIRECTORY/gh"
 
+# deploy.sh, its rsync and nix copy reach another host with plain `ssh HOST`.
+# The service has no agent and no personal key, so an ssh first on PATH adds
+# this run's config, which names the deploy key from the credentials. The host
+# keys come from /etc/ssh/ssh_known_hosts (programs.ssh.knownHosts).
+mkdir -p -- "$RUNTIME_DIRECTORY/bin"
+cat >"$RUNTIME_DIRECTORY/ssh_config" <<EOF
+Host *
+  IdentityFile $CREDENTIALS_DIRECTORY/latitude-deploy-key
+  IdentitiesOnly yes
+  BatchMode yes
+  StrictHostKeyChecking yes
+  UserKnownHostsFile /dev/null
+EOF
+printf '#!%s\nexec %q -F %q "$@"\n' "$(command -v bash)" "$(command -v ssh)" "$RUNTIME_DIRECTORY/ssh_config" \
+  >"$RUNTIME_DIRECTORY/bin/ssh"
+chmod 700 "$RUNTIME_DIRECTORY/bin/ssh"
+export PATH="$RUNTIME_DIRECTORY/bin:$PATH"
+
 # A failed clone or fetch is quiet only during a network outage. Any other
 # failure, such as a revoked token or lost repository access, would stop every
 # update with no sign, so it notifies and fails.
@@ -128,19 +148,77 @@ uncached_agents() {
   grep -Fo -f <(echo "$agents") <<<"$plan" || true
 }
 
-# This host builds only itself, so every other host must at least evaluate.
-other_hosts_evaluate() {
+other_hosts() {
+  nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r --arg self "$host" '.[] | select(. != $self)'
+}
+
+# A candidate merges only when every other host's system builds here too.
+other_hosts_build() {
   local hosts other
-  hosts=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]') || return 76
+  hosts=$(other_hosts) || return 76
   for other in $hosts; do
-    [[ $other == "$host" ]] && continue
-    nix eval --raw ".#nixosConfigurations.$other.config.system.build.toplevel.drvPath" >/dev/null ||
+    nix build --no-link ".#nixosConfigurations.$other.config.system.build.toplevel" ||
       {
-        echo "$other no longer evaluates."
+        echo "$other does not build."
         return 76
       }
   done
 }
+
+# Deploys the checkout, which is main's tree, to every other host whose running
+# system differs from it. The system builds here and is copied first, so the
+# host does not compile it. Per host, current-HOST records the commit the host
+# matched, failed-HOST a commit whose deploy failed for its own reason, and
+# unreachable-HOST that the "does not answer" popup was shown. A host that does
+# not answer, or a deploy that fails for a reason outside the commit, is tried
+# again the next run.
+deliver_others() {
+  local head hosts other running want status
+  head=$(git rev-parse HEAD)
+  hosts=$(other_hosts) || {
+    fail "Other hosts not updated" "The host list does not evaluate. See: journalctl -u oruc-auto-update"
+    return 0
+  }
+  for other in $hosts; do
+    [[ -f $STATE_DIRECTORY/current-$other && $(<"$STATE_DIRECTORY/current-$other") == "$head" ]] && continue
+    [[ -f $STATE_DIRECTORY/failed-$other && $(<"$STATE_DIRECTORY/failed-$other") == "$head" ]] && continue
+    if ! running=$(ssh -o ConnectTimeout=15 "$other" readlink -f /run/current-system); then
+      echo "$other does not answer over SSH; the next run tries again."
+      if [[ ! -f $STATE_DIRECTORY/unreachable-$other ]]; then
+        notify normal "$other not updated" "$other does not answer over SSH. The updater deploys main there once it answers." &&
+          touch "$STATE_DIRECTORY/unreachable-$other"
+      fi
+      continue
+    fi
+    rm -f -- "$STATE_DIRECTORY/unreachable-$other"
+    if ! want=$(nix build --no-link --print-out-paths ".#nixosConfigurations.$other.config.system.build.toplevel"); then
+      echo "$head" >"$STATE_DIRECTORY/failed-$other"
+      fail "$other not updated" "Its system at main does not build here. See: journalctl -u oruc-auto-update"
+      continue
+    fi
+    if [[ $running != "$want" ]]; then
+      nix copy --to "ssh-ng://$other" "$want" ||
+        echo "Copying the system to $other failed; deploy.sh builds it there."
+      status=0
+      ./deploy.sh "$other" switch || status=$?
+      case $status in
+        0) ;;
+        70 | 71 | 74 | 77 | 79)
+          echo "The deploy to $other exited $status, which is not the commit's fault; the next run tries again."
+          continue
+          ;;
+        *)
+          echo "$head" >"$STATE_DIRECTORY/failed-$other"
+          fail "$other update failed" "deploy.sh $other exited $status. The updater tries again once main moves. See: journalctl -u oruc-auto-update"
+          continue
+          ;;
+      esac
+    fi
+    rm -f -- "$STATE_DIRECTORY/failed-$other"
+    echo "$head" >"$STATE_DIRECTORY/current-$other"
+  done
+}
+deliver_others
 
 # Succeeds when a cache holds every package of ci/cached-packages.nix that this
 # host uses at this lock. The host-packages-cache workflow builds them every
@@ -290,7 +368,7 @@ git commit --quiet -am "chore(flake): update inputs to their newest releases" -m
 
 old_system=$(readlink -f /run/current-system)
 status=0
-other_hosts_evaluate || status=$?
+other_hosts_build || status=$?
 if ((status == 0)); then
   ./deploy.sh "$host" switch || status=$?
 fi
@@ -371,3 +449,4 @@ gh pr create --repo "$repo" --base main --head "$branch" \
   gh pr edit "$branch" --repo "$repo" --body "$body"
 gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"
 notify normal "System updated" "$changes" || true
+deliver_others

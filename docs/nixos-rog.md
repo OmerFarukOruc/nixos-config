@@ -31,8 +31,9 @@ hour on AC power, it runs `scripts/auto-update.sh` in its own clone of this
 repository. Its timer adds up to 10 minutes of random delay. On battery the
 service skips the run.
 
-Each run collects its input and app changes into one update, and does these
-steps:
+Each run first deploys `main` to every other host that runs another system,
+as the last step below describes. Then it collects its input and app changes
+into one update, and does these steps:
 
 1. It moves every input that the table below does not name with
    `move-inputs.sh`.
@@ -41,11 +42,16 @@ steps:
    input, kernel and app steps.
 4. When no input or app moved, it logs "Everything is current." and deploys
    nothing.
-5. It checks that every other host still evaluates. When one does not, the
-   update fails with status 76.
+5. It builds every other host's system. When one does not build, the update
+   fails with status 76.
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
 7. It squash-merges the result to `main` through the `auto-update` branch. The
    PR body holds dix's comparison of the old and new system.
+8. It deploys `main` to each other host whose running system differs. It
+   builds that system here, copies it with `nix copy`, then runs
+   `./deploy.sh HOST switch`, so the host does not compile it. The updater
+   reaches the host with its own SSH key, `latitude-deploy-key` in
+   [Secrets](#secrets), which nixos-latitude authorizes.
 
 A desktop notification reports each update or failure.
 
@@ -133,7 +139,10 @@ The exit codes below come from `deploy.sh`, except 76. The
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, or another host no longer evaluates (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
+| The deploy fails with another status, or another host does not evaluate or build (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
+| Another host does not answer over SSH | The run skips it. The next run tries again. | "HOST not updated" once, until the host answers |
+| The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | None |
+| The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
@@ -156,8 +165,9 @@ next run sends it again.
 
 ## Secrets
 
-`secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`) and
-the updater's GitHub token (`github-update-token`). sops encrypts the file for
+`secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`),
+the updater's GitHub token (`github-update-token`) and the SSH key with which
+the updater deploys nixos-latitude (`latitude-deploy-key`). sops encrypts the file for
 two recipients, which `.sops.yaml` lists:
 
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
