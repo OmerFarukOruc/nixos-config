@@ -9,7 +9,8 @@
 # (see below).
 # A candidate that fails another host's build, this host's build or the activation
 # is not tried again until main or an upstream moves. The run retries after
-# deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the candidate's fault.
+# this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the
+# candidate's fault.
 # -E lets the ERR trap below fire inside functions too.
 set -Eeuo pipefail
 
@@ -89,6 +90,9 @@ Host *
   IdentityFile $CREDENTIALS_DIRECTORY/latitude-deploy-key
   IdentitiesOnly yes
   BatchMode yes
+  ConnectTimeout 15
+  ServerAliveInterval 15
+  ServerAliveCountMax 4
   StrictHostKeyChecking yes
   UserKnownHostsFile /dev/null
 EOF
@@ -152,12 +156,19 @@ other_hosts() {
   nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r --arg self "$host" '.[] | select(. != $self)'
 }
 
+# Builds HOST's system and prints its path. A second try covers a download
+# that failed once, such as a substituter timeout.
+build_system() {
+  nix build --no-link --print-out-paths ".#nixosConfigurations.$1.config.system.build.toplevel" ||
+    nix build --no-link --print-out-paths ".#nixosConfigurations.$1.config.system.build.toplevel"
+}
+
 # A candidate merges only when every other host's system builds here too.
 other_hosts_build() {
   local hosts other
   hosts=$(other_hosts) || return 76
   for other in $hosts; do
-    nix build --no-link ".#nixosConfigurations.$other.config.system.build.toplevel" ||
+    build_system "$other" >/dev/null ||
       {
         echo "$other does not build."
         return 76
@@ -165,70 +176,89 @@ other_hosts_build() {
   done
 }
 
-# Deploys the checkout, which is main's tree, to every other host whose running
-# system differs from it. The system builds here and is copied first, so the
-# host does not compile it. Per host, current-HOST records the commit the host
-# matched, failed-HOST a commit whose deploy failed for its own reason, and
-# unreachable-HOST that the "does not answer" popup was shown. A host that does
-# not answer, or a deploy that fails for a reason outside the commit, is tried
-# again the next run.
+# Deploys the checkout's tree to every other host whose running system differs
+# from it. The system builds here and is copied first, so the host does not
+# compile it. Per host, current-HOST records the tree the host matched,
+# failed-HOST a tree whose deploy failed for its own reason, unreachable-HOST
+# that the "cannot log in" popup was shown, and waiting-HOST the deploy.sh
+# status that held the last try back. The state names a tree, not a commit,
+# because the squash merge gives the tree this run deployed a new commit. A host
+# that cannot be reached, or a deploy that fails for a reason outside the tree,
+# is tried again the next run. The popups here do not go through fail, so a
+# later failure of the run still sends its own.
 deliver_others() {
-  local head hosts other running want status
-  head=$(git rev-parse HEAD)
+  local tree hosts other running want status previous ssh_error
+  tree=$(git rev-parse 'HEAD^{tree}')
   hosts=$(other_hosts) || {
-    fail "Other hosts not updated" "The host list does not evaluate. See: journalctl -u oruc-auto-update"
+    notify critical "Other hosts not updated" "The host list does not evaluate. See: journalctl -u oruc-auto-update" || true
     return 0
   }
   for other in $hosts; do
-    [[ -f $STATE_DIRECTORY/current-$other && $(<"$STATE_DIRECTORY/current-$other") == "$head" ]] && continue
-    [[ -f $STATE_DIRECTORY/failed-$other && $(<"$STATE_DIRECTORY/failed-$other") == "$head" ]] && continue
-    if ! running=$(ssh -o ConnectTimeout=15 "$other" readlink -f /run/current-system); then
-      echo "$other does not answer over SSH; the next run tries again."
+    [[ -f $STATE_DIRECTORY/current-$other && $(<"$STATE_DIRECTORY/current-$other") == "$tree" ]] && continue
+    [[ -f $STATE_DIRECTORY/failed-$other && $(<"$STATE_DIRECTORY/failed-$other") == "$tree" ]] && continue
+    if ! running=$(ssh "$other" readlink -f /run/current-system 2>"$RUNTIME_DIRECTORY/ssh.err"); then
+      cat "$RUNTIME_DIRECTORY/ssh.err" >&2
+      ssh_error=$(tail -n 1 "$RUNTIME_DIRECTORY/ssh.err")
+      echo "The updater cannot log in to $other over SSH; the next run tries again."
       if [[ ! -f $STATE_DIRECTORY/unreachable-$other ]]; then
-        notify normal "$other not updated" "$other does not answer over SSH. The updater deploys main there once it answers." &&
+        notify normal "$other not updated" "The updater cannot log in to $other over SSH: ${ssh_error:-no error line}. It deploys main there once it can." &&
           touch "$STATE_DIRECTORY/unreachable-$other"
       fi
       continue
     fi
     rm -f -- "$STATE_DIRECTORY/unreachable-$other"
-    if ! want=$(nix build --no-link --print-out-paths ".#nixosConfigurations.$other.config.system.build.toplevel"); then
-      echo "$head" >"$STATE_DIRECTORY/failed-$other"
-      fail "$other not updated" "Its system at main does not build here. See: journalctl -u oruc-auto-update"
+    if ! want=$(build_system "$other"); then
+      echo "$tree" >"$STATE_DIRECTORY/failed-$other"
+      notify critical "$other not updated" "Its system at main does not build here. See: journalctl -u oruc-auto-update" || true
       continue
     fi
     if [[ $running != "$want" ]]; then
-      nix copy --to "ssh-ng://$other" "$want" ||
+      # The host downloads what a cache holds itself. A copy that stalls, such
+      # as over a Wi-Fi drop, stops after 30 minutes.
+      timeout 30m nix copy --substitute-on-destination --to "ssh-ng://$other" "$want" ||
         echo "Copying the system to $other failed; deploy.sh builds it there."
       status=0
       ./deploy.sh "$other" switch || status=$?
       case $status in
         0) ;;
         70 | 71 | 74 | 77 | 79)
-          echo "The deploy to $other exited $status, which is not the commit's fault; the next run tries again."
+          echo "The deploy to $other exited $status, which is not the tree's fault; the next run tries again."
+          # The second run in a row with the same status notifies once.
+          previous=
+          [[ -f $STATE_DIRECTORY/waiting-$other ]] && previous=$(<"$STATE_DIRECTORY/waiting-$other")
+          if [[ $previous == "$status" ]]; then
+            notify normal "$other update waiting" "deploy.sh $other exited $status in two runs in a row. See the exit codes in docs/deploy.md and journalctl -u oruc-auto-update" &&
+              echo "$status notified" >"$STATE_DIRECTORY/waiting-$other"
+          elif [[ $previous != "$status notified" ]]; then
+            echo "$status" >"$STATE_DIRECTORY/waiting-$other"
+          fi
           continue
           ;;
         *)
-          echo "$head" >"$STATE_DIRECTORY/failed-$other"
-          fail "$other update failed" "deploy.sh $other exited $status. The updater tries again once main moves. See: journalctl -u oruc-auto-update"
+          echo "$tree" >"$STATE_DIRECTORY/failed-$other"
+          rm -f -- "$STATE_DIRECTORY/waiting-$other"
+          notify critical "$other update failed" "deploy.sh $other exited $status. The updater tries again once main moves. See: journalctl -u oruc-auto-update" || true
           continue
           ;;
       esac
     fi
-    rm -f -- "$STATE_DIRECTORY/failed-$other"
-    echo "$head" >"$STATE_DIRECTORY/current-$other"
+    rm -f -- "$STATE_DIRECTORY/failed-$other" "$STATE_DIRECTORY/waiting-$other"
+    echo "$tree" >"$STATE_DIRECTORY/current-$other"
   done
 }
 deliver_others
+# deploy.sh copies its completed lock back; keep the tree on main's lock.
+git checkout --quiet -- flake.lock
 
-# Succeeds when a cache holds every package of ci/cached-packages.nix that this
-# host uses at this lock. The host-packages-cache workflow builds them every
+# Succeeds when a cache holds every package of ci/cached-packages.nix that a
+# host uses at this lock, since this host builds every host's system. The host-packages-cache workflow builds them every
 # hour for the newest inputs; cache.nixos.org holds one that nixpkgs builds
 # unchanged.
 packages_cached() {
   local paths path
   paths=$(nix eval --impure --raw --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
     --apply "hosts: builtins.concatStringsSep \"\\n\" (builtins.concatMap
-      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.attrValues hosts.$host))") ||
+      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.concatMap builtins.attrValues (builtins.attrValues hosts)))") ||
     {
       echo "ci/cached-packages.nix does not evaluate at this lock."
       return 1

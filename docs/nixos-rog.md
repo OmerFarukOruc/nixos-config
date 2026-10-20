@@ -140,8 +140,9 @@ The exit codes below come from `deploy.sh`, except 76. The
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
 | The deploy fails with another status, or another host does not evaluate or build (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
-| Another host does not answer over SSH | The run skips it. The next run tries again. | "HOST not updated" once, until the host answers |
-| The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | None |
+| The updater cannot log in to another host over SSH | The run skips it. The next run tries again. | "HOST not updated" with ssh's last error line, once, until the login works |
+| Copying the system to another host fails or passes 30 minutes | `deploy.sh` builds the system on that host. | None |
+| The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | "HOST update waiting" once, when two runs in a row end with the same status |
 | The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
@@ -167,8 +168,8 @@ next run sends it again.
 
 `secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`),
 the updater's GitHub token (`github-update-token`) and the SSH key with which
-the updater deploys nixos-latitude (`latitude-deploy-key`). sops encrypts the file for
-two recipients, which `.sops.yaml` lists:
+the updater deploys nixos-latitude (`latitude-deploy-key`). sops encrypts the
+file for two recipients, which `.sops.yaml` lists:
 
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
 - the age key derived from the laptop's SSH host key
@@ -212,6 +213,30 @@ working token until the new one is deployed:
    repeat steps 2 to 4 with it, and in step 5 delete both the old token and the
    wrong one.
 5. Delete the old token on the same GitHub page.
+
+### Rotate latitude-deploy-key
+
+nixos-latitude authorizes the key's public half in
+`machines/nixos-latitude/configuration.nix`. Rotate it when it may have
+leaked, in this order, so the updater can still log in at each step:
+
+1. On nixos-rog, create the new key in a private directory:
+   `ssh-keygen -t ed25519 -N '' -C nixos-rog-auto-update -f <dir>/key`.
+2. Add the new public key next to the old one in
+   `machines/nixos-latitude/configuration.nix`, land it, and wait until
+   nixos-latitude runs it. The updater deploys it with the old key, or deploy
+   it with `./deploy.sh nixos-latitude switch`.
+3. Write the new private key into the file. sops reads it from stdin, so it
+   never appears in a process list, and asks for the shared key's password:
+
+   ```sh
+   jq -Rs . <dir>/key | SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["latitude-deploy-key"]'
+   ```
+
+4. Delete `<dir>`, remove the old public key from
+   `machines/nixos-latitude/configuration.nix`, land both files, and deploy
+   nixos-rog with `./deploy.sh nixos-rog switch`. The updater deploys the key
+   removal to nixos-latitude with the new key on its next run.
 
 ## DNS
 
