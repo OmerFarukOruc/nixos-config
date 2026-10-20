@@ -9,6 +9,7 @@ on:
       - kernel-cache/flake.*
       - kernel-cache/nvidia-driver.nix
       - kernel-cache/patches/**
+      - kernel-cache/kernel-module-certs.nix
       - .github/workflows/kernel-cache.yml
   workflow_dispatch:
     inputs:

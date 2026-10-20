@@ -20,6 +20,9 @@ let
   '';
 in
 {
+  # Home Manager uses these packages (useGlobalPkgs), so its overlays go here.
+  nixpkgs.overlays = [ (import ../overlays/khal.nix) ];
+
   imports = [ inputs.home-manager.nixosModules.home-manager ];
 
   # A host adds its own layer through home-manager.users.oruc.imports.
