@@ -1,0 +1,81 @@
+name: host-systems-build
+
+# nixos-rog builds the system of every host that a PR changes
+# (scripts/pr-build.sh). The job runs from main's copy of this file and never
+# checks out the PR, so a PR cannot change what runs with the tailnet login. It
+# passes nixos-rog only the PR number and head SHA, which the script checks with
+# GitHub before it fetches them.
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-systems-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  host-systems-build:
+    # scripts/pr-build.sh refuses a PR from a fork, so its job would only fail.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # scripts/pr-build.sh stops itself after 110 min.
+    timeout-minutes: 120
+    # The environment holds the secrets below and admits only main, so a
+    # workflow on a PR branch can neither read them nor get a token whose
+    # subject the tailnet's federated identity accepts.
+    environment:
+      name: host-systems-build
+      deployment: false
+    permissions:
+      contents: read
+      # The Tailscale login: a GitHub OIDC token for the tailnet's federated
+      # identity, so no Tailscale secret is stored here.
+      id-token: write
+    steps:
+      - uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4.2.0
+        with:
+          oauth-client-id: ${{ secrets.TS_CI_CLIENT_ID }}
+          audience: ${{ secrets.TS_CI_AUDIENCE }}
+          tags: tag:ci
+      - name: Build on nixos-rog
+        shell: bash
+        env:
+          ROG_HOST: ${{ secrets.ROG_SSH_HOST }}
+          SSH_KEY: ${{ secrets.ROG_PR_BUILD_KEY }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          umask 077
+          printf '%s\n' "$SSH_KEY" >"$RUNNER_TEMP/key"
+          # nixos-rog's host key, under an alias so the log never names the host.
+          echo 'nixos-rog ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7Dy/fKeDEATVy33fCAUdsnXmRN6eSjPAxf63xBU+id' \
+            >"$RUNNER_TEMP/known_hosts"
+          ssh_opts=(
+            -F /dev/null -i "$RUNNER_TEMP/key" -o IdentitiesOnly=yes -o BatchMode=yes
+            -o HostKeyAlias=nixos-rog -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts"
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o ServerAliveInterval=30
+          )
+          # ssh exits 255 when it cannot connect, such as while the tailnet
+          # path comes up; the script on nixos-rog never exits 255.
+          for attempt in 1 2 3; do
+            status=0
+            ssh "${ssh_opts[@]}" "oruc@$ROG_HOST" "$PR $SHA" || status=$?
+            ((status == 255 && attempt < 3)) || break
+            echo "nixos-rog did not answer; trying again in 20 s."
+            sleep 20
+          done
+          case $status in
+            0) ;;
+            3) echo "::error::nixos-rog runs on battery. Rerun this check once it is on AC power." ;;
+            5) echo "::error::Another build held nixos-rog's build lock for an hour. Rerun this check." ;;
+            255) echo "::error::nixos-rog does not answer over the tailnet. Rerun this check once it is on." ;;
+            # The updater counts a red check against its update only with
+            # this text (scripts/auto-update.sh, checks_result).
+            1) echo "::error::A host system does not evaluate or build at this commit; the output above names it." ;;
+            *) echo "::error::scripts/pr-build.sh exited $status; its output is above." ;;
+          esac
+          exit "$status"

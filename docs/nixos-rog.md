@@ -1,6 +1,7 @@
 # nixos-rog
 
 - [Hourly updater](#hourly-updater)
+- [PR builds](#pr-builds)
 - [Failures and notifications](#failures-and-notifications)
 - [Secrets](#secrets)
 - [DNS](#dns)
@@ -45,8 +46,10 @@ into one update, and does these steps:
 5. It builds every other host's system. When one does not build, the update
    fails with status 76.
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
-7. It squash-merges the result to `main` through the `auto-update` branch. The
-   PR body holds dix's comparison of the old and new system.
+7. It opens a PR from the `auto-update` branch, waits up to 45 minutes for
+   every check of that PR, including [PR builds](#pr-builds), and
+   squash-merges it to `main`. The PR body holds dix's comparison of the old
+   and new system.
 8. It deploys `main` to each other host whose running system differs. It
    builds that system here, copies it with `nix copy`, then runs
    `./deploy.sh HOST switch`, so the host does not compile it. The updater
@@ -54,6 +57,10 @@ into one update, and does these steps:
    [Secrets](#secrets), which nixos-latitude authorizes.
 
 A desktop notification reports each update or failure.
+
+The run holds the build lock that [PR builds](#pr-builds) also take, from the
+checkout of `main` until it pushes the `auto-update` branch. When a PR build holds the lock
+for 30 minutes, the run stops quietly and the next run tries again.
 
 A change merged to `main` reaches nixos-rog with the next update that moves
 something, or with a manual `./deploy.sh nixos-rog switch`.
@@ -129,6 +136,56 @@ the Cachix cache holds that build. Its closure holds unfree NVIDIA libraries, an
 The laptop compiles whisper-cpp itself, each time an update changes its
 derivation.
 
+## PR builds
+
+Every PR to `main` gets the `host-systems-build` check, which nixos-rog runs.
+The [workflow](../.github/workflows/host-systems-build.yml) joins the tailnet as
+an ephemeral node with the tag `tag:ci`, logs in to nixos-rog over SSH and
+passes the PR number and head SHA. The key it logs in with runs only
+`scripts/pr-build.sh` (`machines/nixos-rog/pr-build.nix`). The script checks
+with GitHub that the SHA is the head of that open PR, which targets `main` from
+this repository. Then it builds the system of each host whose toplevel
+`drvPath` differs from the PR's merge base, and fails when one does not
+evaluate or build.
+
+The job runs from `main`'s copy of the workflow (`pull_request_target`) and
+never checks out the PR, so a PR cannot change what runs with the tailnet
+login. A change to the workflow takes effect once it is on `main`.
+
+The PR's Nix code still runs on nixos-rog as `oruc`. Pure evaluation can read
+any file `oruc` can read through a `path` flake input or `builtins.fetchTree`,
+and an error message lands in the public job log. The script withholds the SSH
+agent and the Git credential helper, and accepts only PRs whose branch is in
+this repository, so the check trusts the people who can push here, as `main`
+and the updater already do.
+
+The script and the updater hold one lock, `/run/nixos-config-build.lock`, so
+they never evaluate or build at once. The check waits up to an hour for the
+lock. It stops itself after 110 minutes, and when its SSH session ends, such as
+when a newer push cancels the job. nixos-rog keeps the newest 50 logs in
+`~/.cache/nixos-config-pr-build/logs`.
+
+The check fails while nixos-rog is off, asleep or on battery. Rerun it from the
+PR, or with `gh run rerun <run id>`, once nixos-rog is on AC power.
+
+The job reads these secrets of the GitHub environment `host-systems-build`,
+which admits only jobs that run from `main`:
+
+- `TS_CI_CLIENT_ID` and `TS_CI_AUDIENCE`: the tailnet's federated identity
+  (Tailscale admin console, Settings, Trust credentials, "nixos-config
+  host-systems-build"). It accepts GitHub's OIDC token with the subject
+  `repo:OmerFarukOruc@7347742/nixos-config@1415995737:environment:host-systems-build`.
+  This repository was created after 15 July 2026, so GitHub's subject names
+  the owner and repository IDs; `gh api
+  repos/OmerFarukOruc/nixos-config/actions/oidc/customization/sub` prints the
+  prefix. The identity may create auth keys for `tag:ci` only. The tailnet
+  policy, which lives only in the admin console, lets `tag:ci` reach only
+  nixos-rog's port 22, and its tests check that.
+- `ROG_SSH_HOST`: nixos-rog's MagicDNS name. It is a secret so that public run
+  logs show it masked.
+- `ROG_PR_BUILD_KEY`: the private half of the key that `pr-build.nix`
+  authorizes.
+
 ## Failures and notifications
 
 The exit codes below come from `deploy.sh`, except 76. The
@@ -145,9 +202,12 @@ The exit codes below come from `deploy.sh`, except 76. The
 | The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | "HOST update waiting" once, when two runs in a row end with the same status |
 | The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
+| A check of the update PR fails, or host-systems-build finds a system that does not evaluate or build | nixos-rog keeps running the update, which never reaches `main`. The run does not try that update again until `main` or an upstream moves. | Critical |
+| The update PR's checks do not finish in time, or host-systems-build fails for another reason, such as nixos-rog on battery | The run stops without a failure. The next run waits on the same commit again; after a red host-systems-build it pushes the update with new dates, so the checks run again. | "Update waiting" from the second run in a row |
+| A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
-| The run reaches 2 hours | The service stops the run (`TimeoutStartSec`). | Critical |
+| The run reaches 3 hours | The service stops the run (`TimeoutStartSec`). | Critical |
 | The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
 | The run ends without reporting, such as a kernel kill for memory or a SIGKILL | `oruc-auto-update-died.service` reads the result systemd gives it. | Critical "Update died" with that result |
 

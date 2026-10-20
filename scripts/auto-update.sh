@@ -126,6 +126,23 @@ base=$(git rev-parse origin/main)
 git checkout --quiet --force -B "$branch" "$base"
 git clean -fdxq
 
+# The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
+# PR build and this run never evaluate or build at once. The run lets it go
+# before it opens its PR, whose check needs it.
+exec {build_lock}>>/run/nixos-config-build.lock
+if ! flock -w 1800 "$build_lock"; then
+  echo "A PR build has held the build lock for 30 min; the next run tries again."
+  # Notifies from the second run in a row that the lock holds back.
+  if [[ -f $waiting && $(<"$waiting") == lock ]]; then
+    notify normal "Update waiting" "PR builds have held the build lock for 30 minutes in two runs in a row. See: journalctl -u oruc-auto-update" || true
+  fi
+  echo lock >"$waiting"
+  exit 0
+fi
+if [[ -f $waiting && $(<"$waiting") == lock ]]; then
+  rm -f -- "$waiting"
+fi
+
 # Prints the coding agents this host would compile itself because
 # cache.numtide.com does not hold their new build yet, or "unknown" when it
 # cannot tell.
@@ -394,7 +411,16 @@ changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new 
 [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
 changes+=$apps
 
-git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
+# The commit takes fixed dates, so the same candidate on the same base gives
+# the same commit each run, and checks that GitHub still runs on it go on
+# counting (see checks_result below). The dates are the base's, or the time a
+# check last went red for a reason outside the commit, so that the checks then
+# run again on a new commit.
+retried=$STATE_DIRECTORY/checks-retried
+commit_date=$(git show -s --format=%cI "$base")
+[[ -f $retried ]] && commit_date=$(<"$retried")
+GIT_AUTHOR_DATE=$commit_date GIT_COMMITTER_DATE=$commit_date \
+  git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
 
 old_system=$(readlink -f /run/current-system)
 status=0
@@ -438,7 +464,7 @@ rm -f -- "$failed" "$waiting"
 
 # deploy.sh copies back a lock that the build completed; keep it in the commit.
 if ! git diff --quiet; then
-  git commit --quiet --amend --no-edit -a
+  GIT_COMMITTER_DATE=$commit_date git commit --quiet --amend --no-edit -a
 fi
 
 # Merge only what this host built. If main moved, the next run rebuilds on it.
@@ -451,6 +477,7 @@ if [[ $(git rev-parse origin/main) != "$base" ]]; then
   exit 0
 fi
 
+flock -u "$build_lock"
 # GitHub answers every push of the branch, which the merge below deletes, with
 # a hint to open a pull request; only a failed push shows what it printed.
 if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>&1); then
@@ -477,6 +504,72 @@ $system_diff
 gh pr create --repo "$repo" --base main --head "$branch" \
   --title "chore(flake): update inputs to their newest releases" --body "$body" ||
   gh pr edit "$branch" --repo "$repo" --body "$body"
+
+# The merge waits for the PR's checks on the pushed commit: check, unit-cycles,
+# host-systems-build, which builds on this host with the build lock this run
+# let go of above, and any other check GitHub starts. Prints "success",
+# "retry REASON" or "failure NAMES". A rerun of a check counts by its newest
+# run. A failed host-systems-build counts against the update only when its
+# annotation says a system does not evaluate or build; it can also fail for
+# reasons outside the commit, such as this host on battery or a busy lock. The
+# wait leaves 45 minutes of the unit's 3 hour limit for the delivery after the
+# merge.
+checks_result() {
+  local sha=$1 limit runs failed id errors=0
+  limit=$((3 * 3600 - 45 * 60))
+  ((limit < SECONDS + 45 * 60)) || limit=$((SECONDS + 45 * 60))
+  while ((SECONDS < limit)); do
+    sleep 30
+    if ! runs=$(gh api "repos/$repo/commits/$sha/check-runs?per_page=100" \
+      --jq '[.check_runs[] | {id, name, status, conclusion}] | group_by(.name) | map(max_by(.id)) | tostring'); then
+      if ((++errors >= 5)); then
+        echo "retry GitHub's check-run API failed 5 times in a row"
+        return
+      fi
+      continue
+    fi
+    errors=0
+    jq -e '(["check", "unit-cycles", "host-systems-build"] - [.[].name]) == []
+      and all(.[]; .status == "completed")' <<<"$runs" >/dev/null || continue
+    failed=$(jq -r '[.[] | select(.conclusion | IN("success", "skipped", "neutral") | not) | .name] | join(" ")' <<<"$runs")
+    if [[ -z $failed ]]; then
+      echo success
+    elif [[ $failed == host-systems-build ]]; then
+      id=$(jq -r '.[] | select(.name == "host-systems-build") | .id' <<<"$runs")
+      if [[ $(gh api "repos/$repo/check-runs/$id/annotations" --jq '.[].message') =~ does\ not\ evaluate\ or\ build ]]; then
+        echo "failure $failed"
+      else
+        echo "retry host-systems-build failed for a reason outside the commit"
+      fi
+    else
+      echo "failure $failed"
+    fi
+    return
+  done
+  echo "retry the checks did not finish in time"
+}
+checks=$(checks_result "$(git rev-parse HEAD)")
+case $checks in
+  success) rm -f -- "$waiting" "$retried" ;;
+  retry*)
+    if [[ $checks == "retry host-systems-build failed"* ]]; then
+      date -Iseconds >"$retried"
+    fi
+    echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
+    # Notifies from the second run in a row that the checks hold back.
+    if [[ -f $waiting && $(<"$waiting") == checks ]]; then
+      notify normal "Update waiting" "The update PR's checks are not green: ${checks#retry }. See: journalctl -u oruc-auto-update" || true
+    fi
+    echo checks >"$waiting"
+    exit 0
+    ;;
+  *)
+    rm -f -- "$retried"
+    echo "$candidate" >"$failed"
+    fail "Update not merged" "The update PR's checks failed: ${checks#failure }. The run does not try this update again until main or an upstream moves."
+    exit 1
+    ;;
+esac
 gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"
 notify normal "System updated" "$changes" || true
 deliver_others

@@ -121,7 +121,7 @@ home-manager/          the user layer, with one module per shell and app
 niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
 kernel-cache/          the separate flake that CI builds into Cachix
-ci/  .github/          CI scripts and workflows: host-package cache, build report, unit ordering check
+ci/  .github/          CI scripts and workflows: host-package cache, build report, unit ordering check, PR host builds
 scripts/               checks and builds on nixos-rog, update scripts, the updater and the post-deploy check
 tooling.nix            the formatter (nix fmt), its linters and the dev shell
 deploy.sh              the deploy with build, confirm and rollback
