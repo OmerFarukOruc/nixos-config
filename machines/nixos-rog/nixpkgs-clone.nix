@@ -27,6 +27,9 @@
       IOSchedulingClass = "idle";
     };
   };
+
+  oruc.keptPaths = [ "/var/cache/nixpkgs" ];
+
   systemd.timers.nixpkgs-clone = {
     wantedBy = [ "timers.target" ];
     timerConfig = {

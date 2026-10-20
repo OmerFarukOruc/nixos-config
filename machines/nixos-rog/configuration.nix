@@ -22,6 +22,7 @@
     ./network.nix
     ./nixpkgs-clone.nix
     ./powertop.nix
+    ./root-reset.nix
     ./stay-active.nix
     ./warp.nix
     ./zapret2.nix

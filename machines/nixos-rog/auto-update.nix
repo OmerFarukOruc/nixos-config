@@ -40,6 +40,8 @@ in
   environment.systemPackages = [ upgrade ];
 
   sops.secrets.github-update-token = { };
+  # Its checkout and failure markers.
+  oruc.keptPaths = [ "/var/lib/oruc-auto-update" ];
 
   systemd.services.oruc-auto-update = {
     description = "Update, deploy and merge the newest releases";

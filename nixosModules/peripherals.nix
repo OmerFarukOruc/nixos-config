@@ -17,6 +17,8 @@ lib.mkIf (cfg.kind == "workstation") {
     # that reported it when they paired.
     settings.General.DeviceID = "bluetooth:004C:0000:0000";
   };
+  # Paired devices.
+  oruc.keptPaths = [ "/var/lib/bluetooth" ];
   services.blueman.enable = isNiri;
 
   services.udisks2.enable = true;
