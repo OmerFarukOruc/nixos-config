@@ -17,8 +17,9 @@ let
   driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
-  # The NVIDIA driver here, and the CUDA packages of media.nix and home.nix,
-  # build with patchelf 0.15.2 while the default patchelf is 0.19.2.
+  # The NVIDIA driver below, and the CUDA packages of media.nix and home.nix
+  # while nixpkgs lacks its own fix, build with patchelf 0.15.2 while their
+  # package set's patchelf is 0.19.2.
   nixpkgs.overlays = [ (import ../../overlays/nvidia-patchelf.nix) ];
 
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
@@ -46,8 +47,11 @@ in
     # nvidiaPackages.latest in flake.lock (the kernel overlay's nixpkgs is node
     # nixpkgs_2) is older than this version. Drop this block once it is this
     # version or newer. The cache and host import the same driver arguments.
-    # The open kernel module is a passthru of the driver, so the override
-    # keeps the module that the kernel-cache workflow builds.
+    # patchelf 0.15.2 while the driver's package set has 0.19.2
+    # (overlays/nvidia-patchelf.nix); the condition skips the override once
+    # that package set moves to another patchelf. The open kernel module is a
+    # passthru of the driver, so the override keeps the module that the
+    # kernel-cache workflow builds.
     package =
       if driverPatchelf.version == "0.19.2" then
         nvidiaDriver.overrideAttrs (old: {
