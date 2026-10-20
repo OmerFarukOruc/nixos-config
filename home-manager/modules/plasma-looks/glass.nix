@@ -59,11 +59,13 @@ in
               # In blacklist mode these window classes get no blur. The ChatGPT
               # app draws its pet in a clear window 1460x3080 px in size, and the
               # forced blur turned that whole window into a dark pane. Its main
-              # window is opaque, so it loses nothing. SourceGit stays unblurred.
+              # window is opaque, so it loses nothing. SourceGit and Telegram stay
+              # unblurred.
               # Glass splits the list at newlines and matches each entry exactly
               # against the window's resource class or resource name.
               WindowClasses = lib.concatStringsSep "\n" [
                 "Chatgpt"
+                "org.telegram.desktop"
                 "SourceGit"
               ];
               # The values of the dark-glass mode in 4v3ngR/glassOS switcher/theme,
