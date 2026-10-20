@@ -487,6 +487,56 @@ $system_diff
 gh pr create --repo "$repo" --base main --head "$branch" \
   --title "chore(flake): update inputs to their newest releases" --body "$body" ||
   gh pr edit "$branch" --repo "$repo" --body "$body"
+
+# The merge waits for the PR's checks on the pushed commit: check, unit-cycles,
+# host-systems-build, which builds on this host with the build lock this run
+# let go of above, and any other check GitHub starts. Prints "success",
+# "retry REASON" or "failure NAMES". A rerun of a check counts by its newest
+# run. host-systems-build fails without the commit's fault when this host went
+# on battery or the lock stayed busy; its annotation says so.
+checks_result() {
+  local sha=$1 deadline=$((SECONDS + 45 * 60)) runs failed id
+  while ((SECONDS < deadline)); do
+    sleep 30
+    runs=$(gh api "repos/$repo/commits/$sha/check-runs?per_page=100" \
+      --jq '[.check_runs[] | {id, name, status, conclusion}] | group_by(.name) | map(max_by(.id)) | tostring') || continue
+    jq -e '([.[].name] | contains(["check", "unit-cycles", "host-systems-build"]))
+      and all(.[]; .status == "completed")' <<<"$runs" >/dev/null || continue
+    failed=$(jq -r '[.[] | select(.conclusion | IN("success", "skipped", "neutral") | not) | .name] | join(" ")' <<<"$runs")
+    if [[ -z $failed ]]; then
+      echo success
+    elif [[ $failed == host-systems-build ]]; then
+      id=$(jq -r '.[] | select(.name == "host-systems-build") | .id' <<<"$runs")
+      if [[ $(gh api "repos/$repo/check-runs/$id/annotations" --jq '.[].message') =~ runs\ on\ battery|build\ lock|does\ not\ answer ]]; then
+        echo "retry host-systems-build could not build on this host"
+      else
+        echo "failure $failed"
+      fi
+    else
+      echo "failure $failed"
+    fi
+    return
+  done
+  echo "retry the checks did not finish in 45 minutes"
+}
+checks=$(checks_result "$(git rev-parse HEAD)")
+case $checks in
+  success) rm -f -- "$waiting" ;;
+  retry*)
+    echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
+    # Notifies from the second run in a row that the checks hold back.
+    if [[ -f $waiting && $(<"$waiting") == checks ]]; then
+      notify normal "Update waiting" "The update PR's checks are not green: ${checks#retry }. See: journalctl -u oruc-auto-update" || true
+    fi
+    echo checks >"$waiting"
+    exit 0
+    ;;
+  *)
+    echo "$candidate" >"$failed"
+    fail "Update not merged" "The update PR's checks failed: ${checks#failure }. The run does not try this update again until main or an upstream moves."
+    exit 1
+    ;;
+esac
 gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"
 notify normal "System updated" "$changes" || true
 deliver_others

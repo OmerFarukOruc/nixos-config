@@ -46,8 +46,10 @@ into one update, and does these steps:
 5. It builds every other host's system. When one does not build, the update
    fails with status 76.
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
-7. It squash-merges the result to `main` through the `auto-update` branch. The
-   PR body holds dix's comparison of the old and new system.
+7. It opens a PR from the `auto-update` branch, waits up to 45 minutes for
+   every check of that PR, including [PR builds](#pr-builds), and
+   squash-merges it to `main`. The PR body holds dix's comparison of the old
+   and new system.
 8. It deploys `main` to each other host whose running system differs. It
    builds that system here, copies it with `nix copy`, then runs
    `./deploy.sh HOST switch`, so the host does not compile it. The updater
@@ -190,6 +192,8 @@ The exit codes below come from `deploy.sh`, except 76. The
 | The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | "HOST update waiting" once, when two runs in a row end with the same status |
 | The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
 | Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
+| A check of the update PR fails | The run does not try that update again until `main` or an upstream moves. | Critical |
+| The update PR's checks do not finish in 45 minutes, or host-systems-build could not build on nixos-rog | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | None |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
