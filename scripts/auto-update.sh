@@ -411,11 +411,15 @@ changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new 
 [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
 changes+=$apps
 
-# The commit takes its dates from the base, so the same candidate on the same
-# base gives the same commit each run, and checks that GitHub still runs on it
-# go on counting (see checks_result below).
-base_date=$(git show -s --format=%cI "$base")
-GIT_AUTHOR_DATE=$base_date GIT_COMMITTER_DATE=$base_date \
+# The commit takes fixed dates, so the same candidate on the same base gives
+# the same commit each run, and checks that GitHub still runs on it go on
+# counting (see checks_result below). The dates are the base's, or the time a
+# check last went red for a reason outside the commit, so that the checks then
+# run again on a new commit.
+retried=$STATE_DIRECTORY/checks-retried
+commit_date=$(git show -s --format=%cI "$base")
+[[ -f $retried ]] && commit_date=$(<"$retried")
+GIT_AUTHOR_DATE=$commit_date GIT_COMMITTER_DATE=$commit_date \
   git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
 
 old_system=$(readlink -f /run/current-system)
@@ -460,14 +464,7 @@ rm -f -- "$failed" "$waiting"
 
 # deploy.sh copies back a lock that the build completed; keep it in the commit.
 if ! git diff --quiet; then
-  GIT_COMMITTER_DATE=$base_date git commit --quiet --amend --no-edit -a
-fi
-# After a check finished red for a reason outside the commit, the checks must
-# run again, so the commit gets new dates and GitHub starts them anew. Checks
-# that only ran out of time keep running on the same commit.
-retried=$STATE_DIRECTORY/checks-retried
-if [[ -f $retried ]]; then
-  git commit --quiet --amend --no-edit --reset-author
+  GIT_COMMITTER_DATE=$commit_date git commit --quiet --amend --no-edit -a
 fi
 
 # Merge only what this host built. If main moved, the next run rebuilds on it.
@@ -556,7 +553,7 @@ case $checks in
   success) rm -f -- "$waiting" "$retried" ;;
   retry*)
     if [[ $checks == "retry host-systems-build failed"* ]]; then
-      git rev-parse HEAD >"$retried"
+      date -Iseconds >"$retried"
     fi
     echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
     # Notifies from the second run in a row that the checks hold back.
