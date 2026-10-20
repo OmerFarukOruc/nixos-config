@@ -91,10 +91,6 @@ let
   };
 in
 {
-  # whisper-cpp here and cudaPackages.cudatoolkit in home.nix use the CUDA
-  # redistributables.
-  nixpkgs.overlays = [ (import ../../overlays/cuda-patchelf.nix) ];
-
   security.rtkit.args = [ "--rttime-usec-max=${toString realtimeLimitUs}" ];
 
   services.pipewire.extraConfig =
