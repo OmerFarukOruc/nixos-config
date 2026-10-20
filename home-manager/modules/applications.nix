@@ -96,9 +96,13 @@ in
     enable = true;
     servers.nixos.command = lib.getExe pkgs.mcp-nixos;
   };
+  # With preferXdgDirectories and stateVersion 26.11, Home Manager moves the
+  # config to ~/.config/claude and exports CLAUDE_CONFIG_DIR there, which hides
+  # every session, login and setting kept in ~/.claude.
   programs.claude-code = {
     enable = true;
     package = agents.claude-code;
+    configDir = "${config.home.homeDirectory}/.claude";
     enableMcpIntegration = true;
   };
 
