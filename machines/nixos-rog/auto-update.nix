@@ -40,6 +40,11 @@ in
   environment.systemPackages = [ upgrade ];
 
   sops.secrets.github-update-token = { };
+  # The SSH key that deploys main to nixos-latitude, which authorizes it.
+  sops.secrets.latitude-deploy-key = { };
+  # nixos-latitude's host key, so the updater's SSH needs no first-use prompt.
+  programs.ssh.knownHosts.nixos-latitude.publicKey =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO92VnaHsupV1yTYiGYal+7LgHABYQfE0ljjODnw2uUS";
 
   systemd.services.oruc-auto-update = {
     description = "Update, deploy and merge the newest releases";
@@ -70,6 +75,8 @@ in
       git
       jq
       libnotify
+      # ssh to the other hosts, for deploy.sh and nix copy.
+      openssh
       python3
       rsync
       # flock for deploy.sh's lock.
@@ -96,7 +103,10 @@ in
       RuntimeDirectoryMode = "0700";
       UMask = "0077";
       SyslogIdentifier = identifier;
-      LoadCredential = "github-token:${config.sops.secrets.github-update-token.path}";
+      LoadCredential = [
+        "github-token:${config.sops.secrets.github-update-token.path}"
+        "latitude-deploy-key:${config.sops.secrets.latitude-deploy-key.path}"
+      ];
       ExecStart = "${pkgs.bash}/bin/bash ${../../scripts/auto-update.sh}";
     };
     onFailure = [ "oruc-auto-update-died.service" ];

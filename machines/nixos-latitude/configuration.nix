@@ -3,6 +3,13 @@
 _:
 
 {
+  # nixos-rog's updater deploys main here with this key
+  # (machines/nixos-rog/auto-update.nix). The private key is
+  # latitude-deploy-key in secrets/nixos-rog.yaml.
+  users.users.oruc.openssh.authorizedKeys.keys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKOUg7Q4PwP3sxF4wr9PTY+nu6Pv1EYnUjBPehzs0gBR nixos-rog-auto-update"
+  ];
+
   nix = {
     daemonCPUSchedPolicy = "idle";
     daemonIOSchedClass = "idle";

@@ -310,7 +310,7 @@ such as 1.
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
-| 76 | Another host no longer evaluates. The [updater](nixos-rog.md#hourly-updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
+| 76 | Another host does not evaluate or build. The [updater](nixos-rog.md#hourly-updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
 | 77 | Another deploy holds the lock on the host. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
