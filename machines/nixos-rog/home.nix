@@ -58,10 +58,14 @@
       # Only a Plasma session reaches plasma-workspace.target.
       After = [ "plasma-workspace.target" ];
       PartOf = [ "plasma-workspace.target" ];
-      # With this, Home Manager's switch neither restarts a running client nor
-      # starts one you quit. A login still starts it, because the target's
-      # Wants is not a manual start.
+      # Home Manager's switch (sd-switch) stops a changed unit that refuses a
+      # manual start, and then cannot start it. When the cursor is on the
+      # laptop, the server keeps fedora-desktop's input captured for a client
+      # that is gone. With both options, a switch neither stops a running
+      # client nor starts one you quit. A login and a logout still start and
+      # stop it, because the target's Wants and PartOf are not manual.
       RefuseManualStart = true;
+      RefuseManualStop = true;
     };
     Service = {
       ExecStart = lib.getExe pkgs.deskflow;
