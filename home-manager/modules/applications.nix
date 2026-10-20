@@ -112,7 +112,11 @@ in
   # their config is installed here; pnpm's is with xdg.configFile below.
   programs.uv = {
     enable = true;
-    settings.exclude-newer = "${toString releaseAgeDays} days";
+    settings = {
+      exclude-newer = "${toString releaseAgeDays} days";
+      # uv's bundled CA roots lag the system store in removing distrusted roots.
+      system-certs = true;
+    };
   };
   programs.npm = {
     enable = true;
