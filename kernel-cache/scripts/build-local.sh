@@ -60,7 +60,7 @@ printf 'CACHIX_AUTH_TOKEN=%s\n' "$CACHIX_AUTH_TOKEN" >"$env_file"
 
 docker run --rm -i --security-opt label=disable \
   --env-file "$env_file" \
-  -e NIX_CONFIG=$'experimental-features = nix-command flakes\nsandbox = false\nmax-jobs = auto\ncores = 0\nextra-substituters = https://'"$cache"$'.cachix.org https://attic.xuyh0120.win/lantian\nextra-trusted-public-keys = '"$cache_key"' lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=' \
+  -e NIX_CONFIG=$'experimental-features = nix-command flakes\nsandbox = false\nmax-jobs = auto\ncores = 0\nextra-substituters = https://'"$cache"$'.cachix.org\nextra-trusted-public-keys = '"$cache_key" \
   -v "$volume":/nix -v "$repo_dir":/src:ro \
   nixos/nix:latest bash -euo pipefail -s -- "$rev" "$nixpkgs" "$cache" "${variants[@]}" <<'CONTAINER'
 rev=$1 nixpkgs=$2 cache=$3; shift 3

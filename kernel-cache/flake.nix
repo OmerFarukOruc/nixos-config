@@ -1,8 +1,10 @@
 {
   description = "Builds the CachyOS kernel and what OmerFarukOruc's NixOS hosts build against it, for a public Cachix cache";
 
-  # The release branch only moves after the upstream Hydra built the kernel.
-  inputs.nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
+  # A commit pin on upstream's default branch, whose commits no upstream build
+  # tests. Move it only after reading the upstream diff from the old pin
+  # (docs/updates.md, The kernel).
+  inputs.nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/be0be288549209421ab4f67c392a23109cb809a3";
 
   outputs =
     { nix-cachyos-kernel, ... }:

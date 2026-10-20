@@ -17,11 +17,14 @@ nixpkgs. A host gets a cache hit when it locks the same revision and uses the
 and patches as `hardware.nvidia.package` in `machines/nixos-rog/graphics.nix`.
 Both import `nvidia-driver.nix`, which holds those shared arguments.
 
-The same path is what upstream's Hydra builds, so the build jobs and
-`scripts/build-local.sh` also read upstream's binary cache
-(`https://attic.xuyh0120.win/lantian`). A kernel still in that cache is
-downloaded and pushed to Cachix instead of compiled. That cache keeps outputs
-for a few days only, so it helps when the `release` branch has just moved.
+The build jobs and `scripts/build-local.sh` read no upstream binary cache, so
+every kernel in the Cachix cache was compiled by this workflow or by that
+script.
+
+`flake.nix` pins nix-cachyos-kernel to a commit on its default branch. Upstream
+builds and tests nothing before a commit lands there, so a person moves the pin
+after reading the upstream diff, as
+[docs/updates.md](../docs/updates.md#move-the-kernel-pin) describes.
 
 This directory is its own flake with its own `flake.lock`, so it moves to a new
 nix-cachyos-kernel revision first and the hosts follow only once the cache holds
@@ -30,8 +33,7 @@ that build.
 The `variants` list in `flake.nix` names the CPU targets, and each builds in its
 own job. The [`kernel-cache` workflow](../.github/workflows/kernel-cache.yml)
 runs on a push to `main` that changes this flake, its driver arguments, its patches or the workflow,
-on a manual start, and once a day after it moves `flake.lock` to the head of the
-upstream `release` branch. After the build and the push to Cachix succeed, it
+and on a manual start. After the build and the push to Cachix succeed, it
 commits `flake.lock` with `cached-paths.json`, which lists the
 nix-cachyos-kernel revision, the kernel version and every pushed output path. A
 host checks those paths in the cache before it locks the same revision.
