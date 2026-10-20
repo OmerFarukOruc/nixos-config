@@ -126,6 +126,15 @@ base=$(git rev-parse origin/main)
 git checkout --quiet --force -B "$branch" "$base"
 git clean -fdxq
 
+# The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
+# PR build and this run never evaluate or build at once. The run lets it go
+# before it opens its PR, whose check needs it.
+exec {build_lock}>>/run/nixos-config-build.lock
+if ! flock -w 1800 "$build_lock"; then
+  echo "A PR build has held the build lock for 30 min; the next run tries again."
+  exit 0
+fi
+
 # Prints the coding agents this host would compile itself because
 # cache.numtide.com does not hold their new build yet, or "unknown" when it
 # cannot tell.
@@ -451,6 +460,7 @@ if [[ $(git rev-parse origin/main) != "$base" ]]; then
   exit 0
 fi
 
+flock -u "$build_lock"
 # GitHub answers every push of the branch, which the merge below deletes, with
 # a hint to open a pull request; only a failed push shows what it printed.
 if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>&1); then
