@@ -462,10 +462,11 @@ rm -f -- "$failed" "$waiting"
 if ! git diff --quiet; then
   GIT_COMMITTER_DATE=$base_date git commit --quiet --amend --no-edit -a
 fi
-# After a run that ended in a retry, the checks of that commit must run again,
-# so the commit gets new dates and GitHub starts them anew.
+# After a check finished red for a reason outside the commit, the checks must
+# run again, so the commit gets new dates and GitHub starts them anew. Checks
+# that only ran out of time keep running on the same commit.
 retried=$STATE_DIRECTORY/checks-retried
-if [[ -f $retried && $(<"$retried") == "$(git rev-parse HEAD)" ]]; then
+if [[ -f $retried ]]; then
   git commit --quiet --amend --no-edit --reset-author
 fi
 
@@ -554,7 +555,9 @@ checks=$(checks_result "$(git rev-parse HEAD)")
 case $checks in
   success) rm -f -- "$waiting" "$retried" ;;
   retry*)
-    git rev-parse HEAD >"$retried"
+    if [[ $checks == "retry host-systems-build failed"* ]]; then
+      git rev-parse HEAD >"$retried"
+    fi
     echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
     # Notifies from the second run in a row that the checks hold back.
     if [[ -f $waiting && $(<"$waiting") == checks ]]; then
