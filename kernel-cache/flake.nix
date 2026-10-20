@@ -26,7 +26,13 @@
         "x86_64-v3"
         "zen4"
       ];
-      kernelPackages = variant: pkgs.cachyosKernels."linuxPackages-cachyos-latest-lto-${variant}";
+      # The hosts extend their kernel package set with the same file, so the
+      # module packages it overrides keep the store paths the hosts use.
+      kernelPackages =
+        variant:
+        pkgs.cachyosKernels."linuxPackages-cachyos-latest-lto-${variant}".extend (
+          import ../overlays/kernel-module-certs.nix pkgs.lib
+        );
       nvidiaOpen =
         variant: ((kernelPackages variant).nvidiaPackages.mkDriver (import ./nvidia-driver.nix)).open;
       # What a variant builds besides the kernel and the NVIDIA open module,

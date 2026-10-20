@@ -1,8 +1,8 @@
 # patchelf 0.19.2 aborts in shiftFile when addDriverRunpath patches some CUDA
 # redistributables a second time, such as cuda_gdb and cuda_sanitizer_api.
 # nixpkgs master builds them with patchelf 0.15.2 instead
-# (https://github.com/NixOS/nixpkgs/pull/575979); this does the same, and drops
-# out once the locked nixpkgs has that change.
+# (https://github.com/NixOS/nixpkgs/pull/575979); this does the same while the
+# default patchelf is 0.19.2 and the locked nixpkgs lacks that change.
 final: prev:
 let
   patchelf = final.patchelf.overrideAttrs (
@@ -14,24 +14,27 @@ let
       };
     }
   );
-  # Read from the source, because evaluating a CUDA package here recurses
-  # through this overlay.
+  # Read from the source, because evaluating a package to decide which
+  # attributes this overlay sets recurses through it.
   fixed = prev.lib.hasInfix "patchelf.overrideAttrs" (
-    builtins.readFile "${prev.path}/pkgs/development/cuda-modules/buildRedist/default.nix"
+    builtins.readFile (prev.path + "/pkgs/development/cuda-modules/buildRedist/default.nix")
   );
 in
 prev.lib.optionalAttrs (!fixed) {
   _cuda = prev._cuda.extend (
     _: prevAttrs: {
-      extensions = prevAttrs.extensions ++ [
-        (_: cprev: {
-          buildRedist =
-            args:
-            (cprev.buildRedist args).overrideAttrs (old: {
-              nativeBuildInputs = [ patchelf ] ++ old.nativeBuildInputs;
-            });
-        })
-      ];
+      # Inside the extension, where reading patchelf's version is safe.
+      extensions =
+        prevAttrs.extensions
+        ++ prev.lib.optional (final.patchelf.version == "0.19.2") (
+          _: cprev: {
+            buildRedist =
+              args:
+              (cprev.buildRedist args).overrideAttrs (old: {
+                nativeBuildInputs = [ patchelf ] ++ old.nativeBuildInputs;
+              });
+          }
+        );
     }
   );
 }
