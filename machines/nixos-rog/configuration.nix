@@ -13,6 +13,7 @@
     ./apps.nix
     ./asus.nix
     ./auto-update.nix
+    ./claude-usage-read.nix
     ./cpu-limits.nix
     ./graphics.nix
     ./low-battery.nix
