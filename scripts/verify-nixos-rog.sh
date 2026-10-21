@@ -167,377 +167,62 @@ remote() {
 }
 
 remote_checks() {
-  remote <<'REMOTE'
-set -uo pipefail
-report() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; } # report NAME STATUS DETAIL
-check() { # check NAME DETAIL CONDITION...
-  local name=$1 detail=$2; shift 2
-  if "$@" >/dev/null 2>&1; then
-    report "$name" pass "$detail"
-  else
-    report "$name" fail "$detail"
-  fi
+  cat "$repo_dir/scripts/verify-rog/prelude.sh" \
+    "$repo_dir/scripts/verify-rog/power.sh" \
+    "$repo_dir/scripts/verify-rog/network.sh" \
+    "$repo_dir/scripts/verify-rog/audio.sh" \
+    "$repo_dir/scripts/verify-rog/desktop.sh" \
+    "$repo_dir/scripts/verify-rog/gpu.sh" | remote
 }
-armoury=/sys/class/firmware-attributes/asus-armoury/attributes
-nvidia_dev=$(find_nvidia)
 
-check hostname "$(hostname)" test "$(hostname)" = nixos-rog
-check sudo-without-password "sudo -n true" sudo -n true
-check wifi-interface "$wifi is up" test "$(cat "/sys/class/net/$wifi/operstate" 2>/dev/null)" = up
-
-limine_conf=$(sudo cat /boot/limine/limine.conf 2>/dev/null)
-entries=$(grep -E '^ *//?[^ ]' <<<"$limine_conf" | sed 's/^ *//' | tr '\n' ';')
-check limine-windows-entry "$entries" grep -q '^/Windows$' <<<"$limine_conf"
-check limine-nixos-entries "NixOS generations in limine.conf" grep -q 'Generation' <<<"$limine_conf"
-free_mib=$(( $(df -B1 --output=avail /boot | tail -n 1) / 1048576 ))
-check esp-free-1gib "${free_mib} MiB free on /boot" test "$free_mib" -ge 1024
-
-scx_ops=$(cat /sys/kernel/sched_ext/root/ops 2>/dev/null)
-check sched-ext-lavd "$scx_ops" test "${scx_ops%%_*}" = lavd
-dgpu_disable=$(<"$armoury/dgpu_disable/current_value")
-gpu_mux=$(<"$armoury/gpu_mux_mode/current_value")
-check gpu-mode-hybrid "dgpu_disable=$dgpu_disable gpu_mux_mode=$gpu_mux" test "$dgpu_disable$gpu_mux" = 01
-check rtx4070-on-pci "${nvidia_dev:-absent}" test -n "$nvidia_dev"
-loaded_version=$(cat /sys/module/nvidia/version 2>/dev/null)
-check nvidia-driver "${loaded_version:-not loaded}" test "$loaded_version" = "$nvidia_version"
-
-# The daemon saves each profile change in its state file and starts in the
-# saved profile, or in balanced without one, so the running profile is the
-# one a reboot brings back.
-profile=$(powerprofilesctl get)
-ppd_state=$(systemctl is-active power-profiles-daemon)
-saved=$(sed -n 's/^Profile=//p' /var/lib/power-profiles-daemon/state.ini 2>/dev/null)
-check ppd-profile-kept "power-profiles-daemon is $ppd_state; saved ${saved:-nothing}, running $profile" \
-  test "$ppd_state/${saved:-balanced}" = "active/$profile"
-# The shell's power menu may pick any profile. Only low battery on battery
-# requires one.
-online=$(cat /sys/class/power_supply/ACAD/online)
-capacity=$(cat /sys/class/power_supply/BAT1/capacity)
-if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
-  check ppd-profile "$profile on low battery (battery=$capacity%)" test "$profile" = power-saver
-else
-  check ppd-profile "$profile as chosen (AC=$online, battery=$capacity%)" test -n "$profile"
-fi
-# On AC the low-battery service undoes its own drop as soon as udev sees the
-# charger, and removes its marker.
-if [[ $online == 1 ]]; then
-  check low-battery-undone "/run/oruc-low-battery/active absent on AC" test ! -e /run/oruc-low-battery/active
-fi
-# power-profiles-daemon turns boost off only in power-saver. It writes each
-# CPU policy's boost file; the global cpufreq/boost stays 1.
-expected_boost=1
-[[ $profile == power-saver ]] && expected_boost=0
-boost=$(sort -u /sys/devices/system/cpu/cpufreq/policy*/boost | tr '\n' ' ')
-boost=${boost% }
-check boost-per-profile "boost=$boost in $profile" test "$boost" = "$expected_boost"
-# asusd writes the asus-armoury limits and the fan curves of the platform
-# profile on each profile change, and the firmware applies the ppt_* limits:
-# ryzenadj -i shows them as its STAPM and PPT limits. These checks switch to
-# each profile and compare what reaches sysfs with the deployed config.
-# The kernel keeps the curve it last sent to the firmware in the
-# asus_custom_fan_curve hwmon, where pwmN_enable reads 1 while it applies.
-curve_dir=
-for dir in /sys/class/hwmon/hwmon*; do
-  [[ $(<"$dir/name") == asus_custom_fan_curve ]] && curve_dir=$dir
+# Icon defaults come from the plasmoid main.xml files, parsed with
+# read_defaults. The remote check only walks the installed icon theme.
+widget_icon_tsv=
+widget_icon_ok=0
+icon_plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
+  'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
+[[ $icon_plasma_look =~ ^[a-z0-9]+$ ]] || icon_plasma_look=none
+icon_scheme=$(ssh "${ssh_opts[@]}" "$host" \
+  'cat .local/state/oruc/scheme 2>/dev/null || sed -n "s/^scheme_default=//p" /etc/oruc/verify-facts' || true)
+[[ $icon_scheme =~ ^[a-z0-9-]+$ ]] || icon_scheme=none
+icon_panels=/etc/oruc/verify-plasma-panels/${icon_plasma_look}_$icon_scheme.json
+mkdir -p "$work/widget-defaults"
+# shellcheck disable=SC2029 # icon_panels holds only a fixed path and a checked look name
+if ssh "${ssh_opts[@]}" "$host" cat "$icon_panels" >"$work/icons-panels.json" 2>/dev/null &&
+  ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
+set -euo pipefail
+out=$(mktemp -d)
+trap 'rm -rf -- "$out"' EXIT
+for root in /run/current-system/sw "/etc/profiles/per-user/$USER"; do
+  for file in "$root"/share/plasma/plasmoids/*/contents/config/main.xml; do
+    [[ -e $file ]] || continue
+    widget=${file#"$root/share/plasma/plasmoids/"}
+    widget=${widget%%/*}
+    mkdir -p "$out/$widget"
+    cat "$file" >"$out/$widget/main.xml"
+  done
 done
-power_source=dc
-[[ $online == 1 ]] && power_source=ac
-# asus-wmi numbers the fans pwm1 to pwm3 in this order.
-fans=([1]=cpu [2]=gpu [3]=mid)
-# Prints each fan whose live curve differs from the facts of platform profile $1.
-fan_curve_diffs() {
-  local n temps_fact pwms_fact temps pwms enable
-  [[ -n $curve_dir ]] || { echo "no asus_custom_fan_curve hwmon"; return; }
-  for n in "${!fans[@]}"; do
-    temps_fact=fan_temps_${1}_${fans[n]} pwms_fact=fan_pwms_${1}_${fans[n]}
-    temps=$(cat "$curve_dir"/pwm${n}_auto_point{1..8}_temp | paste -sd,)
-    pwms=$(cat "$curve_dir"/pwm${n}_auto_point{1..8}_pwm | paste -sd,)
-    enable=$(<"$curve_dir/pwm${n}_enable")
-    [[ $temps == "${!temps_fact}" && $pwms == "${!pwms_fact}" && $enable == 1 ]] ||
-      echo "$1 ${fans[n]} temps $temps pwms $pwms enable $enable, want ${!temps_fact} ${!pwms_fact} 1"
-  done
-}
-# Prints each asus-armoury limit that differs from the facts of platform
-# profile $1 on the current power source.
-armoury_diffs() {
-  local prefix=armoury_${power_source}_${1}_ fact attribute live
-  for fact in ${!armoury_@}; do
-    [[ $fact == "$prefix"* ]] || continue
-    attribute=${fact#"$prefix"}
-    live=$(<"$armoury/$attribute/current_value")
-    [[ $live == "${!fact}" ]] || echo "$1 $attribute=$live, want ${!fact}"
-  done
-}
-restore_profile() {
-  sudo powerprofilesctl set "$profile" && [[ $(powerprofilesctl get) == "$profile" ]]
-}
-trap restore_profile EXIT HUP
-platform=()
-cpu=()
-cpu_ok=true
-fan_found=()
-armoury_found=()
-for target in power-saver balanced performance; do
-  sudo powerprofilesctl set "$target" && sleep 1
-  pp=$(</sys/firmware/acpi/platform_profile)
-  platform+=("$target=$pp")
-  # oruc-cpu-limits applies the limits after the profile change signal.
-  want=$(expected_cpu_limits "$target")
-  for _ in {1..5}; do
-    got=$(cpu_limits)
-    fan_diff=$(fan_curve_diffs "$pp")
-    armoury_diff=$(armoury_diffs "$pp")
-    [[ $got == "$want" && -z $fan_diff$armoury_diff ]] && break
-    sleep 1
-  done
-  [[ $got == "$want" ]] || cpu_ok=false
-  cpu+=("$target=$got/want=$want")
-  [[ -z $fan_diff ]] || fan_found+=("${fan_diff//$'\n'/; }")
-  [[ -z $armoury_diff ]] || armoury_found+=("${armoury_diff//$'\n'/; }")
-done
-if restore_profile; then
-  trap - EXIT HUP
-  printf 'power-profile-restored\tpass\t%s\n' "$profile"
-else
-  printf 'power-profile-restored\tfail\t%s\n' "could not set $profile again; the laptop may stay in another profile"
-fi
-check platform-profile-follows "${platform[*]}" \
-  test "${platform[*]}" = "power-saver=quiet balanced=balanced performance=performance"
-check cpu-limits-follow-profile "${cpu[*]}" test "$cpu_ok" = true
-check fan-curves-follow-profile "${fan_found[*]:-every fan of quiet, balanced and performance matches}" \
-  test "${#fan_found[@]}" -eq 0
-check armoury-limits-follow-profile "${armoury_found[*]:-quiet, balanced and performance match on $power_source}" \
-  test "${#armoury_found[@]}" -eq 0
-# A long-running oruc-* service that crashed, for example on a command its
-# path lacks, shows as inactive or restarted; its restart count clears when
-# the unit restarts. Oneshots and units a timer starts are left out.
-running=()
-broken=()
-while read -r unit state _; do
-  [[ $state == enabled ]] || continue
-  declare -A unit_state=()
-  while IFS== read -r key value; do
-    unit_state[$key]=$value
-  done < <(systemctl show -p Type -p TriggeredBy -p ActiveState -p NRestarts "$unit")
-  [[ ${unit_state[Type]} == oneshot || -n ${unit_state[TriggeredBy]} ]] && continue
-  running+=("$unit=${unit_state[ActiveState]}/${unit_state[NRestarts]} restarts")
-  [[ ${unit_state[ActiveState]} == active && ${unit_state[NRestarts]} == 0 ]] ||
-    broken+=("$unit")
-done < <(systemctl list-unit-files --no-legend 'oruc-*.service')
-check oruc-long-running-units "${running[*]:-none found}" \
-  test "${#running[@]}" -gt 0 -a "${#broken[@]}" -eq 0
-check asusd-profile-switching-off "asusd.ron" \
-  grep -q 'change_platform_profile_on_ac: false' /etc/asusd/asusd.ron
-check slash-off-on-battery "asusctl slash get" \
-  bash -c 'asusctl slash get | grep -qx "Show on battery: false"'
-# Dynamic Boost: nvidia-powerd runs on AC only.
-powerd=$(systemctl is-active nvidia-powerd)
-expected_powerd=inactive
-[[ $online == 1 ]] && expected_powerd=active
-check nvidia-powerd-on-ac "$powerd (AC=$online)" test "$powerd" = "$expected_powerd"
-
-check captive-dns-off "$(captive-dns status)" test "$(captive-dns status)" = off
-check nextdns-secret "/run/secrets/nextdns-profile" sudo test -s /run/secrets/nextdns-profile
-check resolved-dot-nextdns "global DNS uses DoT to NextDNS" \
-  bash -c 'resolvectl status | sed -n "/^Global/,/^Link/p" | grep -q "+DNSOverTLS" && resolvectl dns | grep -q "^Global:.*dns\.nextdns\.io"'
-check public-name-resolves "resolvectl query nixos.org" resolvectl query nixos.org
-risoluto_answer=$(resolvectl query --cache=no --legend=no openchamber.risoluto.dev 2>/dev/null | awk 'NR == 1 { print $2 }')
-check risoluto-dev-allowlisted "openchamber.risoluto.dev -> ${risoluto_answer:-no answer}" \
-  bash -c '[[ $1 == 100.* ]]' _ "$risoluto_answer"
-statuslantern_answer=$(resolvectl query --cache=no --legend=no signoz.statuslantern.com 2>/dev/null | awk 'NR == 1 { print $2 }')
-check statuslantern-com-allowlisted "signoz.statuslantern.com -> ${statuslantern_answer:-no answer}" \
-  bash -c '[[ $1 == 100.* ]]' _ "$statuslantern_answer"
-tailnet_name=$(tailscale status --json --peers=false 2>/dev/null |
-  sed -n 's/^ *"DNSName": "\(.*\)\.",$/\1/p')
-check tailscale-running "${tailnet_name:-not logged in}" test -n "$tailnet_name"
-check magicdns-resolves "$tailnet_name" resolvectl query "$tailnet_name"
-
-check easyeffects-installed "$(command -v easyeffects || echo absent)" command -v easyeffects
-easyeffects_unit=$(systemctl --user is-enabled easyeffects.service 2>&1)
-check easyeffects-user-unit "easyeffects.service is ${easyeffects_unit}" test "$easyeffects_unit" = enabled
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-default_source=$(wpctl inspect @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | sed -n 's/^ *\* node.name = "\(.*\)"$/\1/p')
-check default-source-hushmic "${default_source:-none}" test "$default_source" = hushmic_source
-ee_rc=$HOME/.config/easyeffects/db/easyeffectsrc
-ee_pinned=$(grep -hE '^(useDefaultInputDevice|inputDevice|bypass)=' "$ee_rc" 2>/dev/null | sort | paste -sd' ')
-check easyeffects-input-pinned "$ee_pinned" test "$ee_pinned" = "bypass=false inputDevice=alsa_input.pci-0000_66_00.6.analog-stereo useDefaultInputDevice=false"
-# .inference stays null until an app records from HushMic, so this reads the
-# configured model.
-hushmic_model=$(hushmic status --json 2>/dev/null | jq -r 'select(.enabled and .chain.running and .chain.node_present and .mode == "suppress" and .mic.active == "alsa_input.pci-0000_66_00.6.analog-stereo") | .model')
-check hushmic-active "${hushmic_model:-not running}" test "$hushmic_model" = dpdfnet8_48khz_hr
-units=$HOME/.config/systemd/user
-for unit in noctalia dms gnome-keyring blueman-applet; do
-  # The install links exist whichever session is running. A link from a
-  # target every session reaches would start the unit under Plasma too.
-  check "session-scope-$unit" "wanted by niri.service only" \
-    bash -c "test -L '$units/niri.service.wants/$unit.service' &&
-      test ! -e '$units/graphical-session.target.wants/$unit.service' &&
-      test ! -e '$units/graphical-session-pre.target.wants/$unit.service'"
-done
-# Both niri sessions start niri.service, so each shell also checks the
-# variable that its session's launcher sets.
-for shell in noctalia dms; do
-  check "shell-scope-$shell" "ConditionEnvironment=ORUC_SHELL=$shell" \
-    grep -qx "ConditionEnvironment=ORUC_SHELL=$shell" "$units/$shell.service"
-done
-
-# The panel widgets and KWin effects that the stored look turns on. A
-# widget is QML under share/plasma/plasmoids or a compiled applet plugin.
-if [[ -n ${plasma_widgets:-} ]]; then
-  missing=()
-  IFS=, read -ra widgets <<<"$plasma_widgets"
-  for widget in "${widgets[@]}"; do
-    found=false
-    for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
-      if [[ -e $root/share/plasma/plasmoids/$widget || -e $root/lib/qt-6/plugins/plasma/applets/$widget.so ]]; then
-        found=true
-        break
-      fi
-    done
-    $found || missing+=("$widget")
-  done
-  check plasma-widgets-installed "missing: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
-fi
-# Plasma draws a question mark for a widget icon that the icon theme and the
-# themes it inherits lack. It looks for the name, then for the name with its
-# last dash-separated part dropped, until one is found.
-icon_roots=("$HOME/.local/share/icons" "/etc/profiles/per-user/$USER/share/icons" /run/current-system/sw/share/icons)
-icon_dirs=()
-icon_theme_dirs() {
-  # KIconLoader looks in breeze, its fallback theme, before hicolor.
-  local -a queue=("$@" breeze hicolor) more
-  local -A seen=()
-  local theme root index subdir
-  while ((${#queue[@]})); do
-    theme=${queue[0]}
-    queue=("${queue[@]:1}")
-    [[ -n $theme && -z ${seen[$theme]:-} ]] || continue
-    seen[$theme]=1
-    for root in "${icon_roots[@]}"; do
-      index=$root/$theme/index.theme
-      [[ -r $index ]] || continue
-      for subdir in $(sed -n 's/^\(Scaled\)\{0,1\}Directories=//p' "$index" | tr ',' ' '); do
-        icon_dirs+=("$root/$theme/$subdir")
-      done
-      IFS=, read -ra more <<<"$(sed -n 's/^Inherits=//p' "$index" | head -n 1)"
-      queue+=("${more[@]}")
-    done
-  done
-}
-icon_found() {
-  local name=${1#file://} dir ext
-  [[ $name == /* ]] && { [[ -e $name ]]; return; }
-  while [[ -n $name ]]; do
-    for dir in "${icon_dirs[@]}" /run/current-system/sw/share/pixmaps; do
-      for ext in svg svgz png; do
-        [[ -e $dir/$name.$ext ]] && return 0
-      done
-    done
-    [[ $name == *-* ]] || return 1
-    name=${name%-*}
-  done
-  return 1
-}
-# Prints "widget: icon" for each widget icon in the panels file $1 that is not
-# found. A widget with no icon setting uses the default in its main.xml, when
-# it has one as a file.
-missing_widget_icons() {
-  local name icon root xml
-  while IFS=$'\t' read -r name icon; do
-    if [[ -z $icon ]]; then
-      for root in "/etc/profiles/per-user/$USER" /run/current-system/sw; do
-        xml=$root/share/plasma/plasmoids/$name/contents/config/main.xml
-        [[ -r $xml ]] || continue
-        icon=$(awk '/<entry name="icon"/ { found = 1 } found && /<default>/ { sub(/.*<default>/, ""); sub(/<\/default>.*/, ""); print; exit } /<\/entry>/ { found = 0 }' "$xml")
-        break
-      done
-    fi
-    [[ -z $icon ]] || icon_found "$icon" || printf '%s: %s\n' "$name" "$icon"
-  done < <(jq -r '.[].widgets[] | [.name, (.config.General.icon? // "")] | @tsv' "$1")
-}
-# Widget colors follow the scheme that theme stored, so the file is the variant's.
-scheme=$(cat "$HOME/.local/state/oruc/scheme" 2>/dev/null || echo "${scheme_default:-}")
-panels_file=/etc/oruc/verify-plasma-panels/${plasma_look:-}_$scheme.json
-if [[ -r $panels_file ]]; then
-  icon_theme_dirs "$(kreadconfig6 --file kdeglobals --group Icons --key Theme --default breeze)"
-  # One line per check in the report, so the names go on one line.
-  missing_icons=$(missing_widget_icons "$panels_file" | paste -sd , -)
-  check plasma-widget-icons "not found: ${missing_icons:-none}" test -z "$missing_icons"
-else
-  report plasma-widget-icons manual "no $panels_file; deploy a system that writes it, then rerun"
-fi
-# A failed OLED shift can leave a guard that stops every later shift while
-# oled-care.service still succeeds; mac-tahoe-oled-care status reports it.
-oled_care=/etc/profiles/per-user/$USER/bin/mac-tahoe-oled-care
-if [[ ! -x $oled_care ]]; then
-  report oled-care-state fail "$oled_care is missing; machines/nixos-rog/oled-care.nix installs it"
-elif oled_status=$("$oled_care" status 2>&1); then
-  report oled-care-state pass "no failed shift stopped the panel shifts"
-else
-  report oled-care-state fail "$(head -n 1 <<<"$oled_status"); docs/nixos-rog.md, Plasma panels, says how to recover"
-fi
-# The timer runs only in a Plasma session, and stays off after a stop by hand.
-if systemctl --user -q is-active plasma-workspace.target; then
-  check oled-care-timer "oled-care.timer runs in the Plasma session" \
-    systemctl --user -q is-active oled-care.timer
-fi
-# A running session keeps the plugins it loaded at login, so a deploy or a
-# plasma-look that drops or adds one shows only after the next login.
-if [[ -n ${plasma_widgets:-}${kwin_effects:-} ]]; then
-  plasma_pid=$(systemctl --user show -p MainPID --value plasma-plasmashell 2>/dev/null)
-  changed=$(stat -c %Y /run/current-system)
-  look_changed=$(stat -c %Y "$plasma_look_file" 2>/dev/null || echo 0)
-  ((look_changed > changed)) && changed=$look_changed
-  if [[ ${plasma_pid:-0} == 0 ]]; then
-    report plasma-session manual "No Plasma session runs; log in to Plasma and rerun"
-  elif (($(date +%s) - $(ps -o etimes= -p "$plasma_pid") < changed)); then
-    report plasma-session manual \
-      "plasmashell started before the current system or the last plasma-look; log out and in to load it, then rerun"
-  else
-    report plasma-session pass "plasmashell started after the current system"
-    if [[ -n ${kwin_effects:-} ]]; then
-      loaded=$(busctl --user get-property org.kde.KWin /Effects org.kde.kwin.Effects loadedEffects 2>/dev/null)
-      missing=()
-      IFS=, read -ra effects <<<"$kwin_effects"
-      for effect in "${effects[@]}"; do
-        # Some builds name a compiled effect kwin4_effect_<name>.
-        [[ $loaded == *\"$effect\"* || $loaded == *\"kwin4_effect_$effect\"* ]] || missing+=("$effect")
-      done
-      check kwin-effects-loaded "not loaded: ${missing[*]:-none}" test "${#missing[@]}" -eq 0
-    fi
-  fi
-fi
-
-# Last, so the checks above give the idle dGPU time to power off.
-if [[ -n $nvidia_dev ]]; then
-  for _ in {1..30}; do
-    status=$(<"/sys/bus/pci/devices/$nvidia_dev/power/runtime_status")
-    [[ $status == suspended ]] && break
-    sleep 1
-  done
-  detail=$status
-  if [[ $status != suspended ]]; then
-    # KWin keeps /dev/nvidia0 open without waking the GPU. Processes of other
-    # users, such as root's nvidia-powerd, are not readable here.
-    holders=()
-    for proc in /proc/[0-9]*; do
-      comm=$(cat "$proc/comm" 2>/dev/null) || continue
-      [[ $comm == kwin_wayland* ]] && continue
-      for fd in "$proc"/fd/*; do
-        if [[ $(readlink "$fd" 2>/dev/null) == /dev/nvidia* ]]; then
-          parent=$(awk '/^PPid:/ {print $2}' "$proc/status" 2>/dev/null)
-          parent=$(cat "/proc/$parent/comm" 2>/dev/null)
-          holders+=("$comm[${proc#/proc/}] under ${parent:-?}")
-          break
-        fi
-      done
-    done
-    detail="$status; /dev/nvidia open by this user's processes: $(IFS=,; echo "${holders[*]:-none}")"
-  fi
-  check dgpu-runtime-suspended "$detail" test "$status" = suspended
-fi
+tar -c -C "$out" .
 REMOTE
-}
+then
+  widget_icon_tsv=$(python3 -I -c '
+import json, os, sys
+from importlib.machinery import SourceFileLoader
+mod = SourceFileLoader("panel_settings", sys.argv[1]).load_module()
+for panel in json.load(open(sys.argv[2])):
+    for widget in panel["widgets"]:
+        icon = ((widget.get("config") or {}).get("General") or {}).get("icon") or ""
+        if not icon:
+            xml = os.path.join(sys.argv[3], widget["name"], "main.xml")
+            if os.path.isfile(xml):
+                icon = mod.icon_default(xml)
+        if icon:
+            name = widget["name"]
+            print(name + "\t" + icon)
+' "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/icons-panels.json" "$work/widget-defaults")
+  widget_icon_ok=1
+fi
+remote_prelude+=$'\n'"widget_icon_ok=$widget_icon_ok"$'\n'"widget_icon_rows=$(printf '%q' "$widget_icon_tsv")"
 
 status=0
 remote_checks >>"$results" || status=$?

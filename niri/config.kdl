@@ -104,23 +104,8 @@ binds {
     Mod+Shift+3 { move-column-to-workspace 3; }
     Mod+Shift+4 { move-column-to-workspace 4; }
 
-    // Noctalia and DMS bind the volume and brightness keys themselves
-    // (niri/shells/*.kdl); these binds serve the waybar shell.
-    XF86AudioRaiseVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
-    XF86AudioLowerVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
-    XF86AudioMute        { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    // The name pattern matches amdgpu_bl* and intel_backlight and skips
-    // nvidia_0, which comes first in /sys/class/backlight on a hybrid laptop
-    // and wakes the RTX 4070 when touched. oruc-idle in
-    // home-manager/modules/idle.nix uses the same pattern. -e4 spreads the
-    // steps over a curve.
-    XF86MonBrightnessUp   { spawn "brightnessctl" "-c" "backlight" "-d" "*_b*" "-e4" "set" "5%+"; }
-    XF86MonBrightnessDown { spawn "brightnessctl" "-c" "backlight" "-d" "*_b*" "-e4" "set" "5%-"; }
 }
 
-// Binds for the selected shell, from niri/shells/. On a machine with one niri
-// shell, /etc/niri/shell.kdl holds them and this last include lets them
-// override the binds above. On a machine with several niri shells, shell.kdl
-// holds only a comment and each /etc/niri/session-<shell>.kdl includes this file
-// and then its shell's binds (nixosModules/desktop.nix).
+// shell.kdl is a comment. The session file includes this config and then the
+// shell's binds (nixosModules/desktop.nix), so those binds override these.
 include "/etc/niri/shell.kdl"

@@ -35,10 +35,21 @@ let
   common = ''
     state=''${XDG_STATE_HOME:-$HOME/.local/state}/oruc
     base=${hm.home.activationPackage}
-    default_look=${lib.optionalString (variants.defaultLook != null) variants.defaultLook}
-    default_scheme=${variants.defaultScheme}
-    looks=(${lib.escapeShellArgs (lib.remove null variants.looks)})
+    default_look=${
+      lib.escapeShellArg (if variants.defaultLook == null then "" else variants.defaultLook)
+    }
+    default_scheme=${lib.escapeShellArg variants.defaultScheme}
+    looks=(${lib.escapeShellArgs variants.looks})
     schemes=(${lib.escapeShellArgs variants.schemes})
+    # generation|name|scheme|look. look is empty when the machine has no Plasma.
+    # machines/variants.nix is the only place that builds name.
+    variant_rows=${
+      lib.escapeShellArg (
+        lib.concatMapStrings (
+          row: "${if row.generation then "1" else "0"}|${row.name}|${row.scheme}|${row.look or ""}\n"
+        ) variants.rows
+      )
+    }
 
     # stored FILE DEFAULT CHOICE...: the stored choice, or DEFAULT when none
     # is stored or the stored one no longer exists.
@@ -56,13 +67,28 @@ let
     stored_look() { stored plasma-look "$default_look" "''${looks[@]}"; }
     stored_scheme() { stored scheme "$default_scheme" "''${schemes[@]}"; }
 
-    # activate LOOK SCHEME: activates their variant. The name is the one
-    # that machines/variants.nix gives the specialisation.
+    # variant_dir LOOK SCHEME prints the activation directory of that row.
+    variant_dir() {
+      local want_look=$1 want_scheme=$2 gen name scheme look
+      while IFS='|' read -r gen name scheme look; do
+        [[ -n $scheme ]] || continue
+        if [[ $scheme == "$want_scheme" && $look == "$want_look" ]]; then
+          if [[ $gen == 1 ]]; then
+            printf '%s\n' "$base"
+          else
+            printf '%s\n' "$base/specialisation/$name"
+          fi
+          return 0
+        fi
+      done <<<"$variant_rows"
+      echo "no variant for look '$want_look' and scheme '$want_scheme'" >&2
+      return 1
+    }
+
+    # activate LOOK SCHEME: activates their variant.
     activate() {
-      local dir=$base
-      if [[ $1 != "$default_look" || $2 != "$default_scheme" ]]; then
-        dir=$base/specialisation/''${1:+$1_}$2
-      fi
+      local dir
+      dir=$(variant_dir "$1" "$2") || return 1
       # The session's display and bus, as Home Manager's own service imports
       # them, so the activation reaches KWin from SSH or a system unit too.
       if [[ -z ''${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
@@ -72,10 +98,7 @@ let
         )"
       fi
       "$dir/activate" --driver-version ${driverVersion}
-      ${lib.optionalString hm.programs.ghostty.enable ''
-        # Ghostty reloads its config, theme included, on SIGUSR2.
-        pkill -USR2 -u "$(id -u)" -f "^${hm.programs.ghostty.package}/bin/ghostty" || true
-      ''}
+      ${lib.concatStringsSep "\n" (map (command: "      ${command}") hm.oruc.variantReloads)}
     }
 
     # choose FILE CHOICE: stores the choice for the next activations.
@@ -193,9 +216,22 @@ in
 
     environment.systemPackages = [ theme ] ++ lib.optional hasPlasma plasmaLook;
 
-    # The leading "-" keeps a failed variant from failing the unit, because a
-    # failed unit makes deploy.sh roll back the whole system. The variant can
-    # then be half applied, and the unit's journal holds the error.
-    systemd.services.home-manager-oruc.serviceConfig.ExecStartPost = "-${lib.getExe theme} --reapply";
+    # A failed reapply must not fail this unit, because a failed unit makes
+    # deploy.sh roll back the whole system. The wrapper records the failure
+    # where scripts/verify-nixos-rog.sh can see it.
+    systemd.services.home-manager-oruc.serviceConfig.ExecStartPost = lib.getExe (
+      pkgs.writeShellApplication {
+        name = "theme-reapply";
+        text = ''
+          state=''${XDG_STATE_HOME:-$HOME/.local/state}/oruc
+          mkdir -p "$state"
+          if ${lib.getExe theme} --reapply; then
+            rm -f "$state/reapply-failed"
+          else
+            echo failed >"$state/reapply-failed"
+          fi
+        '';
+      }
+    );
   };
 }

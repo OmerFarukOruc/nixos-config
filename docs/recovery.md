@@ -34,7 +34,7 @@ only until the next reboot. To keep it there, follow [nixos-rog](#nixos-rog).
 ## A host that does not boot
 
 1. Use the local console.
-2. In the systemd-boot menu, select an older NixOS generation.
+2. In the systemd-boot menu on nixos-latitude, select an older NixOS generation.
 3. After it starts, make that selected generation the next boot default:
 
    ```sh
@@ -51,19 +51,9 @@ nixos-latitude, read the files in
 To go back to a kept generation that the boot menu does not list, do these
 steps:
 
-1. On nixos-rog, first pause the updater. Otherwise its next update deploys
-   `main` again.
-
-   ```sh
-   sudo systemctl mask --runtime --now oruc-auto-update.timer
-   ```
-
-   The mask lasts until the next reboot. Use a mask, not a stop, because the
-   activation in step 2 may restart a timer that was only stopped. To resume
-   updates earlier, run `sudo systemctl unmask --runtime oruc-auto-update.timer` and
-   then `sudo systemctl start oruc-auto-update.timer`. The mask does not stop
-   an update that is running. Run `systemctl is-active oruc-auto-update.service`
-   and wait until it prints `inactive` before step 2.
+1. On nixos-rog, pause the updater first.
+   [Hourly updater](nixos-rog.md#hourly-updater) has the pause, the wait, and
+   the resume. A host with no updater skips this step.
 
 2. Run these commands. The first one lists the generations. The second one
    makes the generation you picked the current one, and the third one activates
@@ -77,14 +67,8 @@ steps:
 
    The host now runs the picked generation. On nixos-rog, a reboot boots the
    newest generation again, because Limine always makes the newest generation of
-   the system profile the default ([nixos-rog](#nixos-rog)). To make the picked
-   generation the boot default, delete the newer generations and install the
-   boot entries again:
-
-   ```sh
-   sudo nix-env -p /nix/var/nix/profiles/system --delete-generations <newer...>
-   sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot
-   ```
+   the system profile the default. To keep the picked generation, follow
+   [nixos-rog](#nixos-rog).
 
 ## Boot the recovery entry
 
@@ -124,23 +108,7 @@ When the bootloader of nixos-latitude needs repair, do these steps:
    reboot
    ```
 
-For nixos-rog, replace the three mount lines with mounts that follow
-`machines/nixos-rog/hardware-configuration.nix`. Mount subvolume `@nixos` on
-`/mnt`, `@nixos-nix` on `/mnt/nix`, and the ESP on `/mnt/boot`. The installer
-has no checkout of this repository. Read the btrfs UUID and the ESP UUID from
-that file on another machine, or run `lsblk -f` in the installer and take the
-btrfs partition that holds `@nixos` and the vfat ESP:
-
-```sh
-mount -o subvol=@nixos /dev/disk/by-uuid/<btrfs uuid> /mnt
-mkdir -p /mnt/nix /mnt/boot
-mount -o subvol=@nixos-nix /dev/disk/by-uuid/<btrfs uuid> /mnt/nix
-mount -o umask=077 /dev/disk/by-uuid/<ESP uuid> /mnt/boot
-```
-
-Then run the `nixos-enter`, `NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot`
-lines. The Limine entries then come back after a BIOS update that cleared the
-firmware boot entries.
+nixos-rog uses different mounts. They are in [nixos-rog](#nixos-rog).
 
 ## Swap on nixos-latitude
 
@@ -168,24 +136,24 @@ module on the laptop for the recovery kernel.
 
 To go back to an older generation, open its `Generation <number>` entry in the
 Limine boot menu and pick `Default`. Pick `recovery` there for the recovery
-kernel.
+kernel. A generation the menu does not list can be activated first with
+[A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list).
+Start at step 2 below once that generation is the running system.
 
 Limine always makes the newest generation of the system profile the default,
-whatever generation runs. To keep a generation that you picked in the Limine
-menu as the default, do these steps:
+whatever generation runs. To keep a running generation as the default, do these
+steps:
 
-1. Boot that generation from the Limine menu.
-2. Pause the updater, as step 1 of
+1. Boot that generation from the Limine menu, or activate it with
+   `switch-generation` and `switch-to-configuration switch` as
    [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
-   describes. Otherwise its next update deploys a new newest generation, and
-   Limine boots that one. The pause lasts until the next reboot. After the
-   reboot the updater runs again, and its next deploy of `main` becomes the
-   newest generation and the Limine default, which undoes the pin. After each
-   reboot, pause the updater again, but it may run first, because
-   `Persistent=true` runs a missed hourly update soon after boot (on 2026-10-11
-   it started about 2 minutes after boot). If an update already ran, the pin is
-   lost; repeat steps 1 to 3.
-3. Drop the newer generations and reinstall the boot entries:
+   describes.
+2. Pause the updater.
+   [Hourly updater](nixos-rog.md#hourly-updater) has the pause, the wait, the
+   resume, and the reboot hole. Otherwise the next update deploys a new newest
+   generation, and Limine boots that one.
+3. Drop the newer generations and reinstall the boot entries. The running
+   system is the generation from step 1, so this command writes its boot entries:
 
    ```sh
    sudo nix-env -p /nix/var/nix/profiles/system --list-generations
@@ -193,6 +161,25 @@ menu as the default, do these steps:
    sudo nix-env -p /nix/var/nix/profiles/system --delete-generations <newer...>
    sudo /run/current-system/bin/switch-to-configuration boot
    ```
+
+When the nixos-rog bootloader needs repair, boot the NixOS installer and mount
+the filesystems before the `nixos-enter` lines in
+[Repair the bootloader](#repair-the-bootloader). The installer has no checkout
+of this repository. Read the btrfs UUID and the ESP UUID from
+`machines/nixos-rog/hardware-configuration.nix` on another machine, or run
+`lsblk -f` in the installer and take the btrfs partition that holds `@nixos`
+and the vfat ESP:
+
+```sh
+mount -o subvol=@nixos /dev/disk/by-uuid/<btrfs uuid> /mnt
+mkdir -p /mnt/nix /mnt/boot
+mount -o subvol=@nixos-nix /dev/disk/by-uuid/<btrfs uuid> /mnt/nix
+mount -o umask=077 /dev/disk/by-uuid/<ESP uuid> /mnt/boot
+```
+
+Then run the `nixos-enter`, `NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot`
+lines. The Limine entries then come back after a BIOS update that cleared the
+firmware boot entries.
 
 The firmware GPU mode must be Hybrid mode (see `CONTEXT.md`). In Integrated
 mode the NVIDIA driver has no device.

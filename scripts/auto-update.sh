@@ -381,6 +381,14 @@ if ((status == 0)); then
   if $rehearsal; then
     new_system=$(build_system "$host") || status=$?
   else
+    # main may have moved during the input update. Switching then would
+    # activate a commit the next run drops, because that run resets this
+    # branch to origin/main.
+    git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
+    if [[ $(git rev-parse origin/main) != "$base" ]]; then
+      notify normal "Update not applied" "$changes"$'\n'"main moved before the switch, so this run left $host as it was. The next run rebuilds on the new main." || true
+      exit 0
+    fi
     ./deploy.sh "$host" switch || status=$?
     new_system=$(readlink -f /run/current-system)
   fi
@@ -424,13 +432,12 @@ if ! git diff --quiet; then
   git commit --quiet --amend --no-edit -a
 fi
 
-# Merge only what this host built. If main moved, the next run rebuilds on it.
-# A PR that lands between this fetch and the merge below joins main with this
-# update unbuilt, the same gap every PR has without an up-to-date rule; CI
-# evaluates main after the push.
+# Merge only what this host built. If main moved during the switch, this
+# commit stays unpublished and the next run rebuilds on the new main. The
+# race that remains is main moving during deploy.sh itself.
 git "${git_auth[@]}" fetch --quiet origin main
 if ! $rehearsal && [[ $(git rev-parse origin/main) != "$base" ]]; then
-  notify normal "System updated" "$changes"$'\n'"main moved during the build, so the next run merges." || true
+  notify normal "Update published nowhere" "$changes"$'\n'"main moved during the switch. $host is on this update, and the commit was not published. The next run rebuilds on the new main. A deploy of that main from another checkout can exit 78 until then." || true
   exit 0
 fi
 

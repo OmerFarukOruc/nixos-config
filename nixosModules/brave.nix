@@ -4,6 +4,14 @@
 # colour are managed-only policies, and Brave Sync carries them, so they stay
 # in the profile.
 {
+  config,
+  lib,
+  ...
+}:
+let
+  cfg = config.oruc.machine;
+in
+lib.mkIf (cfg.kind == "workstation") {
   environment.etc."brave/policies/recommended/oruc.json".text = builtins.toJSON {
     BookmarkBarEnabled = true;
     ShowHomeButton = true;

@@ -1,7 +1,15 @@
 # Mission Center's extra values. Its fan readings need nothing, because hwmon
 # fan inputs are world-readable.
-{ pkgs, ... }:
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  cfg = config.oruc.machine;
+in
+lib.mkIf (cfg.kind == "workstation") {
   # CPU power draw reads the RAPL energy counter, which the kernel keeps
   # root-only because power readings leak data across processes
   # (CVE-2020-8694). Only wheel may read it here.

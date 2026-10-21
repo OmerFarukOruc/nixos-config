@@ -51,6 +51,14 @@ def read_kconfig(path):
     return groups
 
 
+def icon_default(path):
+    """The icon default from a plasmoid main.xml, using the same rules as read_defaults."""
+    for group in read_defaults(path).values():
+        if "icon" in group:
+            return group["icon"]
+    return ""
+
+
 def read_defaults(path):
     """Returns {group: {key: default}} from a kcfg main.xml. An entry whose
     default is C++ code has no default here."""

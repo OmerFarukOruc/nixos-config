@@ -1,4 +1,11 @@
 let
+  # The desktops a session may name. shellSpecs and launcherSpecs list which
+  # of these each shell and launcher supports.
+  desktopSpecs = {
+    niri = { };
+    plasma = { };
+  };
+
   launcherSpecs = {
     anyrun.desktops = [ "niri" ];
     fuzzel.desktops = [ "niri" ];
@@ -54,11 +61,13 @@ let
 in
 {
   inherit
+    desktopSpecs
     kernelSpecs
     launcherSpecs
     plasmaLookNames
     shellSpecs
     ;
+  desktopNames = builtins.attrNames desktopSpecs;
   kernelNames = builtins.attrNames kernelSpecs;
   launcherNames = builtins.attrNames launcherSpecs;
   shellNames = builtins.attrNames shellSpecs;

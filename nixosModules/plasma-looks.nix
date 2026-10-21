@@ -13,15 +13,18 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.oruc;
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
+  variantRow =
+    look: scheme:
+    lib.findFirst (
+      row: (row.look or null) == look && row.scheme == scheme
+    ) (throw "No Plasma variant for look ${toString look} and scheme ${scheme}") variants.rows;
   variantConfig =
     look: scheme:
-    if look == variants.defaultLook && scheme == variants.defaultScheme then
-      hm
-    else
-      hm.specialisation.${variants.name look scheme}.configuration;
-  lookConfigs = lib.genAttrs (lib.remove null variants.looks) (
-    look: variantConfig look variants.defaultScheme
-  );
+    let
+      row = variantRow look scheme;
+    in
+    if row.generation then hm else hm.specialisation.${row.name}.configuration;
+  lookConfigs = lib.genAttrs variants.looks (look: variantConfig look variants.defaultScheme);
   looks = lib.attrNames lookConfigs;
 
   pluginSwitches =
@@ -81,14 +84,15 @@ in
       map
         (
           variant:
-          lib.nameValuePair "oruc/verify-plasma-panels/${variants.name variant.look variant.scheme}.json" {
-            text = builtins.toJSON (
-              map (panel: {
-                inherit (panel) location;
-                widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
-              }) (variantConfig variant.look variant.scheme).programs.plasma.panels
-            );
-          }
+          lib.nameValuePair "oruc/verify-plasma-panels/${(variantRow variant.look variant.scheme).name}.json"
+            {
+              text = builtins.toJSON (
+                map (panel: {
+                  inherit (panel) location;
+                  widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
+                }) (variantConfig variant.look variant.scheme).programs.plasma.panels
+              );
+            }
         )
         (
           lib.cartesianProduct {
