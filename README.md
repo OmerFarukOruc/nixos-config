@@ -146,7 +146,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main` |
+| `upgrade [--rehearse]` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main`; `--rehearse` repeats the newest update's moves without activating anything |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run `ci/checks.sh`, CI's formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 
