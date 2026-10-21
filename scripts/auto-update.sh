@@ -120,6 +120,15 @@ remote_failed() {
 
 # git asks gh for credentials from the private runtime hosts.yml.
 git_auth=(-c 'credential.helper=' -c 'credential.helper=!gh auth git-credential')
+# push REFSPEC: force-pushes to origin. GitHub answers a push of a branch with a
+# hint to open a pull request; only a failed push shows what it printed.
+push() {
+  local output
+  if ! output=$(git "${git_auth[@]}" push --quiet --force origin "$1" 2>&1); then
+    printf '%s\n' "$output" >&2
+    return 1
+  fi
+}
 if [[ ! -d $dir/.git ]]; then
   git "${git_auth[@]}" clone --quiet "https://github.com/$repo.git" "$dir" || remote_failed clone
 fi
@@ -138,7 +147,7 @@ if $rehearsal; then
   git commit --quiet -m "chore(flake): rehearsal base with the flake.lock of before ${last:0:7}"
   base=$(git rev-parse HEAD)
   base_pushed=true
-  git "${git_auth[@]}" push --quiet --force origin "HEAD:refs/heads/$base_branch"
+  push "HEAD:refs/heads/$base_branch"
 fi
 
 # The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
@@ -425,12 +434,7 @@ if ! $rehearsal && [[ $(git rev-parse origin/main) != "$base" ]]; then
   exit 0
 fi
 
-# GitHub answers every push of the branch, which the merge below deletes, with
-# a hint to open a pull request; only a failed push shows what it printed.
-if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>&1); then
-  printf '%s\n' "$push_output" >&2
-  false
-fi
+push "$branch"
 # GitHub caps a PR body at 65536 characters.
 system_diff=$(dix --color never "$old_system" "$new_system" 2>&1) ||
   system_diff="dix could not compare the systems."

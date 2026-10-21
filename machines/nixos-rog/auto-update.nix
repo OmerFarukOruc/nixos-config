@@ -25,6 +25,13 @@ let
         echo "usage: upgrade [--rehearse]" >&2
         exit 2
       fi
+      # The unit's ConditionACPower skips a run on battery, and systemctl start
+      # still exits 0. The rehearsal unit, which no timer holds, is unloaded
+      # once it ends, so its ConditionResult cannot tell afterwards.
+      if ! ${config.systemd.package}/bin/systemd-ac-power; then
+        echo "The updater runs only on AC power. Plug in and run upgrade again." >&2
+        exit 1
+      fi
       # Asks for the password before the log starts, so the two do not share a line.
       sudo -v
       # The updater's output and systemd's start and end lines. --unit would
@@ -41,10 +48,6 @@ let
       sudo systemctl start "$unit" </dev/null || status=$?
       # journalctl prints the last lines a moment after the unit ends.
       sleep 1
-      if [[ $(systemctl show --property ConditionResult --value "$unit") == no ]]; then
-        echo "The updater runs only on AC power. Plug in and run upgrade again." >&2
-        exit 1
-      fi
       exit "$status"
     '';
   };
