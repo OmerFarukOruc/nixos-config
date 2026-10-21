@@ -48,8 +48,9 @@ jobs:
             --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
 
   # A job of its own, so the host evaluations run beside nix flake check.
-  # Evaluating the hosts at once was not faster here (3 min 23 s against
-  # 3 min 7 s one after another; GitHub step times, 2026-10-21).
+  # Evaluating the hosts at once showed no clear gain: 3 min 23 s in one run,
+  # against 3 min 7 s to 4 min 26 s in three runs one after another (GitHub
+  # step times, 2026-10-21).
   hosts:
     if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
     runs-on: ubuntu-latest
