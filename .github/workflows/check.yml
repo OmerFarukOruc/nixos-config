@@ -73,6 +73,7 @@ jobs:
             nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath" \
               >"$RUNNER_TEMP/drv-$host" 2>"$RUNNER_TEMP/eval-$host.log" &
             pids[$host]=$!
+            wait "${pids[$host]}" || true
           done
           status=0
           for host in $hosts; do
