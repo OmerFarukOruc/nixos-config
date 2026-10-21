@@ -31,7 +31,7 @@ jobs:
     if: >-
       vars.CACHIX_CACHE != ''
       && (github.event.pull_request.head.repo.full_name != github.repository
-      || !startsWith(github.head_ref, 'auto-update'))
+      || !contains(fromJSON('["auto-update", "auto-update-rehearsal"]'), github.head_ref))
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:

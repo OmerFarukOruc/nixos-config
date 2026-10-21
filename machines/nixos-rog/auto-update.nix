@@ -18,7 +18,7 @@ let
     text = ''
       unit=oruc-auto-update.service
       identifier=oruc-auto-update
-      if [[ ''${1:-} == --rehearse ]]; then
+      if (($# == 1)) && [[ $1 == --rehearse ]]; then
         unit=oruc-auto-update-rehearsal.service
         identifier=oruc-auto-update-rehearsal
       elif (($#)); then
@@ -147,7 +147,7 @@ in
       esac
       ${pkgs.dbus}/bin/dbus-send --system / net.nuetzlich.SystemNotifications.Notify \
         "string:Update died" \
-        "string:The run ended with ''${MONITOR_SERVICE_RESULT:-an unknown result} before it could report. See: journalctl -u oruc-auto-update"
+        "string:The run ended with ''${MONITOR_SERVICE_RESULT:-an unknown result} before it could report. See: journalctl -u ''${MONITOR_UNIT:-oruc-auto-update}"
     '';
   };
 

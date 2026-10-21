@@ -22,10 +22,14 @@ set -Eeuo pipefail
 repo=OmerFarukOruc/nixos-config
 branch=auto-update
 base_branch=main
+unit_name=oruc-auto-update
+pr_title="chore(flake): update inputs to their newest releases"
 rehearsal=false
 title_prefix=
 if [[ ${AUTO_UPDATE_REHEARSAL:-} == 1 ]]; then
   rehearsal=true
+  unit_name=oruc-auto-update-rehearsal
+  pr_title="chore(flake): rehearse an update of the inputs"
   branch=auto-update-rehearsal
   base_branch=auto-update-rehearsal-base
   title_prefix="Rehearsal: "
@@ -67,20 +71,21 @@ held=
 on_exit() {
   local status=$?
   if ((status != 0)) && ! $reported; then
-    notify critical "Update failed" "Exit $status. See: journalctl -u oruc-auto-update" || true
+    notify critical "Update failed" "Exit $status. See: journalctl -u $unit_name" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
   if $base_pushed; then
-    timeout 60 git -C "$dir" "${git_auth[@]}" push --quiet origin --delete "$base_branch" || true
+    # systemd gives a stopping run 30 s, and the TERM trap's popup can take 5.
+    timeout 15 git -C "$dir" "${git_auth[@]}" push --quiet origin --delete "$base_branch" || true
   fi
 }
 trap on_exit EXIT
 # A failure inside $(...) runs this trap in the subshell and again in the main
 # shell, so only the main shell reports.
-trap '[[ $BASHPID != "$$" ]] || fail "Update failed" "See: journalctl -u oruc-auto-update"' ERR
+trap '[[ $BASHPID != "$$" ]] || fail "Update failed" "See: journalctl -u $unit_name"' ERR
 # systemd ends the run with SIGTERM at the unit's TimeoutStartSec or when the
 # system shuts down, and SIGTERM skips the ERR trap.
-trap 'fail "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u oruc-auto-update"; exit 143' TERM
+trap 'fail "Update stopped" "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u $unit_name"; exit 143' TERM
 
 # Config files live only for this service run. Shell builtins keep the token
 # out of argv, and exported variables carry paths only.
@@ -106,7 +111,7 @@ remote_failed() {
   # Any HTTP answer, even an error status, shows that GitHub is reachable.
   if curl -sS --max-time 20 --retry 2 -o /dev/null https://github.com; then
     echo "git $1 failed while GitHub answers; check the token and the repository access." >&2
-    fail "Update failed" "git $1 failed while GitHub is reachable. Check the token. See: journalctl -u oruc-auto-update"
+    fail "Update failed" "git $1 failed while GitHub is reachable. Check the token. See: journalctl -u $unit_name"
     exit 1
   fi
   echo "GitHub is unreachable; the next run tries again."
@@ -125,6 +130,10 @@ git checkout --quiet --force -B "$branch" "$base"
 git clean -fdxq
 if $rehearsal; then
   last=$(git log -1 --format=%H --grep='^chore(flake): update inputs' "$base" -- flake.lock)
+  if [[ -z $last ]]; then
+    echo "main holds no update commit that changed flake.lock, so the rehearsal has no older lock to start from." >&2
+    false
+  fi
   git checkout --quiet "$last^" -- flake.lock
   git commit --quiet -m "chore(flake): rehearsal base with the flake.lock of before ${last:0:7}"
   base=$(git rev-parse HEAD)
@@ -136,10 +145,10 @@ fi
 # PR build and this run never evaluate or build at once.
 exec {build_lock}>>/run/nixos-config-build.lock
 if ! flock -w 1800 "$build_lock"; then
-  echo "A PR build has held the build lock for 30 min; the next run tries again."
+  echo "A PR build or the other updater unit has held the build lock for 30 min; the next run tries again."
   # Notifies from the second run in a row that the lock holds back.
   if [[ -f $waiting && $(<"$waiting") == lock ]]; then
-    notify normal "Update waiting" "PR builds have held the build lock for 30 minutes in two runs in a row. See: journalctl -u oruc-auto-update" || true
+    notify normal "Update waiting" "PR builds or the other updater unit have held the build lock for 30 minutes in two runs in a row. See: journalctl -u $unit_name" || true
   fi
   echo lock >"$waiting"
   exit 0
@@ -295,7 +304,7 @@ while read -r file; do
     reason=${reason:-update-app.sh failed without a message}
     echo "$app stays where it is."
     if [[ ! -f $failed_check || $(<"$failed_check") != "$reason" ]]; then
-      notify normal "$app update check failed" "$reason. $app stays where it is. See: journalctl -u oruc-auto-update" &&
+      notify normal "$app update check failed" "$reason. $app stays where it is. See: journalctl -u $unit_name" &&
         echo "$reason" >"$failed_check"
     fi
     continue
@@ -322,7 +331,7 @@ while read -r file; do
   # Each run builds it again, since a fix on main or a failed download can
   # clear the failure, but only the first failure of a version notifies.
   [[ -f $broken && $(<"$broken") == "$version" ]] && continue
-  notify normal "$app update skipped" "$app $version does not build: ${reason:-no error line}. The other updates go ahead. See: journalctl -u oruc-auto-update" &&
+  notify normal "$app update skipped" "$app $version does not build: ${reason:-no error line}. The other updates go ahead. See: journalctl -u $unit_name" &&
     echo "$version" >"$broken"
 done < <(printf '%s\n' pkgs/*.nix)
 
@@ -378,9 +387,9 @@ if ((status == 77 || status == 78)); then
   [[ -f $waiting ]] && previous=$(<"$waiting")
   record=$status
   if ((status == 78)) && [[ $previous != 78 ]]; then
-    notify normal "Update waiting" "$host runs a release with changes main lacks. Merge them, or deploy main with --replace. See: journalctl -u oruc-auto-update" || record=
+    notify normal "Update waiting" "$host runs a release with changes main lacks. Merge them, or deploy main with --replace. See: journalctl -u $unit_name" || record=
   elif ((status == 77)) && [[ $previous == 77 ]]; then
-    notify normal "Update waiting" "Another deploy has held $host's deploy lock since the last run. See: journalctl -u oruc-auto-update" || true
+    notify normal "Update waiting" "Another deploy has held $host's deploy lock since the last run. See: journalctl -u $unit_name" || true
   fi
   if [[ -n $record ]]; then
     echo "$record" >"$waiting"
@@ -396,7 +405,7 @@ if ((status != 0)); then
   if ((status != 70 && status != 71 && status != 74 && status != 79)); then
     echo "$candidate" >"$failed"
   fi
-  fail "Update failed" "Exit $status. See: journalctl -u oruc-auto-update"
+  fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
   exit 1
 fi
 rm -f -- "$failed" "$waiting"
@@ -445,7 +454,7 @@ $system_diff
 \`\`\`
 </details>"
 gh pr create --repo "$repo" --base "$base_branch" --head "$branch" \
-  --title "chore(flake): update inputs to their newest releases" --body "$body" ||
+  --title "$pr_title" --body "$body" ||
   gh pr edit "$branch" --repo "$repo" --body "$body"
 
 # The PR merges at once, since the checks above ran here; GitHub runs check,
