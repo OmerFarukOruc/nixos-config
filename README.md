@@ -136,8 +136,9 @@ login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
-Run these from fedora-desktop, which has no Nix. `deploy.sh` builds on the
-target, and the `-on-rog` scripts run Nix on nixos-rog over SSH. `move-inputs.sh`
+Run these from fedora-desktop, which has no Nix, or from nixos-rog. `deploy.sh`
+builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
+from either host. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
 checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.

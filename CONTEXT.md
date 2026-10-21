@@ -11,7 +11,7 @@ Omer uses one SSH key, `~/.ssh/id_ed25519_omer`, on every device he works from. 
 ## Language
 
 **This PC**:
-fedora-desktop, where the agent runs. It has no Nix, and this repository holds no configuration for it beyond the inert `nixos-desktop` record. Read its setup from the machine itself.
+fedora-desktop, where an agent usually runs. An agent can also run on nixos-rog. fedora-desktop has no Nix, and this repository holds no configuration for it beyond the inert `nixos-desktop` record. Read its setup from the machine itself.
 _Avoid_: the desktop
 
 **The laptop**:

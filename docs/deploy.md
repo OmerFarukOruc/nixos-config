@@ -10,8 +10,9 @@
 - [Release records and cleanup](#release-records-and-cleanup)
 - [When a deploy fails](#when-a-deploy-fails)
 
-Run deploy commands from fedora-desktop. fedora-desktop has no Nix installed,
-so `deploy.sh` builds on the target. The SSH alias of each host in
+Run deploy commands from fedora-desktop or nixos-rog. fedora-desktop has no
+Nix installed, so `deploy.sh` builds on the target; a deploy of nixos-rog from
+nixos-rog runs locally. The SSH alias of each host in
 `~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONTEXT.md)
 lists the aliases.
 
@@ -23,9 +24,12 @@ merged change and the `main` it merged onto. Before the merge, print both as
 [AGENTS.md](../AGENTS.md#lookups) describes. After the merge,
 `scripts/affected-hosts.sh <sha>` compares the merge commit with its parent
 ([Deploy a merged commit](#deploy-a-merged-commit)). When a host is unreachable,
-report it as the blocker. `scripts/affected-hosts.sh --running` lists each host
-whose running system differs from `main`, such as one that was offline at the
-last deploy, so run it before you end a session that deployed.
+retry the deploy once after about 6 minutes, the Wi-Fi outage nixos-latitude
+showed on 2026-09-21 ([nixos-latitude.md](nixos-latitude.md#operation)).
+Report it as the blocker only when it is still unreachable.
+`scripts/affected-hosts.sh --running` lists each host whose running system
+differs from `main`, such as one that was offline at the last deploy, so run it
+before you end a session that deployed.
 
 This guide uses these terms:
 
@@ -43,8 +47,9 @@ This guide uses these terms:
 
 ## Check before you deploy
 
-Evaluate the change from this checkout. fedora-desktop has no Nix, so these
-scripts copy the working tree to nixos-rog and run Nix there:
+Evaluate the change from this checkout. These scripts copy the working tree to
+nixos-rog and run Nix there, so they work from fedora-desktop, which has no
+Nix, and from nixos-rog:
 
 ```sh
 scripts/check-on-rog.sh
@@ -155,40 +160,41 @@ Enter, to return to the login screen.
 
 Deploy a merged change from a detached worktree of its commit, so the deploy
 needs no `--allow-dirty`. The main checkout may hold another session's
-uncommitted edits, and `--allow-dirty` would ship them. From the main
-checkout, run:
+uncommitted edits, and `--allow-dirty` would ship them.
+
+First find the hosts that the commit affects. A squash merge makes one commit
+on `main`, so the script compares the system `drvPath` of every host at the
+merge commit with the one at its parent `<sha>^`, the `main` it merged onto.
+nixos-rog evaluates both from GitHub, in 70 to 90 seconds (measured on
+2026-10-15), so this step needs no worktree. From the main checkout, run:
 
 ```sh
 git fetch origin
-git worktree add --detach ../nixos-config.worktrees/deploy-<short-sha> <sha>
+scripts/affected-hosts.sh <sha>
 ```
 
 `<sha>` is the output of `gh pr view <n> --json mergeCommit --jq .mergeCommit.oid`,
 or `origin/main` after the fetch.
 
-Before you deploy, find the hosts that the commit affects. A squash merge makes
-one commit on `main`, so the script compares the system `drvPath` of every host
-at the merge commit with the one at its parent `<sha>^`, the `main` it merged
-onto. nixos-rog evaluates both from GitHub, in 70 to 90 seconds (measured on
-2026-10-15):
-
-```sh
-scripts/affected-hosts.sh <sha>
-```
-
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 needs no deploy.
 
-Then run the deploy in the deploy worktree as a background task, with its
-output in a log, and with nothing after it:
+For each affected host, run this block from the main checkout as one
+background task, with nothing after it. It makes the deploy worktree unless it
+exists, prints the path of a new log, and deploys with its output in that log:
 
 ```sh
-cd ../nixos-config.worktrees/deploy-<short-sha> && ./deploy.sh <host> switch > /tmp/deploy-<host>.log 2>&1
+d=../nixos-config.worktrees/deploy-<short-sha>
+[ -d "$d" ] || git worktree add --detach "$d" <sha>
+log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && ./deploy.sh <host> switch > "$log" 2>&1
 ```
 
-The task's exit code is then the deploy's exit code. A trailing `echo` or
-cleanup command replaces it with its own. Read the log for the
-`Deployment completed from release <release>.` line.
+Each run gets its own log, because two agents can deploy the same commit to
+the same host, and the second one exits 77 (see
+[One deploy at a time](#one-deploy-at-a-time)). The task's exit code is then
+the deploy's exit code. A trailing `echo` or cleanup command replaces it with
+its own. Read the log for the `Deployment completed from release <release>.`
+line.
 
 The deploy ships everything on that commit, including other sessions' merged
 changes. Deploy a commit at or after the one that runs on the host. The running
