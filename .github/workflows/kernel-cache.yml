@@ -136,7 +136,7 @@ jobs:
       - name: Stop when main changed the kernel build
         run: |
           git fetch --no-tags origin main
-          if ! git diff --quiet "${{ needs.lock.outputs.sha }}" origin/main -- kernel-cache ':(exclude)kernel-cache/flake.lock'; then
+          if ! git diff --quiet "${{ needs.lock.outputs.sha }}" origin/main -- . ':(exclude)flake.lock'; then
             echo "main changed kernel-cache nix or patches after ${{ needs.lock.outputs.sha }}. The queued run records."
             exit 1
           fi
@@ -144,7 +144,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: kernel-paths-*
-          path: kernel-paths
+          path: ${{ github.workspace }}/kernel-paths
 
       - name: Lock the chosen revision
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
@@ -155,7 +155,7 @@ jobs:
       - name: Record the cached paths
         run: |
           version=$(nix eval --raw '.#packages.x86_64-linux.kernel-x86_64-v3.version')
-          find kernel-paths -type f -name paths -print0 | xargs -0 cat | sort -u >all-paths
+          find "$GITHUB_WORKSPACE/kernel-paths" -type f -name paths -print0 | xargs -0 cat | sort -u >all-paths
           jq -R -s --arg rev "${{ needs.lock.outputs.rev }}" --arg version "$version" \
             '{ rev: $rev, version: $version, paths: (split("\n") | map(select(length > 0))) }' \
             all-paths >cached-paths.json
