@@ -43,6 +43,18 @@ let
     paths = [ agents.opencode2 ];
     postBuild = "ln -s opencode2 $out/bin/opencode";
   };
+  # grok copies through the Wayland clipboard and also through OSC 52. Ghostty's
+  # OSC 52 claim loses that race, and GTK then shows Ghostty an empty clipboard,
+  # so Ctrl+Shift+V types ESC[118;6u. Over SSH, OSC 52 is the only route home.
+  grok = pkgs.symlinkJoin {
+    name = "grok-${agents.grok.version}";
+    paths = [ agents.grok ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/grok \
+        --run 'if [ -z "''${SSH_CONNECTION:-}" ]; then export GROK_CLIPBOARD_NO_OSC52=1; fi'
+    '';
+  };
 in
 {
   home.packages =
@@ -78,12 +90,12 @@ in
       agentsview
       codex
       cursor-agent
-      grok
       herdr
       # keep-sorted end
     ])
     ++ [
       brave
+      grok
       opencode
     ];
 
