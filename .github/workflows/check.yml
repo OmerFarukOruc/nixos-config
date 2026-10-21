@@ -41,6 +41,27 @@ jobs:
         run: |
           nix eval --json --no-write-lock-file ./kernel-cache#packages.x86_64-linux \
             --apply 'builtins.mapAttrs (_: p: p.drvPath)'
+      # Not a flake output, so the steps above do not evaluate it.
+      - name: Evaluate the cached host packages
+        run: |
+          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
+            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+
+  # A job of its own, so the host evaluations run beside nix flake check.
+  # Evaluating the hosts at once showed no clear gain: 3 min 23 s in one run,
+  # against 3 min 7 s to 4 min 26 s in three runs one after another (GitHub
+  # step times, 2026-10-21).
+  hosts:
+    if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            allow-import-from-derivation = false
       - name: Evaluate host systems
         shell: bash
         run: |
@@ -70,11 +91,6 @@ jobs:
               echo "- ${warning#evaluation warning: }" >>"$GITHUB_STEP_SUMMARY"
             done <<<"$warnings"
           fi
-      # Not a flake output, so the steps above do not evaluate it.
-      - name: Evaluate the cached host packages
-        run: |
-          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
 
   # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
   # this job finds the cycle before the merge.
