@@ -81,7 +81,7 @@ These rules follow from the list:
 - **One session per shell.** A desktop with more than one shell gets one
   display manager session per shell, named `<desktop>-<shell>`, in place of its
   own. The session's launcher sets `ORUC_SHELL`, and each shell's services
-  start only when it matches. For niri the launcher also sets `NIRI_CONFIG` to
+  start only when it matches. Every niri shell's launcher sets `NIRI_CONFIG` to
   a file that adds the shell's binds after `/etc/niri/config.kdl`.
   A niri session that is already open misses a deploy that changes the
   launcher. [Deploy](deploy.md#deploy) says how to tell and what to do.
@@ -170,7 +170,7 @@ fixed colors in the vibrancy input's stylesheet with the scheme's.
 Evaluation fails when that stylesheet no longer holds a color that
 `vscode.nix` rewrites.
 
-`theme.plasmaLook` names the default Plasma look. `plasma-look` activates
+`theme.plasmaLook` names the default Plasma look, and a machine with no Plasma session leaves it null. `plasma-look` activates
 another look at run time, with the same variants
 ([Plasma looks](nixos-rog.md#plasma-looks)).
 

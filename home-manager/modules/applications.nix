@@ -155,6 +155,12 @@ in
     };
   };
 
+  # Ghostty reloads its config, theme included, on SIGUSR2. The variant
+  # activator runs this list and does not name Ghostty.
+  oruc.variantReloads = lib.mkIf config.programs.ghostty.enable [
+    ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true''
+  ];
+
   programs.ghostty = {
     enable = true;
     enableZshIntegration = true;

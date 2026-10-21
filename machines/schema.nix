@@ -56,10 +56,7 @@ let
         types.submodule {
           options = {
             desktop = mkOption {
-              type = types.enum [
-                "niri"
-                "plasma"
-              ];
+              type = types.enum selectors.desktopNames;
               description = "Compositor or desktop environment that this login session starts.";
             };
             shell = mkOption {
@@ -101,9 +98,9 @@ let
     };
 
     theme.plasmaLook = mkOption {
-      type = types.enum selectors.plasmaLookNames;
-      default = "glass";
-      description = "Plasma look that a login uses until `plasma-look` selects another one.";
+      type = types.nullOr (types.enum selectors.plasmaLookNames);
+      default = null;
+      description = "Plasma look that a login uses until `plasma-look` selects another one. A machine with no Plasma session leaves it null.";
     };
 
     kernel.profile = mkOption {
@@ -186,6 +183,26 @@ let
     assert lib.assertMsg (lib.all (
       session: builtins.elem session.desktop selectors.shellSpecs.${session.shell}.desktops
     ) machine.sessions) "A session selects a shell that its desktop does not support.";
+    assert lib.assertMsg (
+      sessions.hasDesktop machine "plasma" -> machine.theme.plasmaLook != null
+    ) "${machine.name} has a Plasma session and no theme.plasmaLook.";
+    assert lib.assertMsg (
+      sessions.hasDesktop machine "plasma" || machine.theme.plasmaLook == null
+    ) "${machine.name} sets theme.plasmaLook and has no Plasma session.";
+    assert lib.all
+      (
+        power:
+        let
+          idle = machine.idle.${power};
+        in
+        lib.assertMsg (
+          idle.dimSeconds == null || idle.screenOffSeconds == null || idle.screenOffSeconds > idle.dimSeconds
+        ) "${machine.name} ${power} screen-off must be later than dim."
+      )
+      [
+        "battery"
+        "ac"
+      ];
     machine;
 in
 {

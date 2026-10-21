@@ -108,10 +108,25 @@ state, and its notifications start with "Rehearsal:".
 
 A manual deploy exits 77 while an update holds the deploy lock, and the updater
 deploys `main` again on top of a generation you restored. To pause the updater
-until the next reboot, run
-`sudo systemctl mask --runtime --now oruc-auto-update.timer` on nixos-rog.
-[recovery.md](recovery.md#a-generation-the-boot-menu-does-not-list) pauses it
-before it restores a generation.
+on nixos-rog until the next reboot:
+
+```sh
+sudo systemctl mask --runtime --now oruc-auto-update.timer
+```
+
+Use a mask, not a stop. An activation can restart a timer that was only
+stopped. The mask does not stop an update that is already running. Run
+`systemctl is-active oruc-auto-update.service` and wait until it prints
+`inactive` before you restore a generation or deploy by hand. To resume
+updates before the next reboot, run
+`sudo systemctl unmask --runtime oruc-auto-update.timer` and then
+`sudo systemctl start oruc-auto-update.timer`.
+
+The mask lasts until the next reboot. After the reboot the updater runs again.
+`Persistent=true` runs a missed hourly update soon after boot (on 2026-10-11
+it started about 2 minutes after boot). Pause the updater again after each
+reboot, or it may deploy `main` before you do. [recovery.md](recovery.md#nixos-rog)
+uses this pause when it pins a generation.
 
 ### Cached packages
 

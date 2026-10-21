@@ -22,7 +22,11 @@
 let
   selectors = import ../../../machines/selectors.nix;
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
-  defaultLook = osConfig.oruc.machine.theme.plasmaLook;
+  defaultLook =
+    if isPlasma then
+      osConfig.oruc.machine.theme.plasmaLook
+    else
+      builtins.head selectors.plasmaLookNames;
 in
 {
   imports = map (name: ./. + "/${name}.nix") selectors.plasmaLookNames;
@@ -34,8 +38,11 @@ in
       description = "The Plasma look of this generation.";
     };
     colorScheme = lib.mkOption {
-      type = lib.types.str;
-      description = "Color scheme that oruc-plasma-colors applies at each Plasma login.";
+      type = lib.types.enum [
+        "OrucBase16"
+        "OrucBase16Glass"
+      ];
+      description = "Color scheme that oruc-plasma-colors applies at each Plasma login. The two ids are the schemes plasma-looks/kde-color-scheme.nix emits.";
     };
     widgetStyle = lib.mkOption {
       type = lib.types.str;

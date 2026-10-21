@@ -1,1 +1,14 @@
-// The waybar shell keeps the default binds in config.kdl.
+binds {
+    // The waybar shell's media keys. Other shells bind the same keys in their
+    // own files. The session file includes this after config.kdl.
+    XF86AudioRaiseVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    // The name pattern matches amdgpu_bl* and intel_backlight and skips
+    // nvidia_0, which comes first in /sys/class/backlight on a hybrid laptop
+    // and wakes the RTX 4070 when touched. oruc-idle in
+    // home-manager/modules/idle.nix uses the same pattern. -e4 spreads the
+    // steps over a curve.
+    XF86MonBrightnessUp { spawn "brightnessctl" "-c" "backlight" "-d" "*_b*" "-e4" "set" "5%+"; }
+    XF86MonBrightnessDown { spawn "brightnessctl" "-c" "backlight" "-d" "*_b*" "-e4" "set" "5%-"; }
+}

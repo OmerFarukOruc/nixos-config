@@ -147,8 +147,9 @@ builds, then opens a blank window. To move them:
    "Compatibility" list in the notes of that
    [spicetify-cli release](https://github.com/spicetify/cli/releases) must
    include the Linux Spotify version.
-3. Merge, deploy nixos-rog, and launch Spotify. If the window is blank, revert
-   the commit and deploy again.
+3. Merge, then run `./deploy.sh <host> switch` for each host that
+   `scripts/affected-hosts.sh <sha>` prints. Launch Spotify on nixos-rog. If
+   the window is blank, revert the commit and deploy those hosts again.
 
 ## Apps
 

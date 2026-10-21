@@ -248,8 +248,6 @@ in
       "workbench.editorAssociations"."*.md" = "vscode.markdown.preview.editor";
     };
 
-    xdg.configFile."oruc/vscode-vibrancy.json".text = builtins.toJSON injectData;
-
     programs.vscode = {
       enable = true;
       package = vscode;
@@ -266,19 +264,27 @@ in
 
     # Home Manager's own step fails the switch when it cannot merge, such as
     # after a hand edit that is not JSON5, and a deploy then rolls back. This
-    # runs the same merge, but a failure only warns and keeps the file.
+    # runs the same merge, but a failure only warns and keeps the file. The
+    # inject file is written in the same activation, and only after the merge
+    # succeeds, so a settings file that does not parse stays with the previous
+    # inject file.
     home.activation.vscodeMutableUserSettings = lib.mkForce (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
         ${import "${inputs.home-manager}/modules/programs/vscode/mutableSettings.nix" {
           inherit lib pkgs;
           name = "Visual Studio Code";
         }}
-        vscodeMutableSettings ${lib.escapeShellArg "${config.xdg.configHome}/Code/User/settings.json"} \
+        inject=${lib.escapeShellArg "${config.xdg.configHome}/oruc/vscode-vibrancy.json"}
+        newInject=${pkgs.writeText "vscode-vibrancy.json" (builtins.toJSON injectData)}
+        if vscodeMutableSettings ${lib.escapeShellArg "${config.xdg.configHome}/Code/User/settings.json"} \
           ${
             (pkgs.formats.json { }).generate "vscode-user-settings"
               config.programs.vscode.profiles.default.userSettings
-          } \
-          || warnEcho "VS Code settings.json is unchanged, so the declared settings apply at the next switch after it parses."
+          }; then
+          ${pkgs.coreutils}/bin/install -D -m 644 "$newInject" "$inject"
+        else
+          warnEcho "VS Code settings.json is unchanged, so the declared settings apply at the next switch after it parses."
+        fi
       ''
     );
 

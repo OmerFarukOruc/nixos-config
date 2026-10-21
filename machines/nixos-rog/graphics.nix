@@ -17,9 +17,8 @@ let
   driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
-  # The NVIDIA driver below, and the CUDA packages of media.nix and home.nix
-  # while nixpkgs lacks its own fix, build with patchelf 0.15.2 while their
-  # package set's patchelf is 0.19.2.
+  # The NVIDIA driver below builds with patchelf 0.15.2 while its package
+  # set's patchelf is 0.19.2. The locked nixpkgs already does that for CUDA.
   nixpkgs.overlays = [ (import ../../overlays/nvidia-patchelf.nix) ];
 
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists

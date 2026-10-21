@@ -20,6 +20,7 @@
   ...
 }:
 let
+  profiles = import ./power-profiles.nix;
   # Keyed by power-profiles-daemon profile. maxKHz = "top" keeps each core's
   # own top clock; the Zen 5c cores stop at 3.29 GHz below any cap here.
   limits = {
@@ -41,6 +42,10 @@ let
     field: lib.concatStringsSep " " (lib.mapAttrsToList (p: l: "[${p}]=${toString l.${field}}") limits);
   restart = "${config.systemd.package}/bin/systemctl restart --no-block oruc-cpu-limits.service";
 in
+assert lib.assertMsg (
+  lib.sort builtins.lessThan (lib.attrNames limits)
+  == lib.sort builtins.lessThan (map (profile: profile.ppd) profiles)
+) "CPU limits must use the power-profiles-daemon names in power-profiles.nix.";
 {
   oruc.verifyFacts = lib.concatMapAttrs (
     profile: limit:

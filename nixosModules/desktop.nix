@@ -12,35 +12,44 @@ let
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
   niriShells = sessions.shellsOf cfg "niri";
-  sharedNiri = sessions.hasSeveralShells cfg "niri";
+  niriSessionName =
+    shell:
+    sessions.sessionName cfg {
+      desktop = "niri";
+      inherit shell;
+    };
 
-  # Starts niri with the binds of one shell. niri-session imports this
-  # environment into the user manager, where niri reads NIRI_CONFIG and the
-  # shell's user services check ORUC_SHELL.
+  # Starts niri with that shell's binds. niri-session imports this environment
+  # into the user manager, where niri reads NIRI_CONFIG. A desktop with several
+  # shells also sets ORUC_SHELL, which those shells' services check.
   niriLauncher =
     shell:
     pkgs.writeShellScript "niri-session-${shell}" ''
-      export NIRI_CONFIG=/etc/niri/session-${shell}.kdl ORUC_SHELL=${shell}
+      export NIRI_CONFIG=/etc/niri/${niriSessionName shell}.kdl
+      ${lib.optionalString (sessions.hasSeveralShells cfg "niri") "export ORUC_SHELL=${shell}"}
       exec ${lib.getExe' pkgs.niri "niri-session"}
     '';
-  # niri with one display manager session per shell in place of its own.
+  # One display manager session per niri shell, named by sessions.sessionName.
+  # With one shell that name is niri, so the stock desktop file is replaced.
   niriSessions = pkgs.symlinkJoin {
     name = "niri-sessions";
     paths = [ pkgs.niri ];
-    postBuild = ''
-      rm $out/share/wayland-sessions/niri.desktop
-    ''
-    + lib.concatMapStrings (shell: ''
-      cat >$out/share/wayland-sessions/niri-${shell}.desktop <<EOF
-      [Desktop Entry]
-      Name=Niri (${shell})
-      Comment=A scrollable-tiling Wayland compositor with the ${shell} shell
-      Exec=${niriLauncher shell}
-      Type=Application
-      DesktopNames=niri
-      EOF
-    '') niriShells;
-    passthru.providedSessions = map (shell: "niri-${shell}") niriShells;
+    postBuild =
+      lib.optionalString (!lib.elem "niri" (map niriSessionName niriShells)) ''
+        rm $out/share/wayland-sessions/niri.desktop
+      ''
+      + lib.concatMapStrings (shell: ''
+        rm -f $out/share/wayland-sessions/${niriSessionName shell}.desktop
+        cat >$out/share/wayland-sessions/${niriSessionName shell}.desktop <<EOF
+        [Desktop Entry]
+        Name=Niri (${shell})
+        Comment=A scrollable-tiling Wayland compositor with the ${shell} shell
+        Exec=${niriLauncher shell}
+        Type=Application
+        DesktopNames=niri
+        EOF
+      '') niriShells;
+    passthru.providedSessions = map niriSessionName niriShells;
   };
 in
 {
@@ -68,82 +77,79 @@ in
 
     (lib.mkIf hasNiri {
       programs.niri.enable = true;
-      programs.niri.package = lib.mkIf sharedNiri niriSessions;
+      programs.niri.package = niriSessions;
       # niri starts it on demand for X11 applications when it is on the PATH.
       environment.systemPackages = [ pkgs.xwayland-satellite ];
-      environment.etc."niri/config.kdl".source = ../niri/config.kdl;
-      # Binds for the selected shell, included last by config.kdl so they override
-      # the wpctl volume binds. Every niri shell has a file, because niri 26.04
-      # treats a missing include as an error. With several shells, each session
-      # config adds its shell's binds after config.kdl instead.
-      environment.etc."niri/shell.kdl" =
-        if sharedNiri then
-          { text = "// Each niri session adds its shell's binds in /etc/niri/session-<shell>.kdl.\n"; }
-        else
-          { source = ../niri/shells + "/${builtins.head niriShells}.kdl"; };
-      # The keyboard layout of the greeter, the machine record's touchpad
-      # settings, and hardware settings that a machine's modules append;
-      # included by config.kdl. niri caches the localed layout at startup, so it
-      # writes the layout here instead.
-      environment.etc."niri/host.kdl".text = ''
-        // Settings for this machine's hardware.
-        input {
-            keyboard {
-                xkb {
-                    layout "${config.services.xserver.xkb.layout}"
+      environment.etc = lib.mkMerge [
+        {
+          "niri/config.kdl".source = ../niri/config.kdl;
+          # config.kdl includes this. The session file adds the shell's binds
+          # after config.kdl, so the stub stays a comment for one shell and for several.
+          "niri/shell.kdl".text = ''
+            // The session file adds this shell's binds after config.kdl.
+          '';
+          # The keyboard layout of the greeter, the machine record's touchpad
+          # settings, and hardware settings that a machine's modules append;
+          # included by config.kdl. niri caches the localed layout at startup, so it
+          # writes the layout here instead.
+          "niri/host.kdl".text = ''
+            // Settings for this machine's hardware.
+            input {
+                keyboard {
+                    xkb {
+                        layout "${config.services.xserver.xkb.layout}"
+                    }
+                }
+                touchpad {
+                    ${lib.optionalString cfg.touchpad.tapToClick "tap"}
+                    ${lib.optionalString cfg.touchpad.naturalScroll "natural-scroll"}
                 }
             }
-            touchpad {
-                ${lib.optionalString cfg.touchpad.tapToClick "tap"}
-                ${lib.optionalString cfg.touchpad.naturalScroll "natural-scroll"}
-            }
-        }
-      '';
-      # Colors for the compositor, included by config.kdl.
-      environment.etc."niri/theme.kdl".text =
-        let
-          scheme = config.scheme.withHashtag;
-        in
-        ''
-          layout {
-              focus-ring {
-                  active-color "${scheme.base0D}"
-                  inactive-color "${scheme.base03}"
-                  urgent-color "${scheme.base08}"
+          '';
+          # Colors for the compositor, included by config.kdl.
+          "niri/theme.kdl".text =
+            let
+              scheme = config.scheme.withHashtag;
+            in
+            ''
+              layout {
+                  focus-ring {
+                      active-color "${scheme.base0D}"
+                      inactive-color "${scheme.base03}"
+                      urgent-color "${scheme.base08}"
+                  }
+                  border {
+                      active-color "${scheme.base0D}"
+                      inactive-color "${scheme.base03}"
+                      urgent-color "${scheme.base08}"
+                  }
+                  insert-hint {
+                      color "${scheme.base0D}80"
+                  }
               }
-              border {
-                  active-color "${scheme.base0D}"
-                  inactive-color "${scheme.base03}"
-                  urgent-color "${scheme.base08}"
+
+              overview {
+                  backdrop-color "${scheme.base00}"
               }
-              insert-hint {
-                  color "${scheme.base0D}80"
+
+              cursor {
+                  xcursor-theme "${theme.cursor.name}"
+                  xcursor-size ${toString theme.cursor.size}
               }
-          }
-
-          overview {
-              backdrop-color "${scheme.base00}"
-          }
-
-          cursor {
-              xcursor-theme "${theme.cursor.name}"
-              xcursor-size ${toString theme.cursor.size}
-          }
-        '';
-    })
-
-    (lib.mkIf sharedNiri {
-      environment.etc = lib.listToAttrs (
-        map (
-          shell:
-          lib.nameValuePair "niri/session-${shell}.kdl" {
-            text = ''
-              include "/etc/niri/config.kdl"
-              include "${../niri/shells + "/${shell}.kdl"}"
             '';
-          }
-        ) niriShells
-      );
+        }
+        (lib.listToAttrs (
+          map (
+            shell:
+            lib.nameValuePair "niri/${niriSessionName shell}.kdl" {
+              text = ''
+                include "/etc/niri/config.kdl"
+                include "${../niri/shells + "/${shell}.kdl"}"
+              '';
+            }
+          ) niriShells
+        ))
+      ];
     })
 
     (lib.mkIf hasPlasma {

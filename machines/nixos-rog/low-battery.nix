@@ -29,11 +29,19 @@ in
       capacity=$(cat /sys/class/power_supply/BAT1/capacity)
       if [[ $online == 0 && $capacity -le ${toString lowBatteryPercent} ]]; then
         if [[ $(${ppd} get) != power-saver ]]; then
-          ${ppd} set power-saver
+          # The marker is written first. A stop before the profile change
+          # leaves the marker and the old profile, and the next run finishes
+          # the change. Setting the profile on every later run would make
+          # asusd rewrite the fan curves and drop a thermal-test override.
           touch "$marker"
+          ${ppd} set power-saver
         fi
       elif [[ $online == 1 && -e $marker ]]; then
-        ${ppd} set balanced
+        # A marker with any other profile means the change never landed, so
+        # there is nothing to undo.
+        if [[ $(${ppd} get) == power-saver ]]; then
+          ${ppd} set balanced
+        fi
         rm -f "$marker"
       fi
     '';

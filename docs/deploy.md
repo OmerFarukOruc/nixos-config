@@ -150,8 +150,10 @@ A deploy that changes the session launcher or an `ORUC_SHELL` condition does
 not reach a niri session that is already open. That session started niri
 without the new variable, so the shell's services do not start, because their
 `ORUC_SHELL` condition fails. The screen stays grey, with no bar or launcher.
-To confirm, run
-`ssh nixos-rog 'systemctl --user show-environment | grep ORUC_SHELL'`. The line
+This check is for a niri desktop with more than one shell. nixos-rog is that
+host. nixos-latitude has one niri shell, so it does not set `ORUC_SHELL`.
+To confirm on the host you deployed, run
+`ssh <host> 'systemctl --user show-environment | grep ORUC_SHELL'`. The line
 must read `ORUC_SHELL=<shell>` for the shell that the session runs. No line, or
 another shell, means the session predates the change. Log out and back in to fix it. On a grey screen, press Super+Shift+E, then
 Enter, to return to the login screen.

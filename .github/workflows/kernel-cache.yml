@@ -111,6 +111,12 @@ jobs:
       - name: Push to Cachix
         run: cachix push "${{ vars.CACHIX_CACHE }}" <"$RUNNER_TEMP/paths"
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kernel-paths-${{ matrix.variant }}
+          path: ${{ runner.temp }}/paths
+          if-no-files-found: error
+
   record:
     needs: [lock, build]
     runs-on: ubuntu-latest
@@ -119,25 +125,40 @@ jobs:
     permissions:
       contents: write
     steps:
-      # The tip of main, so a record commit from an earlier run does not make
-      # the push below a non-fast-forward.
+      # The tree the build job pushed. A later main is recorded only when it did
+      # not change the kernel-cache nix or patches that produced those paths.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ needs.lock.outputs.sha }}
+          fetch-depth: 0
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: Stop when main changed the kernel build
+        run: |
+          git fetch --no-tags origin main
+          if ! git diff --quiet "${{ needs.lock.outputs.sha }}" origin/main -- . ':(exclude)flake.lock'; then
+            echo "main changed kernel-cache nix or patches after ${{ needs.lock.outputs.sha }}. The queued run records."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: kernel-paths-*
+          path: ${{ github.workspace }}/kernel-paths
 
       - name: Lock the chosen revision
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
 
       # Hosts read this file to check the cache before they lock this revision.
-      # The version comes from the x86_64-v3 kernel, so keep that variant in
-      # `variants` in flake.nix, or change this name.
+      # The version comes from the x86_64-v3 kernel, evaluated on the tree the
+      # build job checked out. The paths are the ones that job pushed.
       - name: Record the cached paths
         run: |
-          # shellcheck disable=SC2016 # a Nix expression, not shell
-          nix eval --json .#packages.x86_64-linux --apply \
-            'ps: { inherit (ps."kernel-x86_64-v3") version; paths = builtins.concatMap (p: map (o: p.${o}.outPath) p.outputs) (builtins.attrValues ps); }' \
-            | jq --arg rev "${{ needs.lock.outputs.rev }}" '{ rev: $rev } + .' >cached-paths.json
+          version=$(nix eval --raw '.#packages.x86_64-linux.kernel-x86_64-v3.version')
+          find "$GITHUB_WORKSPACE/kernel-paths" -type f -name paths -print0 | xargs -0 cat | sort -u >all-paths
+          jq -R -s --arg rev "${{ needs.lock.outputs.rev }}" --arg version "$version" \
+            '{ rev: $rev, version: $version, paths: (split("\n") | map(select(length > 0))) }' \
+            all-paths >cached-paths.json
 
       # Runs only after every variant was built and pushed, so the lock on main
       # names a revision whose paths are all in the cache.
@@ -150,6 +171,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add flake.lock cached-paths.json
           git commit -m "chore: record the cached nix-cachyos-kernel build"
-          # Host updates merge to main while the build runs.
+          git branch -f kernel-cache-record HEAD
+          git switch kernel-cache-record
+          # Host updates merge to main while the build runs. Cachix already
+          # has the paths this commit names.
           git pull --rebase origin main
-          git push
+          git push origin HEAD:main

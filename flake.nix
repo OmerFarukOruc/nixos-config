@@ -99,5 +99,12 @@
 
   outputs =
     inputs:
-    import ./machines/inventory.nix { inherit inputs; } // import ./tooling.nix { inherit inputs; };
+    let
+      inventory = import ./machines/inventory.nix { inherit inputs; };
+      tooling = import ./tooling.nix { inherit inputs; };
+    in
+    {
+      inherit (inventory) nixosConfigurations;
+      inherit (tooling) formatter devShells;
+    };
 }

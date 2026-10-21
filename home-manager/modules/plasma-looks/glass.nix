@@ -34,6 +34,11 @@ in
           panelLayout = "islands";
         };
 
+        xdg.dataFile."color-schemes/OrucBase16Glass.colors".text = import ./kde-color-scheme.nix {
+          inherit lib;
+          rawScheme = config.scheme;
+        } true;
+
         programs.plasma = {
           workspace = {
             theme = "oruc-glass";

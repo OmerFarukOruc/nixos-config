@@ -145,12 +145,14 @@ in
     whisper-v3
   ];
 
-  systemd.user.services.easyeffects.serviceConfig = {
-    ExecStartPre = [ (lib.getExe easyeffectsSettings) ];
-    # A quit from the tray or the window exits 0, and only a start of this
-    # unit resets bypass. While the unit runs, a launch from the app menu
-    # opens the running instance's window.
-    Restart = lib.mkForce "always";
+  systemd.user.services.easyeffects = lib.mkIf config.oruc.machine.features.audioEffects {
+    serviceConfig = {
+      ExecStartPre = [ (lib.getExe easyeffectsSettings) ];
+      # A quit from the tray or the window exits 0, and only a start of this
+      # unit resets bypass. While the unit runs, a launch from the app menu
+      # opens the running instance's window.
+      Restart = lib.mkForce "always";
+    };
   };
   # Apps that record from the default source get HushMic's denoised
   # microphone. In the 2026-10-13 A/B take, HushMic cut silence and typing by

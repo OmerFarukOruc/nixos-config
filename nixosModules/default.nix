@@ -5,6 +5,8 @@
     ./bootloader.nix
     ./recovery.nix
     ./common.nix
+    ./tools.nix
+    ./monitoring.nix
     ./memory.nix
     ./theme.nix
     ./verify-facts.nix

@@ -108,6 +108,49 @@ let
   # 3400-4300 rpm, against about 2200 for the others.
   # The CPU curve ends at 82 °C with PWM 104 in quiet, at 94 °C with 165 in
   # balanced and at 86 °C with 200 in performance.
+  profiles = import ./power-profiles.nix;
+  sameNames = left: right: lib.sort builtins.lessThan left == lib.sort builtins.lessThan right;
+  fanNames = [
+    "CPU"
+    "GPU"
+    "MID"
+  ];
+  nonDecreasing =
+    values:
+    lib.all (index: builtins.elemAt values index <= builtins.elemAt values (index + 1)) (
+      lib.genList (index: index) (lib.length values - 1)
+    );
+  curveOk =
+    points:
+    let
+      temps = map lib.head points;
+      pwms = map lib.last points;
+    in
+    lib.isList points
+    && lib.length points == 8
+    && lib.all (point: lib.isList point && lib.length point == 2) points
+    && nonDecreasing temps
+    && nonDecreasing pwms
+    && lib.all (pwm: lib.isInt pwm && pwm >= 0 && pwm <= 255) pwms;
+  badCurves = lib.concatMap (
+    profile:
+    lib.concatMap (
+      fan:
+      let
+        points = fanCurveTable.${profile.json}.${fan} or null;
+      in
+      lib.optional (points == null || !curveOk points) "${profile.json}.${fan}"
+    ) fanNames
+  ) profiles;
+  fanSetBad = lib.concatMap (
+    profile:
+    let
+      names = lib.attrNames (fanCurveTable.${profile.json} or { });
+    in
+    lib.optional (
+      fanCurveTable ? ${profile.json} && !sameNames names fanNames
+    ) "${profile.json} fans ${toString names}"
+  ) profiles;
   fanCurveTable = lib.importJSON ./fan-curves.json;
   fanCurves =
     profiles:
@@ -139,6 +182,19 @@ let
     ),
   '';
 in
+assert lib.assertMsg (sameNames (lib.attrNames acTunings) (
+  map (profile: profile.asusd) profiles
+)) "AC tunings must use the asusd names in power-profiles.nix.";
+assert lib.assertMsg (sameNames (lib.attrNames dcTunings) (
+  map (profile: profile.asusd) profiles
+)) "DC tunings must use the asusd names in power-profiles.nix.";
+assert lib.assertMsg (sameNames (lib.attrNames fanCurveTable) (
+  map (profile: profile.json) profiles
+)) "fan-curves.json profiles must match power-profiles.nix.";
+assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
+  "fan-curves.json needs the fans CPU, GPU and MID, eight non-decreasing points, and PWM from 0 to 255: ${
+    lib.concatStringsSep ", " (badCurves ++ fanSetBad)
+  }";
 {
   # verify-nixos-rog.sh compares the live armoury limits and fan curves of each
   # platform profile with these.

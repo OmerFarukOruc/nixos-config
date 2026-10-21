@@ -88,135 +88,14 @@ let
     ) theme.ansi
   );
 
-  rgb =
-    name:
-    lib.concatStringsSep "," [
-      rawScheme."${name}-rgb-r"
-      rawScheme."${name}-rgb-g"
-      rawScheme."${name}-rgb-b"
-    ];
-  # KDE reads a fourth number as the alpha, from 0 (clear) to 255 (opaque).
-  # The Glass Qt style draws windows with these backgrounds, and the Glass
-  # KWin effect blurs what shows through.
-  rgba = name: alpha: "${rgb name},${toString alpha}";
-  kdeColorGroup =
-    {
-      backgroundNormal,
-      backgroundAlternate,
-      foregroundNormal,
-      translucent ? false,
-    }:
-    ''
-      BackgroundAlternate=${if translucent then rgba backgroundAlternate 80 else rgb backgroundAlternate}
-      BackgroundNormal=${if translucent then rgba backgroundNormal 140 else rgb backgroundNormal}
-      DecorationFocus=${rgb "base0D"}
-      DecorationHover=${rgb "base0D"}
-      ForegroundActive=${rgb "base0D"}
-      ForegroundInactive=${rgb "base03"}
-      ForegroundLink=${rgb "base0D"}
-      ForegroundNegative=${rgb "base08"}
-      ForegroundNeutral=${rgb "base09"}
-      ForegroundNormal=${rgb foregroundNormal}
-      ForegroundPositive=${rgb "base0B"}
-      ForegroundVisited=${rgb "base0E"}
-    '';
+  kdeColorScheme = import ./plasma-looks/kde-color-scheme.nix { inherit lib rawScheme; };
   opaqueScheme = kdeColorScheme false;
-  glassScheme = kdeColorScheme true;
   applyColorScheme = lib.getExe' pkgs.kdePackages.plasma-workspace "plasma-apply-colorscheme";
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
   setWidgetStyle = style: "${kwriteconfig} --file kdeglobals --group KDE --key widgetStyle ${style}";
   iconTheme = "${kwriteconfig} --file kdeglobals --group Icons --key Theme ${theme.icons}";
 
   colorsOnce = import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } "oruc-plasma-colors";
-
-  # The glass scheme makes the window and view backgrounds translucent.
-  kdeColorScheme = glass: ''
-    [ColorEffects:Disabled]
-    Color=${rgb "base03"}
-    ColorAmount=0
-    ColorEffect=0
-    ContrastAmount=0.65
-    ContrastEffect=1
-    IntensityAmount=0.1
-    IntensityEffect=2
-
-    [ColorEffects:Inactive]
-    ChangeSelectionColor=true
-    Color=${rgb "base03"}
-    ColorAmount=0.025
-    ColorEffect=2
-    ContrastAmount=0.1
-    ContrastEffect=2
-    Enable=false
-    IntensityAmount=0
-    IntensityEffect=0
-
-    [Colors:Button]
-    ${kdeColorGroup {
-      backgroundNormal = "base01";
-      backgroundAlternate = "base02";
-      foregroundNormal = "base05";
-    }}
-    [Colors:Complementary]
-    ${kdeColorGroup {
-      backgroundNormal = "base00";
-      backgroundAlternate = "base01";
-      foregroundNormal = "base05";
-    }}
-    [Colors:Header]
-    ${kdeColorGroup {
-      backgroundNormal = "base01";
-      backgroundAlternate = "base02";
-      foregroundNormal = "base05";
-    }}
-    [Colors:Header][Inactive]
-    ${kdeColorGroup {
-      backgroundNormal = "base00";
-      backgroundAlternate = "base01";
-      foregroundNormal = "base04";
-    }}
-    [Colors:Selection]
-    ${kdeColorGroup {
-      backgroundNormal = "base0D";
-      backgroundAlternate = "base0C";
-      foregroundNormal = "base00";
-    }}
-    [Colors:Tooltip]
-    ${kdeColorGroup {
-      backgroundNormal = "base01";
-      backgroundAlternate = "base02";
-      foregroundNormal = "base05";
-    }}
-    [Colors:View]
-    ${kdeColorGroup {
-      backgroundNormal = "base00";
-      backgroundAlternate = "base01";
-      foregroundNormal = "base05";
-      translucent = glass;
-    }}
-    [Colors:Window]
-    ${kdeColorGroup {
-      backgroundNormal = "base00";
-      backgroundAlternate = "base01";
-      foregroundNormal = "base05";
-      translucent = glass;
-    }}
-    [General]
-    ColorScheme=OrucBase16${lib.optionalString glass "Glass"}
-    Name=Oruc Base16${lib.optionalString glass " Glass"}
-    shadeSortColumn=true
-
-    [KDE]
-    contrast=4
-
-    [WM]
-    activeBackground=${rgb "base01"}
-    activeBlend=${rgb "base01"}
-    activeForeground=${rgb "base05"}
-    inactiveBackground=${rgb "base00"}
-    inactiveBlend=${rgb "base00"}
-    inactiveForeground=${rgb "base03"}
-  '';
 in
 {
   fonts.fontconfig.enable = true;
@@ -317,9 +196,6 @@ in
       theme.wallpaper;
     "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
       text = opaqueScheme;
-    };
-    "color-schemes/OrucBase16Glass.colors" = lib.mkIf isPlasma {
-      text = glassScheme;
     };
 
     # Plasma's translucent desktop theme has no colors file of its own, and
