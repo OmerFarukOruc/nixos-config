@@ -171,29 +171,13 @@ other_hosts_build() {
   done
 }
 
-# local_check NAME COMMAND...: runs one check and names it on stderr when it
-# fails, so a caller can drop the check's stdout.
-local_check() {
-  local name=$1
-  shift
-  "$@" || {
-    echo "The check \"$name\" fails on this update." >&2
-    return 76
-  }
-}
-
-# The checks of .github/workflows/check.yml that the builds above do not cover,
-# so the PR can merge without waiting for GitHub. CI forbids import from
-# derivation, so these do too.
+# The checks of CI's check job (ci/checks.sh) and unit-cycles job, so the PR can
+# merge without waiting for GitHub. The builds above cover the hosts job.
+# ci/checks.sh forbids import from derivation itself; this covers
+# ci/unit-cycles.sh.
 local_checks() {
   local -x NIX_CONFIG="$NIX_CONFIG"$'\n''allow-import-from-derivation = false'
-  local_check "lock file" nix flake metadata --no-update-lock-file . >/dev/null &&
-    local_check formatting nix fmt -- --ci &&
-    local_check "flake outputs" nix flake check --no-build --no-write-lock-file &&
-    local_check "unit ordering cycles" ci/unit-cycles.sh &&
-    local_check "cached packages" nix eval --json --impure \
-      --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-      --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))' >/dev/null
+  ci/checks.sh && ci/unit-cycles.sh || return 76
 }
 
 # Succeeds when a cache holds every package of ci/cached-packages.nix that a
