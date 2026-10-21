@@ -247,6 +247,11 @@ the terminal. A run without a terminal fails with `could not read passphrase`.
 SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops secrets/nixos-rog.yaml
 ```
 
+After an edit, run `scripts/check-secrets.sh` on nixos-rog. It decrypts the file
+with the host key, as the laptop does at boot, and fails when a secret the
+configuration declares has no key in the file or the file holds a key no secret
+declares. It prints key names only.
+
 ### Rotate github-update-token
 
 The token does not expire. Rotate it when it may have leaked. GitHub lists it as
