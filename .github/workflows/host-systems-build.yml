@@ -20,7 +20,11 @@ concurrency:
 jobs:
   host-systems-build:
     # scripts/pr-build.sh refuses a PR from a fork, so its job would only fail.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # The updater's PR merges at once (scripts/auto-update.sh), after nixos-rog
+    # built every host, and pr-build.sh refuses a closed PR.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.head.ref != 'auto-update'
     runs-on: ubuntu-latest
     # scripts/pr-build.sh stops itself after 110 min.
     timeout-minutes: 120
@@ -73,8 +77,6 @@ jobs:
             3) echo "::error::nixos-rog runs on battery. Rerun this check once it is on AC power." ;;
             5) echo "::error::Another build held nixos-rog's build lock for an hour. Rerun this check." ;;
             255) echo "::error::nixos-rog does not answer over the tailnet. Rerun this check once it is on." ;;
-            # The updater counts a red check against its update only with
-            # this text (scripts/auto-update.sh, checks_result).
             1) echo "::error::A host system does not evaluate or build at this commit; the output above names it." ;;
             *) echo "::error::scripts/pr-build.sh exited $status; its output is above." ;;
           esac
