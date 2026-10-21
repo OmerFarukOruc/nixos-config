@@ -47,8 +47,9 @@ jobs:
           nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
             --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
 
-  # One Nix evaluation uses one core, so each host evaluates in the
-  # background, beside the check job on its own runner.
+  # A job of its own, so the host evaluations run beside nix flake check.
+  # Evaluating the hosts at once was not faster here (3 min 23 s against
+  # 3 min 7 s one after another; GitHub step times, 2026-10-21).
   hosts:
     if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
     runs-on: ubuntu-latest
@@ -68,24 +69,14 @@ jobs:
             echo "The flake defines no host." >&2
             exit 1
           fi
-          declare -A pids
           for host in $hosts; do
+            log=$RUNNER_TEMP/eval-$host.log
+            status=0
             nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath" \
-              >"$RUNNER_TEMP/drv-$host" 2>"$RUNNER_TEMP/eval-$host.log" &
-            pids[$host]=$!
-            wait "${pids[$host]}" || true
-          done
-          status=0
-          for host in $hosts; do
-            rc=0
-            wait "${pids[$host]}" || rc=$?
-            cat "$RUNNER_TEMP/eval-$host.log" >&2
-            if ((rc == 0)); then
-              echo "$host: $(<"$RUNNER_TEMP/drv-$host")"
-            else
-              echo "::error::$host does not evaluate (exit $rc); its log is above."
-              status=1
-            fi
+              2>"$log" || status=$?
+            echo
+            cat "$log" >&2
+            ((status == 0)) || exit "$status"
           done
           # Warnings do not fail the job, so a warning from an upstream input
           # never blocks the updater; each one shows as an annotation.
@@ -99,7 +90,6 @@ jobs:
               echo "- ${warning#evaluation warning: }" >>"$GITHUB_STEP_SUMMARY"
             done <<<"$warnings"
           fi
-          exit "$status"
 
   # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
   # this job finds the cycle before the merge.

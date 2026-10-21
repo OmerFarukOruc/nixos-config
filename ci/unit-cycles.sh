@@ -3,7 +3,7 @@
 # For every host, builds its /etc/systemd/system through ci/unit-cycles.nix and
 # fails when systemd-analyze finds an ordering cycle in what default.target
 # pulls in. deploy.sh runs the same check on the built system (exit 80). The
-# hosts are checked at once, because one Nix evaluation uses one core.
+# hosts are checked at once: 22 s instead of 32 s on nixos-rog (2026-10-21).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
