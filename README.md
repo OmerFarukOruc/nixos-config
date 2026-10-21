@@ -164,6 +164,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/affected-hosts.sh [--running] [REV]` | list the hosts whose system a merged commit changes, or with `--running` the hosts whose running system differs from `main` |
+| `scripts/check-secrets.sh [FILE]` | on nixos-rog, decrypt `secrets/nixos-rog.yaml` (or FILE) with the host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
