@@ -44,10 +44,9 @@ steps:
    nothing.
 5. It builds every other host's system, then runs the checks of
    [check.yml](../.github/workflows/check.yml) that those builds do not
-   cover: the lock file check, `nix fmt -- --ci`, `nix flake check
-   --no-build`, `ci/unit-cycles.sh` and the evaluation of
-   `ci/cached-packages.nix`. When a system does not build or a check fails,
-   the update fails with status 76 and the log names the host or the check.
+   cover: `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
+   build or a check fails, the update fails with status 76 and the log names
+   the host or the check.
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
 7. It opens a PR from the `auto-update` branch and squash-merges it to `main`
    at once. The PR body holds dix's comparison of the old and new system.

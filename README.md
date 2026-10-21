@@ -148,7 +148,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
 | `upgrade` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main` |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
-| `scripts/check-on-rog.sh` | run the formatter and flake checks on nixos-rog and list each distinct evaluation warning; `--fix` formats |
+| `scripts/check-on-rog.sh` | run `ci/checks.sh`, CI's formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 
 <details>
 <summary>More commands</summary>

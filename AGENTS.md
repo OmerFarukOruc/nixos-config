@@ -16,7 +16,7 @@ fedora-desktop has no Nix, so these scripts run Nix on a copy of this checkout o
 
 - A PR that changes `pkgs/`, `overlays/`, `home-manager/modules/plasma-*.nix`, `scripts/auto-update.sh`, `machines/nixos-rog/auto-update.nix` or `.github/workflows/` gets a review of its final diff from an agent that did not write it, before `pr-land`.
 - `nix fmt` runs `scripts/check-theme-drift.sh`, which fails on a fixed color in a tracked file. A color in new UI comes from `config.scheme` or `oruc.theme.ansi`; otherwise list the app under the fixed colors in [Theme](docs/architecture.md#theme).
-- Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs CI's formatter check and `nix flake check` with import from derivation off. CI also evaluates `ci/cached-packages.nix` and runs `ci/unit-cycles.sh`; the script does not.
+- Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs `ci/checks.sh`, the checks of CI's `check` job. CI's `hosts` and `unit-cycles` jobs run beside it; the script does not run them.
 - Print one configuration value with `scripts/eval-on-rog.sh [--json] <attribute>`. A bare attribute is a path under nixos-rog's `config`; a flake attribute with `#` reaches another host. A value that is not a string needs `--json`.
 - Before a new or changed package or overlay lands, prove it builds with `scripts/build-on-rog.sh [ATTRIBUTE...]`. Each attribute is a flake attribute such as `.#nixosConfigurations.nixos-rog.pkgs.deskflow`; with none it builds nixos-rog's system. It builds on nixos-rog from a copy of the checkout and prints each output path.
 - Before deploying a new or changed systemd `script`, run it with `scripts/run-unit-on-rog.sh <unit>`; for a new or changed Home Manager user unit, add `--user`.

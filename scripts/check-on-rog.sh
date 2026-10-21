@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # usage: scripts/check-on-rog.sh [--fix]
-# Runs the formatter check, the lock file check and nix flake check --no-build
-# on nixos-rog, for a copy of this checkout (scripts/lib/rog-copy.sh), because
-# fedora-desktop has no Nix. With --fix, it first formats the copy and locks
+# Runs ci/checks.sh, the checks of CI's check job, on nixos-rog, for a copy of
+# this checkout (scripts/lib/rog-copy.sh), because fedora-desktop has no Nix. With --fix, it first formats the copy and locks
 # each input that flake.lock lacks, copies the files that changed back here,
 # and then checks.
 set -euo pipefail
@@ -40,30 +39,9 @@ EOF
   fi
 fi
 
-# The same checks as CI's check.yml, which also forbids import from derivation.
-# Evaluation warnings do not fail the check; the summary at the end lists them.
 rog_remote <<'EOF'
-set -eo pipefail
+set -e
 cd "$1"
 git add -A
-# With --no-write-lock-file, nix flake check passes an input that flake.lock
-# lacks and only warns, and the input then follows its upstream unpinned. nix
-# fmt writes the lock file, so this check runs first.
-for flake in . ./kernel-cache; do
-  nix flake metadata --no-update-lock-file "$flake" >/dev/null ||
-    { echo "flake.lock of $flake does not match its flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check-on-rog.sh --fix relocks" >&2; exit 1; }
-done
-nix fmt -- --ci
-log=$(mktemp)
-trap 'rm -f -- "$log"' EXIT
-nix flake check --no-build --no-write-lock-file --option allow-import-from-derivation false 2>&1 | tee "$log"
-nix eval --json --no-write-lock-file --option allow-import-from-derivation false \
-  ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
-echo
-warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)
-if [[ -z $warnings ]]; then
-  echo "No evaluation warnings."
-else
-  printf '%d distinct evaluation warnings:\n%s\n' "$(wc -l <<<"$warnings")" "$warnings"
-fi
+ci/checks.sh
 EOF

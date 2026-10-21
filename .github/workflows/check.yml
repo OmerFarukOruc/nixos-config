@@ -27,25 +27,9 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
             allow-import-from-derivation = false
-      # nix flake check passes an input that flake.lock lacks and only warns,
-      # and nix fmt writes the lock file, so this step runs first.
-      - name: Check lock files
-        run: |
-          nix flake metadata --no-update-lock-file . >/dev/null
-          nix flake metadata --no-update-lock-file ./kernel-cache >/dev/null
-      - name: Check formatting
-        run: nix fmt -- --ci
-      - name: Check flake outputs
-        run: nix flake check --no-build --no-write-lock-file
-      - name: Evaluate kernel-cache packages
-        run: |
-          nix eval --json --no-write-lock-file ./kernel-cache#packages.x86_64-linux \
-            --apply 'builtins.mapAttrs (_: p: p.drvPath)'
-      # Not a flake output, so the steps above do not evaluate it.
-      - name: Evaluate the cached host packages
-        run: |
-          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+      # The same list scripts/check-on-rog.sh and the updater run.
+      - name: Run ci/checks.sh
+        run: ci/checks.sh
 
   # A job of its own, so the host evaluations run beside nix flake check.
   # Evaluating the hosts at once showed no clear gain: 3 min 23 s in one run,
