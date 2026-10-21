@@ -428,7 +428,8 @@ gh pr create --repo "$repo" --base main --head "$branch" \
   gh pr edit "$branch" --repo "$repo" --body "$body"
 
 # The PR merges at once, since the checks above ran here; GitHub runs check,
-# unit-cycles and build again on main after the merge and emails a failure.
+# hosts, unit-cycles and build again on main after the merge and emails a
+# failure.
 # GitHub can refuse a merge until it has computed the new PR's mergeability. A
 # try that merged on GitHub but failed afterwards, such as in the local branch
 # cleanup, counts as merged.

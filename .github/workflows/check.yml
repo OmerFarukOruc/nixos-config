@@ -41,6 +41,25 @@ jobs:
         run: |
           nix eval --json --no-write-lock-file ./kernel-cache#packages.x86_64-linux \
             --apply 'builtins.mapAttrs (_: p: p.drvPath)'
+      # Not a flake output, so the steps above do not evaluate it.
+      - name: Evaluate the cached host packages
+        run: |
+          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
+            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+
+  # One Nix evaluation uses one core, so each host evaluates in the
+  # background, beside the check job on its own runner.
+  hosts:
+    if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            allow-import-from-derivation = false
       - name: Evaluate host systems
         shell: bash
         run: |
@@ -49,14 +68,23 @@ jobs:
             echo "The flake defines no host." >&2
             exit 1
           fi
+          declare -A pids
           for host in $hosts; do
-            log=$RUNNER_TEMP/eval-$host.log
-            status=0
             nix eval --raw --no-write-lock-file ".#nixosConfigurations.${host}.config.system.build.toplevel.drvPath" \
-              2>"$log" || status=$?
-            echo
-            cat "$log" >&2
-            ((status == 0)) || exit "$status"
+              >"$RUNNER_TEMP/drv-$host" 2>"$RUNNER_TEMP/eval-$host.log" &
+            pids[$host]=$!
+          done
+          status=0
+          for host in $hosts; do
+            rc=0
+            wait "${pids[$host]}" || rc=$?
+            cat "$RUNNER_TEMP/eval-$host.log" >&2
+            if ((rc == 0)); then
+              echo "$host: $(<"$RUNNER_TEMP/drv-$host")"
+            else
+              echo "::error::$host does not evaluate (exit $rc); its log is above."
+              status=1
+            fi
           done
           # Warnings do not fail the job, so a warning from an upstream input
           # never blocks the updater; each one shows as an annotation.
@@ -70,11 +98,7 @@ jobs:
               echo "- ${warning#evaluation warning: }" >>"$GITHUB_STEP_SUMMARY"
             done <<<"$warnings"
           fi
-      # Not a flake output, so the steps above do not evaluate it.
-      - name: Evaluate the cached host packages
-        run: |
-          nix eval --json --impure --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-            --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+          exit "$status"
 
   # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
   # this job finds the cycle before the merge.

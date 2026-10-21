@@ -51,8 +51,9 @@ steps:
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
 7. It opens a PR from the `auto-update` branch and squash-merges it to `main`
    at once. The PR body holds dix's comparison of the old and new system.
-   GitHub skips the PR's checks and runs `check`, `unit-cycles` and the
-   host-packages-cache build on the push to `main`; GitHub emails a failed run.
+   GitHub skips the PR's checks and runs `check`, `hosts`, `unit-cycles` and
+   the host-packages-cache build on the push to `main`; GitHub emails a failed
+   run.
 
 The updater deploys no other host. nixos-latitude gets `main` only from a
 manual `./deploy.sh nixos-latitude switch`.
