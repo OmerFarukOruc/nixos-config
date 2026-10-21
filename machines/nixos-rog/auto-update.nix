@@ -79,11 +79,12 @@ in
       Type = "oneshot";
       # Without a limit one hung network call keeps the unit active, and the
       # timer never starts it again. The longest run in the journal (24 runs
-      # from 2026-10-10 to 2026-10-12) took 3 min 13 s; the rest is room for
-      # compiling the packages of ci/cached-packages.nix when no cache holds
-      # them, and for up to 30 minutes of waiting for the build lock. A kill sends
-      # the script SIGTERM, and its trap notifies. A kill during deploy.sh
-      # leaves the rollback timer to restore the previous system.
+      # from 2026-10-10 to 2026-10-12) took 3 min 13 s, and the checks before
+      # the deploy added 70 s on 2026-10-21. The rest is room for compiling
+      # the packages of ci/cached-packages.nix when no cache holds them, and
+      # for up to 30 minutes of waiting for the build lock. A kill sends the
+      # script SIGTERM, and its trap notifies. A kill during deploy.sh leaves
+      # the rollback timer to restore the previous system.
       TimeoutStartSec = "3h";
       # Slows the run above 10 GiB, as heavy does, and never kills it, so the
       # script's traps still report. A MemoryMax kill would skip them. The

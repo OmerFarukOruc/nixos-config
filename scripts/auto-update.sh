@@ -7,10 +7,10 @@
 # here; the run deploys to no other host.
 # nixpkgs, dms and sops-nix wait for the cache for a day at most
 # (see below).
-# A candidate that fails another host's build, a check, this host's build or the
-# activation is not tried again until main or an upstream moves. The run retries after
-# this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the
-# candidate's fault.
+# A candidate that fails another host's build, a check, this host's build or
+# the activation is not tried again until main or an upstream moves. The run
+# retries after this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are
+# not the candidate's fault.
 # -E lets the ERR trap below fire inside functions too.
 set -Eeuo pipefail
 
@@ -429,10 +429,14 @@ gh pr create --repo "$repo" --base main --head "$branch" \
 
 # The PR merges at once, since the checks above ran here; GitHub runs check,
 # unit-cycles and build again on main after the merge and emails a failure.
-# GitHub can refuse a merge until it has computed the new PR's mergeability.
+# GitHub can refuse a merge until it has computed the new PR's mergeability. A
+# try that merged on GitHub but failed afterwards, such as in the local branch
+# cleanup, counts as merged.
+pr=$(gh pr view "$branch" --repo "$repo" --json number --jq .number)
 merged=false
 for attempt in 1 2 3; do
-  if gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"; then
+  if gh pr merge "$pr" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)" ||
+    [[ $(gh pr view "$pr" --repo "$repo" --json state --jq .state) == MERGED ]]; then
     merged=true
     break
   fi
