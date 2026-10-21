@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # usage: scripts/check-on-rog.sh [--fix]
 # Runs ci/checks.sh, the checks of CI's check job, on nixos-rog, for a copy of
-# this checkout (scripts/lib/rog-copy.sh), because fedora-desktop has no Nix. With --fix, it first formats the copy and locks
-# each input that flake.lock lacks, copies the files that changed back here,
-# and then checks.
+# this checkout (scripts/lib/rog-copy.sh), because fedora-desktop has no Nix.
+# With --fix, it first formats the copy and locks each input that flake.lock
+# lacks, copies the files that changed back here, and then checks.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

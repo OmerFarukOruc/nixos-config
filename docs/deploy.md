@@ -52,8 +52,8 @@ scripts/check-on-rog.sh --fix
 scripts/eval-on-rog.sh '.#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
 ```
 
-`check-on-rog.sh` runs the formatter check and `nix flake check --no-build`,
-and forbids import from derivation, as CI does. With `--fix` it formats first
+`check-on-rog.sh` runs `ci/checks.sh`, the checks of CI's `check` job, with
+import from derivation forbidden as in CI. With `--fix` it formats first
 and copies the changed files back before it checks. `eval-on-rog.sh` evaluates
 one attribute and does not forbid import from derivation.
 

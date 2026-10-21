@@ -12,13 +12,16 @@ nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
 
-# check NAME COMMAND...: runs one check under a heading.
+# check NAME COMMAND...: runs one check under a heading. COMMAND runs with
+# errexit off, so a function passed here returns its own failure.
 check() {
   local name=$1
   shift
   echo "== $name"
   "$@" || {
     echo "The check \"$name\" failed." >&2
+    # An annotation, so the failed check shows on the PR without the log.
+    [[ ${GITHUB_ACTIONS:-} != true ]] || echo "::error::The check \"$name\" failed."
     exit 1
   }
 }
@@ -41,7 +44,7 @@ flake_outputs() {
 # lacks and only warns, and the input then follows its upstream unpinned. nix
 # fmt writes the lock file, so this check runs first.
 check "lock files" lock_files
-check formatting nix fmt -- --ci
+check formatting nix fmt "${nix_opts[@]}" -- --ci
 check "flake outputs" flake_outputs
 check "kernel-cache packages" nix eval "${nix_opts[@]}" --json --no-write-lock-file \
   ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
