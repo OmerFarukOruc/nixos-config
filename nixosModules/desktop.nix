@@ -39,6 +39,7 @@ let
         rm $out/share/wayland-sessions/niri.desktop
       ''
       + lib.concatMapStrings (shell: ''
+        rm -f $out/share/wayland-sessions/${niriSessionName shell}.desktop
         cat >$out/share/wayland-sessions/${niriSessionName shell}.desktop <<EOF
         [Desktop Entry]
         Name=Niri (${shell})
