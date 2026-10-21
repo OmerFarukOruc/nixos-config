@@ -40,11 +40,6 @@ in
   environment.systemPackages = [ upgrade ];
 
   sops.secrets.github-update-token = { };
-  # The SSH key that deploys main to nixos-latitude, which authorizes it.
-  sops.secrets.latitude-deploy-key = { };
-  # nixos-latitude's host key, so the updater's SSH needs no first-use prompt.
-  programs.ssh.knownHosts.nixos-latitude.publicKey =
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO92VnaHsupV1yTYiGYal+7LgHABYQfE0ljjODnw2uUS";
 
   systemd.services.oruc-auto-update = {
     description = "Update, deploy and merge the newest releases";
@@ -75,8 +70,6 @@ in
       git
       jq
       libnotify
-      # ssh to the other hosts, for deploy.sh and nix copy.
-      openssh
       python3
       rsync
       # flock for deploy.sh's lock.
@@ -88,9 +81,7 @@ in
       # timer never starts it again. The longest run in the journal (24 runs
       # from 2026-10-10 to 2026-10-12) took 3 min 13 s; the rest is room for
       # compiling the packages of ci/cached-packages.nix when no cache holds
-      # them, for up to 30 minutes of waiting for the build lock and 45 for
-      # the update PR's checks, and for the deploys to other hosts after the
-      # merge, which scripts/auto-update.sh keeps 45 minutes for. A kill sends
+      # them, and for up to 30 minutes of waiting for the build lock. A kill sends
       # the script SIGTERM, and its trap notifies. A kill during deploy.sh
       # leaves the rollback timer to restore the previous system.
       TimeoutStartSec = "3h";
@@ -107,7 +98,6 @@ in
       SyslogIdentifier = identifier;
       LoadCredential = [
         "github-token:${config.sops.secrets.github-update-token.path}"
-        "latitude-deploy-key:${config.sops.secrets.latitude-deploy-key.path}"
       ];
       ExecStart = "${pkgs.bash}/bin/bash ${../../scripts/auto-update.sh}";
     };

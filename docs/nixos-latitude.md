@@ -62,10 +62,12 @@ use three 10-second windows.
 
 ## Operation
 
-- nixos-rog's hourly updater deploys `main` here with `switch` whenever the
-  running system differs ([nixos-rog.md](nixos-rog.md#hourly-updater)). A new
-  kernel from such a deploy becomes the boot default and runs after the next
-  reboot, which the item below covers.
+- nixos-latitude gets `main` only from `./deploy.sh nixos-latitude switch`;
+  nixos-rog's hourly updater builds its system but does not deploy it
+  ([nixos-rog.md](nixos-rog.md#hourly-updater)).
+  `scripts/affected-hosts.sh --running` lists nixos-latitude while it runs a
+  system that differs from `main`. A new kernel from a deploy becomes the boot
+  default and runs after the next reboot, which the item below covers.
 - A reboot needs the password at nixos-latitude. Automatic login is off
   (`nixosModules/desktop.nix`), so the greeter waits for a password. Sunshine
   streams the logged-in niri session, so remote desktop stays down until

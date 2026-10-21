@@ -26,8 +26,9 @@ concurrency:
 jobs:
   build:
     # Repository variable CACHIX_CACHE names the Cachix cache; the
-    # CACHIX_AUTH_TOKEN secret may push to it.
-    if: vars.CACHIX_CACHE != ''
+    # CACHIX_AUTH_TOKEN secret may push to it. The updater's PR merges at once
+    # (scripts/auto-update.sh), so its packages build on the push to main.
+    if: vars.CACHIX_CACHE != '' && github.head_ref != 'auto-update'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:

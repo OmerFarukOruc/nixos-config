@@ -32,9 +32,8 @@ hour on AC power, it runs `scripts/auto-update.sh` in its own clone of this
 repository. Its timer adds up to 10 minutes of random delay. On battery the
 service skips the run.
 
-Each run first deploys `main` to every other host that runs another system,
-as the last step below describes. Then it collects its input and app changes
-into one update, and does these steps:
+Each run collects its input and app changes into one update, and does these
+steps:
 
 1. It moves every input that the table below does not name with
    `move-inputs.sh`.
@@ -43,23 +42,25 @@ into one update, and does these steps:
    input, kernel and app steps.
 4. When no input or app moved, it logs "Everything is current." and deploys
    nothing.
-5. It builds every other host's system. When one does not build, the update
-   fails with status 76.
+5. It builds every other host's system, then runs the checks of
+   [check.yml](../.github/workflows/check.yml) that those builds do not
+   cover: the lock file check, `nix fmt -- --ci`, `nix flake check
+   --no-build`, `ci/unit-cycles.sh` and the evaluation of
+   `ci/cached-packages.nix`. When a system does not build or a check fails,
+   the update fails with status 76 and the log names the host or the check.
 6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
-7. It opens a PR from the `auto-update` branch, waits up to 45 minutes for
-   every check of that PR, including [PR builds](#pr-builds), and
-   squash-merges it to `main`. The PR body holds dix's comparison of the old
-   and new system.
-8. It deploys `main` to each other host whose running system differs. It
-   builds that system here, copies it with `nix copy`, then runs
-   `./deploy.sh HOST switch`, so the host does not compile it. The updater
-   reaches the host with its own SSH key, `latitude-deploy-key` in
-   [Secrets](#secrets), which nixos-latitude authorizes.
+7. It opens a PR from the `auto-update` branch and squash-merges it to `main`
+   at once. The PR body holds dix's comparison of the old and new system.
+   GitHub skips the PR's checks and runs `check`, `unit-cycles` and the
+   host-packages-cache build on the push to `main`; GitHub emails a failed run.
+
+The updater deploys no other host. nixos-latitude gets `main` only from a
+manual `./deploy.sh nixos-latitude switch`.
 
 A desktop notification reports each update or failure.
 
 The run holds the build lock that [PR builds](#pr-builds) also take, from the
-checkout of `main` until it pushes the `auto-update` branch. When a PR build holds the lock
+checkout of `main` until it ends. When a PR build holds the lock
 for 30 minutes, the run stops quietly and the next run tries again.
 
 A change merged to `main` reaches nixos-rog with the next update that moves
@@ -119,7 +120,7 @@ that the caches lack and pushes them to the `omerfarukoruc` Cachix cache. It
 also builds them for every push to `main`, so a later deploy of nixos-latitude
 downloads them. On a pull request it builds them and runs the closure check
 without pushing, so a change that would keep a package out of the cache fails
-there. GitHub emails a failed scheduled run of that workflow.
+there. The updater's PR skips this build, because it merges at once. GitHub emails a failed scheduled run of that workflow.
 
 The updater moves the inputs those packages come from only once the cache
 holds every package this host uses. So nixpkgs updates can lag nixos-unstable
@@ -139,6 +140,8 @@ derivation.
 ## PR builds
 
 Every PR to `main` gets the `host-systems-build` check, which nixos-rog runs.
+The updater's PR skips it, because the updater built every host's system
+before it opened the PR.
 The [workflow](../.github/workflows/host-systems-build.yml) joins the tailnet as
 an ephemeral node with the tag `tag:ci`, logs in to nixos-rog over SSH and
 passes the PR number and head SHA. The key it logs in with runs only
@@ -196,14 +199,8 @@ The exit codes below come from `deploy.sh`, except 76. The
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, or another host does not evaluate or build (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
-| The updater cannot log in to another host over SSH | The run skips it. The next run tries again. | "HOST not updated" with ssh's last error line, once, until the login works |
-| Copying the system to another host fails or passes 30 minutes | `deploy.sh` builds the system on that host. | None |
-| The deploy of `main` to another host fails with 70, 71, 74, 77 or 79 | The next run tries again. | "HOST update waiting" once, when two runs in a row end with the same status |
-| The deploy of `main` to another host fails with another status, or its system does not build here | The run does not try that commit on that host again until `main` moves. | Critical |
-| Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` or an unset variable | The next run tries again. | Critical, once per run |
-| A check of the update PR fails, or host-systems-build finds a system that does not evaluate or build | nixos-rog keeps running the update, which never reaches `main`. The run does not try that update again until `main` or an upstream moves. | Critical |
-| The update PR's checks do not finish in time, or host-systems-build fails for another reason, such as nixos-rog on battery | The run stops without a failure. The next run waits on the same commit again; after a red host-systems-build it pushes the update with new dates, so the checks run again. | "Update waiting" from the second run in a row |
+| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
+| Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` after 3 tries or an unset variable | The next run tries again. When `gh pr merge` failed, nixos-rog keeps running the update until then. | Critical, once per run |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
@@ -227,8 +224,7 @@ next run sends it again.
 ## Secrets
 
 `secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`),
-the updater's GitHub token (`github-update-token`) and the SSH key with which
-the updater deploys nixos-latitude (`latitude-deploy-key`). sops encrypts the
+and the updater's GitHub token (`github-update-token`). sops encrypts the
 file for two recipients, which `.sops.yaml` lists:
 
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
@@ -273,30 +269,6 @@ working token until the new one is deployed:
    repeat steps 2 to 4 with it, and in step 5 delete both the old token and the
    wrong one.
 5. Delete the old token on the same GitHub page.
-
-### Rotate latitude-deploy-key
-
-nixos-latitude authorizes the key's public half in
-`machines/nixos-latitude/configuration.nix`. Rotate it when it may have
-leaked, in this order, so the updater can still log in at each step:
-
-1. On nixos-rog, create the new key in a private directory:
-   `ssh-keygen -t ed25519 -N '' -C nixos-rog-auto-update -f <dir>/key`.
-2. Add the new public key next to the old one in
-   `machines/nixos-latitude/configuration.nix`, land it, and wait until
-   nixos-latitude runs it. The updater deploys it with the old key, or deploy
-   it with `./deploy.sh nixos-latitude switch`.
-3. Write the new private key into the file. sops reads it from stdin, so it
-   never appears in a process list, and asks for the shared key's password:
-
-   ```sh
-   jq -Rs . <dir>/key | SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["latitude-deploy-key"]'
-   ```
-
-4. Delete `<dir>`, remove the old public key from
-   `machines/nixos-latitude/configuration.nix`, land both files, and deploy
-   nixos-rog with `./deploy.sh nixos-rog switch`. The updater deploys the key
-   removal to nixos-latitude with the new key on its next run.
 
 ## DNS
 

@@ -12,8 +12,11 @@ concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
 
+# The updater's PR (head branch auto-update) runs these checks on nixos-rog and
+# merges at once (scripts/auto-update.sh), so they run on its push to main.
 jobs:
   check:
+    if: github.head_ref != 'auto-update'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -75,6 +78,7 @@ jobs:
   # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
   # this job finds the cycle before the merge.
   unit-cycles:
+    if: github.head_ref != 'auto-update'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

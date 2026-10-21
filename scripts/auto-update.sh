@@ -3,12 +3,12 @@
 # every app in pkgs/ that names a release source to their newest release,
 # deploys the result to this host with deploy.sh, and squash-merges it to main.
 # The kernel and llm-agents move only while a cache holds the builds they need.
-# Every other host must build here first, and after the merge the run deploys
-# main to each other host that runs another system.
+# Every other host must build here first, and the checks of check.yml must pass
+# here; the run deploys to no other host.
 # nixpkgs, dms and sops-nix wait for the cache for a day at most
 # (see below).
-# A candidate that fails another host's build, this host's build or the activation
-# is not tried again until main or an upstream moves. The run retries after
+# A candidate that fails another host's build, a check, this host's build or the
+# activation is not tried again until main or an upstream moves. The run retries after
 # this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are not the
 # candidate's fault.
 # -E lets the ERR trap below fire inside functions too.
@@ -80,27 +80,6 @@ chmod 600 "$RUNTIME_DIRECTORY/nix.conf" "$RUNTIME_DIRECTORY/gh/hosts.yml"
 export NIX_CONFIG="include $RUNTIME_DIRECTORY/nix.conf"
 export GH_CONFIG_DIR="$RUNTIME_DIRECTORY/gh"
 
-# deploy.sh, its rsync and nix copy reach another host with plain `ssh HOST`.
-# The service has no agent and no personal key, so an ssh first on PATH adds
-# this run's config, which names the deploy key from the credentials. The host
-# keys come from /etc/ssh/ssh_known_hosts (programs.ssh.knownHosts).
-mkdir -p -- "$RUNTIME_DIRECTORY/bin"
-cat >"$RUNTIME_DIRECTORY/ssh_config" <<EOF
-Host *
-  IdentityFile $CREDENTIALS_DIRECTORY/latitude-deploy-key
-  IdentitiesOnly yes
-  BatchMode yes
-  ConnectTimeout 15
-  ServerAliveInterval 15
-  ServerAliveCountMax 4
-  StrictHostKeyChecking yes
-  UserKnownHostsFile /dev/null
-EOF
-printf '#!%s\nexec %q -F %q "$@"\n' "$(command -v bash)" "$(command -v ssh)" "$RUNTIME_DIRECTORY/ssh_config" \
-  >"$RUNTIME_DIRECTORY/bin/ssh"
-chmod 700 "$RUNTIME_DIRECTORY/bin/ssh"
-export PATH="$RUNTIME_DIRECTORY/bin:$PATH"
-
 # A failed clone or fetch is quiet only during a network outage. Any other
 # failure, such as a revoked token or lost repository access, would stop every
 # update with no sign, so it notifies and fails.
@@ -127,8 +106,7 @@ git checkout --quiet --force -B "$branch" "$base"
 git clean -fdxq
 
 # The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
-# PR build and this run never evaluate or build at once. The run lets it go
-# before it opens its PR, whose check needs it.
+# PR build and this run never evaluate or build at once.
 exec {build_lock}>>/run/nixos-config-build.lock
 if ! flock -w 1800 "$build_lock"; then
   echo "A PR build has held the build lock for 30 min; the next run tries again."
@@ -193,79 +171,30 @@ other_hosts_build() {
   done
 }
 
-# Deploys the checkout's tree to every other host whose running system differs
-# from it. The system builds here and is copied first, so the host does not
-# compile it. Per host, current-HOST records the tree the host matched,
-# failed-HOST a tree whose deploy failed for its own reason, unreachable-HOST
-# that the "cannot log in" popup was shown, and waiting-HOST the deploy.sh
-# status that held the last try back. The state names a tree, not a commit,
-# because the squash merge gives the tree this run deployed a new commit. A host
-# that cannot be reached, or a deploy that fails for a reason outside the tree,
-# is tried again the next run. The popups here do not go through fail, so a
-# later failure of the run still sends its own.
-deliver_others() {
-  local tree hosts other running want status previous ssh_error
-  tree=$(git rev-parse 'HEAD^{tree}')
-  hosts=$(other_hosts) || {
-    notify critical "Other hosts not updated" "The host list does not evaluate. See: journalctl -u oruc-auto-update" || true
-    return 0
+# local_check NAME COMMAND...: runs one check and names it on stderr when it
+# fails, so a caller can drop the check's stdout.
+local_check() {
+  local name=$1
+  shift
+  "$@" || {
+    echo "The check \"$name\" fails on this update." >&2
+    return 76
   }
-  for other in $hosts; do
-    [[ -f $STATE_DIRECTORY/current-$other && $(<"$STATE_DIRECTORY/current-$other") == "$tree" ]] && continue
-    [[ -f $STATE_DIRECTORY/failed-$other && $(<"$STATE_DIRECTORY/failed-$other") == "$tree" ]] && continue
-    if ! running=$(ssh "$other" readlink -f /run/current-system 2>"$RUNTIME_DIRECTORY/ssh.err"); then
-      cat "$RUNTIME_DIRECTORY/ssh.err" >&2
-      ssh_error=$(tail -n 1 "$RUNTIME_DIRECTORY/ssh.err")
-      echo "The updater cannot log in to $other over SSH; the next run tries again."
-      if [[ ! -f $STATE_DIRECTORY/unreachable-$other ]]; then
-        notify normal "$other not updated" "The updater cannot log in to $other over SSH: ${ssh_error:-no error line}. It deploys main there once it can." &&
-          touch "$STATE_DIRECTORY/unreachable-$other"
-      fi
-      continue
-    fi
-    rm -f -- "$STATE_DIRECTORY/unreachable-$other"
-    if ! want=$(build_system "$other"); then
-      echo "$tree" >"$STATE_DIRECTORY/failed-$other"
-      notify critical "$other not updated" "Its system at main does not build here. See: journalctl -u oruc-auto-update" || true
-      continue
-    fi
-    if [[ $running != "$want" ]]; then
-      # The host downloads what a cache holds itself. A copy that stalls, such
-      # as over a Wi-Fi drop, stops after 30 minutes.
-      timeout 30m nix copy --substitute-on-destination --to "ssh-ng://$other" "$want" ||
-        echo "Copying the system to $other failed; deploy.sh builds it there."
-      status=0
-      ./deploy.sh "$other" switch || status=$?
-      case $status in
-        0) ;;
-        70 | 71 | 74 | 77 | 79)
-          echo "The deploy to $other exited $status, which is not the tree's fault; the next run tries again."
-          # The second run in a row with the same status notifies once.
-          previous=
-          [[ -f $STATE_DIRECTORY/waiting-$other ]] && previous=$(<"$STATE_DIRECTORY/waiting-$other")
-          if [[ $previous == "$status" ]]; then
-            notify normal "$other update waiting" "deploy.sh $other exited $status in two runs in a row. See the exit codes in docs/deploy.md and journalctl -u oruc-auto-update" &&
-              echo "$status notified" >"$STATE_DIRECTORY/waiting-$other"
-          elif [[ $previous != "$status notified" ]]; then
-            echo "$status" >"$STATE_DIRECTORY/waiting-$other"
-          fi
-          continue
-          ;;
-        *)
-          echo "$tree" >"$STATE_DIRECTORY/failed-$other"
-          rm -f -- "$STATE_DIRECTORY/waiting-$other"
-          notify critical "$other update failed" "deploy.sh $other exited $status. The updater tries again once main moves. See: journalctl -u oruc-auto-update" || true
-          continue
-          ;;
-      esac
-    fi
-    rm -f -- "$STATE_DIRECTORY/failed-$other" "$STATE_DIRECTORY/waiting-$other"
-    echo "$tree" >"$STATE_DIRECTORY/current-$other"
-  done
 }
-deliver_others
-# deploy.sh copies its completed lock back; keep the tree on main's lock.
-git checkout --quiet -- flake.lock
+
+# The checks of .github/workflows/check.yml that the builds above do not cover,
+# so the PR can merge without waiting for GitHub. CI forbids import from
+# derivation, so these do too.
+local_checks() {
+  local -x NIX_CONFIG="$NIX_CONFIG"$'\n''allow-import-from-derivation = false'
+  local_check "lock file" nix flake metadata --no-update-lock-file . >/dev/null &&
+    local_check formatting nix fmt -- --ci &&
+    local_check "flake outputs" nix flake check --no-build --no-write-lock-file &&
+    local_check "unit ordering cycles" ci/unit-cycles.sh &&
+    local_check "cached packages" nix eval --json --impure \
+      --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
+      --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))' >/dev/null
+}
 
 # Succeeds when a cache holds every package of ci/cached-packages.nix that a
 # host uses at this lock, since this host builds every host's system. The host-packages-cache workflow builds them every
@@ -411,20 +340,14 @@ changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new 
 [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
 changes+=$apps
 
-# The commit takes fixed dates, so the same candidate on the same base gives
-# the same commit each run, and checks that GitHub still runs on it go on
-# counting (see checks_result below). The dates are the base's, or the time a
-# check last went red for a reason outside the commit, so that the checks then
-# run again on a new commit.
-retried=$STATE_DIRECTORY/checks-retried
-commit_date=$(git show -s --format=%cI "$base")
-[[ -f $retried ]] && commit_date=$(<"$retried")
-GIT_AUTHOR_DATE=$commit_date GIT_COMMITTER_DATE=$commit_date \
-  git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
+git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
 
 old_system=$(readlink -f /run/current-system)
 status=0
 other_hosts_build || status=$?
+if ((status == 0)); then
+  local_checks || status=$?
+fi
 if ((status == 0)); then
   ./deploy.sh "$host" switch || status=$?
 fi
@@ -464,7 +387,7 @@ rm -f -- "$failed" "$waiting"
 
 # deploy.sh copies back a lock that the build completed; keep it in the commit.
 if ! git diff --quiet; then
-  GIT_COMMITTER_DATE=$commit_date git commit --quiet --amend --no-edit -a
+  git commit --quiet --amend --no-edit -a
 fi
 
 # Merge only what this host built. If main moved, the next run rebuilds on it.
@@ -477,7 +400,6 @@ if [[ $(git rev-parse origin/main) != "$base" ]]; then
   exit 0
 fi
 
-flock -u "$build_lock"
 # GitHub answers every push of the branch, which the merge below deletes, with
 # a hint to open a pull request; only a failed push shows what it printed.
 if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>&1); then
@@ -505,71 +427,16 @@ gh pr create --repo "$repo" --base main --head "$branch" \
   --title "chore(flake): update inputs to their newest releases" --body "$body" ||
   gh pr edit "$branch" --repo "$repo" --body "$body"
 
-# The merge waits for the PR's checks on the pushed commit: check, unit-cycles,
-# host-systems-build, which builds on this host with the build lock this run
-# let go of above, and any other check GitHub starts. Prints "success",
-# "retry REASON" or "failure NAMES". A rerun of a check counts by its newest
-# run. A failed host-systems-build counts against the update only when its
-# annotation says a system does not evaluate or build; it can also fail for
-# reasons outside the commit, such as this host on battery or a busy lock. The
-# wait leaves 45 minutes of the unit's 3 hour limit for the delivery after the
-# merge.
-checks_result() {
-  local sha=$1 limit runs failed id errors=0
-  limit=$((3 * 3600 - 45 * 60))
-  ((limit < SECONDS + 45 * 60)) || limit=$((SECONDS + 45 * 60))
-  while ((SECONDS < limit)); do
-    sleep 30
-    if ! runs=$(gh api "repos/$repo/commits/$sha/check-runs?per_page=100" \
-      --jq '[.check_runs[] | {id, name, status, conclusion}] | group_by(.name) | map(max_by(.id)) | tostring'); then
-      if ((++errors >= 5)); then
-        echo "retry GitHub's check-run API failed 5 times in a row"
-        return
-      fi
-      continue
-    fi
-    errors=0
-    jq -e '(["check", "unit-cycles", "host-systems-build"] - [.[].name]) == []
-      and all(.[]; .status == "completed")' <<<"$runs" >/dev/null || continue
-    failed=$(jq -r '[.[] | select(.conclusion | IN("success", "skipped", "neutral") | not) | .name] | join(" ")' <<<"$runs")
-    if [[ -z $failed ]]; then
-      echo success
-    elif [[ $failed == host-systems-build ]]; then
-      id=$(jq -r '.[] | select(.name == "host-systems-build") | .id' <<<"$runs")
-      if [[ $(gh api "repos/$repo/check-runs/$id/annotations" --jq '.[].message') =~ does\ not\ evaluate\ or\ build ]]; then
-        echo "failure $failed"
-      else
-        echo "retry host-systems-build failed for a reason outside the commit"
-      fi
-    else
-      echo "failure $failed"
-    fi
-    return
-  done
-  echo "retry the checks did not finish in time"
-}
-checks=$(checks_result "$(git rev-parse HEAD)")
-case $checks in
-  success) rm -f -- "$waiting" "$retried" ;;
-  retry*)
-    if [[ $checks == "retry host-systems-build failed"* ]]; then
-      date -Iseconds >"$retried"
-    fi
-    echo "The PR's checks are not green: ${checks#retry }. The next run tries again."
-    # Notifies from the second run in a row that the checks hold back.
-    if [[ -f $waiting && $(<"$waiting") == checks ]]; then
-      notify normal "Update waiting" "The update PR's checks are not green: ${checks#retry }. See: journalctl -u oruc-auto-update" || true
-    fi
-    echo checks >"$waiting"
-    exit 0
-    ;;
-  *)
-    rm -f -- "$retried"
-    echo "$candidate" >"$failed"
-    fail "Update not merged" "The update PR's checks failed: ${checks#failure }. The run does not try this update again until main or an upstream moves."
-    exit 1
-    ;;
-esac
-gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"
+# The PR merges at once, since the checks above ran here; GitHub runs check,
+# unit-cycles and build again on main after the merge and emails a failure.
+# GitHub can refuse a merge until it has computed the new PR's mergeability.
+merged=false
+for attempt in 1 2 3; do
+  if gh pr merge "$branch" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"; then
+    merged=true
+    break
+  fi
+  ((attempt == 3)) || sleep 10
+done
+$merged
 notify normal "System updated" "$changes" || true
-deliver_others
