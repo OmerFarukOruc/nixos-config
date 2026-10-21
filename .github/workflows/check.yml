@@ -12,12 +12,12 @@ concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
 
-# The updater's PR (branch auto-update of this repository) runs these checks on
-# nixos-rog and merges at once (scripts/auto-update.sh), so they run on its
+# The updater's PR (a branch auto-update* of this repository, which includes
+# its rehearsal) runs these checks on nixos-rog and merges at once (scripts/auto-update.sh), so they run on its
 # push to main. A push has no pull_request, so the condition holds there.
 jobs:
   check:
-    if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
+    if: github.event.pull_request.head.repo.full_name != github.repository || !startsWith(github.head_ref, 'auto-update')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -36,7 +36,7 @@ jobs:
   # against 3 min 7 s to 4 min 26 s in three runs one after another (GitHub
   # step times, 2026-10-21).
   hosts:
-    if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
+    if: github.event.pull_request.head.repo.full_name != github.repository || !startsWith(github.head_ref, 'auto-update')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -79,7 +79,7 @@ jobs:
   # deploy.sh refuses a system whose units hold an ordering cycle (exit 80);
   # this job finds the cycle before the merge.
   unit-cycles:
-    if: github.event.pull_request.head.repo.full_name != github.repository || github.head_ref != 'auto-update'
+    if: github.event.pull_request.head.repo.full_name != github.repository || !startsWith(github.head_ref, 'auto-update')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

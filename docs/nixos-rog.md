@@ -97,6 +97,15 @@ log while it runs and exits with the run's status. From fedora-desktop:
 ssh -t nixos-rog upgrade
 ```
 
+To see a run that moves something when nothing upstream moved, run
+`upgrade --rehearse`. The rehearsal unit, `oruc-auto-update-rehearsal.service`,
+starts from `main` with the `flake.lock` of before the newest update, so that
+update's moves happen again. It builds every system and runs the checks, but
+it activates nothing: a deployed tree that never reaches `main` would make every
+later deploy of `main` exit 78. It merges its PR into a throwaway branch,
+`auto-update-rehearsal-base`, which it deletes when it ends. It keeps its own
+state, and its notifications start with "Rehearsal:".
+
 A manual deploy exits 77 while an update holds the deploy lock, and the updater
 deploys `main` again on top of a generation you restored. To pause the updater
 until the next reboot, run

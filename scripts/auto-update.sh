@@ -11,11 +11,27 @@
 # the activation is not tried again until main or an upstream moves. The run
 # retries after this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are
 # not the candidate's fault.
+# With AUTO_UPDATE_REHEARSAL=1 (oruc-auto-update-rehearsal.service, `upgrade
+# --rehearse`) the run starts from main with the flake.lock of before the newest
+# update, so that update's moves happen again. It builds this host's system
+# instead of deploying it, and merges into a throwaway base branch, because a
+# deployed tree that never reaches main makes later deploys of main exit 78.
 # -E lets the ERR trap below fire inside functions too.
 set -Eeuo pipefail
 
 repo=OmerFarukOruc/nixos-config
 branch=auto-update
+base_branch=main
+rehearsal=false
+title_prefix=
+if [[ ${AUTO_UPDATE_REHEARSAL:-} == 1 ]]; then
+  rehearsal=true
+  branch=auto-update-rehearsal
+  base_branch=auto-update-rehearsal-base
+  title_prefix="Rehearsal: "
+fi
+# Set once the rehearsal pushed its base branch, which on_exit deletes.
+base_pushed=false
 host=$(</proc/sys/kernel/hostname)
 dir=$STATE_DIRECTORY/repo
 failed=$STATE_DIRECTORY/failed-candidate
@@ -37,7 +53,7 @@ notify() {
   local bus
   bus=/run/user/$(id -u)/bus
   [[ -S $bus ]] || return 1
-  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$2" "$3"
+  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$title_prefix$2" "$3"
 }
 # fail TITLE BODY: the critical popup of a failed run. on_exit sends a generic
 # one for a failed exit that sent none, such as an unset variable under set -u,
@@ -54,6 +70,9 @@ on_exit() {
     notify critical "Update failed" "Exit $status. See: journalctl -u oruc-auto-update" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
+  if $base_pushed; then
+    timeout 60 git -C "$dir" "${git_auth[@]}" push --quiet origin --delete "$base_branch" || true
+  fi
 }
 trap on_exit EXIT
 # A failure inside $(...) runs this trap in the subshell and again in the main
@@ -104,6 +123,14 @@ git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
 base=$(git rev-parse origin/main)
 git checkout --quiet --force -B "$branch" "$base"
 git clean -fdxq
+if $rehearsal; then
+  last=$(git log -1 --format=%H --grep='^chore(flake): update inputs' "$base" -- flake.lock)
+  git checkout --quiet "$last^" -- flake.lock
+  git commit --quiet -m "chore(flake): rehearsal base with the flake.lock of before ${last:0:7}"
+  base=$(git rev-parse HEAD)
+  base_pushed=true
+  git "${git_auth[@]}" push --quiet --force origin "HEAD:refs/heads/$base_branch"
+fi
 
 # The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
 # PR build and this run never evaluate or build at once.
@@ -333,7 +360,12 @@ if ((status == 0)); then
   local_checks || status=$?
 fi
 if ((status == 0)); then
-  ./deploy.sh "$host" switch || status=$?
+  if $rehearsal; then
+    new_system=$(build_system "$host") || status=$?
+  else
+    ./deploy.sh "$host" switch || status=$?
+    new_system=$(readlink -f /run/current-system)
+  fi
 fi
 if ((status == 77 || status == 78)); then
   # 77 is another deploy to this host and 78 a running release whose files main
@@ -379,7 +411,7 @@ fi
 # update unbuilt, the same gap every PR has without an up-to-date rule; CI
 # evaluates main after the push.
 git "${git_auth[@]}" fetch --quiet origin main
-if [[ $(git rev-parse origin/main) != "$base" ]]; then
+if ! $rehearsal && [[ $(git rev-parse origin/main) != "$base" ]]; then
   notify normal "System updated" "$changes"$'\n'"main moved during the build, so the next run merges." || true
   exit 0
 fi
@@ -391,13 +423,18 @@ if ! push_output=$(git "${git_auth[@]}" push --quiet --force origin "$branch" 2>
   false
 fi
 # GitHub caps a PR body at 65536 characters.
-system_diff=$(dix --color never "$old_system" "$(readlink -f /run/current-system)" 2>&1) ||
+system_diff=$(dix --color never "$old_system" "$new_system" 2>&1) ||
   system_diff="dix could not compare the systems."
 if ((${#system_diff} > 50000)); then
   system_diff="${system_diff:0:50000}
 (cut at 50000 characters)"
 fi
-body="$host built and switched to this update.
+if $rehearsal; then
+  done_text="built this update in a rehearsal and activated nothing."
+else
+  done_text="built and switched to this update."
+fi
+body="$host $done_text
 
 $changes
 
@@ -407,7 +444,7 @@ $changes
 $system_diff
 \`\`\`
 </details>"
-gh pr create --repo "$repo" --base main --head "$branch" \
+gh pr create --repo "$repo" --base "$base_branch" --head "$branch" \
   --title "chore(flake): update inputs to their newest releases" --body "$body" ||
   gh pr edit "$branch" --repo "$repo" --body "$body"
 
