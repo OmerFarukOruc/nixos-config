@@ -9,6 +9,7 @@
 }:
 let
   inherit (osConfig.oruc.machine) gpu;
+  # hybrid is a Radeon with an NVIDIA card, as on nixos-rog.
   hasAmd = gpu == "amd" || gpu == "hybrid";
   hasNvidia = gpu == "nvidia" || gpu == "hybrid";
   nvtop =

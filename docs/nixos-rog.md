@@ -645,7 +645,7 @@ a floating top bar of three islands and the dock for the glass look, or a top
 bar and the dock for the klassy look. In the floating bar, Panel Colorizer draws
 each run of widgets that panel spacers separate on one background, so one
 colorizer styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
-`home-manager/modules/plasma-looks/default.nix`. The dock's task manager and
+`machines/nixos-rog/home.nix`. The dock's task manager and
 the glass look's launcher come from the macOS Tahoe theme (the `mac-tahoe`
 flake input). The task manager is Plasma's own with notification badges and
 hover zoom, whose `dockMagnification` key is a percentage from 100 to 150

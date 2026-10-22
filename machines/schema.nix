@@ -120,7 +120,8 @@ let
       description = ''
         GPU class. intel and amd turn on nixosModules/intel-graphics.nix or
         amd-graphics.nix. hybrid is a Radeon with an NVIDIA card, which the
-        host's own files set up. The Home Manager profiles pick GPU tools by it.
+        host's own files set up. unknown selects no GPU module. The Home
+        Manager profiles pick GPU tools by it.
       '';
     };
 
@@ -132,7 +133,7 @@ let
     autoLogin = mkOption {
       type = types.bool;
       default = false;
-      description = "Whether the display manager logs oruc in at boot. The session then starts locked.";
+      description = "Whether the display manager logs oruc in at boot, into a locked Plasma session.";
     };
 
     # Every desktop of the machine reads these, so its sessions behave alike.
@@ -197,6 +198,10 @@ let
     assert lib.assertMsg (
       sessions.hasDesktop machine "plasma" -> machine.theme.plasmaLook != null
     ) "${machine.name} has a Plasma session and no theme.plasmaLook.";
+    # Only Plasma locks the session that autologin starts.
+    assert lib.assertMsg (
+      machine.autoLogin -> desktops == [ "plasma" ]
+    ) "${machine.name} sets autoLogin, which needs Plasma as its only desktop.";
     assert lib.assertMsg (
       sessions.hasDesktop machine "plasma" || machine.theme.plasmaLook == null
     ) "${machine.name} sets theme.plasmaLook and has no Plasma session.";
