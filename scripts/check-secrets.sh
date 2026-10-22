@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # usage: scripts/check-secrets.sh [FILE]
-# Proves that nixos-rog's SSH host key decrypts its sops file and that the
-# file's keys are the secrets the configuration declares. Run it on nixos-rog
-# after editing secrets/nixos-rog.yaml.
+# Proves that this host's SSH host key decrypts its sops file and that the
+# file's keys are the secrets the configuration declares. Run it on the host
+# after editing secrets/<host>.yaml.
 #
 # It exits 1 when decryption fails, when a declared secret has no key in the
 # file, or when the file holds a key no secret declares (a retired secret left
-# behind). Only key names are printed, never a value. It exits 2 on any other
-# host, because the host key lives on nixos-rog.
+# behind). Only key names are printed, never a value. It exits 2 on a host
+# without a secrets/<host>.yaml, because each host key lives on its own host.
 #
-# With FILE, it checks FILE instead of secrets/nixos-rog.yaml, against the
+# With FILE, it checks FILE instead of secrets/<host>.yaml, against the
 # secrets that declare that file, and skips any other sops file.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,12 +18,14 @@ cd "$(dirname "$0")/.."
   echo "usage: $0 [FILE]" >&2
   exit 2
 }
-[[ $(</proc/sys/kernel/hostname) == nixos-rog ]] || {
-  echo "$0 runs on nixos-rog only: the host key is there" >&2
+host=$(</proc/sys/kernel/hostname)
+main_file=secrets/$host.yaml
+[[ -f $main_file ]] || {
+  echo "$0 runs on a host with a secrets file, because it decrypts with that host's key:" >&2
+  ls secrets/*.yaml | sed 's|^secrets/||; s|\.yaml$||' >&2
   exit 2
 }
 override=${1:-}
-main_file=secrets/nixos-rog.yaml
 
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
@@ -32,7 +34,7 @@ if command -v heavy >/dev/null; then nix=(heavy nix); fi
 # prefix to get the path in this repository.
 declared=$(
   "${nix[@]}" eval --json --no-write-lock-file \
-    '.#nixosConfigurations.nixos-rog.config.sops.secrets' \
+    ".#nixosConfigurations.$host.config.sops.secrets" \
     --apply 'builtins.mapAttrs (_: s: { inherit (s) key; sopsFile = toString s.sopsFile; })' |
     jq -c 'to_entries
       | map({file: (.value.sopsFile | sub("^/nix/store/[^/]+/"; "")), key: .value.key})
