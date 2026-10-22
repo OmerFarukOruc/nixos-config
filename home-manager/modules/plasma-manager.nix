@@ -182,7 +182,8 @@ in
       # Apps that start at login come from Home Manager units, such as the
       # Deskflow client, not from the last session.
       session.sessionRestore.restoreOpenApplicationsOnLogin = "startWithEmptySession";
-      # nixos-rog has no disk swap, so it cannot hibernate.
+      # A laptop sleeps at critical battery. nixos-rog has no disk swap, so it
+      # cannot hibernate.
       powerdevil.batteryLevels.criticalAction = lib.mkIf hasBattery "sleep";
 
       hotkeys.commands =
@@ -220,7 +221,9 @@ in
       configFile.kuriikwsfilterrc = lib.mkForce { };
 
       # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
-      # ROG laptop, as in the Noctalia and DMS sessions.
+      # ROG laptop, as in the Noctalia and DMS sessions. A machine without a
+      # battery and without niri runs no power-profiles-daemon
+      # (nixosModules/peripherals.nix), so it gets no switch.
       shortcuts.org_kde_powerdevil.powerProfile = lib.mkIf hasBattery [
         "Battery"
         "Meta+B"

@@ -344,7 +344,7 @@ REMOTE
     0) if [[ -z $missing ]]; then
       record dock-launchers-installed pass "${#launchers[@]} desktop files found"
     else
-      record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from oruc.plasma.dockLaunchers in home-manager/modules/plasma-looks/default.nix"
+      record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from oruc.plasma.dockLaunchers in machines/nixos-rog/home.nix"
     fi ;;
     3) record dock-launchers-installed manual "the user manager on $host has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
     4) record dock-launchers-installed fail "systemctl --user show-environment failed on $host" ;;
