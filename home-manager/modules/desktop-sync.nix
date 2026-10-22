@@ -3,7 +3,7 @@
 # Claude Code's settings.json both ways. It leaves the shell and tools to Home
 # Manager.
 # The checkout's claude-usage keeps ~/.cache/claude-usage/usage.json fresh for
-# the Claude accounts widget, which desktop-sync.sh links into place.
+# the Claude accounts widget.
 {
   config,
   lib,

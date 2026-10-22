@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Omer Faruk Oruc"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Usage limits and login state of Claude accounts on this host and remote hosts",
+        "Icon": "office-chart-bar",
+        "Id": "org.oruc.claudeaccounts",
+        "License": "MIT",
+        "Name": "Claude accounts",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

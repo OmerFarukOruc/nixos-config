@@ -293,9 +293,7 @@ let
   };
 
   # The Claude accounts widget (org.oruc.claudeaccounts) shows each Claude
-  # Code account's usage and login state. It lives in the dotfiles checkout,
-  # whose desktop-sync.sh links it into ~/.local/share/plasma/plasmoids, so only
-  # a host with that checkout turns it on.
+  # Code account's usage and login state (pkgs/claude-accounts-widget.nix).
   claudeAccounts = lib.optional config.oruc.plasma.claudeAccountsWidget "org.oruc.claudeaccounts";
 
   dock = {
@@ -327,7 +325,10 @@ in
       pkgs.plasmusic-toolbar
       tahoe.task-manager
       tahoePlasmoids
-    ];
+    ]
+    ++ lib.optional config.oruc.plasma.claudeAccountsWidget (
+      pkgs.callPackage ../../pkgs/claude-accounts-widget.nix { }
+    );
 
     # plasmashell caches compiled QML in qmlcache. A cache file is named after
     # the qrc path only and is checked against the source's timestamp, which

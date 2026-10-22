@@ -352,9 +352,9 @@ Code account's usage limits and login state to
 `~/.cache/claude-usage/usage.json`, and reads the files of risoluto-dev-1 and
 nixos-desktop over SSH. nixos-desktop reads this host's file with a key that
 `machines/nixos-rog/claude-usage-read.nix` allows only to print it.
-The Claude accounts widget in the top bar shows that file; `desktop-sync.sh`
-links the widget into `~/.local/share/plasma/plasmoids`, and
-`oruc.plasma.claudeAccountsWidget` puts it on the panel. Its Log in button
+The Claude accounts widget in the top bar shows that file.
+`oruc.plasma.claudeAccountsWidget` installs it from
+`pkgs/claude-accounts-widget.nix` and puts it on the panel. Its Log in button
 opens a Ghostty window that runs `claude-accounts login`.
 
 ## Heavy commands
@@ -652,8 +652,8 @@ hover zoom, whose `dockMagnification` key is a percentage from 100 to 150
 (default 110). Whenever the layout changes, plasma-manager deletes `plasma-org.kde.plasma.desktop-appletsrc` at the next login and builds
 the panels again. A panel or widget change made in Plasma's settings window
 lasts only until then, so write a lasting change in the Nix file.
-On nixos-rog, `oruc.plasma.claudeAccountsWidget` adds the Claude accounts
-widget before kVitals in either top bar ([Claude Code and Codex
+On nixos-desktop and nixos-rog, `oruc.plasma.claudeAccountsWidget` adds the
+Claude accounts widget before kVitals in either top bar ([Claude Code and Codex
 setup](#claude-code-and-codex-setup)).
 
 - Every 5 minutes in a Plasma session, `oled-care.timer`
