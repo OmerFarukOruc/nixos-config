@@ -166,6 +166,11 @@ in
         khelpcenter
       ];
       programs.kde-pim.enable = false;
+      # Plasma starts no SSH agent. gcr's agent unlocks the shared key with the
+      # password saved in KWallet; niri's gnome-keyring already turns it on for
+      # a host that also has niri. secret-tool saves that password
+      # (home-manager/README.md, Per-host credentials).
+      services.gnome.gcr-ssh-agent.enable = true;
       environment.systemPackages = [
         # The effect loads only into the exact KWin it was built for. The flake
         # follows our nixpkgs, so both come from the same revision.
@@ -175,6 +180,7 @@ in
         # Video and Wallpaper Engine wallpapers. Wallpaper Engine scenes need
         # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
+        pkgs.libsecret
       ];
     })
   ];
