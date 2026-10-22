@@ -699,7 +699,7 @@ setup](#claude-code-and-codex-setup)).
   `~/.local/state/dock-try`, so you can put them back:
 
   ```sh
-  ssh nixos-rog 'export XDG_RUNTIME_DIR=/run/user/$(id -u) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus WAYLAND_DISPLAY=wayland-0; qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "print(panels().length)"'
+  ssh nixos-rog 'export XDG_RUNTIME_DIR=/run/user/$(id -u) DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus; qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "print(panels().length)"'
   ```
 
 - KWin reads an effect's `kwinrc` settings only when it loads the effect. A

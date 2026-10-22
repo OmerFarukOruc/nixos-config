@@ -18,7 +18,15 @@ fi
 ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s <<'EOF'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+# The login session exports its Wayland socket name to the user's systemd
+# manager; the name depends on how many compositors started before it.
+WAYLAND_DISPLAY=$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p')
+if [[ -z $WAYLAND_DISPLAY ]]; then
+  echo "No Wayland session runs on nixos-rog; log in first." >&2
+  exit 1
+fi
+export WAYLAND_DISPLAY
 if [[ $(systemctl --user show -p MainPID --value plasma-plasmashell) == 0 ]]; then
   echo "No Plasma session runs on nixos-rog; log in to Plasma first." >&2
   exit 1
