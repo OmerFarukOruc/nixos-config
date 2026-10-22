@@ -222,7 +222,7 @@ host it deploys `main` to that host in these steps:
    `~/.local/state/nixos-config-upgrade` when the clone is missing. It then
    fetches `main` and resets the clone to it, which drops any change in the
    clone, so keep no work there.
-2. When the host runs and boots a clean release of that commit, it prints
+2. When the host runs a clean release whose files match that commit, it prints
    `<host> already runs main at <commit>.` with the first 12 characters of
    the commit, and exits 0. A `test` deploy does not count, because it leaves
    the boot default behind.
