@@ -792,7 +792,7 @@ the stored look.
 ## Switch the scheme
 
 `theme` switches the Base16 scheme of the Home Manager apps without a rebuild,
-on both hosts. It offers the record's `theme.scheme` and the schemes in
+on every host. It offers the record's `theme.scheme` and the schemes in
 `theme.schemes` (`machines/inventory.nix`):
 
 ```sh

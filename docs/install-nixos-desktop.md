@@ -38,7 +38,7 @@ what you keep first. Before you start, have these ready:
    parted "$DISK" -- mkpart nixos btrfs 4097MiB 100%
    udevadm settle
    mkfs.fat -F 32 -n BOOT /dev/disk/by-partlabel/nixos-esp
-   mkfs.btrfs -L nixos /dev/disk/by-partlabel/nixos
+   mkfs.btrfs -f -L nixos /dev/disk/by-partlabel/nixos
    mount /dev/disk/by-partlabel/nixos /mnt
    for sv in @nixos @nixos-home @nixos-nix @nixos-log; do btrfs subvolume create "/mnt/$sv"; done
    umount /mnt
@@ -146,3 +146,9 @@ what you keep first. Before you start, have these ready:
    ```
 
    Do this after the host boots a generation that `deploy.sh` made.
+
+10. Set up Omer's own credentials with
+    [Per-host credentials](../home-manager/README.md#per-host-credentials): the
+    shared SSH key, `gh auth login` and commit signing. Then clone
+    nixos-config and the dotfiles checkout into `~/Desktop/workspace`, so
+    `home-manager/modules/desktop-sync.nix` links the agent config.

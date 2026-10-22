@@ -38,7 +38,7 @@ owns Ctrl-R and does not take Up.
 
 ## Updates
 
-On both hosts, every switch, manual or automatic, leaves the desktop shell, the
+On every host, every switch, manual or automatic, leaves the desktop shell, the
 keyring, the Bluetooth applet and the idle service (swayidle) on their old
 version (`X-SwitchMethod = "keep-old"` in `home-manager/modules/session-scope.nix`),
 so an update does not restart the panel while you work. The next login starts

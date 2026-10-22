@@ -53,14 +53,14 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Login shell | zsh with oh-my-zsh and Starship |
 | Editors | VS Code, and Neovim through nvf |
 | Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
-| Secrets | sops-nix with age on nixos-rog |
-| DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-rog |
+| Secrets | sops-nix with age on nixos-desktop and nixos-rog |
+| DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | Remote access | Tailscale, and Sunshine on nixos-latitude |
 | Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 
 ## Highlights
 
-- **🧊 A kernel the laptops download.** The [`kernel-cache`](kernel-cache/README.md)
+- **🧊 A kernel the hosts download.** The [`kernel-cache`](kernel-cache/README.md)
   flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu,
   turbostat and nct6687d on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
   cache. [`scripts/update-kernel.sh`](scripts/update-kernel.sh) moves a host
@@ -103,8 +103,8 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   result to itself and squash-merges it to `main`.
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
   [`scripts/auto-update.sh`](scripts/auto-update.sh)
-- **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/nixos-rog.yaml`
-  with the age key derived from the laptop's SSH host key.
+- **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
+  with the age key derived from that host's SSH host key.
   [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
 - **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi

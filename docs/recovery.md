@@ -109,7 +109,8 @@ When the bootloader of nixos-latitude needs repair, do these steps:
    reboot
    ```
 
-nixos-rog uses different mounts. They are in [nixos-rog](#nixos-rog).
+nixos-rog and nixos-desktop use different mounts. They are in
+[nixos-rog](#nixos-rog) and [nixos-desktop](#nixos-desktop).
 
 ## Swap on nixos-latitude
 
