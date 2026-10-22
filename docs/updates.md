@@ -66,7 +66,7 @@ timed out, build the revision on nixos-desktop instead:
    kernel-cache workflow to record them.
 
    ```sh
-   cd ~/Desktop/workspace && CACHIX_AUTH_TOKEN=$(infisical secrets get CACHIX_AUTH_TOKEN_FEDORA_DESKTOP --plain --silent --env secrets --path /nixos-config) \
+   cd ~/Desktop/workspace && CACHIX_AUTH_TOKEN=$(infisical secrets get CACHIX_AUTH_TOKEN_NIXOS_DESKTOP --plain --silent --env secrets --path /nixos-config) \
      ~/Desktop/workspace/nixos-config/kernel-cache/scripts/build-local.sh --rev <nix-cachyos-kernel sha> --record zen4 x86_64-v3
    ```
 

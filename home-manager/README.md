@@ -60,6 +60,21 @@ Keep these steps outside the repository:
    ```
 2. Run `gh auth login --git-protocol ssh` interactively. Store the resulting
    credential in the session Secret Service; never add `hosts.yml` to Git.
+   On nixos-desktop on 2026-10-22, KWallet served the `kdewallet` collection
+   without the `default` alias, and gh fell back to `~/.config/gh/hosts.yml`.
+   After the alias was set, gh stored the token in KWallet. Why the alias was
+   missing is not known. Before the login, check that this prints the alias:
+
+   ```sh
+   busctl --user tree org.freedesktop.secrets | grep aliases/default
+   ```
+
+   When it prints nothing, set the alias, which KWallet also saves as
+   `Default Wallet` in `~/.config/kwalletrc`:
+
+   ```sh
+   busctl --user call org.freedesktop.secrets /org/freedesktop/secrets org.freedesktop.Secret.Service SetAlias so default /org/freedesktop/secrets/collection/kdewallet
+   ```
 3. Enroll the shared public key as a GitHub signing key.
 4. Put the host-local signing policy in `~/.config/git/local-signing.inc`:
 
@@ -85,9 +100,10 @@ need their own login. Behavior below was observed on nixos-rog on 2026-10-10.
 - **gh.** Run `gh auth login --git-protocol ssh --web`. Over ssh the host has no
   clipboard tool and no display, so gh cannot copy its one-time code or open a
   browser. Type the code gh prints into your own browser, and ignore the
-  browser launch error that follows. `--insecure-storage` keeps the token in
-  `~/.config/gh/hosts.yml`; whether the Secret Service keyring is unlocked over
-  ssh was not tested.
+  browser launch error that follows. Over ssh, gh still stores the token in
+  KWallet once the default alias exists (step 2 above; observed on
+  nixos-desktop on 2026-10-22). `--insecure-storage` keeps it in
+  `~/.config/gh/hosts.yml` instead.
 - **gh SSH key.** Skip the key that gh offers to generate during login, because
   the shared key `~/.ssh/id_ed25519_omer` is already on GitHub.
 - **Codex.** Run `codex login --device-auth`.
