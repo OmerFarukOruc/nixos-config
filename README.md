@@ -61,8 +61,8 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 ## Highlights
 
 - **🧊 A kernel the laptops download.** The [`kernel-cache`](kernel-cache/README.md)
-  flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu and
-  turbostat on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
+  flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu,
+  turbostat and nct6687d on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
   cache. [`scripts/update-kernel.sh`](scripts/update-kernel.sh) moves a host
   only to a revision whose every path is already in that cache.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
@@ -82,7 +82,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   [`machines/variants.nix`](machines/variants.nix),
   [`nixosModules/hm-variants.nix`](nixosModules/hm-variants.nix),
   [`home-manager/modules/plasma-looks/`](home-manager/modules/plasma-looks)
-- **🔥 One scheme for the editors too.** Both hosts start on `warm-burnout-dark`,
+- **🔥 One scheme for the editors too.** Every host starts on `warm-burnout-dark`,
   a Base16 scheme in [`assets/schemes`](assets/schemes). A `warm-burnout-*`
   scheme also installs Warm Burnout's own VS Code and Neovim themes, which color
   syntax beyond the 16 Base16 colors.
@@ -176,7 +176,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 
 </details>
 
-`deploy.sh` takes a `HOST` (nixos-rog or nixos-latitude), `--allow-dirty` for a
+`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop or nixos-latitude), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
 says when to use either flag. Every deploy command can change boot or running
 system state.

@@ -17,8 +17,8 @@ nixpkgs. A host gets a cache hit when it locks the same revision and uses the
 and patches as `hardware.nvidia.package` in `machines/nixos-rog/graphics.nix`.
 Both import `nvidia-driver.nix`, which holds those shared arguments.
 The hosts and this flake also extend the kernel package set with
-`kernel-module-certs.nix`, which makes ryzen-smu and v4l2loopback install
-through Kbuild, so ryzen-smu has the same store path in both.
+`kernel-module-certs.nix`, which makes ryzen-smu, v4l2loopback and nct6687d
+install through Kbuild, so their store paths are the same in both.
 
 The build jobs and `scripts/build-local.sh` read no upstream binary cache, so
 every kernel in the Cachix cache was compiled by this workflow or by that

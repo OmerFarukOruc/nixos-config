@@ -21,6 +21,10 @@
         path: guid(10036113-64c6-4117-9dd5-ea8b222762ea):/EFI/Microsoft/Boot/bootmgfw.efi
   '';
 
+  # The hardware watchdog for features.alwaysOn. The driver loads only on
+  # request, because many distributions blacklist it.
+  boot.kernelModules = [ "sp5100_tco" ];
+
   # Windows keeps the hardware clock in local time.
   time.hardwareClockInLocalTime = true;
 

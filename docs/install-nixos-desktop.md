@@ -4,7 +4,8 @@ Run on nixos-desktop from the NixOS minimal ISO, wired to the LAN. NixOS goes
 on the WD SN850X. The Samsung 990 PRO holds Windows and its own ESP; leave it
 alone.
 
-Before you start, have these ready:
+Step 3 erases the WD disk, the old system's `/home` included, so copy off
+what you keep first. Before you start, have these ready:
 
 - A copy of the SSH host keys of the system this install replaces
   (`ssh_host_ed25519_key`, `ssh_host_rsa_key`, `ssh_host_ecdsa_key` and their
@@ -26,9 +27,8 @@ Before you start, have these ready:
    ```
 
 3. Partition and format it. The GPT partition names `nixos-esp` and `nixos`
-   are what `machines/nixos-desktop/hardware-configuration.nix` mounts, and the
-   file system labels `BOOT` and `nixos` are what [recovery.md](recovery.md)
-   mounts.
+   are what `machines/nixos-desktop/hardware-configuration.nix` and
+   [recovery.md](recovery.md#nixos-desktop) mount.
 
    ```
    wipefs -a "$DISK"
@@ -90,14 +90,16 @@ Before you start, have these ready:
    curl -L https://github.com/OmerFarukOruc/nixos-config/archive/<commit>.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
    nixos-generate-config --root /mnt --show-hardware-config > /tmp/generated.nix
    grep -A8 availableKernelModules /tmp/generated.nix
-   nix build --no-link --no-write-lock-file /mnt/etc/nixos#nixosConfigurations.nixos-desktop.config.system.build.toplevel
    nixos-install --flake /mnt/etc/nixos#nixos-desktop
    ```
 
    The committed `hardware-configuration.nix` mounts by partition name, so the
    install keeps it. Compare its `boot.initrd.availableKernelModules` with the
-   generated list first, and add any module the generated list has. `nixos-install`
-   asks for the root password at the end.
+   generated list first. When the generated list has a module the file lacks,
+   add it here and commit the same change to the repository after the first
+   boot, because `deploy.sh` ships the committed file. `nixos-install` builds
+   the system in `/mnt`, not in the ISO's memory-backed store, and asks for the
+   root password at the end.
 
 6. Set oruc's password, which unlocks the screen after the automatic login,
    then reboot and remove the USB stick:

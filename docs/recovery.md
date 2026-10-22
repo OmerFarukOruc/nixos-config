@@ -7,6 +7,7 @@
 - [Repair the bootloader](#repair-the-bootloader)
 - [Swap on nixos-latitude](#swap-on-nixos-latitude)
 - [nixos-rog](#nixos-rog)
+- [nixos-desktop](#nixos-desktop)
 
 Each host keeps the newest 5 system generations, one from each of the last 7
 days, the running one, and the booted one. The boot menu lists only the newest
@@ -183,3 +184,18 @@ firmware boot entries.
 
 The firmware GPU mode must be Hybrid mode (see `CONTEXT.md`). In Integrated
 mode the NVIDIA driver has no device.
+
+## nixos-desktop
+
+nixos-desktop uses Limine on its own ESP on the WD disk; Windows keeps the ESP
+on the Samsung disk. When its bootloader needs repair, boot the NixOS
+installer, mount by partition name, then run the `nixos-enter`,
+`NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot` lines of
+[Repair the bootloader](#repair-the-bootloader):
+
+```sh
+mount -o subvol=@nixos /dev/disk/by-partlabel/nixos /mnt
+mkdir -p /mnt/nix /mnt/boot
+mount -o subvol=@nixos-nix /dev/disk/by-partlabel/nixos /mnt/nix
+mount -o umask=077 /dev/disk/by-partlabel/nixos-esp /mnt/boot
+```

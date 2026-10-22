@@ -82,8 +82,8 @@ in
   };
 
   # Deskflow keeps its own settings in Deskflow.conf, so the switch sets only
-  # these keys: server mode, the screen layout above, and the log in
-  # ~/deskflow.log.
+  # these keys: server mode, the screen layout above, the log in
+  # ~/deskflow.log, and a server that starts with the window.
   home.activation.deskflowServer = lib.hm.dag.entryBetween [ "reloadSystemd" ] [ "writeBoundary" ] ''
     conf=${config.xdg.configHome}/Deskflow/Deskflow.conf
     ini=(${lib.getExe pkgs.crudini} --ini-options=nospace --set "$conf")
@@ -92,5 +92,6 @@ in
     run "''${ini[@]}" server externalConfig true
     run "''${ini[@]}" server externalConfigFile ${deskflowLayout}
     run "''${ini[@]}" log toFile true
+    run "''${ini[@]}" gui startCoreWithGui true
   '';
 }

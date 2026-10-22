@@ -28,7 +28,7 @@ scripts/update-kernel.sh
 
 The script first checks that every path the builder recorded for that revision
 is in the `omerfarukoruc` Cachix cache. Those paths are the kernels, the NVIDIA
-open modules, and ryzen-smu and turbostat for zen4. When one is missing, the
+open modules, and ryzen-smu, turbostat and nct6687d for zen4. When one is missing, the
 script leaves `flake.lock` unchanged. So a host never compiles the kernel
 itself.
 

@@ -216,7 +216,7 @@ host can share, such as desktop-sync, are in `home-manager/modules/`.
 
 `kernel-cache/` is a separate flake. GitHub Actions builds it into the
 `omerfarukoruc` Cachix cache. The cache holds the CachyOS kernels, the NVIDIA
-open modules, and ryzen-smu and turbostat for zen4. The
+open modules, and ryzen-smu, turbostat and nct6687d for zen4. The
 [kernel-cache README](../kernel-cache/README.md) explains how the hosts follow
 it.
 

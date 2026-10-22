@@ -54,8 +54,9 @@ steps:
    the host-packages-cache build on the push to `main`; GitHub emails a failed
    run.
 
-The updater deploys no other host. nixos-latitude gets `main` only from a
-manual `./deploy.sh nixos-latitude switch`.
+The updater deploys no other host, but it builds every host, so a build failure
+of nixos-desktop or nixos-latitude also stops its merge. Those two get `main`
+only from a manual `./deploy.sh <host> switch`.
 
 A desktop notification reports each update or failure.
 

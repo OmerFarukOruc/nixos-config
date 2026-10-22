@@ -142,7 +142,7 @@ let
       ++ hostModules;
     };
 in
-# Validates the planned machines too, which have no nixosConfiguration yet.
+# Validates every record, also one without a nixosConfiguration.
 assert builtins.deepSeq machines true;
 {
   nixosConfigurations.nixos-latitude = mkMachine {
