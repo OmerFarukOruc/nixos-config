@@ -1,5 +1,6 @@
-# A Radeon as the only GPU. Mesa's radeonsi already gives OpenGL, Vulkan and
-# VA-API, so this adds the 32-bit drivers, an early driver load and vainfo.
+# A Radeon as the only GPU. hardware.graphics.enable installs Mesa (radeonsi
+# for OpenGL and VA-API, RADV for Vulkan); this adds the 32-bit drivers, an
+# early driver load and vainfo.
 {
   config,
   lib,
