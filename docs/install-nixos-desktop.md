@@ -110,25 +110,23 @@ what you keep first. Before you start, have these ready:
    ```
 
 7. On the first boot, Plasma logs oruc in and locks the screen. Unlock it,
-   open a terminal, and join the tailnet with the tag that the tailnet policy
-   allows to be an exit node:
+   open a terminal, and join the tailnet with its tag:
 
    ```
    sudo tailscale up --ssh=false --advertise-tags=tag:desktop-relay
    ```
 
    Open the printed URL on any device and approve the machine. `tailscale up`
-   resets the settings that `tailscaled-set` applied at boot, so apply
-   `--advertise-exit-node` and `--operator=oruc` again:
+   resets the operator that `tailscaled-set` applied at boot, so apply it
+   again:
 
    ```
    sudo systemctl restart tailscaled-set
-   tailscale debug prefs | jq -c '{AdvertiseRoutes, OperatorUser}'
+   tailscale debug prefs | jq -r .OperatorUser
    ```
 
-   The routes list `0.0.0.0/0` and `::/0`, and the operator is `oruc`. Then, in
-   the admin console, approve its exit node, and delete the node of the old
-   system.
+   It prints `oruc`. Then delete the node of the old system in the admin
+   console.
 
 8. From nixos-rog, check that sops-nix decrypted the secrets and that the host
    runs what was installed:

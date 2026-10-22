@@ -79,7 +79,7 @@ let
       };
     };
 
-    # Home desktop, always on: the exit node and the Deskflow server.
+    # Home desktop, always on: the Deskflow server.
     nixos-desktop = {
       system = "x86_64-linux";
       kind = "workstation";

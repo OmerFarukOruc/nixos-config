@@ -49,16 +49,9 @@
   security.tpm2.enable = true;
   users.users.oruc.extraGroups = [ "tss" ];
 
-  # The exit node of the tailnet. The list adds to the shared flags in
-  # nixosModules/connectivity.nix. browser-lend runs `tailscale serve` as
-  # oruc, which needs the operator.
-  services.tailscale = {
-    useRoutingFeatures = "server";
-    extraSetFlags = [
-      "--advertise-exit-node"
-      "--operator=oruc"
-    ];
-  };
+  # browser-lend runs `tailscale serve` as oruc, which needs the operator. The
+  # list adds to the shared flags in nixosModules/connectivity.nix.
+  services.tailscale.extraSetFlags = [ "--operator=oruc" ];
 
   # The kernel kills other processes before the ways in.
   systemd.services.sshd.serviceConfig.OOMScoreAdjust = -900;
