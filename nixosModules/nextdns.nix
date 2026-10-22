@@ -1,6 +1,6 @@
 # DNS-over-TLS to Omer's NextDNS profile, with a switch for captive portals.
-# The host imports this file and sops-nix, and its secrets file holds
-# nextdns-profile.
+# The host imports this file and sops-nix and sets sops.defaultSopsFile to its
+# secrets/<host>.yaml, which holds nextdns-profile and has a rule in .sops.yaml.
 { config, pkgs, ... }:
 let
   profile = config.sops.placeholder.nextdns-profile;

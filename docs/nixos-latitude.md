@@ -69,7 +69,7 @@ use three 10-second windows.
   system that differs from `main`. A new kernel from a deploy becomes the boot
   default and runs after the next reboot, which the item below covers.
 - A reboot needs the password at nixos-latitude. Automatic login is off
-  (`nixosModules/desktop.nix`), so the greeter waits for a password. Sunshine
+  (`autoLogin` defaults to false in `machines/schema.nix`), so the greeter waits for a password. Sunshine
   streams the logged-in niri session, so remote desktop stays down until
   someone logs in. Reboot remotely only when someone is at nixos-latitude.
 - On 2026-09-21 the Wi-Fi lost the access point (beacon loss) and Tailscale
