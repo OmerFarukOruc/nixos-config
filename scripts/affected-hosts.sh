@@ -42,11 +42,28 @@ if [[ ! $url =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then
 fi
 repo=${BASH_REMATCH[1]%.git}
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
+this_host=$(</proc/sys/kernel/hostname)
+
+# on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in HOST's home
+# directory, with the ARGs. A host trusts its own SSH host key only after
+# someone accepts it by hand, so this host runs SCRIPT without SSH, as deploy.sh
+# does.
+on_host() {
+  local host=$1
+  shift
+  if [[ $host == "$this_host" ]]; then
+    (cd && bash -s -- "$@")
+  elif (($#)); then
+    # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
+    ssh "${ssh_opts[@]}" "$host" "bash -s -- $(printf '%q ' "$@")"
+  else
+    ssh "${ssh_opts[@]}" "$host" 'bash -s'
+  fi
+}
 
 # systems REV: prints {HOST: {drv, out}} for every host at REV.
 systems() {
-  # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-  ssh "${ssh_opts[@]}" nixos-rog "bash -s -- $(printf '%q ' "github:$repo/$1")" <<'REMOTE'
+  on_host nixos-rog "github:$repo/$1" <<'REMOTE'
 set -e
 # heavy (machines/nixos-rog/heavy.nix) caps the memory of each evaluation. One
 # evaluation per host stays under that cap; three systems in one evaluation
@@ -94,7 +111,7 @@ for host in "${hosts[@]}"; do
 readlink -f /run/current-system
 running_revision
 REMOTE
-    } | ssh "${ssh_opts[@]}" "$host" 'bash -s'
+    } | on_host "$host"
   ); then
     printf '%s\tunreachable\tSSH to %s failed\n' "$host" "$host"
     continue
