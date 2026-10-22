@@ -37,7 +37,7 @@ let
   # Days a release must age before a package manager installs it.
   releaseAgeDays = 3;
   # OpenCode 2 from llm-agents installs as opencode2, beside version 1. It is
-  # the only OpenCode here, so it also answers to opencode, as on fedora-desktop.
+  # the only OpenCode here, so it also answers to opencode.
   opencode = pkgs.symlinkJoin {
     name = "opencode-${agents.opencode2.version}";
     paths = [ agents.opencode2 ];
@@ -165,7 +165,7 @@ in
     enable = true;
     enableZshIntegration = true;
     settings = {
-      # The family matches fedora-desktop. The bars use oruc.theme.fonts.mono instead.
+      # The bars use oruc.theme.fonts.mono instead.
       font-family = "CaskaydiaCove Nerd Font Mono";
       font-size = 13;
       font-feature = [

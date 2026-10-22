@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy from fedora-desktop. The target builds because fedora-desktop has no Nix.
+# Deploy from nixos-desktop or nixos-rog. The target builds its own system.
 # A host deploys itself when HOST is its own host name; the steps then run
 # locally instead of over SSH.
 set -euo pipefail

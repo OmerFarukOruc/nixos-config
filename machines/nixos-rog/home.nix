@@ -37,7 +37,7 @@
     key = "Launch (3)";
   };
 
-  # Deskflow runs here as the client of fedora-desktop's server. A client on
+  # Deskflow runs here as the client of nixos-desktop's server. A client on
   # Wayland types through the remote desktop portal, which Plasma has and niri
   # does not, so it starts at a Plasma login only. The portal reads the app ID
   # from the unit name (app-<ID>.service), and Plasma names the app in its
@@ -45,13 +45,13 @@
   # "An unidentifiable application".
   systemd.user.services."app-org.deskflow.deskflow" = {
     Unit = {
-      Description = "Deskflow client of fedora-desktop";
+      Description = "Deskflow client of nixos-desktop";
       # Only a Plasma session reaches plasma-workspace.target.
       After = [ "plasma-workspace.target" ];
       PartOf = [ "plasma-workspace.target" ];
       # Home Manager's switch (sd-switch) stops a changed unit that refuses a
       # manual start, and then cannot start it. When the cursor is on the
-      # laptop, the server keeps fedora-desktop's input captured for a client
+      # laptop, the server keeps nixos-desktop's input captured for a client
       # that is gone. With both options, a switch neither stops a running
       # client nor starts one you quit. A login and a logout still start and
       # stop it, because the target's Wants and PartOf are not manual.
@@ -70,7 +70,7 @@
   };
 
   # The client's log otherwise shows only in its window. Deskflow writes it to
-  # ~/deskflow.log, as on fedora-desktop, and rotates it at 1 MiB. Deskflow
+  # ~/deskflow.log, as on nixos-desktop, and rotates it at 1 MiB. Deskflow
   # also saves its own settings in Deskflow.conf, so the switch sets only the
   # toFile key.
   home.activation.deskflowLogToFile =

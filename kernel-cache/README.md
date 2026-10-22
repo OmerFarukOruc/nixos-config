@@ -79,6 +79,6 @@ CACHIX_AUTH_TOKEN=... scripts/build-local.sh --rev <nix-cachyos-kernel sha> --re
 The token comes from the environment; push only the outputs in `flake.nix`,
 because the cache is public. The `kernel-cache` workflow can also be started by
 hand for one revision: `gh workflow run kernel-cache -f rev=<sha>`. On
-fedora-desktop,
+nixos-desktop,
 [docs/updates.md](../docs/updates.md#when-the-cache-lacks-the-kernel) has the
 command that reads the token from Infisical and the steps that follow.

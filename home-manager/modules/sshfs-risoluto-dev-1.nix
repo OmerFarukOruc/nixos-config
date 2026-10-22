@@ -1,7 +1,7 @@
 # Mounts the whole of risoluto-dev-1 read-only, as oruc over Tailscale SSH, so
 # local apps open its paths: /tmp/x on the box is ~/remote/risoluto-dev-1/tmp/x
-# here. It ports dotfiles' services/systemd/sshfs-risoluto-dev-1.service from
-# fedora-desktop under the same unit name, because dotfiles' `ropen` starts
+# here. It ports dotfiles' services/systemd/sshfs-risoluto-dev-1.service
+# under the same unit name, because dotfiles' `ropen` starts
 # sshfs-risoluto-dev-1.service when the mount is down.
 #
 # The mount point is under $XDG_RUNTIME_DIR and ~/remote/risoluto-dev-1 is a

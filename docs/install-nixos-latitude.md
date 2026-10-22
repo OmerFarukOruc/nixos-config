@@ -1,18 +1,9 @@
 # First install of nixos-latitude
 
-Run on nixos-latitude from the NixOS minimal ISO. Before you start, serve the
-committed files of this repository from fedora-desktop as a tarball with one
-top-level directory, which step 5 strips:
-
-```
-mkdir -p /tmp/serve
-git -C <nixos-config checkout> archive --format=tar.gz --prefix=nixos-config/ -o /tmp/serve/nixos-config.tar.gz HEAD
-python3 -m http.server 8090 --directory /tmp/serve
-```
-
-`git archive` ships only committed files, so commit first. nixos-latitude fetches
-the tarball from `<fedora-desktop-ip>:8090`, so fedora-desktop must accept TCP
-port 8090 from the LAN. Stop the server after step 5.
+Run on nixos-latitude from the NixOS minimal ISO. Before you start, push the
+commit to install to GitHub. The ISO downloads it over HTTPS in step 5, because
+the repository is public and nixos-desktop and nixos-rog accept nothing from
+the LAN.
 
 1. Open the BIOS setup with F2 at the Dell logo. Disable Secure Boot, and set the
    boot mode to UEFI.
@@ -23,7 +14,7 @@ port 8090 from the LAN. Stop the server after step 5.
    ```
    sudo -i
    nmcli device wifi connect 'SSID' password 'PASSWORD'
-   ping -c 2 <fedora-desktop-ip>
+   ping -c 2 github.com
    ```
 
 4. Partition the internal disk. Check the device name first with `lsblk`.
@@ -60,7 +51,7 @@ port 8090 from the LAN. Stop the server after step 5.
    extra-substituters = https://omerfarukoruc.cachix.org https://cache.numtide.com
    extra-trusted-public-keys = omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
    mkdir -p /mnt/etc/nixos
-   curl http://<fedora-desktop-ip>:8090/nixos-config.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
+   curl -L https://github.com/OmerFarukOruc/nixos-config/archive/<commit>.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
    nixos-generate-config --root /mnt --show-hardware-config > /mnt/etc/nixos/machines/nixos-latitude/hardware-configuration.nix
    nix flake check --no-build --no-write-lock-file /mnt/etc/nixos
    nix build --no-link --no-write-lock-file /mnt/etc/nixos#nixosConfigurations.nixos-latitude.config.system.build.toplevel
@@ -84,10 +75,11 @@ port 8090 from the LAN. Stop the server after step 5.
    ```
 
    Open the printed URL on any device and approve the machine.
-   From then on fedora-desktop reaches it as `nixos-latitude` over Tailscale.
+   From then on nixos-desktop and nixos-rog reach it as `nixos-latitude` over
+   Tailscale.
 
 8. Keep the generated disk ids in the repository. In the nixos-config checkout
-   on fedora-desktop, copy the file the install generated:
+   on nixos-desktop or nixos-rog, copy the file the install generated:
 
    ```
    scp nixos-latitude:/etc/nixos/machines/nixos-latitude/hardware-configuration.nix machines/nixos-latitude/hardware-configuration.nix

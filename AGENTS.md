@@ -12,7 +12,7 @@
 
 # Checks
 
-Agents run on fedora-desktop, which has no Nix, or on nixos-rog; `hostname` tells which. These scripts run Nix on a copy of this checkout on nixos-rog, over SSH from either host. [README.md](README.md#everyday-commands) lists every script you run by hand.
+Agents run on nixos-desktop or on nixos-rog; `hostname` tells which. These scripts run Nix on a copy of this checkout on nixos-rog, over SSH from either host. [README.md](README.md#everyday-commands) lists every script you run by hand.
 
 - A PR that changes `pkgs/`, `overlays/`, `home-manager/modules/plasma-*.nix`, `scripts/auto-update.sh`, `machines/nixos-rog/auto-update.nix` or `.github/workflows/` gets a review of its final diff from an agent that did not write it, before `pr-land`.
 - `nix fmt` runs `scripts/check-theme-drift.sh`, which fails on a fixed color in a tracked file. A color in new UI comes from `config.scheme` or `oruc.theme.ansi`; otherwise list the app under the fixed colors in [Theme](docs/architecture.md#theme).
@@ -33,7 +33,7 @@ Agents run on fedora-desktop, which has no Nix, or on nixos-rog; `hostname` tell
 
 # Lookups
 
-Look up a Nix name, hash or rebuild cause before you write it. The tools run on nixos-rog. On nixos-rog, run them directly. From fedora-desktop, quote the whole command, as in `ssh nixos-rog '<command>'`, so that `$(...)` expands on nixos-rog. They read upstream nixpkgs, not `flake.lock`, so `scripts/eval-on-rog.sh` stays the source for a value in this configuration. The login shell on nixos-rog is zsh, so an unmatched glob aborts the command; send a multi-line command as `ssh nixos-rog bash -s <<'EOF'`. Claude Code also has a `nixos` MCP server that searches search.nixos.org.
+Look up a Nix name, hash or rebuild cause before you write it. The tools run on nixos-desktop and nixos-rog, so run them directly. The nixpkgs clone below exists on nixos-rog only; from nixos-desktop, quote the whole command, as in `ssh nixos-rog '<command>'`, so that `$(...)` expands on nixos-rog. They read upstream nixpkgs, not `flake.lock`, so `scripts/eval-on-rog.sh` stays the source for a value in this configuration. The login shell on nixos-rog is zsh, so an unmatched glob aborts the command; send a multi-line command as `ssh nixos-rog bash -s <<'EOF'`. Claude Code also has a `nixos` MCP server that searches search.nixos.org.
 
 - Option, package or `lib` name: `nix-search-tv print --indexes <nixos|home-manager|nixpkgs|noogle> | grep <word>`, then `nix-search-tv preview --indexes <index> --json <name>` for its type, default and declaration. Exit 1 means the name does not exist. plasma-manager options are not indexed.
 - Source of a module at the locked revision: `scripts/eval-on-rog.sh --json '.#nixosConfigurations.nixos-rog.pkgs.path'` prints nixpkgs' store path (without `--json` the script copies it to a new path). `scripts/eval-on-rog.sh --json '.#nixosConfigurations.nixos-rog.options.<option path>.declarations'` prints the file that declares an option. `scripts/eval-on-rog.sh '.#nixosConfigurations.nixos-rog._module.specialArgs.inputs.<input>.outPath'` prints another input's path, such as `home-manager`. Read the file with `ssh nixos-rog "sed -n 60,80p <file>"`.

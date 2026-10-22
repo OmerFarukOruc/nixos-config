@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # usage: scripts/vscode-cdp-on-rog.sh on|off|run STEPS_JSON
-# Drives VS Code on nixos-rog from fedora-desktop over the Chrome DevTools
+# Drives VS Code on nixos-rog from nixos-desktop over the Chrome DevTools
 # Protocol. `on` starts VS Code with a debugging port on the laptop's loopback
 # and tunnels it to 127.0.0.1:19229 here. `run` sends steps to the window and
 # prints one JSON line per step. `off` closes the tunnel. docs/nixos-rog.md,

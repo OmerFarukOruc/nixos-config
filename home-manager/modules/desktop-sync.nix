@@ -1,7 +1,7 @@
 # Every hour the dotfiles checkout's desktop-sync.sh links the agent config
 # (Claude Code and Codex rules, skills, hooks, agents) into place and syncs
-# Claude Code's settings.json both ways, as desktop-sync-config.timer does on
-# fedora-desktop. On a NixOS host it leaves the shell and tools to Home Manager.
+# Claude Code's settings.json both ways. It leaves the shell and tools to Home
+# Manager.
 # The checkout's claude-usage keeps ~/.cache/claude-usage/usage.json fresh for
 # the Claude accounts widget, which desktop-sync.sh links into place.
 {

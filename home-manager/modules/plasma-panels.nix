@@ -156,10 +156,9 @@ let
     };
   };
 
-  # This dock style matches fedora-desktop: one blurred, rounded, faintly tinted
-  # background with no outline, icons in the scheme's text color, and popups
-  # that float clear of the panel. The blur follows this radius, while
-  # fedora-desktop takes its corners from its Plasma theme.
+  # The dock style: one blurred, rounded, faintly tinted background with no
+  # outline, icons in the scheme's text color, and popups that float clear of
+  # the panel. The blur follows this radius.
   dockStyle = {
     nativePanel = {
       background.opacity = 0;

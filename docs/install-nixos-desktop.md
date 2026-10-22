@@ -117,10 +117,18 @@ what you keep first. Before you start, have these ready:
    sudo tailscale up --ssh=false --advertise-tags=tag:desktop-relay
    ```
 
-   Open the printed URL on any device and approve the machine. In the admin
-   console, approve its exit node, and delete the node of the old system.
-   `tailscaled-set` adds `--advertise-exit-node` and `--operator=oruc` each time
-   tailscaled starts.
+   Open the printed URL on any device and approve the machine. `tailscale up`
+   resets the settings that `tailscaled-set` applied at boot, so apply
+   `--advertise-exit-node` and `--operator=oruc` again:
+
+   ```
+   sudo systemctl restart tailscaled-set
+   tailscale debug prefs | jq -c '{AdvertiseRoutes, OperatorUser}'
+   ```
+
+   The routes list `0.0.0.0/0` and `::/0`, and the operator is `oruc`. Then, in
+   the admin console, approve its exit node, and delete the node of the old
+   system.
 
 8. From nixos-rog, check that sops-nix decrypted the secrets and that the host
    runs what was installed:

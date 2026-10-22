@@ -10,10 +10,9 @@
 - [Release records and cleanup](#release-records-and-cleanup)
 - [When a deploy fails](#when-a-deploy-fails)
 
-Run deploy commands from fedora-desktop or nixos-rog. fedora-desktop has no
-Nix installed, so `deploy.sh` builds on the target; a deploy of nixos-rog from
-nixos-rog runs locally. The SSH alias of each host in
-`~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONTEXT.md)
+Run deploy commands from nixos-desktop or nixos-rog. `deploy.sh` builds on the
+target; a deploy of a host from that host runs locally. The SSH alias of each
+host in `~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONTEXT.md)
 lists the aliases.
 
 Every deploy command in this guide can change boot or running system state.
@@ -48,8 +47,8 @@ This guide uses these terms:
 ## Check before you deploy
 
 Evaluate the change from this checkout. These scripts copy the working tree to
-nixos-rog and run Nix there, so they work from fedora-desktop, which has no
-Nix, and from nixos-rog:
+nixos-rog and run Nix there, so they work the same from nixos-desktop and
+nixos-rog:
 
 ```sh
 scripts/check-on-rog.sh
@@ -437,7 +436,7 @@ When a rebuild fails, do these steps:
 
 1. Read the complete output of the rebuild. The failure message names the
    candidate release that stays on the target for read-only investigation.
-2. Fix the source on fedora-desktop. When you also try a fix with a rebuild on
+2. Fix the source in this checkout. When you also try a fix with a rebuild on
    the target, apply the same fix here.
 3. Run `scripts/check-on-rog.sh` again.
 4. Run the same deploy command again. For example, rerun the `test` action,

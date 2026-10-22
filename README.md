@@ -4,8 +4,8 @@
 
 # nixos-config
 
-**Two NixOS laptops in one flake, deployed from a Fedora desktop over Tailscale,<br>
-with a CachyOS kernel that CI compiles so the laptops never do.**
+**A NixOS desktop and two NixOS laptops in one flake, deployed over Tailscale,<br>
+with a CachyOS kernel that CI compiles so the hosts never do.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
 
@@ -136,12 +136,12 @@ login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
-Run these from fedora-desktop, which has no Nix, or from nixos-rog. `deploy.sh`
+Run these from nixos-desktop or nixos-rog. `deploy.sh`
 builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
 from either host. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
-checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
+checkout with Nix. The hourly updater on nixos-rog runs them.
 
 | Command | What it does |
 | --- | --- |

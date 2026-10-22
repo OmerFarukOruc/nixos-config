@@ -92,7 +92,7 @@ the run. Processes of `oruc` can still read those files; this removes the
 token from inherited environments without isolating the service from that user.
 
 To run the updater now, run `upgrade` on nixos-rog. It prints the updater's
-log while it runs and exits with the run's status. From fedora-desktop:
+log while it runs and exits with the run's status. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade
@@ -350,7 +350,7 @@ The unit does nothing until that checkout exists.
 checkout's `desktop/bin/claude-usage` every 10 minutes. It writes each Claude
 Code account's usage limits and login state to
 `~/.cache/claude-usage/usage.json`, and reads the files of risoluto-dev-1 and
-fedora-desktop over SSH. fedora-desktop reads this host's file with a key that
+nixos-desktop over SSH. nixos-desktop reads this host's file with a key that
 `machines/nixos-rog/claude-usage-read.nix` allows only to print it.
 The Claude accounts widget in the top bar shows that file; `desktop-sync.sh`
 links the widget into `~/.local/share/plasma/plasmoids`, and
@@ -434,7 +434,7 @@ Facts that matter when you change or measure them:
   in performance (85 and 20). With 2 CPU threads also loaded, it drew about
   60 W in balanced.
 
-From fedora-desktop, in the repository root, run the thermal test to measure a
+From nixos-desktop, in the repository root, run the thermal test to measure a
 profile, or a change to its limits or fan curves before you commit it. It drives
 nixos-rog over SSH, heats the laptop and runs the fans hard for several minutes,
 and needs the charger plugged in:
@@ -580,7 +580,7 @@ the last app stops recording, and with bypass on it does not link it again, so
 the next app that records gets silence. Run `easyeffects -b 2` to turn bypass
 off. EasyEffects has no output effects, so apps play to the speakers directly.
 
-From fedora-desktop, in the repository root, compare the microphone level or the
+From nixos-desktop, in the repository root, compare the microphone level or the
 two denoisers. Someone at the laptop follows the prompts:
 
 ```sh
@@ -590,7 +590,7 @@ scripts/mic-ab-on-rog.sh ab
 
 ## Check the running laptop
 
-After a deploy, check the running laptop from fedora-desktop:
+After a deploy, check the running laptop from nixos-desktop:
 
 ```sh
 scripts/verify-nixos-rog.sh
@@ -832,8 +832,8 @@ tinted-theming collection needs nothing else; a scheme it lacks goes in
 ## Deskflow
 
 Deskflow shares one keyboard, mouse and clipboard between the two machines.
-fedora-desktop is the server and nixos-rog is the client. They connect over
-Tailscale.
+nixos-desktop is the server and nixos-rog is the client. They connect over
+Tailscale, and both run the same Deskflow build from this flake.
 
 On nixos-rog:
 
@@ -848,7 +848,7 @@ On nixos-rog:
   starts a client you quit and never stops a running one. With
   `RefuseManualStart` alone, Home Manager stops a changed client and cannot
   start it again. If the cursor is on the laptop at that moment, the server
-  keeps fedora-desktop's keyboard and mouse captured. `systemctl --user start`
+  keeps nixos-desktop's keyboard and mouse captured. `systemctl --user start`
   and `stop app-org.deskflow.deskflow` fail for the same reason; open Deskflow
   from the menu, and quit it from its window.
 - `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
@@ -860,14 +860,24 @@ On nixos-rog:
   stay as you set them in the Deskflow window. Both machines write
   `~/deskflow.log`.
 
-On fedora-desktop, outside this repository:
+On nixos-desktop:
 
-- The server is the upstream RPM, installed with `dnf install`, at the version of
-  the laptop's client, because Fedora's package can lag the release.
-  `rpm -q deskflow` on fedora-desktop prints the server's version, and
-  `scripts/eval-on-rog.sh --json '.#nixosConfigurations.nixos-rog.pkgs.deskflow.version'`
-  prints the laptop's.
-- TLS is on, and the server requires client certificates. Keep the Network IP
+- The `app-org.deskflow.deskflow` user service in
+  `machines/nixos-desktop/home.nix` starts the server at a Plasma login, with
+  the same `RefuseManualStart`, `RefuseManualStop` and exit 5 rules as the
+  client. The server reads the keyboard and mouse through the input capture
+  portal.
+- Home Manager writes the server mode, the screen links file, the log setting
+  and one `[computer_<name>]` group for each machine into `Deskflow.conf`.
+  Deskflow 1.27 reads the computers from those groups and skips a `screens`
+  section in the links file, so a computer missing there stops the server with
+  `unknown computer name`.
+- TLS is on, and each side checks the other's certificate. The server's
+  `~/.config/Deskflow/tls/trusted-clients` holds the laptop's fingerprint, and
+  the laptop's `tls/trusted-servers` holds the server's. Each line is
+  `v2:sha256:` and the lowercase hex that
+  `openssl x509 -in ~/.config/Deskflow/tls/deskflow.pem -noout -fingerprint -sha256`
+  prints on the other machine, without colons. Keep the Network IP
   setting automatic, because a fixed Tailscale address would stop the server
   whenever Tailscale is not up yet.
 - The server's screen for the laptop must be named exactly `nixos-rog`.
@@ -886,8 +896,8 @@ access. Approve it with the laptop's own keyboard or touchpad.
 
 To check the clipboard, move the cursor onto the laptop and copy there. Then
 look for `computer "nixos-rog" updated clipboard 0` in `~/deskflow.log` on
-fedora-desktop. Deskflow sends the laptop's clipboard only after the cursor has
-been on the laptop, so a `wl-copy` over SSH while the cursor is on fedora-desktop
+nixos-desktop. Deskflow sends the laptop's clipboard only after the cursor has
+been on the laptop, so a `wl-copy` over SSH while the cursor is on nixos-desktop
 proves nothing.
 
 ## Keyboard keys
@@ -956,7 +966,7 @@ nixos-rog is Omer's daily laptop. Before you click in VS Code, take a
 screenshot with `scripts/screenshot-nixos-rog.sh`. When he is working in VS
 Code, tell him what to click, or ask him to close it.
 
-`scripts/vscode-cdp-on-rog.sh` drives VS Code from fedora-desktop over the
+`scripts/vscode-cdp-on-rog.sh` drives VS Code from nixos-desktop over the
 Chrome DevTools Protocol. `on` refuses while VS Code runs, because a stop
 signal raises its quit dialogs and a forced stop loses the open window. Once
 Omer has closed it, `on` starts VS Code with a debugging port on the laptop's
@@ -969,7 +979,7 @@ scripts/vscode-cdp-on-rog.sh run '[{"shot":"/tmp/vscode.png"}]'
 scripts/vscode-cdp-on-rog.sh off
 ```
 
-`run` runs the steps with Node on fedora-desktop, which needs the built-in
+`run` runs the steps with the local Node, which needs the built-in
 `fetch` and `WebSocket` globals; `node -e 'console.log(typeof WebSocket)'`
 prints `function` when Node has them. It takes a JSON list of steps and prints
 one JSON line for each:
