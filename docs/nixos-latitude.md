@@ -89,8 +89,9 @@ the power was cut or the kernel froze. The cause was not found. The pstore
 crashes at that time is not confirmed. The battery history had already
 rotated out.
 
-`machines/nixos-latitude/configuration.nix` sets these so that the next such stop
-leaves evidence and nixos-latitude restarts without anyone present:
+`features.alwaysOn` in the machine record turns these on through
+`nixosModules/always-on.nix`, so that the next such stop leaves evidence and
+nixos-latitude restarts without anyone present:
 
 - `panic=10` reboots 10 s after a kernel panic.
 - `efi_pstore.pstore_disable=0` turns on EFI pstore, which the CachyOS kernel

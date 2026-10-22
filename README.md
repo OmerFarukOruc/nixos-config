@@ -109,7 +109,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 - **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
   sign-in pages.
-  [`machines/nixos-rog/network.nix`](machines/nixos-rog/network.nix)
+  [`nixosModules/nextdns.nix`](nixosModules/nextdns.nix)
 
 ## Layout
 

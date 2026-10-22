@@ -12,7 +12,7 @@ let
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
   inherit (config.oruc) theme;
 
-  inherit (osConfig.oruc.machine) idle;
+  inherit (osConfig.oruc.machine) autoLogin hasBattery idle;
 
   idleDisplay =
     { dimSeconds, screenOffSeconds }:
@@ -183,7 +183,7 @@ in
       # Deskflow client, not from the last session.
       session.sessionRestore.restoreOpenApplicationsOnLogin = "startWithEmptySession";
       # nixos-rog has no disk swap, so it cannot hibernate.
-      powerdevil.batteryLevels.criticalAction = "sleep";
+      powerdevil.batteryLevels.criticalAction = lib.mkIf hasBattery "sleep";
 
       hotkeys.commands =
         let
@@ -221,7 +221,7 @@ in
 
       # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
       # ROG laptop, as in the Noctalia and DMS sessions.
-      shortcuts.org_kde_powerdevil.powerProfile = [
+      shortcuts.org_kde_powerdevil.powerProfile = lib.mkIf hasBattery [
         "Battery"
         "Meta+B"
         "Launch (4)"
@@ -253,12 +253,16 @@ in
           Autolock = false;
           Lock = false;
           LockOnResume = false;
-          LockOnStart = false;
+          # A machine that logs in by itself starts locked, so its session
+          # comes up after a reboot without opening the desktop to the room.
+          LockOnStart = autoLogin;
           Timeout = 0;
         };
         powerdevilrc = {
           "AC/Display" = idleDisplay idle.ac;
           "AC/SuspendAndShutdown" = noAutoSuspend;
+        }
+        // lib.optionalAttrs hasBattery {
           "Battery/Display" = idleDisplay idle.battery;
           "Battery/SuspendAndShutdown" = noAutoSuspend;
           "LowBattery/Display" = idleDisplay idle.battery;

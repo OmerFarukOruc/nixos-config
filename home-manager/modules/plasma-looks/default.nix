@@ -50,8 +50,8 @@ in
     };
     dockLaunchers = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      # The Teams and WhatsApp Web entries are web apps that Brave writes to
-      # ~/.local/share/applications.
+      # The apps that every workstation installs. A host with more apps sets
+      # its own list.
       default = [
         "preferred://filemanager"
         "applications:io.missioncenter.MissionCenter.desktop"
@@ -59,19 +59,10 @@ in
         "applications:com.mitchellh.ghostty.desktop"
         "applications:SourceGit.desktop"
         "applications:code.desktop"
-        "applications:chatgpt.desktop"
         "applications:com.anthropic.Claude.desktop"
-        "applications:grok-bot.desktop"
-        "applications:openchamber.desktop"
-        "applications:cursor.desktop"
-        "applications:org.opengamingcollective.rog-control-center.desktop"
-        "applications:slack.desktop"
-        "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
-        "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
         "applications:discord.desktop"
         "applications:org.telegram.desktop.desktop"
         "applications:spotify.desktop"
-        "applications:md.obsidian.Obsidian.desktop"
       ];
       description = "Launchers pinned to the dock of every look.";
     };

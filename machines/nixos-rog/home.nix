@@ -1,7 +1,6 @@
-# Home Manager layer of nixos-rog: its own apps and session variables, on
-# top of the workstation profile.
+# Home Manager layer of nixos-rog: its own apps and units, on top of the
+# workstation and personal profiles.
 {
-  agents,
   config,
   lib,
   osConfig,
@@ -11,24 +10,16 @@
 {
   imports = [
     ../../home-manager/profiles/workstation.nix
-    ./desktop-sync.nix
+    ../../home-manager/modules/desktop-sync.nix
     ./easyeffects.nix
     ./hdr.nix
     ./heavy.nix
     ./hushmic.nix
     ./mpv.nix
     ./oled-care.nix
-    ./sshfs-risoluto-dev-1.nix
+    ../../home-manager/modules/sshfs-risoluto-dev-1.nix
     ./warp-launchers.nix
   ];
-
-  # Both apps register their URL schemes with xdg-mime at start; declaring them
-  # keeps that rewrite of mimeapps.list identical to the Home Manager file.
-  xdg.mimeApps.defaultApplications = {
-    "x-scheme-handler/codex" = [ "chatgpt.desktop" ];
-    "x-scheme-handler/grokbot" = [ "grok-bot.desktop" ];
-    "x-scheme-handler/sand" = [ "grok-bot.desktop" ];
-  };
 
   # This sets only these keys, because input.touchpads would also delete every
   # touchpad key it does not set, such as pointer speed. The group name is this
@@ -90,52 +81,27 @@
           ${config.xdg.configHome}/Deskflow/Deskflow.conf log toFile true
       '';
 
-  home.sessionVariables = {
-    # Playwright uses the nixpkgs browsers; npm's downloaded ones do not run here.
-    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
-  };
-
-  home.packages =
-    with pkgs;
-    [
-      amdgpu_top
-      android-tools
-      apkeep
-      chromium
-      code-cursor
-      cudaPackages.cudatoolkit
-      devenv
-      fastfetch
-      frida-tools
-      gum
-      hwinfo
-      iptvnator
-      jadx
-      kdePackages.kate
-      lmstudio
-      mitmproxy
-      nvtopPackages.full
-      obsidian
-      openssl
-      pandoc
-      podman-desktop
-      qbittorrent
-      silicon
-      slack
-      tigervnc
-      vhs
-      vlc
-    ]
-    ++ [
-      (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
-      (pkgs.callPackage ../../pkgs/chatgpt.nix { })
-      (pkgs.callPackage ../../pkgs/grok-bot.nix { })
-      (pkgs.callPackage ../../pkgs/openchamber.nix { })
-    ]
-    ++ (with agents; [
-      agent-browser
-      antigravity-cli
-      pi
-    ]);
+  # The Teams and WhatsApp Web entries are web apps that Brave writes to
+  # ~/.local/share/applications.
+  oruc.plasma.dockLaunchers = [
+    "preferred://filemanager"
+    "applications:io.missioncenter.MissionCenter.desktop"
+    "preferred://browser"
+    "applications:com.mitchellh.ghostty.desktop"
+    "applications:SourceGit.desktop"
+    "applications:code.desktop"
+    "applications:chatgpt.desktop"
+    "applications:com.anthropic.Claude.desktop"
+    "applications:grok-bot.desktop"
+    "applications:openchamber.desktop"
+    "applications:cursor.desktop"
+    "applications:org.opengamingcollective.rog-control-center.desktop"
+    "applications:slack.desktop"
+    "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+    "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
+    "applications:discord.desktop"
+    "applications:org.telegram.desktop.desktop"
+    "applications:spotify.desktop"
+    "applications:md.obsidian.Obsidian.desktop"
+  ];
 }

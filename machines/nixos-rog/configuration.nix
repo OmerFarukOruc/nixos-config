@@ -20,6 +20,7 @@
     ./media.nix
     ./monitoring.nix
     ./network.nix
+    ../../nixosModules/nextdns.nix
     ./nixpkgs-clone.nix
     ./powertop.nix
     ./pr-build.nix
@@ -113,7 +114,10 @@
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
   };
 
-  home-manager.users.oruc.imports = [ ./home.nix ];
+  home-manager.users.oruc.imports = [
+    ./home.nix
+    ../../home-manager/profiles/personal.nix
+  ];
 
   system.stateVersion = "26.11";
 }

@@ -33,6 +33,7 @@ let
         docker = true;
         diskSelfTests = true;
         audioEffects = true;
+        alwaysOn = true;
       };
     };
 

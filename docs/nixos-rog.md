@@ -345,7 +345,7 @@ server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
 
-`claude-usage.timer`, defined in `machines/nixos-rog/desktop-sync.nix`, runs the
+`claude-usage.timer`, defined in `home-manager/modules/desktop-sync.nix`, runs the
 checkout's `desktop/bin/claude-usage` every 10 minutes. It writes each Claude
 Code account's usage limits and login state to
 `~/.cache/claude-usage/usage.json`, and reads the files of risoluto-dev-1 and

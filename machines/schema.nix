@@ -125,6 +125,12 @@ let
       description = "Whether the machine has a battery.";
     };
 
+    autoLogin = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the display manager logs oruc in at boot. The session then starts locked.";
+    };
+
     # Every desktop of the machine reads these, so its sessions behave alike.
     idle = {
       battery = mkIdle 120 300 "on battery power";
@@ -153,6 +159,7 @@ let
           docker = mkFeature "Enable the Docker daemon and client tooling.";
           diskSelfTests = mkFeature "Schedule the smartd short and long disk self-tests.";
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
+          alwaysOn = mkFeature "Never sleep, and reboot after a panic or a hang (nixosModules/always-on.nix).";
         };
       };
       description = "Explicit feature switches consumed by self-gating modules.";
