@@ -1,8 +1,9 @@
 # OpenRGB sets the motherboard's and the Razer controller's lights from
 # openrgb-boot.json at boot, then exits; no OpenRGB server runs. The profile
 # was saved from the OpenRGB window on Fedora. OpenRGB matches each device by
-# name, version and serial, not by its /dev/hidraw path. The window works as
-# oruc through the package's udev rules.
+# name, version and serial, not by its /dev/hidraw path, so the profile keeps
+# the two controllers' serials. The window works as oruc through the package's
+# udev rules.
 { pkgs, ... }:
 {
   boot.kernelModules = [
