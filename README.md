@@ -100,7 +100,8 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   [`deploy.sh`](deploy.sh)
 - **🔄 A laptop that updates itself.** Every hour on AC power, nixos-rog moves its
   inputs and apps, waits for the caches to hold the expensive builds, deploys the
-  result to itself and squash-merges it to `main`.
+  result to itself and squash-merges it to `main`. When nothing moved, it deploys
+  a newer `main` to itself.
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
   [`scripts/auto-update.sh`](scripts/auto-update.sh)
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
@@ -147,7 +148,7 @@ checkout with Nix. The hourly updater on nixos-rog runs them.
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade [--rehearse]` (on nixos-rog) | run the hourly updater now: move inputs and apps, deploy nixos-rog and merge to `main`; `--rehearse` repeats the newest update's moves without activating anything |
+| `upgrade [--rehearse]` (on any host) | bring this host to the newest `main`; on nixos-rog run the hourly updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run `ci/checks.sh`, CI's formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 

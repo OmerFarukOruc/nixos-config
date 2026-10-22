@@ -3,6 +3,7 @@
 - [Check before you deploy](#check-before-you-deploy)
 - [Deploy](#deploy)
 - [Deploy a merged commit](#deploy-a-merged-commit)
+- [Upgrade a host to main](#upgrade-a-host-to-main)
 - [What the deploy does](#what-the-deploy-does)
 - [Exit codes](#exit-codes)
 - [One deploy at a time](#one-deploy-at-a-time)
@@ -210,6 +211,26 @@ Before you remove the worktree with `git worktree remove`, run
 `git status --short` in it. The deploy copies the target's `flake.lock` into
 the worktree, and a changed lock is lost with the worktree unless you commit it
 on a branch.
+
+## Upgrade a host to main
+
+Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
+it runs the [hourly updater](nixos-rog.md#hourly-updater) now. On every other
+host it deploys `main` to that host in these steps:
+
+1. It clones this repository over https into
+   `~/.local/state/nixos-config-upgrade` when the clone is missing. It then
+   fetches `main` and resets the clone to it, which drops any change in the
+   clone, so keep no work there.
+2. When the host runs a clean release of that commit, it prints
+   `<host> already runs main at <sha>.` and exits 0.
+3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so its output
+   and [exit codes](#exit-codes) are those of `deploy.sh`.
+
+`upgrade` runs as your own user, because the releases live in that user's
+home. It never moves an input, because the updater on nixos-rog owns
+`flake.lock`. It has no `--replace`; after exit 78, follow the message of
+`deploy.sh` and run it from the clone.
 
 ## What the deploy does
 

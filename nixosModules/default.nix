@@ -7,6 +7,7 @@
     ./recovery.nix
     ./common.nix
     ./tools.nix
+    ./upgrade.nix
     ./monitoring.nix
     ./memory.nix
     ./theme.nix
