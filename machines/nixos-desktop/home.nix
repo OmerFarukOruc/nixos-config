@@ -7,13 +7,10 @@
   ...
 }:
 let
-  # nixos-rog sits left of this screen.
+  # nixos-rog sits left of this screen. Deskflow 1.27 skips a screens
+  # section here; it reads the computers from Deskflow.conf, which the
+  # activation below writes.
   deskflowLayout = pkgs.writeText "deskflow-server.conf" ''
-    section: screens
-    	nixos-desktop:
-    	nixos-rog:
-    end
-
     section: links
     	nixos-rog:
     		right = nixos-desktop
@@ -82,7 +79,7 @@ in
   };
 
   # Deskflow keeps its own settings in Deskflow.conf, so the switch sets only
-  # these keys: server mode, the screen layout above, the log in
+  # these keys: server mode, the screen layout above, its computers, the log in
   # ~/deskflow.log, and a server that starts with the window.
   home.activation.deskflowServer = lib.hm.dag.entryBetween [ "reloadSystemd" ] [ "writeBoundary" ] ''
     conf=${config.xdg.configHome}/Deskflow/Deskflow.conf
@@ -91,6 +88,9 @@ in
     run "''${ini[@]}" core coreMode 2
     run "''${ini[@]}" server externalConfig true
     run "''${ini[@]}" server externalConfigFile ${deskflowLayout}
+    for computer in nixos-desktop nixos-rog; do
+      run "''${ini[@]}" "computer_$computer" name "$computer"
+    done
     run "''${ini[@]}" log toFile true
     run "''${ini[@]}" gui startCoreWithGui true
   '';
