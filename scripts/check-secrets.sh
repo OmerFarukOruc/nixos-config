@@ -22,7 +22,10 @@ host=$(</proc/sys/kernel/hostname)
 main_file=secrets/$host.yaml
 [[ -f $main_file ]] || {
   echo "$0 runs on a host with a secrets file, because it decrypts with that host's key:" >&2
-  ls secrets/*.yaml | sed 's|^secrets/||; s|\.yaml$||' >&2
+  for f in secrets/*.yaml; do
+    f=${f#secrets/}
+    echo "${f%.yaml}"
+  done >&2
   exit 2
 }
 override=${1:-}
