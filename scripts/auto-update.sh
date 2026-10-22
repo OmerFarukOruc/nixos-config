@@ -7,6 +7,8 @@
 # here; the run deploys to no other host.
 # nixpkgs, dms and sops-nix wait for the cache for a day at most
 # (see below).
+# When nothing moves and this host runs a system other than main's, the run
+# deploys main to this host and merges nothing.
 # A candidate that fails another host's build, a check, this host's build or
 # the activation is not tried again until main or an upstream moves. The run
 # retries after this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are
@@ -344,9 +346,23 @@ while read -r file; do
     echo "$version" >"$broken"
 done < <(printf '%s\n' pkgs/*.nix)
 
+# Without a move, the run deploys main to this host unless the host runs a
+# clean release of it. Each commit on main passed its checks before it merged,
+# so the run skips the commit, the other hosts' builds and the checks, and
+# merges nothing.
+main_only=false
 if git diff --quiet; then
-  echo "Everything is current."
-  exit 0
+  if $rehearsal; then
+    echo "Everything is current."
+    exit 0
+  fi
+  # shellcheck source=/dev/null
+  . scripts/lib/running-revision.sh
+  if runs_tree_of "$base"; then
+    echo "Everything is current."
+    exit 0
+  fi
+  main_only=true
 fi
 
 candidate=$({
@@ -358,24 +374,37 @@ if [[ -f $failed && $(<"$failed") == "$candidate" ]]; then
   exit 0
 fi
 
-# Inputs that moved to a new release tag are listed by version instead.
-changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new flake.lock \
-  --arg tagged "$(cut -d: -f1 <<<"$tags")" '
-  ($tagged | split("\n")) as $skip
-  | $new[0].nodes | to_entries[] | select(.value.locked.rev) | .key as $name
-  | select($skip | index($name) | not)
-  | ($old[0].nodes[$name].locked.rev // "none") as $from | .value.locked.rev as $to
-  | select($from != $to) | "- \($name): \($from[0:7]) -> \($to[0:7])"')
-[[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
-changes+=$apps
+if $main_only; then
+  # A commit that leaves this host's system as it is, such as a docs change,
+  # needs no deploy. A failed build goes on to deploy.sh, whose failure records
+  # the candidate, so the next runs wait for main to move.
+  if new_system=$(build_system "$host") && [[ $new_system == "$(readlink -f /run/current-system)" ]]; then
+    echo "Everything is current."
+    exit 0
+  fi
+  echo "$host runs a system other than main's; deploying main at ${base:0:12}."
+else
+  # Inputs that moved to a new release tag are listed by version instead.
+  changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new flake.lock \
+    --arg tagged "$(cut -d: -f1 <<<"$tags")" '
+    ($tagged | split("\n")) as $skip
+    | $new[0].nodes | to_entries[] | select(.value.locked.rev) | .key as $name
+    | select($skip | index($name) | not)
+    | ($old[0].nodes[$name].locked.rev // "none") as $from | .value.locked.rev as $to
+    | select($from != $to) | "- \($name): \($from[0:7]) -> \($to[0:7])"')
+  [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
+  changes+=$apps
 
-git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
+  git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
+fi
 
 old_system=$(readlink -f /run/current-system)
 status=0
-other_hosts_build || status=$?
-if ((status == 0)); then
-  local_checks || status=$?
+if ! $main_only; then
+  other_hosts_build || status=$?
+  if ((status == 0)); then
+    local_checks || status=$?
+  fi
 fi
 if ((status == 0)); then
   if $rehearsal; then
@@ -383,11 +412,13 @@ if ((status == 0)); then
   else
     # main may have moved during the input update. Switching then would
     # activate a commit the next run drops, because that run resets this
-    # branch to origin/main.
-    git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
-    if [[ $(git rev-parse origin/main) != "$base" ]]; then
-      notify normal "Update not applied" "$changes"$'\n'"main moved before the switch, so this run left $host as it was. The next run rebuilds on the new main." || true
-      exit 0
+    # branch to origin/main. A deploy of main itself stays on main.
+    if ! $main_only; then
+      git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
+      if [[ $(git rev-parse origin/main) != "$base" ]]; then
+        notify normal "Update not applied" "$changes"$'\n'"main moved before the switch, so this run left $host as it was. The next run rebuilds on the new main." || true
+        exit 0
+      fi
     fi
     ./deploy.sh "$host" switch || status=$?
     new_system=$(readlink -f /run/current-system)
@@ -426,6 +457,10 @@ if ((status != 0)); then
   exit 1
 fi
 rm -f -- "$failed" "$waiting"
+if $main_only; then
+  notify normal "System updated" "$host now runs main at ${base:0:12}." || true
+  exit 0
+fi
 
 # deploy.sh copies back a lock that the build completed; keep it in the commit.
 if ! git diff --quiet; then

@@ -86,24 +86,21 @@ fi
 for host in "${hosts[@]}"; do
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
   # The first line is the running system. The second holds the commit and the
-  # dirty flag of the release record that names it (docs/deploy.md, Release
-  # records and cleanup).
+  # dirty flag of the release record that names it.
   if ! state=$(
-    ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
-system=$(readlink -f /run/current-system)
-echo "$system"
-for record in ~/.local/state/nixos-config-deploy/releases/*.source; do
-  if grep -qxF "system=$system" "$record" 2>/dev/null; then
-    printf '%s %s\n' "$(sed -n 's/^revision=//p' "$record")" "$(sed -n 's/^dirty=//p' "$record")"
-  fi
-done | tail -n 1
+    {
+      cat scripts/lib/running-revision.sh
+      cat <<'REMOTE'
+readlink -f /run/current-system
+running_revision
 REMOTE
+    } | ssh "${ssh_opts[@]}" "$host" 'bash -s'
   ); then
     printf '%s\tunreachable\tSSH to %s failed\n' "$host" "$host"
     continue
   fi
   system=$(sed -n 1p <<<"$state")
-  read -r revision dirty <<<"$(sed -n 2p <<<"$state")" || true
+  read -r revision dirty _ <<<"$(sed -n 2p <<<"$state")" || true
   if [[ $system == "$want" ]]; then
     printf '%s\tcurrent\t%s\n' "$host" "$system"
   elif [[ $dirty == true ]]; then

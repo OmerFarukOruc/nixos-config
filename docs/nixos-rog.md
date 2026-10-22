@@ -40,8 +40,10 @@ steps:
 2. It moves the inputs in the table by the rules there.
 3. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
    input, kernel and app steps.
-4. When no input or app moved, it logs "Everything is current." and deploys
-   nothing.
+4. When no input or app moved, it logs "Everything is current." and stops,
+   unless nixos-rog runs a system other than the one `main` builds. Then it
+   deploys `main` with `./deploy.sh nixos-rog switch`, skips steps 5 to 7 and
+   merges nothing.
 5. It builds every other host's system, then runs the checks of
    [check.yml](../.github/workflows/check.yml) that those builds do not
    cover: `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
@@ -56,7 +58,8 @@ steps:
 
 The updater deploys no other host, but it builds every host, so a build failure
 of nixos-desktop or nixos-latitude also stops its merge. Those two get `main`
-only from a manual `./deploy.sh <host> switch`.
+from `upgrade` on the host or from a manual `./deploy.sh <host> switch`
+([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)).
 
 A desktop notification reports each update or failure.
 
@@ -64,8 +67,8 @@ The run holds the build lock that [PR builds](#pr-builds) also take, from the
 checkout of `main` until it ends. When a PR build holds the lock
 for 30 minutes, the run stops quietly and the next run tries again.
 
-A change merged to `main` reaches nixos-rog with the next update that moves
-something, or with a manual `./deploy.sh nixos-rog switch`.
+A change merged to `main` reaches nixos-rog with the next run of the updater,
+or with a manual `./deploy.sh nixos-rog switch`.
 
 | Input | When it moves |
 | --- | --- |
@@ -293,7 +296,7 @@ working token until the new one is deployed:
 3. Commit the file and land it, then deploy it with
    `./deploy.sh nixos-rog switch`. [deploy.md](deploy.md) has the rules.
 4. Start the updater as in [Hourly updater](#hourly-updater). The new token
-   works when the log reaches "Everything is current." or the update deploys.
+   works when the log reaches "Everything is current." or the run deploys.
    When the log shows `git ... failed while GitHub answers`, the new token is
    wrong or lacks access to this repository, and the laptop holds it. Skip
    step 5, because the old token still works on GitHub. Create a corrected token,
