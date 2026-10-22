@@ -21,12 +21,14 @@ let
     .${gpu} or pkgs.nvtopPackages.full;
 in
 {
-  # Both apps register their URL schemes with xdg-mime at start; declaring them
-  # keeps that rewrite of mimeapps.list identical to the Home Manager file.
+  # ChatGPT and Grok Bot register their URL schemes with xdg-mime at start;
+  # declaring them keeps that rewrite of mimeapps.list identical to the Home
+  # Manager file. Thunderbird opens mailto links.
   xdg.mimeApps.defaultApplications = {
     "x-scheme-handler/codex" = [ "chatgpt.desktop" ];
     "x-scheme-handler/grokbot" = [ "grok-bot.desktop" ];
     "x-scheme-handler/sand" = [ "grok-bot.desktop" ];
+    "x-scheme-handler/mailto" = [ "thunderbird.desktop" ];
   };
 
   home.sessionVariables = {
@@ -64,6 +66,7 @@ in
       qbittorrent
       silicon
       slack
+      thunderbird
       tigervnc
       vhs
       vlc
