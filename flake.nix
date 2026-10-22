@@ -1,5 +1,5 @@
 {
-  description = "NixOS hosts managed from fedora-desktop";
+  description = "NixOS hosts of Omer's desktop and laptops";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

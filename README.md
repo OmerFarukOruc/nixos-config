@@ -4,8 +4,8 @@
 
 # nixos-config
 
-**Two NixOS laptops in one flake, deployed from a Fedora desktop over Tailscale,<br>
-with a CachyOS kernel that CI compiles so the laptops never do.**
+**A NixOS desktop and two NixOS laptops in one flake, deployed over Tailscale,<br>
+with a CachyOS kernel that CI compiles so the hosts never do.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
 
@@ -34,35 +34,35 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Host | Role | Machine | Login sessions | Kernel | Boot |
 | --- | --- | --- | --- | --- | --- |
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
+| `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
 
-`machines/inventory.nix` is the source of truth for this table. A third record,
-`nixos-desktop`, is inventory only; the flake does not build it.
+`machines/inventory.nix` is the source of truth for this table.
 
 ## Stack
 
 | Part | Choice |
 | --- | --- |
 | Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built by CI |
-| Boot loader | Limine on nixos-rog, systemd-boot on nixos-latitude |
+| Boot loader | Limine on nixos-rog and nixos-desktop, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
-| Plasma looks | Glass and Klassy on nixos-rog, switched with `plasma-look` |
+| Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |
 | Launcher | Rofi and the macOS Tahoe launcher on nixos-rog, Vicinae on nixos-latitude |
 | Terminal | Ghostty |
 | Login shell | zsh with oh-my-zsh and Starship |
 | Editors | VS Code, and Neovim through nvf |
 | Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
-| Secrets | sops-nix with age on nixos-rog |
-| DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-rog |
+| Secrets | sops-nix with age on nixos-desktop and nixos-rog |
+| DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | Remote access | Tailscale, and Sunshine on nixos-latitude |
 | Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 
 ## Highlights
 
-- **🧊 A kernel the laptops download.** The [`kernel-cache`](kernel-cache/README.md)
-  flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu and
-  turbostat on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
+- **🧊 A kernel the hosts download.** The [`kernel-cache`](kernel-cache/README.md)
+  flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu,
+  turbostat and nct6687d on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
   cache. [`scripts/update-kernel.sh`](scripts/update-kernel.sh) moves a host
   only to a revision whose every path is already in that cache.
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
@@ -82,7 +82,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   [`machines/variants.nix`](machines/variants.nix),
   [`nixosModules/hm-variants.nix`](nixosModules/hm-variants.nix),
   [`home-manager/modules/plasma-looks/`](home-manager/modules/plasma-looks)
-- **🔥 One scheme for the editors too.** Both hosts start on `warm-burnout-dark`,
+- **🔥 One scheme for the editors too.** Every host starts on `warm-burnout-dark`,
   a Base16 scheme in [`assets/schemes`](assets/schemes). A `warm-burnout-*`
   scheme also installs Warm Burnout's own VS Code and Neovim themes, which color
   syntax beyond the 16 Base16 colors.
@@ -103,8 +103,8 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   result to itself and squash-merges it to `main`.
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
   [`scripts/auto-update.sh`](scripts/auto-update.sh)
-- **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/nixos-rog.yaml`
-  with the age key derived from the laptop's SSH host key.
+- **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
+  with the age key derived from that host's SSH host key.
   [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
 - **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
@@ -136,12 +136,12 @@ login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
-Run these from fedora-desktop, which has no Nix, or from nixos-rog. `deploy.sh`
+Run these from nixos-desktop or nixos-rog. `deploy.sh`
 builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
 from either host. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
-checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
+checkout with Nix. The hourly updater on nixos-rog runs them.
 
 | Command | What it does |
 | --- | --- |
@@ -176,7 +176,7 @@ checkout on nixos-rog, which has Nix. The hourly updater on nixos-rog runs them.
 
 </details>
 
-`deploy.sh` takes a `HOST` (nixos-rog or nixos-latitude), `--allow-dirty` for a
+`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop or nixos-latitude), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
 says when to use either flag. Every deploy command can change boot or running
 system state.
@@ -203,6 +203,7 @@ ordering cycle on every pull request and push to `main`.
 | [nixos-rog](docs/nixos-rog.md) | the hourly updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
+| [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
 | [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |

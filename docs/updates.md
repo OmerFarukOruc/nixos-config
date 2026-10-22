@@ -6,7 +6,7 @@
 - [Spotify and Spicetify](#spotify-and-spicetify)
 - [Apps](#apps)
 
-fedora-desktop has no Nix. `update-kernel.sh` needs none, so it runs there.
+`update-kernel.sh` needs no Nix.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
 Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
@@ -28,7 +28,7 @@ scripts/update-kernel.sh
 
 The script first checks that every path the builder recorded for that revision
 is in the `omerfarukoruc` Cachix cache. Those paths are the kernels, the NVIDIA
-open modules, and ryzen-smu and turbostat for zen4. When one is missing, the
+open modules, and ryzen-smu, turbostat and nct6687d for zen4. When one is missing, the
 script leaves `flake.lock` unchanged. So a host never compiles the kernel
 itself.
 
@@ -59,7 +59,7 @@ updater on nixos-rog then moves the hosts with `update-kernel.sh`.
 ### When the cache lacks the kernel
 
 When the script reports missing paths because the GitHub runner is slow or
-timed out, build the revision on fedora-desktop instead:
+timed out, build the revision on nixos-desktop instead:
 
 1. Run this command. It takes the Cachix push token from Infisical, builds the
    variants in a `nixos/nix` container and pushes them. Then it starts the

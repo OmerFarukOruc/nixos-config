@@ -1,0 +1,2135 @@
+{
+  "base_color": 0,
+  "controllers": [
+    {
+      "active_mode": 0,
+      "colors": [
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680,
+        16711680
+      ],
+      "configuration": null,
+      "description": "MSI Mystic Light Device (185-byte)",
+      "display_name": "",
+      "flags": 1,
+      "leds": [
+        {
+          "name": "JRGB1, LED 1"
+        },
+        {
+          "name": "JRGB2, LED 1"
+        },
+        {
+          "name": "JRAINBOW1, LED 1"
+        },
+        {
+          "name": "JRAINBOW1, LED 2"
+        },
+        {
+          "name": "JRAINBOW1, LED 3"
+        },
+        {
+          "name": "JRAINBOW1, LED 4"
+        },
+        {
+          "name": "JRAINBOW1, LED 5"
+        },
+        {
+          "name": "JRAINBOW1, LED 6"
+        },
+        {
+          "name": "JRAINBOW1, LED 7"
+        },
+        {
+          "name": "JRAINBOW1, LED 8"
+        },
+        {
+          "name": "JRAINBOW1, LED 9"
+        },
+        {
+          "name": "JRAINBOW1, LED 10"
+        },
+        {
+          "name": "JRAINBOW1, LED 11"
+        },
+        {
+          "name": "JRAINBOW1, LED 12"
+        },
+        {
+          "name": "JRAINBOW1, LED 13"
+        },
+        {
+          "name": "JRAINBOW1, LED 14"
+        },
+        {
+          "name": "JRAINBOW1, LED 15"
+        },
+        {
+          "name": "JRAINBOW1, LED 16"
+        },
+        {
+          "name": "JRAINBOW1, LED 17"
+        },
+        {
+          "name": "JRAINBOW1, LED 18"
+        },
+        {
+          "name": "JRAINBOW1, LED 19"
+        },
+        {
+          "name": "JRAINBOW1, LED 20"
+        },
+        {
+          "name": "JRAINBOW1, LED 21"
+        },
+        {
+          "name": "JRAINBOW1, LED 22"
+        },
+        {
+          "name": "JRAINBOW1, LED 23"
+        },
+        {
+          "name": "JRAINBOW1, LED 24"
+        },
+        {
+          "name": "JRAINBOW1, LED 25"
+        },
+        {
+          "name": "JRAINBOW1, LED 26"
+        },
+        {
+          "name": "JRAINBOW1, LED 27"
+        },
+        {
+          "name": "JRAINBOW1, LED 28"
+        },
+        {
+          "name": "JRAINBOW1, LED 29"
+        },
+        {
+          "name": "JRAINBOW1, LED 30"
+        },
+        {
+          "name": "JRAINBOW1, LED 31"
+        },
+        {
+          "name": "JRAINBOW1, LED 32"
+        },
+        {
+          "name": "JRAINBOW1, LED 33"
+        },
+        {
+          "name": "JRAINBOW1, LED 34"
+        },
+        {
+          "name": "JRAINBOW1, LED 35"
+        },
+        {
+          "name": "JRAINBOW1, LED 36"
+        },
+        {
+          "name": "JRAINBOW1, LED 37"
+        },
+        {
+          "name": "JRAINBOW1, LED 38"
+        },
+        {
+          "name": "JRAINBOW1, LED 39"
+        },
+        {
+          "name": "JRAINBOW1, LED 40"
+        },
+        {
+          "name": "JRAINBOW1, LED 41"
+        },
+        {
+          "name": "JRAINBOW1, LED 42"
+        },
+        {
+          "name": "JRAINBOW1, LED 43"
+        },
+        {
+          "name": "JRAINBOW1, LED 44"
+        },
+        {
+          "name": "JRAINBOW1, LED 45"
+        },
+        {
+          "name": "JRAINBOW1, LED 46"
+        },
+        {
+          "name": "JRAINBOW1, LED 47"
+        },
+        {
+          "name": "JRAINBOW1, LED 48"
+        },
+        {
+          "name": "JRAINBOW2, LED 1"
+        },
+        {
+          "name": "JRAINBOW2, LED 2"
+        },
+        {
+          "name": "JRAINBOW2, LED 3"
+        },
+        {
+          "name": "JRAINBOW2, LED 4"
+        },
+        {
+          "name": "JRAINBOW2, LED 5"
+        },
+        {
+          "name": "JRAINBOW2, LED 6"
+        },
+        {
+          "name": "JRAINBOW2, LED 7"
+        },
+        {
+          "name": "JRAINBOW2, LED 8"
+        },
+        {
+          "name": "JRAINBOW2, LED 9"
+        },
+        {
+          "name": "JRAINBOW2, LED 10"
+        },
+        {
+          "name": "JRAINBOW2, LED 11"
+        },
+        {
+          "name": "JRAINBOW2, LED 12"
+        },
+        {
+          "name": "JRAINBOW2, LED 13"
+        },
+        {
+          "name": "JRAINBOW2, LED 14"
+        },
+        {
+          "name": "JRAINBOW2, LED 15"
+        },
+        {
+          "name": "JRAINBOW2, LED 16"
+        },
+        {
+          "name": "JRAINBOW2, LED 17"
+        },
+        {
+          "name": "JRAINBOW2, LED 18"
+        },
+        {
+          "name": "JRAINBOW2, LED 19"
+        },
+        {
+          "name": "JRAINBOW2, LED 20"
+        },
+        {
+          "name": "JRAINBOW2, LED 21"
+        },
+        {
+          "name": "JRAINBOW2, LED 22"
+        },
+        {
+          "name": "JRAINBOW2, LED 23"
+        },
+        {
+          "name": "JRAINBOW2, LED 24"
+        },
+        {
+          "name": "JRAINBOW2, LED 25"
+        },
+        {
+          "name": "JRAINBOW2, LED 26"
+        },
+        {
+          "name": "JRAINBOW2, LED 27"
+        },
+        {
+          "name": "JRAINBOW2, LED 28"
+        },
+        {
+          "name": "JRAINBOW2, LED 29"
+        },
+        {
+          "name": "JRAINBOW2, LED 30"
+        },
+        {
+          "name": "JRAINBOW2, LED 31"
+        },
+        {
+          "name": "JRAINBOW2, LED 32"
+        },
+        {
+          "name": "JRAINBOW2, LED 33"
+        },
+        {
+          "name": "JRAINBOW2, LED 34"
+        },
+        {
+          "name": "JRAINBOW2, LED 35"
+        },
+        {
+          "name": "JRAINBOW2, LED 36"
+        },
+        {
+          "name": "JRAINBOW2, LED 37"
+        },
+        {
+          "name": "JRAINBOW2, LED 38"
+        },
+        {
+          "name": "JRAINBOW2, LED 39"
+        },
+        {
+          "name": "JRAINBOW2, LED 40"
+        },
+        {
+          "name": "JRAINBOW2, LED 41"
+        },
+        {
+          "name": "JRAINBOW2, LED 42"
+        },
+        {
+          "name": "JRAINBOW2, LED 43"
+        },
+        {
+          "name": "JRAINBOW2, LED 44"
+        },
+        {
+          "name": "JRAINBOW2, LED 45"
+        },
+        {
+          "name": "JRAINBOW2, LED 46"
+        },
+        {
+          "name": "JRAINBOW2, LED 47"
+        },
+        {
+          "name": "JRAINBOW2, LED 48"
+        }
+      ],
+      "location": "HID: /dev/hidraw9",
+      "modes": [
+        {
+          "brightness": 0,
+          "brightness_max": 10,
+          "brightness_min": 10,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 32,
+          "name": "Direct",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 304,
+          "name": "Static",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 305,
+          "name": "Breathing",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Flashing",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Double flashing",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 305,
+          "name": "Lightning",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Meteor",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Color ring",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Planetary",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Double meteor",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Energy",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Blink",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Clock",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Color pulse",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Color shift",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Color wave",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 305,
+          "name": "Marquee",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Rainbow wave",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Visor",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Rainbow flashing",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Color ring double flashing",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 433,
+          "name": "Stack",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        },
+        {
+          "brightness": 10,
+          "brightness_max": 10,
+          "brightness_min": 0,
+          "color_mode": 3,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 401,
+          "name": "Fire",
+          "speed": 1,
+          "speed_max": 2,
+          "speed_min": 0
+        }
+      ],
+      "name": "MSI MAG B650 TOMAHAWK WIFI (MS-7D75)",
+      "serial": "A02022102704",
+      "type": 0,
+      "vendor": "MSI",
+      "version": "AP/LD 0.4 / 1.5",
+      "zones": [
+        {
+          "display_name": "",
+          "flags": 0,
+          "leds_count": 1,
+          "leds_max": 1,
+          "leds_min": 1,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "JRGB1",
+          "type": 0
+        },
+        {
+          "display_name": "",
+          "flags": 0,
+          "leds_count": 1,
+          "leds_max": 1,
+          "leds_min": 1,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "JRGB2",
+          "type": 0
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 200,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "JRAINBOW1",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 240,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "JRAINBOW2",
+          "type": 1
+        }
+      ]
+    },
+    {
+      "active_mode": 0,
+      "colors": [
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687,
+        18687
+      ],
+      "configuration": null,
+      "description": "Razer Addressable Device",
+      "display_name": "",
+      "flags": 1,
+      "leds": [
+        {
+          "name": "Channel 1, LED 1"
+        },
+        {
+          "name": "Channel 1, LED 2"
+        },
+        {
+          "name": "Channel 1, LED 3"
+        },
+        {
+          "name": "Channel 1, LED 4"
+        },
+        {
+          "name": "Channel 1, LED 5"
+        },
+        {
+          "name": "Channel 1, LED 6"
+        },
+        {
+          "name": "Channel 1, LED 7"
+        },
+        {
+          "name": "Channel 1, LED 8"
+        },
+        {
+          "name": "Channel 1, LED 9"
+        },
+        {
+          "name": "Channel 1, LED 10"
+        },
+        {
+          "name": "Channel 1, LED 11"
+        },
+        {
+          "name": "Channel 1, LED 12"
+        },
+        {
+          "name": "Channel 1, LED 13"
+        },
+        {
+          "name": "Channel 1, LED 14"
+        },
+        {
+          "name": "Channel 1, LED 15"
+        },
+        {
+          "name": "Channel 1, LED 16"
+        },
+        {
+          "name": "Channel 1, LED 17"
+        },
+        {
+          "name": "Channel 1, LED 18"
+        },
+        {
+          "name": "Channel 1, LED 19"
+        },
+        {
+          "name": "Channel 1, LED 20"
+        },
+        {
+          "name": "Channel 1, LED 21"
+        },
+        {
+          "name": "Channel 1, LED 22"
+        },
+        {
+          "name": "Channel 1, LED 23"
+        },
+        {
+          "name": "Channel 1, LED 24"
+        },
+        {
+          "name": "Channel 1, LED 25"
+        },
+        {
+          "name": "Channel 1, LED 26"
+        },
+        {
+          "name": "Channel 1, LED 27"
+        },
+        {
+          "name": "Channel 1, LED 28"
+        },
+        {
+          "name": "Channel 1, LED 29"
+        },
+        {
+          "name": "Channel 1, LED 30"
+        },
+        {
+          "name": "Channel 1, LED 31"
+        },
+        {
+          "name": "Channel 1, LED 32"
+        },
+        {
+          "name": "Channel 1, LED 33"
+        },
+        {
+          "name": "Channel 1, LED 34"
+        },
+        {
+          "name": "Channel 1, LED 35"
+        },
+        {
+          "name": "Channel 1, LED 36"
+        },
+        {
+          "name": "Channel 1, LED 37"
+        },
+        {
+          "name": "Channel 1, LED 38"
+        },
+        {
+          "name": "Channel 1, LED 39"
+        },
+        {
+          "name": "Channel 1, LED 40"
+        },
+        {
+          "name": "Channel 1, LED 41"
+        },
+        {
+          "name": "Channel 1, LED 42"
+        },
+        {
+          "name": "Channel 1, LED 43"
+        },
+        {
+          "name": "Channel 1, LED 44"
+        },
+        {
+          "name": "Channel 1, LED 45"
+        },
+        {
+          "name": "Channel 1, LED 46"
+        },
+        {
+          "name": "Channel 1, LED 47"
+        },
+        {
+          "name": "Channel 1, LED 48"
+        },
+        {
+          "name": "Channel 2, LED 1"
+        },
+        {
+          "name": "Channel 2, LED 2"
+        },
+        {
+          "name": "Channel 2, LED 3"
+        },
+        {
+          "name": "Channel 2, LED 4"
+        },
+        {
+          "name": "Channel 2, LED 5"
+        },
+        {
+          "name": "Channel 2, LED 6"
+        },
+        {
+          "name": "Channel 2, LED 7"
+        },
+        {
+          "name": "Channel 2, LED 8"
+        },
+        {
+          "name": "Channel 2, LED 9"
+        },
+        {
+          "name": "Channel 2, LED 10"
+        },
+        {
+          "name": "Channel 2, LED 11"
+        },
+        {
+          "name": "Channel 2, LED 12"
+        },
+        {
+          "name": "Channel 2, LED 13"
+        },
+        {
+          "name": "Channel 2, LED 14"
+        },
+        {
+          "name": "Channel 2, LED 15"
+        },
+        {
+          "name": "Channel 2, LED 16"
+        },
+        {
+          "name": "Channel 2, LED 17"
+        },
+        {
+          "name": "Channel 2, LED 18"
+        },
+        {
+          "name": "Channel 2, LED 19"
+        },
+        {
+          "name": "Channel 2, LED 20"
+        },
+        {
+          "name": "Channel 2, LED 21"
+        },
+        {
+          "name": "Channel 2, LED 22"
+        },
+        {
+          "name": "Channel 2, LED 23"
+        },
+        {
+          "name": "Channel 2, LED 24"
+        },
+        {
+          "name": "Channel 2, LED 25"
+        },
+        {
+          "name": "Channel 2, LED 26"
+        },
+        {
+          "name": "Channel 2, LED 27"
+        },
+        {
+          "name": "Channel 2, LED 28"
+        },
+        {
+          "name": "Channel 2, LED 29"
+        },
+        {
+          "name": "Channel 2, LED 30"
+        },
+        {
+          "name": "Channel 2, LED 31"
+        },
+        {
+          "name": "Channel 2, LED 32"
+        },
+        {
+          "name": "Channel 2, LED 33"
+        },
+        {
+          "name": "Channel 2, LED 34"
+        },
+        {
+          "name": "Channel 2, LED 35"
+        },
+        {
+          "name": "Channel 2, LED 36"
+        },
+        {
+          "name": "Channel 2, LED 37"
+        },
+        {
+          "name": "Channel 2, LED 38"
+        },
+        {
+          "name": "Channel 2, LED 39"
+        },
+        {
+          "name": "Channel 2, LED 40"
+        },
+        {
+          "name": "Channel 2, LED 41"
+        },
+        {
+          "name": "Channel 2, LED 42"
+        },
+        {
+          "name": "Channel 2, LED 43"
+        },
+        {
+          "name": "Channel 2, LED 44"
+        },
+        {
+          "name": "Channel 2, LED 45"
+        },
+        {
+          "name": "Channel 2, LED 46"
+        },
+        {
+          "name": "Channel 2, LED 47"
+        },
+        {
+          "name": "Channel 2, LED 48"
+        },
+        {
+          "name": "Channel 3, LED 1"
+        },
+        {
+          "name": "Channel 3, LED 2"
+        },
+        {
+          "name": "Channel 3, LED 3"
+        },
+        {
+          "name": "Channel 3, LED 4"
+        },
+        {
+          "name": "Channel 3, LED 5"
+        },
+        {
+          "name": "Channel 3, LED 6"
+        },
+        {
+          "name": "Channel 3, LED 7"
+        },
+        {
+          "name": "Channel 3, LED 8"
+        },
+        {
+          "name": "Channel 3, LED 9"
+        },
+        {
+          "name": "Channel 3, LED 10"
+        },
+        {
+          "name": "Channel 3, LED 11"
+        },
+        {
+          "name": "Channel 3, LED 12"
+        },
+        {
+          "name": "Channel 3, LED 13"
+        },
+        {
+          "name": "Channel 3, LED 14"
+        },
+        {
+          "name": "Channel 3, LED 15"
+        },
+        {
+          "name": "Channel 3, LED 16"
+        },
+        {
+          "name": "Channel 3, LED 17"
+        },
+        {
+          "name": "Channel 3, LED 18"
+        },
+        {
+          "name": "Channel 3, LED 19"
+        },
+        {
+          "name": "Channel 3, LED 20"
+        },
+        {
+          "name": "Channel 3, LED 21"
+        },
+        {
+          "name": "Channel 3, LED 22"
+        },
+        {
+          "name": "Channel 3, LED 23"
+        },
+        {
+          "name": "Channel 3, LED 24"
+        },
+        {
+          "name": "Channel 3, LED 25"
+        },
+        {
+          "name": "Channel 3, LED 26"
+        },
+        {
+          "name": "Channel 3, LED 27"
+        },
+        {
+          "name": "Channel 3, LED 28"
+        },
+        {
+          "name": "Channel 3, LED 29"
+        },
+        {
+          "name": "Channel 3, LED 30"
+        },
+        {
+          "name": "Channel 3, LED 31"
+        },
+        {
+          "name": "Channel 3, LED 32"
+        },
+        {
+          "name": "Channel 3, LED 33"
+        },
+        {
+          "name": "Channel 3, LED 34"
+        },
+        {
+          "name": "Channel 3, LED 35"
+        },
+        {
+          "name": "Channel 3, LED 36"
+        },
+        {
+          "name": "Channel 3, LED 37"
+        },
+        {
+          "name": "Channel 3, LED 38"
+        },
+        {
+          "name": "Channel 3, LED 39"
+        },
+        {
+          "name": "Channel 3, LED 40"
+        },
+        {
+          "name": "Channel 3, LED 41"
+        },
+        {
+          "name": "Channel 3, LED 42"
+        },
+        {
+          "name": "Channel 3, LED 43"
+        },
+        {
+          "name": "Channel 3, LED 44"
+        },
+        {
+          "name": "Channel 3, LED 45"
+        },
+        {
+          "name": "Channel 3, LED 46"
+        },
+        {
+          "name": "Channel 3, LED 47"
+        },
+        {
+          "name": "Channel 3, LED 48"
+        },
+        {
+          "name": "Channel 4, LED 1"
+        },
+        {
+          "name": "Channel 4, LED 2"
+        },
+        {
+          "name": "Channel 4, LED 3"
+        },
+        {
+          "name": "Channel 4, LED 4"
+        },
+        {
+          "name": "Channel 4, LED 5"
+        },
+        {
+          "name": "Channel 4, LED 6"
+        },
+        {
+          "name": "Channel 4, LED 7"
+        },
+        {
+          "name": "Channel 4, LED 8"
+        },
+        {
+          "name": "Channel 4, LED 9"
+        },
+        {
+          "name": "Channel 4, LED 10"
+        },
+        {
+          "name": "Channel 4, LED 11"
+        },
+        {
+          "name": "Channel 4, LED 12"
+        },
+        {
+          "name": "Channel 4, LED 13"
+        },
+        {
+          "name": "Channel 4, LED 14"
+        },
+        {
+          "name": "Channel 4, LED 15"
+        },
+        {
+          "name": "Channel 4, LED 16"
+        },
+        {
+          "name": "Channel 4, LED 17"
+        },
+        {
+          "name": "Channel 4, LED 18"
+        },
+        {
+          "name": "Channel 4, LED 19"
+        },
+        {
+          "name": "Channel 4, LED 20"
+        },
+        {
+          "name": "Channel 4, LED 21"
+        },
+        {
+          "name": "Channel 4, LED 22"
+        },
+        {
+          "name": "Channel 4, LED 23"
+        },
+        {
+          "name": "Channel 4, LED 24"
+        },
+        {
+          "name": "Channel 4, LED 25"
+        },
+        {
+          "name": "Channel 4, LED 26"
+        },
+        {
+          "name": "Channel 4, LED 27"
+        },
+        {
+          "name": "Channel 4, LED 28"
+        },
+        {
+          "name": "Channel 4, LED 29"
+        },
+        {
+          "name": "Channel 4, LED 30"
+        },
+        {
+          "name": "Channel 4, LED 31"
+        },
+        {
+          "name": "Channel 4, LED 32"
+        },
+        {
+          "name": "Channel 4, LED 33"
+        },
+        {
+          "name": "Channel 4, LED 34"
+        },
+        {
+          "name": "Channel 4, LED 35"
+        },
+        {
+          "name": "Channel 4, LED 36"
+        },
+        {
+          "name": "Channel 4, LED 37"
+        },
+        {
+          "name": "Channel 4, LED 38"
+        },
+        {
+          "name": "Channel 4, LED 39"
+        },
+        {
+          "name": "Channel 4, LED 40"
+        },
+        {
+          "name": "Channel 4, LED 41"
+        },
+        {
+          "name": "Channel 4, LED 42"
+        },
+        {
+          "name": "Channel 4, LED 43"
+        },
+        {
+          "name": "Channel 4, LED 44"
+        },
+        {
+          "name": "Channel 4, LED 45"
+        },
+        {
+          "name": "Channel 4, LED 46"
+        },
+        {
+          "name": "Channel 4, LED 47"
+        },
+        {
+          "name": "Channel 4, LED 48"
+        },
+        {
+          "name": "Channel 5, LED 1"
+        },
+        {
+          "name": "Channel 5, LED 2"
+        },
+        {
+          "name": "Channel 5, LED 3"
+        },
+        {
+          "name": "Channel 5, LED 4"
+        },
+        {
+          "name": "Channel 5, LED 5"
+        },
+        {
+          "name": "Channel 5, LED 6"
+        },
+        {
+          "name": "Channel 5, LED 7"
+        },
+        {
+          "name": "Channel 5, LED 8"
+        },
+        {
+          "name": "Channel 5, LED 9"
+        },
+        {
+          "name": "Channel 5, LED 10"
+        },
+        {
+          "name": "Channel 5, LED 11"
+        },
+        {
+          "name": "Channel 5, LED 12"
+        },
+        {
+          "name": "Channel 5, LED 13"
+        },
+        {
+          "name": "Channel 5, LED 14"
+        },
+        {
+          "name": "Channel 5, LED 15"
+        },
+        {
+          "name": "Channel 5, LED 16"
+        },
+        {
+          "name": "Channel 5, LED 17"
+        },
+        {
+          "name": "Channel 5, LED 18"
+        },
+        {
+          "name": "Channel 5, LED 19"
+        },
+        {
+          "name": "Channel 5, LED 20"
+        },
+        {
+          "name": "Channel 5, LED 21"
+        },
+        {
+          "name": "Channel 5, LED 22"
+        },
+        {
+          "name": "Channel 5, LED 23"
+        },
+        {
+          "name": "Channel 5, LED 24"
+        },
+        {
+          "name": "Channel 5, LED 25"
+        },
+        {
+          "name": "Channel 5, LED 26"
+        },
+        {
+          "name": "Channel 5, LED 27"
+        },
+        {
+          "name": "Channel 5, LED 28"
+        },
+        {
+          "name": "Channel 5, LED 29"
+        },
+        {
+          "name": "Channel 5, LED 30"
+        },
+        {
+          "name": "Channel 5, LED 31"
+        },
+        {
+          "name": "Channel 5, LED 32"
+        },
+        {
+          "name": "Channel 5, LED 33"
+        },
+        {
+          "name": "Channel 5, LED 34"
+        },
+        {
+          "name": "Channel 5, LED 35"
+        },
+        {
+          "name": "Channel 5, LED 36"
+        },
+        {
+          "name": "Channel 5, LED 37"
+        },
+        {
+          "name": "Channel 5, LED 38"
+        },
+        {
+          "name": "Channel 5, LED 39"
+        },
+        {
+          "name": "Channel 5, LED 40"
+        },
+        {
+          "name": "Channel 5, LED 41"
+        },
+        {
+          "name": "Channel 5, LED 42"
+        },
+        {
+          "name": "Channel 5, LED 43"
+        },
+        {
+          "name": "Channel 5, LED 44"
+        },
+        {
+          "name": "Channel 5, LED 45"
+        },
+        {
+          "name": "Channel 5, LED 46"
+        },
+        {
+          "name": "Channel 5, LED 47"
+        },
+        {
+          "name": "Channel 5, LED 48"
+        },
+        {
+          "name": "Channel 6, LED 1"
+        },
+        {
+          "name": "Channel 6, LED 2"
+        },
+        {
+          "name": "Channel 6, LED 3"
+        },
+        {
+          "name": "Channel 6, LED 4"
+        },
+        {
+          "name": "Channel 6, LED 5"
+        },
+        {
+          "name": "Channel 6, LED 6"
+        },
+        {
+          "name": "Channel 6, LED 7"
+        },
+        {
+          "name": "Channel 6, LED 8"
+        },
+        {
+          "name": "Channel 6, LED 9"
+        },
+        {
+          "name": "Channel 6, LED 10"
+        },
+        {
+          "name": "Channel 6, LED 11"
+        },
+        {
+          "name": "Channel 6, LED 12"
+        },
+        {
+          "name": "Channel 6, LED 13"
+        },
+        {
+          "name": "Channel 6, LED 14"
+        },
+        {
+          "name": "Channel 6, LED 15"
+        },
+        {
+          "name": "Channel 6, LED 16"
+        },
+        {
+          "name": "Channel 6, LED 17"
+        },
+        {
+          "name": "Channel 6, LED 18"
+        },
+        {
+          "name": "Channel 6, LED 19"
+        },
+        {
+          "name": "Channel 6, LED 20"
+        },
+        {
+          "name": "Channel 6, LED 21"
+        },
+        {
+          "name": "Channel 6, LED 22"
+        },
+        {
+          "name": "Channel 6, LED 23"
+        },
+        {
+          "name": "Channel 6, LED 24"
+        },
+        {
+          "name": "Channel 6, LED 25"
+        },
+        {
+          "name": "Channel 6, LED 26"
+        },
+        {
+          "name": "Channel 6, LED 27"
+        },
+        {
+          "name": "Channel 6, LED 28"
+        },
+        {
+          "name": "Channel 6, LED 29"
+        },
+        {
+          "name": "Channel 6, LED 30"
+        },
+        {
+          "name": "Channel 6, LED 31"
+        },
+        {
+          "name": "Channel 6, LED 32"
+        },
+        {
+          "name": "Channel 6, LED 33"
+        },
+        {
+          "name": "Channel 6, LED 34"
+        },
+        {
+          "name": "Channel 6, LED 35"
+        },
+        {
+          "name": "Channel 6, LED 36"
+        },
+        {
+          "name": "Channel 6, LED 37"
+        },
+        {
+          "name": "Channel 6, LED 38"
+        },
+        {
+          "name": "Channel 6, LED 39"
+        },
+        {
+          "name": "Channel 6, LED 40"
+        },
+        {
+          "name": "Channel 6, LED 41"
+        },
+        {
+          "name": "Channel 6, LED 42"
+        },
+        {
+          "name": "Channel 6, LED 43"
+        },
+        {
+          "name": "Channel 6, LED 44"
+        },
+        {
+          "name": "Channel 6, LED 45"
+        },
+        {
+          "name": "Channel 6, LED 46"
+        },
+        {
+          "name": "Channel 6, LED 47"
+        },
+        {
+          "name": "Channel 6, LED 48"
+        }
+      ],
+      "location": "HID: /dev/hidraw10",
+      "modes": [
+        {
+          "brightness": 255,
+          "brightness_max": 255,
+          "brightness_min": 0,
+          "color_mode": 1,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 48,
+          "name": "Direct",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 0,
+          "brightness_max": 0,
+          "brightness_min": 0,
+          "color_mode": 0,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 0,
+          "name": "Off",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 255,
+          "brightness_max": 255,
+          "brightness_min": 0,
+          "color_mode": 2,
+          "colors": [
+            0
+          ],
+          "colors_max": 1,
+          "colors_min": 1,
+          "direction": 0,
+          "flags": 80,
+          "name": "Static",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 255,
+          "brightness_max": 255,
+          "brightness_min": 0,
+          "color_mode": 2,
+          "colors": [
+            0
+          ],
+          "colors_max": 2,
+          "colors_min": 1,
+          "direction": 0,
+          "flags": 208,
+          "name": "Breathing",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 255,
+          "brightness_max": 255,
+          "brightness_min": 0,
+          "color_mode": 0,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 0,
+          "flags": 16,
+          "name": "Spectrum Cycle",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        },
+        {
+          "brightness": 255,
+          "brightness_max": 255,
+          "brightness_min": 0,
+          "color_mode": 0,
+          "colors_max": 0,
+          "colors_min": 0,
+          "direction": 1,
+          "flags": 18,
+          "name": "Wave",
+          "speed": 0,
+          "speed_max": 0,
+          "speed_min": 0
+        }
+      ],
+      "name": "Razer Chroma Addressable RGB Controller",
+      "serial": "IO2313U08300329       ",
+      "type": 4,
+      "vendor": "Razer",
+      "version": "v1.0",
+      "zones": [
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 1",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 2",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 3",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 4",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 5",
+          "type": 1
+        },
+        {
+          "display_name": "",
+          "flags": 4158,
+          "leds_count": 48,
+          "leds_max": 80,
+          "leds_min": 0,
+          "matrix_map": {
+            "height": 0,
+            "width": 0
+          },
+          "name": "Channel 6",
+          "type": 1
+        }
+      ]
+    }
+  ],
+  "profile_name": "boot",
+  "profile_version": 6
+}

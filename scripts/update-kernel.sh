@@ -5,8 +5,8 @@
 # in the omerfarukoruc Cachix cache. Hosts then download the CachyOS
 # kernel and the NVIDIA open module instead of compiling them.
 # Needs no Nix: it copies the locked revisions of the input and of the inputs
-# below it from kernel-cache/flake.lock on GitHub. A person runs it on
-# fedora-desktop; scripts/auto-update.sh runs it on nixos-rog.
+# below it from kernel-cache/flake.lock on GitHub. A person runs it on either
+# host; scripts/auto-update.sh runs it on nixos-rog.
 # Exit status 1 leaves flake.lock unchanged.
 set -euo pipefail
 

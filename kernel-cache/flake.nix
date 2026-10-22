@@ -43,7 +43,9 @@
       hostPackages = {
         x86_64-v3 = [ ];
         # nixos-rog: hardware.cpu.amd.ryzen-smu and environment.systemPackages.
+        # nixos-desktop: the fan driver in machines/nixos-desktop/fans.nix.
         zen4 = [
+          "nct6687d"
           "ryzen-smu"
           "turbostat"
         ];

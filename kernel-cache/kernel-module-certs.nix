@@ -17,6 +17,15 @@ lib: kfinal: kprev: {
         installFlags = (old.installFlags or [ ]) ++ [ "DEPMOD=true" ];
       });
 
+  # The same depmod clash as v4l2loopback.
+  nct6687d =
+    if builtins.elem "DEPMOD=true" (kprev.nct6687d.installFlags or [ ]) then
+      kprev.nct6687d
+    else
+      kprev.nct6687d.overrideAttrs (old: {
+        installFlags = (old.installFlags or [ ]) ++ [ "DEPMOD=true" ];
+      });
+
   # The package copies ryzen_smu.ko by hand, so no `.ko.cer` exists.
   ryzen-smu =
     if !lib.hasInfix "install ryzen_smu.ko" (kprev.ryzen-smu.installPhase or "") then

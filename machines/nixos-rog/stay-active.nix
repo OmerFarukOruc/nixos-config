@@ -1,4 +1,4 @@
-# Keeps Teams in Brave Available while Omer works on fedora-desktop through
+# Keeps Teams in Brave Available while Omer works on nixos-desktop through
 # Deskflow. nixos-rog gets no input then, so KWin counts the session as idle,
 # and Teams reads that idle time through Brave's Idle Detection API
 # (nixosModules/brave.nix). A virtual mouse moves one pixel and back every

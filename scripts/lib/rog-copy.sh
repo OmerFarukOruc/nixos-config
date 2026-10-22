@@ -1,9 +1,9 @@
 # shellcheck shell=bash disable=SC2119,SC2120 # callers pass rog_remote its ARGs
 # Sourced by the scripts that run Nix on a copy of this checkout (build-on-rog.sh,
 # check-on-rog.sh, eval-on-rog.sh, run-unit-on-rog.sh) after they cd to the
-# checkout's root. fedora-desktop has no Nix, so they work on a copy on
-# nixos-rog. The copy holds the tracked files and the new files that
-# .gitignore does not exclude, as they are in the working tree.
+# checkout's root. They work on a copy on nixos-rog from either host. The copy
+# holds the tracked files and the new files that .gitignore does not exclude,
+# as they are in the working tree.
 ROG_HOST=nixos-rog
 ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 ROG_COPY=

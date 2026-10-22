@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks a running nixos-rog from fedora-desktop and writes a JSON report.
+# Checks a running nixos-rog from nixos-desktop and writes a JSON report.
 # Rerun it after any deploy to the laptop and compare the reports.
 set -euo pipefail
 

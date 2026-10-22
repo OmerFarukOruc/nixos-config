@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy from fedora-desktop. The target builds because fedora-desktop has no Nix.
+# Deploy from nixos-desktop or nixos-rog. The target builds its own system.
 # A host deploys itself when HOST is its own host name; the steps then run
 # locally instead of over SSH.
 set -euo pipefail
@@ -529,7 +529,7 @@ fi
 # removes old ones, so a nearly full ESP fails halfway through. Count every
 # distinct kernel and initrd of the candidate and its specialisations, even
 # those already on the ESP, and stop before anything on the target changes.
-# Both hosts have a 4 GiB ESP; 1 GiB left free covers a few more generations.
+# Every host has a 4 GiB ESP; 1 GiB left free covers a few more generations.
 esp_headroom=$((1024 * 1024 * 1024))
 check_esp_space() {
   local esp=/boot needed=0 free path

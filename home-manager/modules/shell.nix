@@ -77,8 +77,8 @@ in
         "sudo"
       ];
     };
-    # Up and Down search the history for the text typed so far, as on
-    # fedora-desktop. Ctrl-P and Ctrl-N are bound below; Atuin keeps Ctrl-R.
+    # Up and Down search the history for the text typed so far. Ctrl-P and
+    # Ctrl-N are bound below; Atuin keeps Ctrl-R.
     historySubstringSearch = {
       enable = true;
       searchUpKey = [

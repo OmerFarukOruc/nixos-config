@@ -205,8 +205,8 @@ if $gpu_load; then
   setsid "$gpu_burn" "$seconds" >/dev/null 2>&1 &
   loads+=(-$!)
 fi
-# A Ctrl-C on fedora closes this script's output. The next sample write then
-# ends the script, and the EXIT trap stops the loads and waits for them, so the
+# A Ctrl-C in the SSH session that started it closes this script's output.
+# The next sample write then ends the script, and the EXIT trap stops the loads and waits for them, so the
 # lock stays held until they end. After a complete run the loads have already
 # ended, and a failed kill or wait would set the exit status.
 trap 'kill -- "${loads[@]}" 2>/dev/null || true; wait || true' EXIT
