@@ -5,9 +5,15 @@
 keys:
   - &omer-all-devices ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h
   - &nixos-rog age1dv44zphjr702d598p7p4p35vk7834ttr8escl6geg0cuxx3mcukq6gm6gl
+  - &nixos-desktop age1d5e58gp5cf272n7tyt02tmklzdck7d2yj5x2x08fcna3f0pj9vesagcwdh
 creation_rules:
   - path_regex: secrets/nixos-rog\.yaml$
     key_groups:
       - age:
           - *omer-all-devices
           - *nixos-rog
+  - path_regex: secrets/nixos-desktop\.yaml$
+    key_groups:
+      - age:
+          - *omer-all-devices
+          - *nixos-desktop

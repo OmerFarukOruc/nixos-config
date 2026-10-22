@@ -7,9 +7,7 @@
 - [Home Manager](#home-manager)
 - [kernel-cache](#kernel-cache)
 
-The flake builds `nixos-latitude` and `nixos-rog`. `nixos-desktop` stays an
-inert inventory record until its real hardware configuration and host policy
-exist.
+The flake builds `nixos-desktop`, `nixos-latitude` and `nixos-rog`.
 
 ## Inventory
 
@@ -98,7 +96,7 @@ These rules follow from the list:
 ## Add a host, launcher, shell or kernel profile
 
 - **A host.** Add a record to `rawMachines` in `machines/inventory.nix`. A record
-  alone stays inert, as `nixos-desktop` does. To build the host, add a
+  alone stays inert. To build the host, add a
   `nixosConfigurations.<name>` block in the same file, with `hostModules` that
   name `machines/<name>/configuration.nix` and `hardware-configuration.nix`.
 - **A launcher.** Add it to `launcherSpecs` in `machines/selectors.nix` and

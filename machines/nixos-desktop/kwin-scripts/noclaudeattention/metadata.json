@@ -1,0 +1,10 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Id": "noclaudeattention",
+        "Name": "No Claude Attention",
+        "Description": "Clears the demands-attention flag for Claude Desktop so an auto-hide panel does not reveal on alt-tab.",
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API": "javascript"
+}

@@ -20,8 +20,9 @@ lib.mkIf (cfg.kind == "workstation") {
   services.blueman.enable = isNiri;
 
   services.udisks2.enable = true;
-  # The battery widgets of the desktop shells read UPower.
-  services.upower.enable = cfg.hasBattery;
+  # The battery widgets of the desktop shells read UPower. Plasma turns it on
+  # without a battery too, because its power management needs it.
+  services.upower.enable = lib.mkDefault cfg.hasBattery;
 
   # Writes the platform profile through the shell's power menu. Plasma enables
   # the daemon by default, and this normal-priority value keeps it off there.

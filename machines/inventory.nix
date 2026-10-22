@@ -79,25 +79,38 @@ let
       };
     };
 
-    # Inventory metadata only. This machine becomes deployable after its real
-    # hardware configuration and host-specific policy are available.
+    # Home desktop, always on: the exit node and the Deskflow server.
     nixos-desktop = {
       system = "x86_64-linux";
       kind = "workstation";
       formFactor = "desktop";
       sessions = [
         {
-          desktop = "niri";
-          shell = "noctalia";
+          desktop = "plasma";
+          shell = "plasma";
         }
       ];
-      gpu = "unknown";
+      launcher = "rofi";
+      theme = {
+        scheme = "warm-burnout-dark";
+        schemes = [
+          "gruvbox-dark-medium"
+          "warm-burnout-light"
+          "catppuccin-mocha"
+        ];
+        plasmaLook = "glass";
+      };
+      kernel.profile = "cachyos-latest-lto-zen4";
+      bootloader = "limine";
+      gpu = "amd";
       hasBattery = false;
+      autoLogin = true;
       features = {
         remoteAccess = true;
         remoteDesktop = false;
-        docker = false;
-        diskSelfTests = false;
+        docker = true;
+        diskSelfTests = true;
+        alwaysOn = true;
       };
     };
   };
@@ -137,6 +150,14 @@ assert builtins.deepSeq machines true;
     hostModules = [
       ./nixos-latitude/configuration.nix
       ./nixos-latitude/hardware-configuration.nix
+    ];
+  };
+
+  nixosConfigurations.nixos-desktop = mkMachine {
+    machine = machines.nixos-desktop;
+    hostModules = [
+      ./nixos-desktop/configuration.nix
+      ./nixos-desktop/hardware-configuration.nix
     ];
   };
 

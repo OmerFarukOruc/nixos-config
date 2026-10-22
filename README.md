@@ -34,20 +34,20 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Host | Role | Machine | Login sessions | Kernel | Boot |
 | --- | --- | --- | --- | --- | --- |
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
+| `nixos-desktop` | home desktop, exit node | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
 
-`machines/inventory.nix` is the source of truth for this table. A third record,
-`nixos-desktop`, is inventory only; the flake does not build it.
+`machines/inventory.nix` is the source of truth for this table.
 
 ## Stack
 
 | Part | Choice |
 | --- | --- |
 | Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built by CI |
-| Boot loader | Limine on nixos-rog, systemd-boot on nixos-latitude |
+| Boot loader | Limine on nixos-rog and nixos-desktop, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
-| Plasma looks | Glass and Klassy on nixos-rog, switched with `plasma-look` |
+| Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |
 | Launcher | Rofi and the macOS Tahoe launcher on nixos-rog, Vicinae on nixos-latitude |
 | Terminal | Ghostty |
 | Login shell | zsh with oh-my-zsh and Starship |
@@ -203,6 +203,7 @@ ordering cycle on every pull request and push to `main`.
 | [nixos-rog](docs/nixos-rog.md) | the hourly updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
+| [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
 | [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |
