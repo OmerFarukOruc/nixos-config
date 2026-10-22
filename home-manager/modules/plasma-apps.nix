@@ -1,5 +1,5 @@
 # Settings of the KDE apps that plasma-manager knows. Plasma 6 installs
-# Okular, and machines/nixos-rog/home.nix installs Kate, so neither module
+# Okular, and home-manager/profiles/personal.nix installs Kate, so neither module
 # adds a package.
 {
   config,

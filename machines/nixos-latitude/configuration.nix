@@ -8,39 +8,14 @@ _:
     daemonIOSchedClass = "idle";
   };
 
-  # Lab box: never sleep. The lid and the power key do nothing.
+  # Lab box: the lid and the power key do nothing. features.alwaysOn keeps it
+  # awake and recovers it (nixosModules/always-on.nix).
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchExternalPower = "ignore";
     HandleLidSwitchDocked = "ignore";
     HandlePowerKey = "ignore";
   };
-  systemd.sleep.settings.Sleep = {
-    AllowSuspend = "no";
-    AllowHibernation = "no";
-    AllowHybridSleep = "no";
-    AllowSuspendThenHibernate = "no";
-  };
-  systemd.targets.sleep.enable = false;
-  systemd.targets.suspend.enable = false;
-  systemd.targets.hibernate.enable = false;
-  systemd.targets.hybrid-sleep.enable = false;
-
-  # A lab box nobody watches recovers on its own. A panic reboots it after
-  # 10 s and leaves its log in EFI pstore, which CachyOS's kernel turns off by
-  # default; systemd-pstore then moves the log to /var/lib/systemd/pstore. A
-  # hung system resets through the hardware watchdog when the platform provides
-  # one, and a failed mount after the initrd no longer stops at the emergency
-  # shell.
-  boot.kernelParams = [
-    "panic=10"
-    "efi_pstore.pstore_disable=0"
-  ];
-  systemd.settings.Manager = {
-    RuntimeWatchdogSec = "20s";
-    RebootWatchdogSec = "30s";
-  };
-  systemd.enableEmergencyMode = false;
 
   home-manager.users.oruc.imports = [ ./home.nix ];
 

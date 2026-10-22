@@ -12,7 +12,7 @@ let
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
   inherit (config.oruc) theme;
 
-  inherit (osConfig.oruc.machine) idle;
+  inherit (osConfig.oruc.machine) autoLogin hasBattery idle;
 
   idleDisplay =
     { dimSeconds, screenOffSeconds }:
@@ -182,8 +182,9 @@ in
       # Apps that start at login come from Home Manager units, such as the
       # Deskflow client, not from the last session.
       session.sessionRestore.restoreOpenApplicationsOnLogin = "startWithEmptySession";
-      # nixos-rog has no disk swap, so it cannot hibernate.
-      powerdevil.batteryLevels.criticalAction = "sleep";
+      # A laptop sleeps at critical battery. nixos-rog has no disk swap, so it
+      # cannot hibernate.
+      powerdevil.batteryLevels.criticalAction = lib.mkIf hasBattery "sleep";
 
       hotkeys.commands =
         let
@@ -220,12 +221,16 @@ in
       configFile.kuriikwsfilterrc = lib.mkForce { };
 
       # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
-      # ROG laptop, as in the Noctalia and DMS sessions.
-      shortcuts.org_kde_powerdevil.powerProfile = [
-        "Battery"
-        "Meta+B"
-        "Launch (4)"
-      ];
+      # ROG laptop, as in the Noctalia and DMS sessions. Only a machine with a
+      # niri session runs power-profiles-daemon (nixosModules/peripherals.nix),
+      # so only it gets the switch.
+      shortcuts.org_kde_powerdevil.powerProfile =
+        lib.mkIf (sessions.hasDesktop osConfig.oruc.machine "niri")
+          [
+            "Battery"
+            "Meta+B"
+            "Launch (4)"
+          ];
 
       # plasma-manager writes powerdevilrc itself, so these files are written
       # here, not linked read-only from the store.
@@ -253,12 +258,16 @@ in
           Autolock = false;
           Lock = false;
           LockOnResume = false;
-          LockOnStart = false;
+          # A machine that logs in by itself starts locked, so its session
+          # comes up after a reboot without opening the desktop to the room.
+          LockOnStart = autoLogin;
           Timeout = 0;
         };
         powerdevilrc = {
           "AC/Display" = idleDisplay idle.ac;
           "AC/SuspendAndShutdown" = noAutoSuspend;
+        }
+        // lib.optionalAttrs hasBattery {
           "Battery/Display" = idleDisplay idle.battery;
           "Battery/SuspendAndShutdown" = noAutoSuspend;
           "LowBattery/Display" = idleDisplay idle.battery;

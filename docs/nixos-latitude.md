@@ -69,7 +69,7 @@ use three 10-second windows.
   system that differs from `main`. A new kernel from a deploy becomes the boot
   default and runs after the next reboot, which the item below covers.
 - A reboot needs the password at nixos-latitude. Automatic login is off
-  (`nixosModules/desktop.nix`), so the greeter waits for a password. Sunshine
+  (`autoLogin` defaults to false in `machines/schema.nix`), so the greeter waits for a password. Sunshine
   streams the logged-in niri session, so remote desktop stays down until
   someone logs in. Reboot remotely only when someone is at nixos-latitude.
 - On 2026-09-21 the Wi-Fi lost the access point (beacon loss) and Tailscale
@@ -89,8 +89,9 @@ the power was cut or the kernel froze. The cause was not found. The pstore
 crashes at that time is not confirmed. The battery history had already
 rotated out.
 
-`machines/nixos-latitude/configuration.nix` sets these so that the next such stop
-leaves evidence and nixos-latitude restarts without anyone present:
+`features.alwaysOn` in the machine record turns these on through
+`nixosModules/always-on.nix`, so that the next such stop leaves evidence and
+nixos-latitude restarts without anyone present:
 
 - `panic=10` reboots 10 s after a kernel panic.
 - `efi_pstore.pstore_disable=0` turns on EFI pstore, which the CachyOS kernel

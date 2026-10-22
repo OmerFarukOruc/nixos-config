@@ -6,7 +6,7 @@
   ...
 }:
 let
-  themed = sessions.hasDesktop config.oruc.machine "niri";
+  themed = sessions.hasAnyDesktop config.oruc.machine;
   scheme = config.scheme.withHashtag;
   # Themes/jake_the_dog.conf.user, which SDDM reads over the theme's own file,
   # so the fonts, layout and video stay Jake's. The values are quoted as in the

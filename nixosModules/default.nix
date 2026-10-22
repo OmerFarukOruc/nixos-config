@@ -1,6 +1,7 @@
 {
   imports = [
     ./machine.nix
+    ./always-on.nix
     ./kernel.nix
     ./bootloader.nix
     ./recovery.nix

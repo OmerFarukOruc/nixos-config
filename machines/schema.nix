@@ -125,6 +125,12 @@ let
       description = "Whether the machine has a battery.";
     };
 
+    autoLogin = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the display manager logs oruc in at boot, into a locked Plasma session.";
+    };
+
     # Every desktop of the machine reads these, so its sessions behave alike.
     idle = {
       battery = mkIdle 120 300 "on battery power";
@@ -153,6 +159,7 @@ let
           docker = mkFeature "Enable the Docker daemon and client tooling.";
           diskSelfTests = mkFeature "Schedule the smartd short and long disk self-tests.";
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
+          alwaysOn = mkFeature "Never sleep, and reboot after a panic or a hang (nixosModules/always-on.nix).";
         };
       };
       description = "Explicit feature switches consumed by self-gating modules.";
@@ -186,6 +193,10 @@ let
     assert lib.assertMsg (
       sessions.hasDesktop machine "plasma" -> machine.theme.plasmaLook != null
     ) "${machine.name} has a Plasma session and no theme.plasmaLook.";
+    # Only Plasma locks the session that autologin starts.
+    assert lib.assertMsg (
+      machine.autoLogin -> desktops == [ "plasma" ]
+    ) "${machine.name} sets autoLogin, which needs Plasma as its only desktop.";
     assert lib.assertMsg (
       sessions.hasDesktop machine "plasma" || machine.theme.plasmaLook == null
     ) "${machine.name} sets theme.plasmaLook and has no Plasma session.";

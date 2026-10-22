@@ -56,7 +56,12 @@ in
   config = lib.mkMerge [
     (lib.mkIf (sessions.hasAnyDesktop cfg) {
       services.displayManager = {
-        autoLogin.enable = false;
+        # Off unless the machine record turns it on; plasma-manager.nix then
+        # starts the session locked.
+        autoLogin = {
+          enable = cfg.autoLogin;
+          user = lib.mkIf cfg.autoLogin "oruc";
+        };
         defaultSession = sessions.defaultSession cfg;
         sddm = {
           enable = true;
