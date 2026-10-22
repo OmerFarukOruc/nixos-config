@@ -117,7 +117,11 @@ let
         "nvidia"
         "hybrid"
       ];
-      description = "GPU class consumed by optional hardware modules.";
+      description = ''
+        GPU class. intel and amd turn on nixosModules/intel-graphics.nix or
+        amd-graphics.nix. hybrid is a Radeon with an NVIDIA card, which the
+        host's own files set up. The Home Manager profiles pick GPU tools by it.
+      '';
     };
 
     hasBattery = mkOption {

@@ -84,7 +84,10 @@
       };
     };
 
-    services.journald.settings.Journal.MaxRetentionSec = "7day";
+    services.journald.settings.Journal = {
+      MaxRetentionSec = "7day";
+      SystemMaxUse = "1G";
+    };
 
     # A stuck service delays a shutdown 30 s instead of 90 s.
     systemd.settings.Manager.DefaultTimeoutStopSec = "30s";

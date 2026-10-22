@@ -111,6 +111,13 @@ in
         export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
         zstyle ':omz:update' mode disabled
 
+        # Agent shells (Claude Code, Codex) run zsh with stdout on a pipe. An
+        # unmatched glob then stays as text instead of aborting the command,
+        # and a word that starts with = stays as text instead of a path.
+        if [[ ! -t 1 ]]; then
+          setopt nonomatch noequals
+        fi
+
         # Keep fzf's file and directory widgets, but leave Ctrl-R to Atuin.
         eval "$(${lib.getExe config.programs.fzf.package} --zsh)"
         bindkey -r '^R'

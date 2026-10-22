@@ -13,6 +13,7 @@
     ./verify-facts.nix
     ./home-manager.nix
     ./intel-graphics.nix
+    ./amd-graphics.nix
     ./workstation.nix
   ];
 }
