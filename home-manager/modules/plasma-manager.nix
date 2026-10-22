@@ -254,6 +254,16 @@ in
           "only basic indexing" = true;
           "exclude folders" = "${config.home.homeDirectory}/Desktop/workspace/";
         };
+        # The clipboard keeps only the current item, and drops it at logout.
+        klipperrc.General = {
+          MaxClipItems = 1;
+          KeepClipboardContents = false;
+        };
+        # Dolphin deletes and empties the trash without asking.
+        kiorc.Confirmations = {
+          ConfirmDelete = false;
+          ConfirmEmptyTrash = false;
+        };
         kscreenlockerrc.Daemon = {
           Autolock = false;
           Lock = false;

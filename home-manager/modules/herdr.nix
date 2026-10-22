@@ -15,6 +15,7 @@ let
     # The terminal's 16 ANSI colors, which come from the scheme.
     theme.name = "terminal";
     ui.toast.delivery = "system";
+    ui.agent_panel_sort = "spaces";
     # Nix delivers new versions; herdr update cannot replace a store path.
     update.version_check = false;
   };
