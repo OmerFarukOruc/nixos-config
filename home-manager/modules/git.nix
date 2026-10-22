@@ -23,6 +23,8 @@
 
   programs.gh = {
     enable = true;
+    # `gh stack`: stacked PRs (github/gh-stack).
+    extensions = [ pkgs.gh-stack ];
     settings = {
       git_protocol = "ssh";
       prompt = "enabled";
