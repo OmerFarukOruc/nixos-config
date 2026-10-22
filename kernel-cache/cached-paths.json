@@ -3,6 +3,7 @@
   "version": "7.2.11",
   "paths": [
     "/nix/store/1cpk9qnkaacdxbxja497fk16why7nc5y-nvidia-open-615.78.08-7.2.11",
+    "/nix/store/1ifcaqkaswpd9waj6inmcpij269r8sl2-nct6687d-0-unstable-2026-08-15",
     "/nix/store/29ll6vyxh7yc65r54s8gx4n85gqbfc28-linux-cachyos-latest-lto-x86_64-v3-7.2.11-dev",
     "/nix/store/3gdzdjfy3fdv9xy5yqzx4mvicrsrlgns-nvidia-open-615.78.08-7.2.11",
     "/nix/store/3wmw4r7bqjily3sg59159k51j4qzwr2q-linux-cachyos-latest-lto-zen4-7.2.11-dev",
