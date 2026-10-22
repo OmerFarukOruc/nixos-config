@@ -48,12 +48,17 @@ systems() {
   # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
   ssh "${ssh_opts[@]}" nixos-rog "bash -s -- $(printf '%q ' "github:$repo/$1")" <<'REMOTE'
 set -e
-# heavy (machines/nixos-rog/heavy.nix) caps the memory of this evaluation, which
-# holds every host's system at once.
+# heavy (machines/nixos-rog/heavy.nix) caps the memory of each evaluation. One
+# evaluation per host stays under that cap; three systems in one evaluation
+# did not, and systemd-oomd killed it.
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
-"${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations" --apply \
-  'builtins.mapAttrs (_: c: { drv = c.config.system.build.toplevel.drvPath; out = c.config.system.build.toplevel.outPath; })' </dev/null
+hosts=$("${nix[@]}" eval --raw --no-write-lock-file "$1#nixosConfigurations" \
+  --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)' </dev/null)
+for host in $hosts; do
+  "${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations.$host.config.system.build.toplevel" \
+    --apply "t: { \"$host\" = { drv = t.drvPath; out = t.outPath; }; }" </dev/null
+done | jq -s add
 REMOTE
 }
 
