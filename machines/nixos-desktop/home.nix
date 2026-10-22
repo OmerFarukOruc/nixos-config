@@ -33,6 +33,8 @@ in
     pkgs.aws-signing-helper
   ];
 
+  # nixos-rog's dock without the ROG Control Center. The Teams and WhatsApp Web
+  # entries are web apps that Brave writes to ~/.local/share/applications.
   oruc.plasma.dockLaunchers = [
     "preferred://filemanager"
     "applications:io.missioncenter.MissionCenter.desktop"
@@ -40,14 +42,18 @@ in
     "applications:com.mitchellh.ghostty.desktop"
     "applications:SourceGit.desktop"
     "applications:code.desktop"
+    "applications:chatgpt.desktop"
     "applications:com.anthropic.Claude.desktop"
+    "applications:grok-bot.desktop"
+    "applications:openchamber.desktop"
+    "applications:cursor.desktop"
+    "applications:slack.desktop"
+    "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+    "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
     "applications:discord.desktop"
     "applications:org.telegram.desktop.desktop"
     "applications:spotify.desktop"
-    "applications:org.openrgb.OpenRGB.desktop"
-    "applications:io.github.ilya_zlobintsev.LACT.desktop"
-    "applications:org.deskflow.deskflow.desktop"
-    "applications:systemsettings.desktop"
+    "applications:md.obsidian.Obsidian.desktop"
   ];
 
   # Claude Desktop marks its window as demanding attention on every Alt+Tab,
