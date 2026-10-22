@@ -92,7 +92,7 @@
     };
     # The runtime that home-manager/modules/vscode.nix patches into VS Code.
     vscode-vibrancy = {
-      url = "github:illixion/vscode-vibrancy-continued/v1.4.0";
+      url = "github:illixion/vscode-vibrancy-continued/v1.6.0";
       flake = false;
     };
   };

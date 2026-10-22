@@ -240,11 +240,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792495086,
-        "narHash": "sha256-TyoYH983Nsc++1scw0SoOEKshPSJWJDxK7tTmuZ974M=",
+        "lastModified": 1792668857,
+        "narHash": "sha256-chUrnAqBhBLvXBUsLFxFYBIl8c0GWp06wdjmAMS8l+U=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "ec80131710bffcdf3b8498cf41f3a0579833b023",
+        "rev": "cb7de2c7e589afe7531d4832c71ad4df144624ea",
         "type": "github"
       },
       "original": {
@@ -305,11 +305,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1792577217,
-        "narHash": "sha256-YRvnXVnyZGr6+v118Lb4pTtzLzeJet2Y69qf00katjQ=",
+        "lastModified": 1792668368,
+        "narHash": "sha256-PoqUEkQ+/NKnGF66iwIwLzqdVOUO6lX1i8DvvtU7buY=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "4c0e549dab7167b1fe7433af15adf892a299fb83",
+        "rev": "327ba8b06108782bb26e22aec8df01806573aa49",
         "type": "github"
       },
       "original": {
@@ -566,11 +566,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792056300,
-        "narHash": "sha256-YU1LjDe1o2Ymg5zEiCHbmMXLkDCtxHQRiVqZ3nC5GGk=",
+        "lastModified": 1792308394,
+        "narHash": "sha256-r4G33ygU307QCwyngAS6E9BMhnCRPyZrL7UxRCMrqo0=",
         "owner": "Mic92",
         "repo": "sops-nix",
-        "rev": "44931708c62937c2b1bf7953902989fa5bb9ee1b",
+        "rev": "a1438ca361b05d1e70854d5495abcb34fdf6ff47",
         "type": "github"
       },
       "original": {
@@ -705,16 +705,16 @@
     "vscode-vibrancy": {
       "flake": false,
       "locked": {
-        "lastModified": 1791233872,
-        "narHash": "sha256-4PCIGND6PjMGQHYQPiMvhAbjvT0UBXSElmuHhgjQbVg=",
+        "lastModified": 1792659182,
+        "narHash": "sha256-b5PxrMBF/XgqKFbvzjiBEfQNKaBATh9BoLL+u773/5k=",
         "owner": "illixion",
         "repo": "vscode-vibrancy-continued",
-        "rev": "ddae99e34314d69cb1f9d232db6cc9f05403c89f",
+        "rev": "82720fb0c4a2013dd212468f9ec7f1d61b384019",
         "type": "github"
       },
       "original": {
         "owner": "illixion",
-        "ref": "v1.4.0",
+        "ref": "v1.6.0",
         "repo": "vscode-vibrancy-continued",
         "type": "github"
       }
