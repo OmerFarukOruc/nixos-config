@@ -100,7 +100,7 @@ REMOTE
     continue
   fi
   system=$(sed -n 1p <<<"$state")
-  read -r revision dirty <<<"$(sed -n 2p <<<"$state")" || true
+  read -r revision dirty _ <<<"$(sed -n 2p <<<"$state")" || true
   if [[ $system == "$want" ]]; then
     printf '%s\tcurrent\t%s\n' "$host" "$system"
   elif [[ $dirty == true ]]; then

@@ -222,10 +222,15 @@ host it deploys `main` to that host in these steps:
    `~/.local/state/nixos-config-upgrade` when the clone is missing. It then
    fetches `main` and resets the clone to it, which drops any change in the
    clone, so keep no work there.
-2. When the host runs a clean release of that commit, it prints
-   `<host> already runs main at <sha>.` and exits 0.
-3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so its output
-   and [exit codes](#exit-codes) are those of `deploy.sh`.
+2. When the host runs and boots a clean release of that commit, it prints
+   `<host> already runs main at <commit>.` with the first 12 characters of
+   the commit, and exits 0. A `test` deploy does not count, because it leaves
+   the boot default behind.
+3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so from there
+   its output and [exit codes](#exit-codes) are those of `deploy.sh`.
+
+Before `deploy.sh` starts, `upgrade` exits 2 for an argument, 1 when it runs
+as root, and with Git's status when the clone or fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's
 home. It never moves an input, because the updater on nixos-rog owns

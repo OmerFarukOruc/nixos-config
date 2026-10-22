@@ -71,7 +71,8 @@ let
         exit 1
       fi
       host=$(</proc/sys/kernel/hostname)
-      clone=''${XDG_STATE_HOME:-$HOME/.local/state}/nixos-config-upgrade
+      # Beside deploy.sh's releases, which ignore XDG_STATE_HOME too.
+      clone=$HOME/.local/state/nixos-config-upgrade
       # The personal Git config hands github.com credentials to gh, which may
       # have no login on this host. The repository is public and needs none.
       if [[ ! -d $clone/.git ]]; then
@@ -87,8 +88,7 @@ let
       sha=$(git rev-parse HEAD)
       # shellcheck source=/dev/null
       . scripts/lib/running-revision.sh
-      read -r revision dirty <<<"$(running_revision)" || true
-      if [[ $revision == "$sha" && $dirty == false ]]; then
+      if runs_tree_of "$sha"; then
         echo "$host already runs main at ''${sha:0:12}."
         exit 0
       fi

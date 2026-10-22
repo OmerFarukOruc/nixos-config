@@ -347,8 +347,9 @@ while read -r file; do
 done < <(printf '%s\n' pkgs/*.nix)
 
 # Without a move, the run deploys main to this host unless the host runs a
-# clean release of it. main passed CI, so the run skips the commit, the other
-# hosts' builds and the checks, and merges nothing.
+# clean release of it. Each commit on main passed its checks before it merged,
+# so the run skips the commit, the other hosts' builds and the checks, and
+# merges nothing.
 main_only=false
 if git diff --quiet; then
   if $rehearsal; then
@@ -357,8 +358,7 @@ if git diff --quiet; then
   fi
   # shellcheck source=/dev/null
   . scripts/lib/running-revision.sh
-  read -r revision dirty <<<"$(running_revision)" || true
-  if [[ $revision == "$base" && $dirty == false ]]; then
+  if runs_tree_of "$base"; then
     echo "Everything is current."
     exit 0
   fi
