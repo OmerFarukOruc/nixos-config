@@ -41,6 +41,7 @@
   libXfixes,
   libXrandr,
   libxcb,
+  nodejs_24,
 }:
 stdenv.mkDerivation rec {
   pname = "chatgpt";
@@ -117,6 +118,16 @@ stdenv.mkDerivation rec {
     mkdir -p $out/bin $out/lib $out/share
     cp -r usr/lib/chatgpt $out/lib/chatgpt
     cp -r usr/share/. $out/share/
+    # autoPatchelf gives the bundled Node, the official Linux build, a program
+    # header that overlaps the next segment, so it crashes in ld.so before
+    # main. nixpkgs' Node of the same major version runs the plugins instead;
+    # autoPatchelf skips the symlink.
+    node=$out/lib/chatgpt/resources/cua_node
+    grep -Eq '"node_binary_version": *"24\.' $node/manifest.json || {
+      echo "chatgpt: the bundled Node is no longer major version 24; change nodejs_24" >&2
+      exit 1
+    }
+    ln -sf ${lib.getExe nodejs_24} $node/bin/node
     substituteInPlace $out/share/applications/chatgpt.desktop \
       --replace-fail "Exec=chatgpt" "Exec=$out/bin/chatgpt"
     # Only its own codex:// links: the .deb also claims web links and office files.
