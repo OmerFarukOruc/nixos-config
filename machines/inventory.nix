@@ -79,7 +79,9 @@ let
       };
     };
 
-    # Home desktop, always on: the Deskflow server.
+    # Home desktop and the Deskflow server. It can be off or booted into
+    # Windows, so nothing may count on it being up. features.alwaysOn below
+    # only keeps it awake while it runs.
     nixos-desktop = {
       system = "x86_64-linux";
       kind = "workstation";
