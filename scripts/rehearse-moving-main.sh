@@ -10,8 +10,9 @@
 # script with a runtime drop-in, and it removes the drop-in and the test branch
 # when it ends. The run's popups reach the desktop session.
 # Exits 0 when the run ended with exit 0, every ROUND started and was moved,
-# and the run noticed each move. Exits 2 for a usage error or another host, and
-# non-zero for any other failure.
+# the run noticed each move, and it then published in the next round, or gave
+# up in round 3 when that was the last ROUND. Exits 2 for a usage error or
+# another host, and non-zero for any other failure.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -164,7 +165,9 @@ while :; do
     fi
   done
   ((${#lines[@]} <= seen)) || seen=${#lines[@]}
-  [[ $state == active || $state == activating ]] || break
+  case $state in
+    inactive | failed) break ;;
+  esac
   sleep 5
 done
 
@@ -181,6 +184,18 @@ done
 noticed=$(grep -c '^main moved' "$log" || true)
 if ((noticed != ${#moved[@]})); then
   echo "main moved ${#moved[@]} times, but the run noticed $noticed." >&2
+  status=1
+fi
+# After the last named round the run publishes in the next round, or gives up
+# when that round was the last one auto-update.sh allows (max_rounds, 3).
+last=$(printf '%s\n' "${!wanted[@]}" | sort -n | tail -n 1)
+if ((last < 3)); then
+  if ! grep -q "^Round $((last + 1)) starts" "$log" || ! grep -qE '/pull/[0-9]+$' "$log"; then
+    echo "The run did not publish in round $((last + 1))." >&2
+    status=1
+  fi
+elif ! grep -q "in round 3, and the bounds allow no further round" "$log"; then
+  echo "The run did not give up in round 3." >&2
   status=1
 fi
 exit "$status"

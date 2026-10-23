@@ -136,9 +136,10 @@ scripts/rehearse-moving-main.sh 1 2 3  # main moves in every round; the run give
 ```
 
 The script reads a test branch as `main` and moves it when the run logs the
-rounds you name. It prints the round lines and the log path. It exits 0 when
-the run ended with exit 0, every named round started, and the run noticed each
-move. The rehearsals of 2026-10-23 took 8 to 14 minutes each (the rehearsal
+rounds you name. It prints the run's round, move and PR lines and the log
+path. It exits 0 when the run ended with exit 0, every named round started, the
+run noticed each move, and it then published in the next round, or gave up in
+round 3. The rehearsals of 2026-10-23 took 8 to 14 minutes each (the rehearsal
 unit's journal), so run the script in the background with its output in a
 file. Its popups reach the desktop, so tell Omer before you start one. Run it
 after the review's fixes, because a later fix means running it again.
