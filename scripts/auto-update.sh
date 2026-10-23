@@ -43,6 +43,11 @@ dir=$STATE_DIRECTORY/repo
 failed=$STATE_DIRECTORY/failed-candidate
 # The deploy.sh exit status that held the last run back.
 waiting=$STATE_DIRECTORY/waiting
+# "<commit> <system>" when main at that commit builds the system this host
+# runs, such as after a docs change. The next quiet run on that commit and
+# system then skips the evaluation, which made such a run take 58 s and 6.9 GiB
+# instead of about 10 s (journal, 2026-10-23).
+same=$STATE_DIRECTORY/same-system
 # The personal Git config pushes over SSH and signs with an agent key; the
 # service has neither.
 export GIT_CONFIG_GLOBAL=/dev/null
@@ -358,7 +363,8 @@ if git diff --quiet; then
   fi
   # shellcheck source=/dev/null
   . scripts/lib/running-revision.sh
-  if runs_tree_of "$base"; then
+  if runs_tree_of "$base" ||
+    [[ -f $same && $(<"$same") == "$base $(readlink -f /run/current-system)" ]]; then
     echo "Everything is current."
     exit 0
   fi
@@ -379,6 +385,8 @@ if $main_only; then
   # needs no deploy. A failed build goes on to deploy.sh, whose failure records
   # the candidate, so the next runs wait for main to move.
   if new_system=$(build_system "$host") && [[ $new_system == "$(readlink -f /run/current-system)" ]]; then
+    # Only a skip of the next evaluation depends on it.
+    echo "$base $new_system" >"$same" || true
     echo "Everything is current."
     exit 0
   fi
