@@ -635,14 +635,15 @@ setup](#claude-code-and-codex-setup)).
   `systemctl --user stop oled-care.timer`, then `mac-tahoe-oled-care restore`.
   The `oled-care-timer` check of `scripts/verify-nixos-rog.sh` fails while the
   timer is stopped.
-- A shift that fails can leave a guard file. While it exists, every later
-  shift does nothing and `oled-care.service` still succeeds. Then
-  `mac-tahoe-oled-care status` prints `recovery pending` and exits 1, and the
-  `oled-care-state` check of `scripts/verify-nixos-rog.sh` fails.
-  `mac-tahoe-oled-care restore` clears the guard. When `restore` cannot reach
-  plasmashell or times out waiting for the lock, run it again in the Plasma
-  session, because it keeps what it needs to put each panel back. When it
-  fails otherwise, stop the timer and delete `oled-care.disabled` and `oled-care-transition.json` in
+- A shift that fails can leave a guard file. While it exists, a shift does
+  nothing and exits 0, and `mac-tahoe-oled-care status` prints `recovery
+  pending` and exits 1. The next timer run then runs
+  `mac-tahoe-oled-care restore`, which puts the panels back and clears the
+  guard, before it shifts. When `restore` fails, `oled-care.service` fails on
+  each run and the `oled-care-state` check of `scripts/verify-nixos-rog.sh`
+  fails. A `restore` that cannot reach plasmashell or times out waiting for
+  the lock keeps what it needs to put each panel back, so a later run can
+  still succeed. When it fails otherwise, stop the timer and delete `oled-care.disabled` and `oled-care-transition.json` in
   `~/.local/state/mac-tahoe-liquid-kde/`. When its error was `uncertain
   geometry has no persisted panel bases`, no panel moved. After any other
   error, a panel may sit a few pixels off, and `scripts/panels-rebuild-on-rog.sh`

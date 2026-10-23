@@ -9,6 +9,7 @@
 { inputs, pkgs, ... }:
 let
   inherit (inputs.mac-tahoe.lib.mkPackages pkgs) tools;
+  oledCare = "${tools}/bin/mac-tahoe-oled-care";
 in
 {
   # For mac-tahoe-oled-care status and restore by hand. The tools package
@@ -28,7 +29,17 @@ in
     };
     Service = {
       Type = "oneshot";
-      ExecStart = "${tools}/bin/mac-tahoe-oled-care shift --max-px 8";
+      # A shift whose outcome plasmashell left uncertain leaves a guard, and
+      # every later shift then exits 0 without moving a panel. restore puts
+      # the panels back and clears the guard; a restore that fails fails the
+      # unit.
+      ExecStart = "${pkgs.writeShellScript "oled-care-shift" ''
+        if ! state=$(${oledCare} status 2>&1) && [[ $state == "recovery pending"* ]]; then
+          echo "$state; restoring the panels"
+          ${oledCare} restore || exit 1
+        fi
+        exec ${oledCare} shift --max-px 8
+      ''}";
     };
   };
 
