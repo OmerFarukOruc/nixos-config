@@ -18,8 +18,8 @@ running_revision() {
 }
 
 # runs_tree_of REV: succeeds when this host runs a clean release whose commit
-# has the tree of REV. The updater's squash merge makes a new commit with the
-# tree of the commit it deployed. A test deploy leaves the boot default behind,
+# has the tree of REV. A squash merge makes a new commit with the tree of the
+# commit a host deployed. A test deploy leaves the boot default behind,
 # so it does not count. Run it in a clone that holds both commits.
 runs_tree_of() {
   local revision dirty action
