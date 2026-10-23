@@ -1,5 +1,6 @@
-# Remote desktop hosting over Tailscale. Sunshine streams the niri session, and
-# Moonlight on another machine connects.
+# Remote desktop hosting over Tailscale. Sunshine streams the login session, and
+# Moonlight on another machine connects. Sunshine is a user service, so it
+# starts only once someone logs in.
 { config, lib, ... }:
 lib.mkIf config.oruc.machine.features.remoteDesktop {
   services.sunshine = {
@@ -10,8 +11,7 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
   };
   # Sunshine turns on Avahi so Moonlight finds the host on the LAN. Moonlight
   # reaches it over Tailscale by name, so mDNS stays closed on the LAN. This
-  # host's own Moonlight and Remmina then find no LAN hosts either; add them
-  # by name.
+  # host's own Moonlight then finds no LAN hosts either; add them by name.
   services.avahi.openFirewall = false;
   # nixpkgs' sunshine module still sets the obsolete services.avahi.publish
   # options, which print two warnings. These lines set the same values the new

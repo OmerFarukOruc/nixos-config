@@ -71,9 +71,9 @@ use three 10-second windows.
   system that differs from `main`. A new kernel from a deploy becomes the boot
   default and runs after the next reboot, which the item below covers.
 - A reboot needs the password at nixos-latitude. Automatic login is off
-  (`autoLogin` defaults to false in `machines/schema.nix`), so the greeter waits for a password. Sunshine
-  streams the logged-in niri session, so remote desktop stays down until
-  someone logs in. Reboot remotely only when someone is at nixos-latitude.
+  (`autoLogin` defaults to false in `machines/schema.nix`), so the greeter
+  waits for a password and the niri session stays down until someone logs in.
+  Reboot remotely only when someone is at nixos-latitude.
 - On 2026-09-21 the Wi-Fi lost the access point (beacon loss) and Tailscale
   could not reach its relay for about 6 minutes. The uptime was unchanged, so
   the host had not crashed. Wait a few minutes before you treat an unreachable

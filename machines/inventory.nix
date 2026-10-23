@@ -29,7 +29,6 @@ let
       hasBattery = true;
       features = {
         remoteAccess = true;
-        remoteDesktop = true;
         docker = true;
         diskSelfTests = true;
         audioEffects = true;
@@ -72,7 +71,7 @@ let
       hasBattery = true;
       features = {
         remoteAccess = true;
-        remoteDesktop = false;
+        remoteDesktop = true;
         docker = true;
         diskSelfTests = false;
         audioEffects = true;
@@ -109,7 +108,7 @@ let
       autoLogin = true;
       features = {
         remoteAccess = true;
-        remoteDesktop = false;
+        remoteDesktop = true;
         docker = true;
         diskSelfTests = true;
         alwaysOn = true;
