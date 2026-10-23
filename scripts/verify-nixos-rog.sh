@@ -205,7 +205,7 @@ done
 tar -c -C "$out" .
 REMOTE
 then
-  widget_icon_tsv=$(python3 -I -c '
+  widget_icon_tsv=$(python3 -I -B -c '
 import json, os, sys
 from importlib.machinery import SourceFileLoader
 mod = SourceFileLoader("panel_settings", sys.argv[1]).load_module()
