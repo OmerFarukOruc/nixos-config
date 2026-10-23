@@ -12,6 +12,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+if [[ ${1:-} == -* ]]; then
+  echo "usage: $0 [INPUT...]" >&2
+  exit 2
+fi
 named=" $* "
 
 selected=()

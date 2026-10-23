@@ -109,8 +109,8 @@ It locks each input that `flake.lock` lacks or whose URL changed, and copies
 input, and so does the pre-push hook.
 
 `move-inputs.sh` never moves the kernel or llm-agents, because each of them
-moves only once a cache holds its builds. It takes the same arguments as
-`update-release-tags.sh`. The updater on nixos-rog runs it.
+moves only once a cache holds its builds. It moves every input, or only the
+inputs it names. The updater on nixos-rog runs it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
 then compile the kernel and the llm-agents packages. Move the kernel with

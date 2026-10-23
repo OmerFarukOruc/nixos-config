@@ -36,12 +36,13 @@ steps:
 
 1. It moves every input that the table below does not name with
    `move-inputs.sh`.
-2. It moves the inputs in the table by the rules there. It moves
-   `devenv.lock` with `devenv update` when the dev shell of `devenv.nix` still
-   builds with it (`devenv build shell`).
+2. It moves the inputs in the table by the rules there.
 3. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
-   input, kernel and app steps.
-4. When no input, app or `devenv.lock` moved, it logs "Everything is current." and stops,
+   input, kernel and app steps. When an input or app moved, it also moves
+   `devenv.lock` with `devenv update`, while the dev shell of `devenv.nix`
+   still builds with it (`devenv build shell`). The first failure in a row
+   notifies.
+4. When no input or app moved, it logs "Everything is current." and stops,
    unless nixos-rog runs a system other than the one `main` builds. Then it
    deploys `main` with `./deploy.sh nixos-rog switch`, skips steps 5 to 7 and
    merges nothing.
@@ -497,7 +498,9 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
 - The RTX 4070 sleeps only while nothing reads it. A program that shows its
   usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
   awake, so the kVitals panel widget shows only the Radeon. KWin, niri and
-  nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake.
+  nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake. A display
+  on its HDMI port keeps it awake, and the `dgpu-runtime-suspended` check of
+  `scripts/verify-nixos-rog.sh` then expects it active.
 - A running `nvidia-smi dmon` under ksystemstats means some client still
   holds an RTX 4070 sensor. After a login on 2026-10-13 it kept running with
   no client, because ksystemstats kept sensors that a client had subscribed

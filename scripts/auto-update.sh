@@ -317,13 +317,6 @@ while :; do
   # The kernel input moves only through update-kernel.sh, which first checks
   # that the kernel cache holds the new build.
   scripts/update-kernel.sh || echo "The kernel input stays where it is."
-  # devenv.lock moves only while the dev shell of devenv.nix still builds. The
-  # build does not enter the shell, so this clone gets no git hooks.
-  if ! devenv update >"$held/devenv.log" 2>&1 || ! devenv build shell >>"$held/devenv.log" 2>&1; then
-    tail -n 5 "$held/devenv.log"
-    git checkout -- devenv.lock
-    echo "devenv.lock stays where it is."
-  fi
 
   # llm-agents moves only while cache.numtide.com holds every coding agent of its
   # new revision. Unlike the inputs above, it has no day limit.
@@ -382,6 +375,26 @@ while :; do
       echo "$version" >"$broken"
   done < <(printf '%s\n' pkgs/*.nix)
 
+  # devenv.lock moves only with another move, because cachix/devenv moves about
+  # 4 times a day (29 commits on main from 2026-10-16 to 2026-10-23), and only
+  # while the dev shell of devenv.nix still builds. The build does not enter
+  # the shell, so this clone gets no git hooks.
+  if ! git diff --quiet; then
+    devenv_failed=$STATE_DIRECTORY/devenv-failed
+    if devenv update >"$held/devenv.log" 2>&1 && devenv build shell >>"$held/devenv.log" 2>&1; then
+      rm -f "$devenv_failed"
+    else
+      tail -n 5 "$held/devenv.log"
+      git checkout -- devenv.lock
+      echo "devenv.lock stays where it is."
+      # Only the first failure in a row notifies.
+      if [[ ! -f $devenv_failed ]]; then
+        notify normal "devenv.lock update skipped" "devenv update or devenv build shell failed. The other updates go ahead. See: journalctl -u $unit_name" &&
+          touch "$devenv_failed"
+      fi
+    fi
+  fi
+
   # Without a move, the run deploys main to this host unless the host runs a
   # clean release of it. A commit reaches main only after the pre-push checks
   # of its host, so the run skips the commit, the other hosts' builds and the
@@ -404,9 +417,11 @@ while :; do
     main_only=true
   fi
 
+  # devenv.lock moves often and builds no host, so a failed candidate waits
+  # for a move of the rest.
   candidate=$({
     echo "$base"
-    git diff
+    git diff -- . ':!devenv.lock'
   } | sha256sum)
   if [[ -f $failed && $(<"$failed") == "$candidate" ]]; then
     echo "This candidate failed before; waiting for main or an upstream to move."

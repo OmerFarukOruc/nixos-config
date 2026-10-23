@@ -103,8 +103,8 @@ if [[ -r $panels_file ]]; then
 else
   report plasma-widget-icons manual "no $panels_file; deploy a system that writes it, then rerun"
 fi
-# A failed OLED shift can leave a guard that stops every later shift while
-# oled-care.service still succeeds; mac-tahoe-oled-care status reports it.
+# A failed OLED shift can leave a guard that stops every later shift until
+# oled-care.service restores the panels; mac-tahoe-oled-care status reports it.
 oled_care=/etc/profiles/per-user/$USER/bin/mac-tahoe-oled-care
 if [[ ! -x $oled_care ]]; then
   report oled-care-state fail "$oled_care is missing; machines/nixos-rog/oled-care.nix installs it"
