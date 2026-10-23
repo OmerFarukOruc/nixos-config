@@ -2,6 +2,7 @@
   imports = [
     ./machine.nix
     ./always-on.nix
+    ./box-browser.nix
     ./kernel.nix
     ./bootloader.nix
     ./recovery.nix

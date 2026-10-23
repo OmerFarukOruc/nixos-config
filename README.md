@@ -199,6 +199,7 @@ ordering cycle on every pull request and push to `main`.
 | --- | --- |
 | [Architecture](docs/architecture.md) | the inventory, login sessions, theme and Home Manager |
 | [Deploy](docs/deploy.md) | evaluation checks, the deploy and rollback steps, exit codes, release records |
+| [Box browser](docs/box-browser.md) | the shared signed-in Chromium for coding agents, its VNC sign-in and its wrapper command |
 | [Updates](docs/updates.md) | the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [nixos-rog](docs/nixos-rog.md) | the hourly updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
