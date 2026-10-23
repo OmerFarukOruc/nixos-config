@@ -75,6 +75,8 @@ in
       (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
+      # The Linear CLI agents run from a repository with a .linctl.toml pin.
+      (pkgs.callPackage ../../pkgs/linctl.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
     ]
     ++ (with agents; [
