@@ -293,6 +293,18 @@ The deploy runs these steps in order:
 A host that deploys itself (the host name given is its own) runs every step
 locally. It checks the two units without an SSH login.
 
+Activation starts a new system service but leaves running user services as
+they were. A user service that looks for a system service only when it starts
+misses one that the deploy added. Plasma's powerdevil finds
+power-profiles-daemon this way, so after a deploy that first enables the
+daemon, the battery applet shows "Power Profile: Not available" until
+`systemctl --user restart plasma-powerdevil.service`. This command lists the
+profiles the applet shows:
+
+```sh
+busctl --user call org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/Actions/PowerProfile org.kde.Solid.PowerManagement.Actions.PowerProfile profileChoices
+```
+
 When a step after the build fails, the deploy acts as follows:
 
 - **A user service fails the step 14 check.** One of them failed or waits to
