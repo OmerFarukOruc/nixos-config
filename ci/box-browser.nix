@@ -1,9 +1,10 @@
 # nixos-desktop with features.boxBrowser forced on. No host turns the feature
-# on, so no other check evaluates nixosModules/box-browser.nix. Forcing the
-# system's toplevel runs the module's assertions, and the unit names show that
-# the feature switched its units on.
+# on, so no other check evaluates nixosModules/box-browser.nix. The unit names
+# show that the feature switched its units on, and the display's command line
+# shows that Xvnc stays on localhost, because with no password the loopback
+# bind is its only protection.
 #
-# Takes the root flake; returns { drvPath, userUnits, systemUnits }.
+# Takes the root flake; returns { drvPath, userUnits, displayCommand }.
 flake:
 let
   system = flake.nixosConfigurations.nixos-desktop.extendModules {
@@ -20,5 +21,5 @@ in
 {
   drvPath = system.config.system.build.toplevel.drvPath;
   userUnits = builtins.attrNames system.config.systemd.user.services;
-  systemUnits = builtins.attrNames system.config.systemd.services;
+  displayCommand = system.config.systemd.user.services.box-display.serviceConfig.ExecStart;
 }

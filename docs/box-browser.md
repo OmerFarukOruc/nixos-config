@@ -3,62 +3,64 @@
 `features.boxBrowser` gives a host one signed-in Chromium that coding agents
 share. Omer signs in to a site once through a VNC viewer, and every agent session
 then drives the same logins with agent-browser, each in its own tab.
-`nixosModules/box-browser.nix` holds the whole feature. No host turns it on yet.
+`nixosModules/box-browser.nix` holds the box side and
+`home-manager/modules/box-view.nix` the viewer side. No host turns the feature on
+yet.
 
 ## Turn it on
 
-1. Set `features.boxBrowser = true` in the host's record in
-   `machines/inventory.nix`. The host must enable Tailscale (the module asserts
-   it) and set `sops.defaultSopsFile` and an age key for sops-nix, as
-   `machines/nixos-desktop/configuration.nix` does.
-2. Add the VNC password to the host's `secrets/<host>.yaml` as
-   `box-vnc-password`. The command reads it from a hidden prompt and keeps it out
-   of the process list. [Secrets](nixos-rog.md#secrets) explains the key file and
-   `scripts/check-secrets.sh`.
-
-   ```sh
-   read -rs pw && printf '%s' "$pw" | jq -R . | SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops set --value-stdin secrets/<host>.yaml '["box-vnc-password"]'; unset pw
-   ```
-
-3. Allow the viewer's devices to reach port 5920 of the host in the tailnet
-   policy.
+Set `features.boxBrowser = true` in the host's record in `machines/inventory.nix`
+and deploy it. The feature needs no secret and no tailnet policy change: the
+viewer reaches Xvnc only through an SSH tunnel, which Tailscale SSH already
+allows for `oruc@<host>`.
 
 ## What runs
 
 - `box-display.service` (user unit) is Xvnc on display `:20`, listening on
-  `127.0.0.1:5920` with the password from step 2.
+  `127.0.0.1:5920` with no password (`-SecurityTypes None`) and the desktop name
+  `box-browser`, which the viewer shows in its window title.
 - `box-browser.service` (user unit) is nixpkgs Chromium on that display, with the
   profile in `~/.local/share/box-browser/profile` and DevTools on
   `127.0.0.1:9344`. Both units restart on failure, and a restart of the display
   restarts the browser. `users.users.oruc.linger` keeps them running without a
   login.
-- `box-display-tailnet.service` (system unit) runs `tailscale serve` so that the
-  host's tailnet name answers on port 5920.
 - `box-browser` (command) runs `agent-browser` against the DevTools port, with
   `AGENT_BROWSER_PIN_TAB=1`. It names the agent-browser session after
   `$CLAUDE_CODE_SESSION_ID`, unless the caller passes `--session` or sets
   `AGENT_BROWSER_SESSION`; with none of the three it exits 2. `box-browser status`
   checks that both units are active and that DevTools answers.
+- `box-view` (command and menu entry "Box browser", on nixos-desktop and
+  nixos-rog) opens the viewer. It starts `ssh -N -L <port>:127.0.0.1:5920
+  oruc@<host>` on the first free local port from 5920, waits up to 15 seconds for
+  the port, runs `vncviewer` on it, and stops the tunnel when the viewer exits. A
+  failure of the tunnel or the viewer also shows as a desktop notification, since
+  the menu entry has no terminal.
 
 The wrapper runs the first `agent-browser` on `PATH`; this repository does not pin
 one for the host.
 
 ## Sign in
 
-From nixos-desktop or nixos-rog, run `vncviewer <host>:5920`. tigervnc is in
-`home-manager/profiles/personal.nix`. Sign in to the site in the Chromium window,
-then close the viewer. The session stays in the profile.
+Run `box-view`, or open Box browser from the menu. `box-view <host>` names another
+host, and the default is `risoluto-dev-1`. Sign in to the site in the Chromium
+window, then close the viewer. The session stays in the profile.
 
 ## Limits
 
 - Any process of the user, and root, can drive the browser through DevTools,
   which has no password. This is the purpose of the feature.
-- VNC password authentication uses only the first 8 characters of the password.
-  The VNC traffic travels inside the tailnet.
+- Xvnc has no password, because anyone who reaches `127.0.0.1:5920` on the host is
+  already a local user who can drive the same Chromium through DevTools. The
+  loopback bind is its only protection, so `ci/checks.sh` fails when the display
+  command loses `-localhost` or `-SecurityTypes None`. Do not publish the port
+  with `tailscale serve` or open it in a firewall.
+- The viewer needs `ssh` access to `oruc@<host>`. The tunnel carries the VNC
+  traffic, and SSH encrypts it.
 
 ## Check
 
 CI evaluates the module although no host enables it. `ci/box-browser.nix` forces
 the feature on for nixos-desktop, and `ci/checks.sh` builds that system's
-`drvPath` and checks the unit names. The check does not start the units; run
-`box-browser status` on the host after the first deploy.
+`drvPath`, checks the unit names and checks the display's command line. The check
+does not start the units; run `box-browser status` on the host after the first
+deploy.
