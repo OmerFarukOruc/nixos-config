@@ -368,13 +368,14 @@ ssh).
 ## Heavy commands
 
 `heavy <command> [argument...]` (`machines/nixos-rog/heavy.nix`) runs a heavy
-command in one of two slots, at nice 10, in a systemd user scope that the
-kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of swap. A
-third command waits for a slot. `scripts/lib/rog-copy.sh` runs the Nix calls of
-the `*-on-rog.sh` scripts under it. `scripts/affected-hosts.sh`,
-`scripts/thermal-test-rog.sh` and `deploy.sh`'s build of the system use it too.
-The hourly updater runs outside the slots, so it never makes an agent wait;
-its unit's `MemoryHigh` slows it above 10 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
+command at nice 10, in a systemd user scope that the kernel slows above 10 GiB
+of memory and stops above 14 GiB or 4 GiB of swap. Commands never wait for
+each other. A `heavy` inside another one runs its command directly, and one
+reached over SSH, as in `scripts/lib/rog-copy.sh`, gets a scope of its own.
+`scripts/lib/rog-copy.sh` runs the Nix calls of the `*-on-rog.sh` scripts under
+it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh` and `deploy.sh`'s
+build of the system use it too. The hourly updater runs outside heavy; its
+unit's `MemoryHigh` slows it above 10 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
 evaluation of this flake on nixos-rog as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.

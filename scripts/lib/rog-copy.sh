@@ -15,9 +15,8 @@ ROG_COPY=
 # drops a piped input and zsh merges it into the script.
 #
 # rog_remote runs under heavy when the host has it (machines/nixos-rog/heavy.nix),
-# so the Nix work of several agents waits for a slot instead of running the
-# laptop out of memory together. rog_remote_light runs at once, for a call that
-# runs no Nix, so a script's setup and cleanup never wait behind other jobs.
+# so each Nix call gets its own memory cap. rog_remote_light runs without it,
+# for a call that runs no Nix.
 rog_remote() {
   local args
   args=$(printf '%q ' "$ROG_COPY" "$@")
