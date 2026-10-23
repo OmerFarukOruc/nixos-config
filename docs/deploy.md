@@ -183,20 +183,22 @@ needs no deploy.
 
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it
-exists, prints the path of a new log, and deploys with its output in that log:
+exists, prints the path of a new log as its only output, and deploys with its
+output in that log:
 
 ```sh
 d=../nixos-config.worktrees/deploy-<short-sha>
-[ -d "$d" ] || git worktree add --detach "$d" <sha>
-log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && ./deploy.sh <host> switch > "$log" 2>&1
+[ -d "$d" ] || git worktree add -q --detach "$d" <sha>
+log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "deploy exit $rc" >> "$log"; exit $rc; }
 ```
 
 Each run gets its own log, because two agents can deploy the same commit to
 the same host, and the second one exits 77 (see
-[One deploy at a time](#one-deploy-at-a-time)). The task's exit code is then
-the deploy's exit code. A trailing `echo` or cleanup command replaces it with
-its own. Read the log for the `Deployment completed from release <release>.`
-line.
+[One deploy at a time](#one-deploy-at-a-time)). The task's exit code is the
+deploy's exit code; a command after the block would replace it with its own.
+The log's last line is `deploy exit <code>` however the deploy ends, so a wait
+inside the turn loops until that line appears. On success, the line before it
+is `Deployment completed from release <release>.`.
 
 The deploy ships everything on that commit, including other sessions' merged
 changes. Deploy a commit at or after the one that runs on the host. The running
