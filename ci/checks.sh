@@ -40,6 +40,19 @@ flake_outputs() {
   nix flake check "${nix_opts[@]}" --no-build --no-write-lock-file 2>&1 | tee "$log"
 }
 
+# No host turns features.boxBrowser on, so this evaluates the module on
+# nixos-desktop with the feature forced on (ci/box-browser.nix).
+box_browser() {
+  local out
+  out=$(nix eval "${nix_opts[@]}" --json --impure \
+    --expr 'import ./ci/box-browser.nix (builtins.getFlake (toString ./.))') || return 1
+  jq -e '(.userUnits | contains(["box-browser", "box-display"])) and (.systemUnits | contains(["box-display-tailnet"]))' \
+    <<<"$out" >/dev/null || {
+    echo "The forced-on host lacks a box browser unit." >&2
+    return 1
+  }
+}
+
 # With --no-write-lock-file, nix flake check passes an input that flake.lock
 # lacks and only warns, and the input then follows its upstream unpinned. nix
 # fmt writes the lock file, so this check runs first.
@@ -53,6 +66,8 @@ echo
 check "cached host packages" nix eval "${nix_opts[@]}" --json --impure \
   --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
   --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
+echo
+check "box browser feature" box_browser
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)

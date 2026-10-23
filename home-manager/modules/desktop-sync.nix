@@ -46,8 +46,8 @@ in
       ExecStart = "${dotfiles}/desktop/bin/desktop-sync.sh --config";
       WorkingDirectory = dotfiles;
       # The pre-commit hook falls back to this ruff and shellcheck when mise
-      # cannot download the pinned versions. ~/.local/bin holds browser-harness,
-      # whose helper link and telemetry setting the run keeps.
+      # cannot download the pinned versions. ~/.local/bin holds mise, which
+      # the run calls.
       Environment = [
         "PATH=${
           lib.makeBinPath [
