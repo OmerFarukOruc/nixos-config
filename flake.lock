@@ -426,6 +426,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-security": {
+      "locked": {
+        "lastModified": 1792598994,
+        "narHash": "sha256-QMyc19dlfVqWMt/Uqm0eQiJJmM5Qxka9Nb7F5aD0L/g=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "1325d382e38ad08c924d600233e7706865d15b84",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "1325d382e38ad08c924d600233e7706865d15b84",
+        "type": "github"
+      }
+    },
     "nixpkgs-spotify": {
       "locked": {
         "lastModified": 1791734076,
@@ -549,6 +565,7 @@
         "nix-cachyos-kernel": "nix-cachyos-kernel",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs_4",
+        "nixpkgs-security": "nixpkgs-security",
         "nixpkgs-spotify": "nixpkgs-spotify",
         "nvf": "nvf",
         "plasma-manager": "plasma-manager",

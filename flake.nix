@@ -80,6 +80,11 @@
       url = "github:Gerg-L/spicetify-nix/50246f67d72e042291e426823dd61567b796fea9";
       inputs.nixpkgs.follows = "nixpkgs-spotify";
     };
+    # Google Chrome 156 and Tailscale 1.104.2 carry security fixes and are on
+    # nixpkgs master but not yet on nixos-unstable. applications.nix and
+    # connectivity.nix take each package from here only while it is newer than
+    # the one in nixpkgs. Remove this input once nixpkgs has both versions.
+    nixpkgs-security.url = "github:nixos/nixpkgs/1325d382e38ad08c924d600233e7706865d15b84";
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
