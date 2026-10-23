@@ -32,6 +32,17 @@ in
     }
   '';
 
+  # In automatic mode Sunshine tried NVENC first, which failed without CUDA but
+  # left it holding the RTX 4070 open, and then encoded on the Radeon through
+  # Vulkan. These settings go straight to the Radeon.
+  services.sunshine.settings = lib.mkIf config.services.sunshine.enable {
+    encoder = "vulkan";
+    adapter_name = radeonRenderNode;
+  };
+  systemd.user.services.sunshine = lib.mkIf config.services.sunshine.enable {
+    environment.VK_LOADER_DRIVERS_SELECT = "*radeon*";
+  };
+
   # The NixOS NVIDIA module turns on only when "nvidia" is listed here, also on
   # Wayland. The iGPU driver comes first so nothing keeps the dGPU awake.
   services.xserver.videoDrivers = [
