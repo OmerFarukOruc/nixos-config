@@ -244,7 +244,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | Another deploy's rollback timer stays pending (70) past the run's 20 minutes, or the deploy fails with 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
+| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical, and "Update published nowhere" after 73, which leaves the update running |
 | Any other step of the script fails, such as a Nix evaluation, `git push` after 3 tries or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" when nixos-rog runs the update |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) past the run's 20 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |

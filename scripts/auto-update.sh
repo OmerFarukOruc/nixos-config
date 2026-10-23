@@ -96,7 +96,7 @@ on_exit() {
     notify critical "Update failed" "Exit $status. See: journalctl -u $unit_name" || true
   fi
   if $unpublished; then
-    notify normal "Update published nowhere" "$host runs an update that main lacks, so a deploy of main from another checkout exits 78 until a later run publishes it. To drop the update, deploy main with --replace. See: journalctl -u $unit_name" || true
+    notify normal "Update published nowhere" "$host runs an update that main lacks. A later run publishes it; until then a deploy of main from another checkout can exit 78. To drop the update, deploy main with --replace. See: journalctl -u $unit_name" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
   if $base_pushed; then
@@ -572,9 +572,10 @@ while :; do
     if ((status != 70 && status != 71 && status != 74 && status != 79)); then
       echo "$candidate" >"$failed"
     fi
-    # 73 is a switch whose boot entries failed; the host runs the update.
-    if ((status == 73)) && ! $main_only; then
-      unpublished=true
+    # 73 is a switch whose boot entries failed, so the host runs what it
+    # deployed.
+    if ((status == 73)); then
+      if $main_only; then unpublished=false; else unpublished=true; fi
     fi
     fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
     exit 1
@@ -646,12 +647,16 @@ $system_diff
       break
     fi
     printf '%s\n' "$push_output" >&2
-    git "${git_auth[@]}" fetch --quiet origin "$base_branch" || true
+    moved=false
+    main_moved && moved=true
+    if [[ $base_branch != "$main_branch" ]]; then
+      git "${git_auth[@]}" fetch --quiet origin "$base_branch" || true
+    fi
     if git merge-base --is-ancestor HEAD "origin/$base_branch"; then
       pushed=true
       break
     fi
-    if main_moved; then
+    if $moved; then
       if may_start_round; then
         echo "main moved before the push; a new round starts."
         continue 2
