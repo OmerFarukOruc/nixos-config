@@ -1,7 +1,9 @@
 # ASUS platform control. power-profiles-daemon owns the platform profile, EPP
 # and boost; asusd keeps the fans, the charge limit, Aura and the armoury
-# settings. Only one of them may switch profiles, so asusd's profile switching
-# and its EPP link are off.
+# settings. Only one of them may switch profiles, so asusd's automatic profile
+# switching and its EPP link are off. ROG Control Center and
+# `asusctl profile set` still switch through asusd, and oruc-profile-sync
+# (profile-sync.nix) hands that switch to power-profiles-daemon.
 {
   config,
   lib,
