@@ -3,13 +3,29 @@
 # shellcheck disable=SC1087,SC2034,SC2086,SC2154,SC2155
 # Last, so the checks above give the idle dGPU time to power off.
 if [[ -n $nvidia_dev ]]; then
+  # A display on a connector of the dGPU, such as the HDMI port, keeps it
+  # awake, so the check then wants it active.
+  outputs=()
+  for connector in "/sys/bus/pci/devices/$nvidia_dev"/drm/card*/card*-*; do
+    [[ $(cat "$connector/status" 2>/dev/null) == connected &&
+    $(cat "$connector/enabled" 2>/dev/null) == enabled ]] || continue
+    name=${connector##*/}
+    outputs+=("${name#card*-}")
+  done
   for _ in {1..30}; do
     status=$(<"/sys/bus/pci/devices/$nvidia_dev/power/runtime_status")
-    [[ $status == suspended ]] && break
+    [[ $status == suspended || ${#outputs[@]} -gt 0 ]] && break
     sleep 1
   done
   detail=$status
-  if [[ $status != suspended ]]; then
+  want=suspended
+  if ((${#outputs[@]})); then
+    want=active
+    detail="$status; drives $(
+      IFS=,
+      echo "${outputs[*]}"
+    )"
+  elif [[ $status != suspended ]]; then
     # KWin keeps /dev/nvidia0 open without waking the GPU. Processes of other
     # users, such as root's nvidia-powerd, are not readable here.
     holders=()
@@ -30,5 +46,5 @@ if [[ -n $nvidia_dev ]]; then
       echo "${holders[*]:-none}"
     )"
   fi
-  check dgpu-runtime-suspended "$detail" test "$status" = suspended
+  check dgpu-runtime-suspended "$detail" test "$status" = "$want"
 fi
