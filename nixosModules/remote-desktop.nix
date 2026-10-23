@@ -8,6 +8,11 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
     capSysAdmin = true; # KMS capture on Wayland
     autoStart = true;
     openFirewall = false; # tailscale0 is a trusted interface already
+    # In automatic mode Sunshine on Plasma asked the XDG portal first, which
+    # waits for someone to approve a dialog on the host's screen, so Sunshine
+    # never started listening. KMS needs no approval. With settings set, the
+    # web UI can no longer change the configuration, but pairing still works.
+    settings.capture = "kms";
   };
   # Sunshine turns on Avahi so Moonlight finds the host on the LAN. Moonlight
   # reaches it over Tailscale by name, so mDNS stays closed on the LAN. This
