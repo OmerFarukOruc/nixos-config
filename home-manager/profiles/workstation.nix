@@ -24,6 +24,12 @@
     "application/zstd"
   ] (_: [ "org.kde.ark.desktop" ]);
 
+  # Mission Center opens its "Enabling Additional Values" setup dialog on the
+  # first launch without checking anything. nixosModules/mission-center.nix
+  # already grants what its setup script would, and the script cannot write
+  # NixOS's udev rules, so the dialog never opens.
+  dconf.settings."io/missioncenter/MissionCenter".first-time-running = false;
+
   home.packages =
     with pkgs;
     [
