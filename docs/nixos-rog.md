@@ -360,7 +360,10 @@ nixos-desktop over SSH. nixos-desktop reads this host's file with a key that
 The Claude accounts widget in the top bar shows that file.
 `oruc.plasma.claudeAccountsWidget` installs it from
 `pkgs/claude-accounts-widget.nix` and puts it on the panel. Its Log in button
-opens a Ghostty window that runs `claude-accounts login`.
+opens a Ghostty window that runs `claude-accounts login`. The same module links
+`~/.local/bin/claude-accounts` to the checkout's script, so a `git pull` changes
+it without a switch, and installs the tools the script runs (jq, gum, tmux,
+ssh).
 
 ## Heavy commands
 

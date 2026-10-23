@@ -14,13 +14,27 @@ let
   dotfiles = "${config.home.homeDirectory}/Desktop/workspace/dotfiles";
 in
 {
-  # json-config.py and the Claude Code hooks in settings.json run under python3.
-  # The checkout's pre-commit hook installs ruff and shellcheck through mise at
-  # the versions the checkout pins, for commits typed in a shell too.
+  # json-config.py, the Claude Code hooks in settings.json and the checkout's
+  # claude-accounts tools run under python3. claude-accounts also runs jq, gum
+  # (its list table), tmux and ssh (logins on another host). The checkout's
+  # pre-commit hook installs ruff and shellcheck through mise at the versions
+  # the checkout pins, for commits typed in a shell too.
   home.packages = [
     pkgs.python3
     pkgs.mise
+    pkgs.jq
+    pkgs.gum
+    pkgs.tmux
+    pkgs.openssh
   ];
+
+  # The link points into the checkout, so a git pull changes claude-accounts
+  # without a switch. force replaces the link desktop-sync.sh made before Home
+  # Manager owned it.
+  home.file.".local/bin/claude-accounts" = {
+    source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/desktop/bin/claude-accounts";
+    force = true;
+  };
 
   systemd.user.services.desktop-sync-config = {
     Unit = {
