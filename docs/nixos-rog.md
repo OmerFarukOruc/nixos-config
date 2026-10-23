@@ -245,7 +245,7 @@ The exit codes below come from `deploy.sh`, except 76. The
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | Another deploy's rollback timer stays pending (70) past the run's 20 minutes, or the deploy fails with 71, 74 or 79 | The next run tries the same update again. | Critical |
 | The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
-| Any other step of the script fails, such as a Nix evaluation, `git push` or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" after a switch |
+| Any other step of the script fails, such as a Nix evaluation, `git push` after 3 tries or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" when nixos-rog runs the update |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) past the run's 20 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | `main` moves in each of the run's rounds | The run stops without a failure. The next run tries again. | "Update not applied", or "Update published nowhere" after a switch |
@@ -260,7 +260,7 @@ expired or was revoked, or the account lost access to the repository.
 A stop during `deploy.sh` leaves the rollback timer armed. The timer restores
 the previous system when it fires, at most 420 seconds after the deploy armed
 it. The stopped run records no failed update, so the next run tries it again.
-That run exits 70 if the rollback has not fired yet.
+That run waits for the rollback to fire, then deploys.
 
 Some messages would repeat every hour, such as a failed app check or a build
 that fails. The updater sends such a message once. It counts the message as

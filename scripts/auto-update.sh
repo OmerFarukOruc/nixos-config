@@ -211,10 +211,10 @@ may_start_round() { ((round < max_rounds)) && may_go_on; }
 
 # give_up WHEN: main moved WHEN in the last round the bounds allow.
 give_up() {
-  echo "main moved $1 in round $round, the last one this run may start; the next run tries again."
+  echo "main moved $1 in round $round, and the bounds allow no further round; the next run tries again."
   # on_exit reports an update this host runs unpublished.
   if ! $unpublished; then
-    notify normal "Update not applied" "$changes"$'\n'"main kept moving during $round rounds, so this run left $host as it was. The next run tries again." || true
+    notify normal "Update not applied" "${changes:+$changes$'\n'}main kept moving during $round rounds, so this run left $host as it was. The next run tries again." || true
   fi
   exit 0
 }
@@ -443,6 +443,8 @@ while :; do
     if runs_tree_of "$base" ||
       [[ -f $same && $(<"$same") == "$base $(readlink -f /run/current-system)" ]]; then
       echo "Everything is current."
+      # main already holds what this host runs.
+      unpublished=false
       exit 0
     fi
     main_only=true
@@ -465,6 +467,7 @@ while :; do
       # Only a skip of the next evaluation depends on it.
       echo "$base $new_system" >"$same" || true
       echo "Everything is current."
+      unpublished=false
       exit 0
     fi
     echo "$host runs a system other than main's; deploying main at ${base:0:12}."
@@ -569,6 +572,10 @@ while :; do
     if ((status != 70 && status != 71 && status != 74 && status != 79)); then
       echo "$candidate" >"$failed"
     fi
+    # 73 is a switch whose boot entries failed; the host runs the update.
+    if ((status == 73)) && ! $main_only; then
+      unpublished=true
+    fi
     fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
     exit 1
   fi
@@ -629,17 +636,31 @@ $system_diff
   # squash merge would land on the newer main as a tree no host built. GitHub
   # marks a PR merged once its head commit is on the base branch, and then
   # deletes the PR's branch, as the repository's settings ask.
-  if ! push_output=$(git "${git_auth[@]}" push --quiet origin "HEAD:refs/heads/$base_branch" 2>&1); then
+  # A push that fails while main stays put, such as a server error, is tried
+  # again. A push whose answer got lost can have landed, so the run first
+  # checks whether main holds the commit.
+  pushed=false
+  for attempt in 1 2 3; do
+    if push_output=$(git "${git_auth[@]}" push --quiet origin "HEAD:refs/heads/$base_branch" 2>&1); then
+      pushed=true
+      break
+    fi
     printf '%s\n' "$push_output" >&2
+    git "${git_auth[@]}" fetch --quiet origin "$base_branch" || true
+    if git merge-base --is-ancestor HEAD "origin/$base_branch"; then
+      pushed=true
+      break
+    fi
     if main_moved; then
       if may_start_round; then
         echo "main moved before the push; a new round starts."
-        continue
+        continue 2
       fi
       give_up "before the push"
     fi
-    false
-  fi
+    ((attempt == 3)) || sleep 10
+  done
+  $pushed
   unpublished=false
   notify normal "System updated" "$changes" || true
   exit 0
