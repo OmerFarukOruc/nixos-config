@@ -5,8 +5,9 @@
 # REV^, the main that a squash merge landed on. STATUS is affected, which
 # means the host needs a deploy of REV, or unchanged.
 # With --running it compares the system each host runs with REV's system.
-# STATUS is current, behind (the release the host runs is an ancestor of REV,
-# so it needs a deploy), other (the host runs a release that is not an
+# STATUS is current, behind (the release the host runs is an ancestor of REV;
+# DETAIL lists the subjects of the commits it lacks, so the reader can tell
+# whose merges they are), other (the host runs a release that is not an
 # ancestor of REV, one from a dirty tree, or one with no release record) or
 # unreachable.
 # REV defaults to origin/main and must be pushed, because nixos-rog evaluates
@@ -122,7 +123,11 @@ REMOTE
   elif [[ $dirty == true ]]; then
     printf '%s\tother\truns %s from a dirty tree at %s\n' "$host" "$system" "$revision"
   elif [[ -n $revision ]] && git merge-base --is-ancestor "$revision" "$sha" 2>/dev/null; then
-    printf '%s\tbehind\truns %s; deploy %s\n' "$host" "$revision" "$sha"
+    mapfile -t lacks < <(git log --format=%s "$revision..$sha")
+    detail=$(printf '%s; ' "${lacks[@]:0:5}")
+    detail=${detail%; }
+    ((${#lacks[@]} <= 5)) || detail+=" and $((${#lacks[@]} - 5)) more"
+    printf '%s\tbehind\truns %s; lacks %d commit(s): %s\n' "$host" "${revision:0:12}" "${#lacks[@]}" "$detail"
   else
     printf '%s\tother\truns %s from %s\n' "$host" "$system" "${revision:-no release record}"
   fi
