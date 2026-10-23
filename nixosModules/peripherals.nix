@@ -27,7 +27,7 @@ lib.mkIf (cfg.kind == "workstation") {
   # Plasma's battery applet and the niri shells' power menus switch profiles
   # through this daemon. On a host without a firmware platform profile
   # (/sys/firmware/acpi/platform_profile) a profile changes only the CPU's
-  # energy preference (EPP) and boost.
+  # governor, energy preference (EPP) and boost.
   services.power-profiles-daemon.enable = true;
   # The daemon starts at boot rather than on the first D-Bus call. It starts
   # in the profile last set, which it keeps in its state file, or in balanced

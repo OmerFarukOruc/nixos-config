@@ -18,7 +18,7 @@ per condition, unless a line says otherwise. Re-measure before you rely on one.
   reports `fan_max` 2, so the fan has 3 states and `pwm1` steps through 0, 128
   and 255. Writing `pwm1_enable=0` returns `Invalid argument` (2026-09-21).
 - The platform profile is the only fan lever. `power-profiles-daemon` sets it
-  on niri hosts (`nixosModules/peripherals.nix`).
+  (`nixosModules/peripherals.nix`).
 
 ## Fan and heat
 
