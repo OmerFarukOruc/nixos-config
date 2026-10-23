@@ -11,7 +11,8 @@
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
 Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
 and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
-no Nix. The updater on nixos-rog runs all four scripts ([nixos-rog.md](nixos-rog.md#updater)).
+no Nix. The updater on nixos-rog runs all four scripts, and `devenv update` for
+`devenv.lock` ([nixos-rog.md](nixos-rog.md#updater)).
 
 Each script changes files in that checkout and commits nothing. Commit the
 change and push it to `main` as [AGENTS.md](../AGENTS.md) describes, then

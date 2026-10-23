@@ -35,6 +35,7 @@ let
     ++ (with pkgs; [
       bash
       curl
+      devenv
       diffutils
       # The system diff in the PR body.
       dix

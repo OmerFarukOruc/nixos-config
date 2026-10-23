@@ -36,10 +36,12 @@ steps:
 
 1. It moves every input that the table below does not name with
    `move-inputs.sh`.
-2. It moves the inputs in the table by the rules there.
+2. It moves the inputs in the table by the rules there. It moves
+   `devenv.lock` with `devenv update` when the dev shell of `devenv.nix` still
+   builds with it (`devenv build shell`).
 3. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
    input, kernel and app steps.
-4. When no input or app moved, it logs "Everything is current." and stops,
+4. When no input, app or `devenv.lock` moved, it logs "Everything is current." and stops,
    unless nixos-rog runs a system other than the one `main` builds. Then it
    deploys `main` with `./deploy.sh nixos-rog switch`, skips steps 5 to 7 and
    merges nothing.

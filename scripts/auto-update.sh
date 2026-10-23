@@ -317,6 +317,13 @@ while :; do
   # The kernel input moves only through update-kernel.sh, which first checks
   # that the kernel cache holds the new build.
   scripts/update-kernel.sh || echo "The kernel input stays where it is."
+  # devenv.lock moves only while the dev shell of devenv.nix still builds. The
+  # build does not enter the shell, so this clone gets no git hooks.
+  if ! devenv update >"$held/devenv.log" 2>&1 || ! devenv build shell >>"$held/devenv.log" 2>&1; then
+    tail -n 5 "$held/devenv.log"
+    git checkout -- devenv.lock
+    echo "devenv.lock stays where it is."
+  fi
 
   # llm-agents moves only while cache.numtide.com holds every coding agent of its
   # new revision. Unlike the inputs above, it has no day limit.
@@ -428,6 +435,11 @@ while :; do
     | ($old[0].nodes[$name].locked.rev // "none") as $from | .value.locked.rev as $to
     | select($from != $to) | "- \($name): \($from[0:7]) -> \($to[0:7])"')
     [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
+    devenv_changes=$(jq -rn --slurpfile old <(git show "$base:devenv.lock") --slurpfile new devenv.lock '
+    $new[0].nodes | to_entries[] | select(.value.locked.rev) | .key as $name
+    | ($old[0].nodes[$name].locked.rev // "none") as $from | .value.locked.rev as $to
+    | select($from != $to) | "- devenv.lock \($name): \($from[0:7]) -> \($to[0:7])"')
+    [[ -n $devenv_changes ]] && changes+=$'\n'"$devenv_changes"
     changes+=$apps
 
     git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
