@@ -45,8 +45,7 @@ ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 this_host=$(</proc/sys/kernel/hostname)
 
 # on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in HOST's home
-# directory, with the ARGs. A host trusts its own SSH host key only after
-# someone accepts it by hand, so this host runs SCRIPT without SSH, as deploy.sh
+# directory, with the ARGs. This host runs SCRIPT without SSH, as deploy.sh
 # does.
 on_host() {
   local host=$1

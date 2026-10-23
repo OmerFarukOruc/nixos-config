@@ -11,11 +11,23 @@
       extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
     };
 
-    # Lets git and gh reach GitHub over SSH without a first-use prompt. The
-    # fingerprint SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU matches
-    # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
-    programs.ssh.knownHosts."github.com".publicKey =
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+    programs.ssh.knownHosts = {
+      # Lets git and gh reach GitHub over SSH without a first-use prompt. The
+      # fingerprint SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU matches
+      # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+      "github.com".publicKey =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+
+      # The hosts' own keys, so the scripts and deploys that SSH from one host
+      # to another, or from a host to itself, need no key accepted by hand.
+      # sops-nix derives nixos-desktop's and nixos-rog's age keys in .sops.yaml
+      # from these keys, so a reinstall puts the old keys back, as
+      # docs/install-nixos-desktop.md does. A host reinstalled with new keys
+      # needs its line here changed.
+      nixos-desktop.publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHBSVaj7MrTnp/7Fg7zAzPJgMeeqETySFH6MtLX6GgGR";
+      nixos-latitude.publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO92VnaHsupV1yTYiGYal+7LgHABYQfE0ljjODnw2uUS";
+      nixos-rog.publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7Dy/fKeDEATVy33fCAUdsnXmRN6eSjPAxf63xBU+id";
+    };
 
     time.timeZone = "Europe/Istanbul";
     i18n = {
