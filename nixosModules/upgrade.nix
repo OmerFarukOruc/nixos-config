@@ -62,8 +62,14 @@ let
       gnused
     ];
     text = ''
-      if (($#)); then
-        echo "usage: upgrade" >&2
+      # --replace passes on to deploy.sh, which then drops the files of a running
+      # release from another checkout (docs/deploy.md, Dirty trees and other
+      # checkouts).
+      replace=()
+      if (($# == 1)) && [[ $1 == --replace ]]; then
+        replace=(--replace)
+      elif (($#)); then
+        echo "usage: upgrade [--replace]" >&2
         exit 2
       fi
       if ((EUID == 0)); then
@@ -92,7 +98,13 @@ let
         echo "$host already runs main at ''${sha:0:12}."
         exit 0
       fi
-      exec ./deploy.sh "$host" switch
+      status=0
+      ./deploy.sh "''${replace[@]}" "$host" switch || status=$?
+      # deploy.sh's own advice names this clone, which the next run resets.
+      if ((status == 78)); then
+        echo "Merge that work into main instead, or run upgrade --replace after its owner agrees." >&2
+      fi
+      exit "$status"
     '';
   };
 in

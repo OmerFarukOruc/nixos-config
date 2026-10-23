@@ -227,15 +227,18 @@ host it deploys `main` to that host in these steps:
    the commit, and exits 0. A `test` deploy does not count, because it leaves
    the boot default behind.
 3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so from there
-   its output and [exit codes](#exit-codes) are those of `deploy.sh`.
+   its output and [exit codes](#exit-codes) are those of `deploy.sh`. After
+   exit 78 it adds what to do instead of changing the clone.
 
-Before `deploy.sh` starts, `upgrade` exits 2 for an argument, 1 when it runs
-as root, and with Git's status when the clone or fetch fails.
+Before `deploy.sh` starts, `upgrade` exits 2 for any arguments other than
+one `--replace`, 1 when it runs as root, and with Git's status when the clone or
+fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's
 home. It never moves an input, because the updater on nixos-rog owns
-`flake.lock`. It has no `--replace`; after exit 78, follow the message of
-`deploy.sh` and run it from the clone.
+`flake.lock`. After exit 78, merge the work of the running release into
+`main`, or run `upgrade --replace` once its owner agrees that the deploy may
+drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
 
 ## What the deploy does
 
