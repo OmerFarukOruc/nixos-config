@@ -2,9 +2,10 @@
 # usage: scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]
 # Runs the script of the NixOS service UNIT, as this checkout defines it, on
 # nixos-rog for up to SECONDS (default 40, at most 600), on a copy of this
-# checkout (scripts/lib/rog-copy.sh). It runs as root with only the unit's
-# environment, so a command missing from the unit's path fails here rather
-# than after a deploy. The script really acts on the laptop.
+# checkout (scripts/lib/rog-copy.sh). It first builds the unit file, which
+# also builds the script and every package of the unit's path. It runs as root
+# with only the unit's environment, so a command missing from the unit's path
+# fails here rather than after a deploy. The script really acts on the laptop.
 #
 # A unit still running at the timeout passes, as a long-running unit should;
 # a failed one makes this script exit 1. A unit that runs as another user
@@ -147,8 +148,8 @@ rog_remote "$unit" "$seconds" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 # One evaluation gives what the run needs: whether the unit runs as root, its
-# script, its environment, and runtimeShell, which NixOS runs a unit script
-# with and which is not on the unit's PATH.
+# script, its environment, the unit file to build, and runtimeShell, which
+# NixOS runs a unit script with and which is not on the unit's PATH.
 expression='host: let
   service = host.config.systemd.services."UNIT";
   config = service.serviceConfig;
@@ -159,9 +160,10 @@ in {
   environment = map (n: "${n}=${toString environment.${n}}")
     (builtins.filter (n: environment.${n} != null) (builtins.attrNames environment));
   shell = host.pkgs.runtimeShell;
+  unit = host.config.systemd.units."UNIT.service".unit.drvPath;
 }'
 spec=$(nix eval --json --no-write-lock-file .#nixosConfigurations.nixos-rog \
-  --apply "${expression/UNIT/$2}" </dev/null)
+  --apply "${expression//UNIT/$2}" </dev/null)
 if [[ $(jq -r .asRoot <<<"$spec") != true ]]; then
   echo "refused: $2 runs as another user, and root would hide its permission failures" >&2
   exit 3
@@ -170,6 +172,9 @@ if ! jq -e '.script != ""' <<<"$spec" >/dev/null; then
   echo "refused: $2 has no script option" >&2
   exit 3
 fi
+# The evaluation builds nothing, so the packages of the unit's path may be
+# missing from the store until this build.
+nix build --no-link --no-write-lock-file "$(jq -r .unit <<<"$spec")^out" </dev/null
 script=$PWD/unit-script
 jq -r .script <<<"$spec" >"$script"
 mapfile -t setenv < <(jq -r '.environment[] | "-E", .' <<<"$spec")
