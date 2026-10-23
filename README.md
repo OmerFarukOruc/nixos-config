@@ -148,7 +148,7 @@ checkout with Nix. The hourly updater on nixos-rog runs them.
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade [--rehearse \| --replace]` (on any host) | bring this host to the newest `main`; on nixos-rog run the hourly updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything; `--replace`, on every other host, passes on to `deploy.sh` after exit 78 |
+| `upgrade [--rehearse \| --replace]` (on any host) | bring this host to the newest `main`; on nixos-rog run the hourly updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `scripts/check-on-rog.sh` | run `ci/checks.sh`, CI's formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 

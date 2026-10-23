@@ -227,10 +227,11 @@ host it deploys `main` to that host in these steps:
    the commit, and exits 0. A `test` deploy does not count, because it leaves
    the boot default behind.
 3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so from there
-   its output and [exit codes](#exit-codes) are those of `deploy.sh`.
+   its output and [exit codes](#exit-codes) are those of `deploy.sh`. After
+   exit 78 it adds what to do instead of changing the clone.
 
-Before `deploy.sh` starts, `upgrade` exits 2 for an argument other than
-`--replace`, 1 when it runs as root, and with Git's status when the clone or
+Before `deploy.sh` starts, `upgrade` exits 2 for any arguments other than
+one `--replace`, 1 when it runs as root, and with Git's status when the clone or
 fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's

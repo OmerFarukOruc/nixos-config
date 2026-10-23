@@ -98,7 +98,13 @@ let
         echo "$host already runs main at ''${sha:0:12}."
         exit 0
       fi
-      exec ./deploy.sh "''${replace[@]}" "$host" switch
+      status=0
+      ./deploy.sh "''${replace[@]}" "$host" switch || status=$?
+      # deploy.sh's own advice names this clone, which the next run resets.
+      if ((status == 78)); then
+        echo "Merge that work into main instead, or run upgrade --replace after its owner agrees." >&2
+      fi
+      exit "$status"
     '';
   };
 in
