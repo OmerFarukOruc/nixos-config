@@ -29,15 +29,6 @@
       nixos-rog.publicKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM7Dy/fKeDEATVy33fCAUdsnXmRN6eSjPAxf63xBU+id";
     };
 
-    # git push opens the SSH connection before it runs the pre-push hook, and
-    # GitHub closes a connection that stays idle for about 6 minutes (measured
-    # on 2026-10-23). This repository's pre-push checks run longer, so the
-    # push died after they passed. Keepalives hold the connection open.
-    programs.ssh.extraConfig = ''
-      Host github.com
-        ServerAliveInterval 15
-    '';
-
     time.timeZone = "Europe/Istanbul";
     i18n = {
       defaultLocale = "en_US.UTF-8";
