@@ -11,11 +11,11 @@
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
 Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
 and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
-no Nix. The hourly updater on nixos-rog runs all four scripts ([nixos-rog.md](nixos-rog.md#hourly-updater)).
+no Nix. The updater on nixos-rog runs all four scripts ([nixos-rog.md](nixos-rog.md#updater)).
 
 Each script changes files in that checkout and commits nothing. Commit the
-change on a branch from a fresh `origin/main`, merge it, then deploy as
-[deploy.md](deploy.md#deploy-a-merged-commit) describes.
+change and push it to `main` as [AGENTS.md](../AGENTS.md) describes, then
+deploy as [deploy.md](deploy.md#deploy-a-change-on-main) describes.
 
 ## The kernel
 
@@ -52,8 +52,8 @@ Read every other changed file in full.
 
 Then change the commit in `kernel-cache/flake.nix`, run
 `scripts/check-on-rog.sh --fix`, which locks the new commit in
-`kernel-cache/flake.lock`, and merge the change. The merge starts the
-kernel-cache workflow, which builds and records the new revision. The hourly
+`kernel-cache/flake.lock`, and push the change to `main`. The push starts the
+kernel-cache workflow, which builds and records the new revision. The
 updater on nixos-rog then moves the hosts with `update-kernel.sh`.
 
 ### When the cache lacks the kernel
@@ -105,24 +105,18 @@ the new revision.
 To add an input, write it in `flake.nix` and run `scripts/check-on-rog.sh --fix`.
 It locks each input that `flake.lock` lacks or whose URL changed, and copies
 `flake.lock` back. Without `--fix`, the check fails while `flake.lock` lacks an
-input, and so does CI.
+input, and so does the pre-push hook.
 
 `move-inputs.sh` never moves the kernel or llm-agents, because each of them
 moves only once a cache holds its builds. It takes the same arguments as
-`update-release-tags.sh`. The updater on nixos-rog and the host-packages-cache
-workflow both run it.
+`update-release-tags.sh`. The updater on nixos-rog runs it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
-then compile the kernel, the llm-agents packages, and the packages built from
-nixpkgs, dms and sops-nix. Move the kernel with
-`scripts/update-kernel.sh`. Move nixpkgs, dms and sops-nix by hand
-only after the host-packages-cache workflow
-([nixos-rog.md](nixos-rog.md#cached-packages)) has pushed the packages for the
-lock you will deploy. The workflow builds the lock that `scripts/move-inputs.sh`
-produces. To move one input by hand, use `nix flake update <input>`, or
+then compile the kernel and the llm-agents packages. Move the kernel with
+`scripts/update-kernel.sh`. To move one input by hand, use `nix flake update <input>`, or
 `scripts/update-release-tags.sh <input>` for an input pinned to a release tag.
 The updater moves llm-agents once cache.numtide.com holds its builds
-([nixos-rog.md](nixos-rog.md#hourly-updater)).
+([nixos-rog.md](nixos-rog.md#updater)).
 
 ## Release tags
 
@@ -147,8 +141,8 @@ builds, then opens a blank window. To move them:
    "Compatibility" list in the notes of that
    [spicetify-cli release](https://github.com/spicetify/cli/releases) must
    include the Linux Spotify version.
-3. Merge, then run `./deploy.sh <host> switch` for each host that
-   `scripts/affected-hosts.sh <sha>` prints. Launch Spotify on nixos-rog. If
+3. Push to `main`, then run `./deploy.sh <host> switch` for each host that
+   `scripts/affected-hosts.sh <old>..<sha>` prints. Launch Spotify on nixos-rog. If
    the window is blank, revert the commit and deploy those hosts again.
 
 ## Apps

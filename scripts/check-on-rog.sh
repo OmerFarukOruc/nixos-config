@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # usage: scripts/check-on-rog.sh [--fix]
-# Runs ci/checks.sh, the checks of CI's check job, on nixos-rog, for a copy of
+# Runs ci/checks.sh, the checks of the pre-push hook, on nixos-rog, for a copy of
 # this checkout (scripts/lib/rog-copy.sh), from either host.
 # With --fix, it first formats the copy and locks each input that flake.lock
 # lacks, copies the files that changed back here, and then checks.

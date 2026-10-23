@@ -1,7 +1,6 @@
 # herdr 0.9.4, which llm-agents does not package yet. Once llm-agents' herdr
 # reaches 0.9.4, the version check below passes it through unchanged; then
-# delete this file, its use in nixosModules/home-manager.nix and the herdr
-# entry in ci/cached-packages.nix.
+# delete this file and its use in nixosModules/home-manager.nix.
 {
   lib,
   fetchFromGitHub,

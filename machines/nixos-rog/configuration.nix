@@ -23,7 +23,6 @@
     ../../nixosModules/nextdns.nix
     ./nixpkgs-clone.nix
     ./powertop.nix
-    ./pr-build.nix
     ./profile-sync.nix
     ./stay-active.nix
     ./warp.nix

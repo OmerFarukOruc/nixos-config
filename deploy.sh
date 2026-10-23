@@ -483,7 +483,7 @@ release_dir=$HOME/$2
 action=$3
 
 # heavy (machines/nixos-rog/heavy.nix) caps the evaluation's memory on a host
-# that has it. The hourly updater's PATH lacks it, so its deploy runs plain nix
+# that has it. The updater's PATH lacks it, so its deploy runs plain nix
 # under the unit's own MemoryHigh.
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi

@@ -51,9 +51,6 @@ let
     HoverSessionButtonTextColor = scheme.base0D;
     HoverVirtualKeyboardButtonTextColor = scheme.base0D;
   };
-  # A copy inside the package instead of themeConfig's link to a separate
-  # file, because the public cache takes the package only when cache.nixos.org
-  # holds the rest of its closure (ci/host-packages.sh).
   jake = (pkgs.sddm-astronaut.override { embeddedTheme = "jake_the_dog"; }).overrideAttrs (old: {
     jakeColors = lib.generators.toINI { } { General = colors; };
     passAsFile = [ "jakeColors" ];

@@ -4,10 +4,8 @@
 # deploys the result to this host with deploy.sh, and publishes the commit it
 # deployed to main with a fast-forward push through a PR.
 # The kernel and llm-agents move only while a cache holds the builds they need.
-# Every other host must build here first, and the checks of check.yml must pass
-# here; the run deploys to no other host.
-# nixpkgs, dms and sops-nix wait for the cache for a day at most
-# (see below).
+# Every other host must build here first, and ci/checks.sh and
+# ci/unit-cycles.sh must pass here; the run deploys to no other host.
 # When nothing moves and this host runs a system other than main's, the run
 # deploys main to this host and merges nothing.
 # When main moves before the switch or before the push, the run starts a new
@@ -158,16 +156,15 @@ push() {
   fi
 }
 
-# The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
-# PR build and this run never evaluate or build at once. The run takes it before
-# it reads main, because main often moves while it waits: a PR build that ends
-# frees the lock, and its PR merges seconds later.
+# The rehearsal unit takes the same lock, so the two runs never evaluate or
+# build at once. The run takes it before it reads main, because main can move
+# while it waits.
 exec {build_lock}>>/run/nixos-config-build.lock
 if ! flock -w 1800 "$build_lock"; then
-  echo "A PR build or the other updater unit has held the build lock for 30 min; the next run tries again."
+  echo "The other updater unit has held the build lock for 30 min; the next run tries again."
   # Notifies from the second run in a row that the lock holds back.
   if [[ -f $waiting && $(<"$waiting") == lock ]]; then
-    notify normal "Update waiting" "PR builds or the other updater unit have held the build lock for 30 minutes in two runs in a row. See: journalctl -u $unit_name" || true
+    notify normal "Update waiting" "The other updater unit has held the build lock for 30 minutes in two runs in a row. See: journalctl -u $unit_name" || true
   fi
   echo lock >"$waiting"
   exit 0
@@ -202,11 +199,12 @@ main_moved() {
 
 # A run starts a new round on the new main when main moves before its switch
 # or before its push, at most max_rounds in all. No round and no deploy retry
-# starts after the run has held the build lock for admit_seconds, because PR
-# builds wait at most 60 min for it (scripts/pr-build.sh). A round that started
-# runs to its end, so the hold can reach admit_seconds plus one round. Of 119
-# runs in the journal (2026-10-16 to 2026-10-23), the longest took 19 min and
-# the slowest deploy 659 s, so the hold stays below that hour.
+# starts after the run has held the build lock for admit_seconds, so a main
+# that keeps moving cannot keep the lock from the other updater unit, which
+# waits at most 30 min for it. A round that started runs to its end, so the
+# hold can reach admit_seconds plus one round. Of 119 runs in the journal
+# (2026-10-16 to 2026-10-23), the longest took 19 min and the slowest deploy
+# 659 s.
 max_rounds=3
 admit_seconds=$((20 * 60))
 may_go_on() { ((SECONDS - locked_at < admit_seconds)); }
@@ -272,35 +270,12 @@ other_hosts_build() {
   done
 }
 
-# The checks of CI's check job (ci/checks.sh) and unit-cycles job, so the PR can
-# merge without waiting for GitHub. The builds above cover the hosts job.
-# ci/checks.sh forbids import from derivation itself; this covers
+# The checks that the pre-push hooks run (devenv.nix), so the PR can merge at
+# once. ci/checks.sh forbids import from derivation itself; this covers
 # ci/unit-cycles.sh.
 local_checks() {
   local -x NIX_CONFIG="$NIX_CONFIG"$'\n''allow-import-from-derivation = false'
   ci/checks.sh && ci/unit-cycles.sh || return 76
-}
-
-# Succeeds when a cache holds every package of ci/cached-packages.nix that a
-# host uses at this lock, since this host builds every host's system. The host-packages-cache workflow builds them every
-# hour for the newest inputs; cache.nixos.org holds one that nixpkgs builds
-# unchanged.
-packages_cached() {
-  local paths path
-  paths=$(nix eval --impure --raw --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-    --apply "hosts: builtins.concatStringsSep \"\\n\" (builtins.concatMap
-      (p: map (o: p.\${o}.outPath) p.outputs) (builtins.concatMap builtins.attrValues (builtins.attrValues hosts)))") ||
-    {
-      echo "ci/cached-packages.nix does not evaluate at this lock."
-      return 1
-    }
-  while read -r path; do
-    [[ -n $path ]] || continue
-    path=${path#/nix/store/}
-    curl -fs --max-time 20 --retry 2 -o /dev/null "https://omerfarukoruc.cachix.org/${path%%-*}.narinfo" ||
-      curl -fs --max-time 20 --retry 2 -o /dev/null "https://cache.nixos.org/${path%%-*}.narinfo" ||
-      return 1
-  done <<<"$paths"
 }
 
 held=$(mktemp -d)
@@ -309,10 +284,6 @@ held=$(mktemp -d)
 hold() { cp flake.nix flake.lock "$held/"; }
 release() { cp "$held/flake.nix" "$held/flake.lock" .; }
 
-# The inputs the packages of ci/cached-packages.nix come from. They move below,
-# once the cache holds those packages. The Glass inputs are pinned to a
-# commit, so they never move here.
-cached_from=(nixpkgs dms sops-nix)
 # The system this host ran before the run, which the PR body compares with.
 old_system=$(readlink -f /run/current-system)
 round=0
@@ -342,37 +313,10 @@ while :; do
     push "HEAD:refs/heads/$base_branch"
   fi
 
-  tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
+  tags=$(scripts/move-inputs.sh)
   # The kernel input moves only through update-kernel.sh, which first checks
   # that the kernel cache holds the new build.
   scripts/update-kernel.sh || echo "The kernel input stays where it is."
-
-  # A new nixpkgs or DMS release needs new builds of the packages in
-  # ci/cached-packages.nix, which would compile here at full load. Their inputs
-  # wait for the cache, but for a day at most, so one broken build cannot hold
-  # back every other package's fixes.
-  since=$STATE_DIRECTORY/packages-held-since
-  hold
-  cached_tags=$(scripts/move-inputs.sh "${cached_from[@]}")
-  if cmp -s flake.lock "$held/flake.lock"; then
-    :
-  elif packages_cached; then
-    rm -f -- "$since" "$since.notified"
-    [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
-  else
-    [[ -f $since && $(<"$since") =~ ^[0-9]+$ ]] || date +%s >"$since"
-    if (($(date +%s) - $(<"$since") < 86400)); then
-      echo "The cache lacks builds for the new ${cached_from[*]}; they stay where they are."
-      release
-    else
-      echo "Builds have been missing from the cache for a day; ${cached_from[*]} move and this host compiles them."
-      if [[ ! -f $since.notified ]]; then
-        notify normal "Builds not in the cache" "nixpkgs waited a day for the host-packages-cache builds. Updates compile them on the laptop until that workflow works again." &&
-          touch "$since.notified"
-      fi
-      [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
-    fi
-  fi
 
   # llm-agents moves only while cache.numtide.com holds every coding agent of its
   # new revision. Unlike the inputs above, it has no day limit.
@@ -432,9 +376,9 @@ while :; do
   done < <(printf '%s\n' pkgs/*.nix)
 
   # Without a move, the run deploys main to this host unless the host runs a
-  # clean release of it. Each commit on main passed its checks before it merged,
-  # so the run skips the commit, the other hosts' builds and the checks, and
-  # merges nothing.
+  # clean release of it. A commit reaches main only after the pre-push checks
+  # of its host, so the run skips the commit, the other hosts' builds and the
+  # checks, and merges nothing.
   main_only=false
   if git diff --quiet; then
     if $rehearsal; then
@@ -633,10 +577,9 @@ $system_diff
     --title "$pr_title" --body "$body" ||
     gh pr edit "$branch" --repo "$repo" --body "$body"
 
-  # The PR merges at once, since the checks above ran here; GitHub runs check,
-  # hosts, unit-cycles and build again on main after the merge and emails a
-  # failure. A fast-forward push of the commit this host runs merges it, and
-  # GitHub refuses that push when main moved after the check above, where a
+  # The PR merges at once, since the checks above ran here. A fast-forward
+  # push of the commit this host runs merges it, and GitHub refuses that push
+  # when main moved after the check above, where a
   # squash merge would land on the newer main as a tree no host built. GitHub
   # marks a PR merged once its head commit is on the base branch, and then
   # deletes the PR's branch, as the repository's settings ask.

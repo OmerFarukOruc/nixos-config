@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # usage: ci/checks.sh
-# The checks that the check job of .github/workflows/check.yml runs, in one
-# place for each caller: that job, scripts/check-on-rog.sh and the updater
-# (scripts/auto-update.sh). It stops at the first failure and names it.
+# The checks a change passes before it reaches main, in one place for each
+# caller: the pre-push hook and devenv test (devenv.nix),
+# scripts/check-on-rog.sh and the updater (scripts/auto-update.sh). It stops at
+# the first failure and names it.
 # Evaluation warnings do not fail it; the summary at the end lists them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# CI forbids import from derivation, so every evaluation here does too.
+# This repository forbids import from derivation (AGENTS.md, Nixpkgs), so every
+# evaluation here does too.
 nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
@@ -20,8 +22,6 @@ check() {
   echo "== $name"
   "$@" || {
     echo "The check \"$name\" failed." >&2
-    # An annotation, so the failed check shows on the PR without the log.
-    [[ ${GITHUB_ACTIONS:-} != true ]] || echo "::error::The check \"$name\" failed."
     exit 1
   }
 }
@@ -38,6 +38,26 @@ lock_files() {
 
 flake_outputs() {
   nix flake check "${nix_opts[@]}" --no-build --no-write-lock-file 2>&1 | tee "$log"
+}
+
+# nix flake check --no-build only checks that each host's toplevel is a
+# derivation, so an error inside a host's configuration, such as a package
+# that became a throw, shows only when its drvPath is forced. One evaluation
+# per host keeps each under heavy's memory cap.
+host_systems() {
+  local hosts host
+  hosts=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
+    --apply builtins.attrNames | jq -r '.[]') || return 1
+  [[ -n $hosts ]] || {
+    echo "The flake defines no host." >&2
+    return 1
+  }
+  for host in $hosts; do
+    echo "$host"
+    nix eval "${nix_opts[@]}" --raw --no-write-lock-file \
+      ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath" 2>&1 >/dev/null |
+      tee -a "$log" || return 1
+  done
 }
 
 # No host turns features.boxBrowser on, so this evaluates the module on
@@ -64,13 +84,9 @@ box_browser() {
 check "lock files" lock_files
 check formatting nix fmt "${nix_opts[@]}" -- --ci
 check "flake outputs" flake_outputs
+check "host systems" host_systems
 check "kernel-cache packages" nix eval "${nix_opts[@]}" --json --no-write-lock-file \
   ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
-echo
-# Not a flake output, so nix flake check does not evaluate it.
-check "cached host packages" nix eval "${nix_opts[@]}" --json --impure \
-  --expr 'import ./ci/cached-packages.nix (builtins.getFlake (toString ./.))' \
-  --apply 'builtins.mapAttrs (_: builtins.mapAttrs (_: p: p.drvPath))'
 echo
 check "box browser feature" box_browser
 echo

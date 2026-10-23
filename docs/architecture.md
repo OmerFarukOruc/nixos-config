@@ -219,8 +219,3 @@ host can share, such as desktop-sync, are in `home-manager/modules/`.
 open modules, and ryzen-smu, turbostat and nct6687d for zen4. The
 [kernel-cache README](../kernel-cache/README.md) explains how the hosts follow
 it.
-
-The same cache holds the host packages in `ci/cached-packages.nix`, which the
-host-packages-cache workflow builds from each host's configuration.
-[nixos-rog.md](nixos-rog.md#cached-packages) explains how the updater waits for
-them.

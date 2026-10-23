@@ -59,7 +59,7 @@ window, then close the viewer. The session stays in the profile.
 
 ## Check
 
-CI evaluates the module although no host enables it. `ci/box-browser.nix` forces
+`ci/checks.sh` evaluates the module although no host enables it. `ci/box-browser.nix` forces
 the feature on for nixos-desktop, and `ci/checks.sh` builds that system's
 `drvPath`, checks the unit names and checks the display's command line. The check
 does not start the units; run `box-browser status` on the host after the first

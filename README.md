@@ -5,14 +5,12 @@
 # nixos-config
 
 **A NixOS desktop and two NixOS laptops in one flake, deployed over Tailscale,<br>
-with a CachyOS kernel that CI compiles so the hosts never do.**
+with a CachyOS kernel that GitHub compiles so the hosts never do.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
 
 [![NixOS unstable](https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white)](https://github.com/NixOS/nixpkgs/tree/nixos-unstable)
-[![check](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/check.yml?branch=main&style=flat-square&label=check&logo=github)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/check.yml)
 [![kernel-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/kernel-cache.yml?branch=main&style=flat-square&label=kernel-cache&logo=linux&logoColor=white)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/kernel-cache.yml)
-[![host-packages-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/host-packages-cache.yml?branch=main&style=flat-square&label=host-packages-cache)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/host-packages-cache.yml)
 [![Cachix](https://img.shields.io/badge/cachix-omerfarukoruc-4E7FC1?style=flat-square)](https://omerfarukoruc.cachix.org)
 
 [Hosts](#hosts) · [Stack](#stack) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
@@ -43,7 +41,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 
 | Part | Choice |
 | --- | --- |
-| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built by CI |
+| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built on GitHub |
 | Boot loader | Limine on nixos-rog and nixos-desktop, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
@@ -98,9 +96,9 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   the user's running services. A deploy that breaks any of them restores the
   previous system, even when the connection drops.
   [`deploy.sh`](deploy.sh)
-- **🔄 A laptop that updates itself.** Every hour on AC power, nixos-rog moves its
-  inputs and apps, waits for the caches to hold the expensive builds, deploys the
-  result to itself and merges it to `main`. When nothing moved, it deploys
+- **🔄 A laptop that updates itself.** Every 2 hours on AC power, nixos-rog moves
+  its inputs and apps, waits for the caches to hold the kernel and the coding
+  agents, builds every host, deploys the result to itself and merges it to `main`. When nothing moved, it deploys
   a newer `main` to itself.
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
   [`scripts/auto-update.sh`](scripts/auto-update.sh)
@@ -121,10 +119,12 @@ nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme,
 home-manager/          the user layer, with one module per shell and app
 niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
-kernel-cache/          the separate flake that CI builds into Cachix
-ci/  .github/          CI scripts and workflows: host-package cache, build report, unit ordering check, PR host builds
+kernel-cache/          the separate flake that GitHub builds into Cachix
+ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
+.github/               the kernel-cache workflow
+devenv.nix             the dev shell, its linters and the git hooks
 scripts/               checks and builds on nixos-rog, update scripts, the updater and the post-deploy check
-tooling.nix            the formatter (nix fmt), its linters and the dev shell
+tooling.nix            the formatter (nix fmt) and its linters
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
 docs/                  operating guides and the architecture
@@ -142,15 +142,17 @@ builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
 from either host. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
-checkout with Nix. The hourly updater on nixos-rog runs them.
+checkout with Nix. The updater on nixos-rog runs them.
 
 | Command | What it does |
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade [--rehearse \| --replace]` (on any host) | bring this host to the newest `main`; on nixos-rog run the hourly updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
+| `upgrade [--rehearse \| --replace]` (on any host) | bring this host to the newest `main`; on nixos-rog run the updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
-| `scripts/check-on-rog.sh` | run `ci/checks.sh`, CI's formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
+| `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
+| `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
+| `scripts/check-on-rog.sh` | run `ci/checks.sh`, the formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
 
 <details>
 <summary>More commands</summary>
@@ -166,7 +168,7 @@ checkout with Nix. The hourly updater on nixos-rog runs them.
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/rehearse-moving-main.sh ROUND...` (on nixos-rog) | rehearse this checkout's `scripts/auto-update.sh` while `main` moves at the start of each named round |
-| `scripts/affected-hosts.sh [--running] [REV]` | list the hosts whose system a merged commit changes, or with `--running` the hosts whose running system differs from `main` |
+| `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` |
 | `scripts/check-secrets.sh [FILE]` | on nixos-desktop or nixos-rog, decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
@@ -190,9 +192,12 @@ helpers that other scripts source. Nobody runs these by hand, except that a
 host without Nix can run `scripts/check-theme-drift.sh` to check a color
 before `scripts/check-on-rog.sh`.
 
-CI runs the formatter, `nix flake check --no-build`, the evaluation of each
-host and of the cached host packages, and a check of each host's units for an
-ordering cycle on every pull request and push to `main`.
+A change commits straight to `main` once the git hooks of `devenv.nix` pass:
+`nix fmt` before the commit, and before the push `ci/checks.sh` (the lock and
+formatter checks, `nix flake check --no-build` and an evaluation of each host's
+system)
+and `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
+GitHub runs only the kernel build.
 
 ## Docs
 
@@ -203,11 +208,11 @@ ordering cycle on every pull request and push to `main`.
 | [Box browser](docs/box-browser.md) | the shared signed-in Chromium for coding agents, the `box-view` command that opens it and its wrapper command |
 | [Updates](docs/updates.md) | the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
-| [nixos-rog](docs/nixos-rog.md) | the hourly updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
+| [nixos-rog](docs/nixos-rog.md) | the updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
-| [kernel-cache](kernel-cache/README.md) | how CI builds the kernel and how hosts follow it |
+| [kernel-cache](kernel-cache/README.md) | how GitHub builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
 | [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |
 

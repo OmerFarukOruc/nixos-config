@@ -99,20 +99,4 @@ in
         };
       };
     };
-
-  # direnv loads this through .envrc on a host with Nix.
-  devShells.x86_64-linux.default = pkgs.mkShell {
-    packages = with pkgs; [
-      deadnix
-      jq
-      keep-sorted
-      lychee
-      nixfmt
-      shellcheck
-      shfmt
-      sops
-      ssh-to-age
-      statix
-    ];
-  };
 }

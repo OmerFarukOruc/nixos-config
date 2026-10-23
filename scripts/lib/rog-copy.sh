@@ -45,7 +45,7 @@ rog_copy_open() {
   # leaves it out, as the working tree does.
   git ls-files -co --exclude-standard -z |
     rsync -a --from0 --ignore-missing-args --files-from=- ./ "$ROG_HOST:$ROG_COPY/"
-  # A git flake, like CI's checkout. Without git add, Nix would leave the new
+  # A git flake, like a checkout. Without git add, Nix would leave the new
   # files out of it.
   rog_remote_light <<'REMOTE'
 set -e

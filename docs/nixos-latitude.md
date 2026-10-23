@@ -64,9 +64,9 @@ use three 10-second windows.
 
 - nixos-latitude gets `main` from `upgrade` on the host or from
   `./deploy.sh nixos-latitude switch`
-  ([deploy.md](deploy.md#upgrade-a-host-to-main)); nixos-rog's hourly updater
+  ([deploy.md](deploy.md#upgrade-a-host-to-main)); nixos-rog's updater
   builds its system but does not deploy it
-  ([nixos-rog.md](nixos-rog.md#hourly-updater)).
+  ([nixos-rog.md](nixos-rog.md#updater)).
   `scripts/affected-hosts.sh --running` lists nixos-latitude while it runs a
   system that differs from `main`. A new kernel from a deploy becomes the boot
   default and runs after the next reboot, which the item below covers.

@@ -1,7 +1,7 @@
 name: kernel-cache
 
 on:
-  # The hourly host updates merge to main too; only changes to these paths start
+  # The host updates merge to main too; only changes to these paths start
   # a build.
   push:
     branches: [main]

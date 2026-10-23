@@ -2,7 +2,7 @@
 
 - [Check before you deploy](#check-before-you-deploy)
 - [Deploy](#deploy)
-- [Deploy a merged commit](#deploy-a-merged-commit)
+- [Deploy a change on main](#deploy-a-change-on-main)
 - [Upgrade a host to main](#upgrade-a-host-to-main)
 - [What the deploy does](#what-the-deploy-does)
 - [Exit codes](#exit-codes)
@@ -17,20 +17,20 @@ host in `~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONT
 lists the aliases.
 
 Every deploy command in this guide can change boot or running system state.
-Omer's request for a change also approves its deploy. After the change merges
-to `main`, run `./deploy.sh <host> switch` for each host it affects without
+Omer's request for a change also approves its deploy. After the change reaches
+`main`, run `./deploy.sh <host> switch` for each host it affects without
 asking again. A host is affected when its system `drvPath` differs between the
-merged change and the `main` it merged onto. Before the merge, print both as
-[AGENTS.md](../AGENTS.md#lookups) describes. After the merge,
-`scripts/affected-hosts.sh <sha>` compares the merge commit with its parent
-([Deploy a merged commit](#deploy-a-merged-commit)). When a host is unreachable,
+pushed change and the `main` it landed on. Before the push, print both as
+[AGENTS.md](../AGENTS.md#lookups) describes. After the push,
+`scripts/affected-hosts.sh <old>..<sha>` compares the two
+([Deploy a change on main](#deploy-a-change-on-main)). When a host is unreachable,
 retry the deploy once after about 6 minutes, the Wi-Fi outage nixos-latitude
 showed on 2026-09-21 ([nixos-latitude.md](nixos-latitude.md#operation)).
 Report it as the blocker only when it is still unreachable.
 `scripts/affected-hosts.sh --running` lists each host whose running system
 differs from `main`, such as one that was offline at the last deploy, so run it
 before you end a session that deployed. For a host that is behind, it lists the
-commits the host lacks; a host behind only by another session's merges is that
+commits the host lacks; a host behind only by another session's pushes is that
 session's to deploy.
 
 This guide uses these terms:
@@ -49,9 +49,46 @@ This guide uses these terms:
 
 ## Check before you deploy
 
-Evaluate the change from this checkout. These scripts copy the working tree to
-nixos-rog and run Nix there, so they work the same from nixos-desktop and
-nixos-rog:
+A change reaches `main` only through the git hooks of `devenv.nix`, which
+direnv installs when it loads the devenv shell. GitHub runs no check of a
+commit; it builds only the kernel ([kernel-cache](../kernel-cache/README.md)).
+
+| Hook | Runs | Took on nixos-rog |
+| --- | --- | --- |
+| pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
+| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the staged tree, under `heavy` where it exists | 190 to 224 s with a warm store in 3 runs (2026-10-23) |
+
+The times come from a test clone on 2026-10-23. The same checks run with one
+command, and `devenv tasks run ci` also builds every host's system with
+`ci/build-hosts.sh`:
+
+```sh
+devenv test
+devenv tasks run ci
+```
+
+The hooks see the staged tree, because prek sets unstaged edits aside while a
+hook runs. Commit everything before you push, so the checked tree is the
+pushed one. No hook builds a host's system. The deploy builds it on the target
+and changes nothing when the build fails, and the updater builds every host
+before its own merge; a commit that does not build for another host therefore
+also fails the updater's next run with status 76. `devenv tasks run ci` builds
+them all before a push.
+
+The gate exists only where the devenv shell loaded. A clone that never loaded
+it has no hooks, and on nixos-rog `heavy` fails without a user session bus,
+which fails the push hook. The hooks do not take the updater's build lock, so
+a push on nixos-rog can run beside an updater run.
+
+A worktree gets the hooks from the shared `.git/hooks`, but their config is a
+link that the devenv shell writes. Until `direnv allow <worktree>` and a first
+`direnv exec <worktree> true` have run there, a commit in it fails with
+`config file not found: .pre-commit-config.yaml`. Commit from a worktree only
+after that step; `PREK_ALLOW_NO_CONFIG=1` skips the hooks and with them every
+check.
+
+To check from a host without a loaded shell, these scripts copy the working
+tree to nixos-rog and run Nix there:
 
 ```sh
 scripts/check-on-rog.sh
@@ -59,8 +96,8 @@ scripts/check-on-rog.sh --fix
 scripts/eval-on-rog.sh '.#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
 ```
 
-`check-on-rog.sh` runs `ci/checks.sh`, the checks of CI's `check` job, with
-import from derivation forbidden as in CI. With `--fix` it formats first
+`check-on-rog.sh` runs `ci/checks.sh`, the checks of the pre-push hook, with
+import from derivation forbidden. With `--fix` it formats first
 and copies the changed files back before it checks. `eval-on-rog.sh` evaluates
 one attribute and does not forbid import from derivation.
 
@@ -81,17 +118,11 @@ fails. The checks do not prove that the hardware and services work after
 activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
-CI runs the formatter check, `nix flake check --no-build` and, in its `hosts`
-job, the evaluation of every host on every pull request and on every push to
-`main`. Its `unit-cycles` job also runs `ci/unit-cycles.sh`, the ordering-cycle check of step 7, on each
-host's units. It builds the unit files without the programs they start, so it
-downloads about 1.8 GiB instead of the whole system (CI log, 2026-10-13).
-
-The same CI run evaluates the cached host packages of `ci/cached-packages.nix`,
-which the flake outputs do not include. The build-report workflow
-(`.github/workflows/build-report.yml`) runs `ci/build-report.sh` on each push
-to `main`. It lists in the job summary what each host would compile itself
-after a fresh install, because none of its caches holds the build.
+`ci/checks.sh` runs the formatter check, `nix flake check --no-build` and an
+evaluation of each host's system `drvPath`, which the flake check skips. `ci/unit-cycles.sh` runs the ordering-cycle check
+of step 7 on each host's units. It builds the unit files without the programs
+they start, so it downloaded about 1.8 GiB instead of the whole system on a
+GitHub runner on 2026-10-13.
 
 Without a `#`, `scripts/eval-on-rog.sh` prints one value of nixos-rog's
 configuration; give a flake attribute with `#` for another host. A string
@@ -160,25 +191,26 @@ must read `ORUC_SHELL=<shell>` for the shell that the session runs. No line, or
 another shell, means the session predates the change. Log out and back in to fix it. On a grey screen, press Super+Shift+E, then
 Enter, to return to the login screen.
 
-## Deploy a merged commit
+## Deploy a change on main
 
-Deploy a merged change from a detached worktree of its commit, so the deploy
+Deploy a pushed change from a detached worktree of its commit, so the deploy
 needs no `--allow-dirty`. The main checkout may hold another session's
 uncommitted edits, and `--allow-dirty` would ship them.
 
-First find the hosts that the commit affects. A squash merge makes one commit
-on `main`, so the script compares the system `drvPath` of every host at the
-merge commit with the one at its parent `<sha>^`, the `main` it merged onto.
-nixos-rog evaluates both from GitHub, in 70 to 90 seconds (measured on
-2026-10-15), so this step needs no worktree. From the main checkout, run:
+First find the hosts that the push affects. A push can carry several commits,
+so the script compares the system `drvPath` of every host at the pushed commit
+`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog
+evaluates both from GitHub, in 70 to 90 seconds (measured on 2026-10-15), so
+this step needs no worktree. From the main checkout, run:
 
 ```sh
 git fetch origin
-scripts/affected-hosts.sh <sha>
+scripts/affected-hosts.sh <old>..<sha>
 ```
 
-`<sha>` is the output of `gh pr view <n> --json mergeCommit --jq .mergeCommit.oid`,
-or `origin/main` after the fetch.
+`<old>` is the `origin/main` you rebased onto before the push, and `<sha>` the
+commit you pushed. With one commit, `scripts/affected-hosts.sh <sha>` compares
+it with its parent.
 
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 needs no deploy.
@@ -202,7 +234,7 @@ The log's last line is `deploy exit <code>` however the deploy ends, so a wait
 inside the turn loops until that line appears. On success, the line before it
 is `Deployment completed from release <release>.`.
 
-The deploy ships everything on that commit, including other sessions' merged
+The deploy ships everything on that commit, including other sessions' pushed
 changes. Deploy a commit at or after the one that runs on the host. The running
 commit is the `revision=` line of the release record whose `system=` line
 matches `readlink -f /run/current-system` on the host (see
@@ -219,7 +251,7 @@ on a branch.
 ## Upgrade a host to main
 
 Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
-it runs the [hourly updater](nixos-rog.md#hourly-updater) now. On every other
+it runs the [updater](nixos-rog.md#updater) now. On every other
 host it deploys `main` to that host in these steps:
 
 1. It clones this repository over https into
@@ -362,7 +394,7 @@ such as 1.
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
-| 76 | Another host does not evaluate or build, or a check before the merge fails. The [updater](nixos-rog.md#hourly-updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
+| 76 | Another host does not evaluate or build, or a check before the merge fails. The [updater](nixos-rog.md#updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
 | 77 | Another deploy holds the lock on the host. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |

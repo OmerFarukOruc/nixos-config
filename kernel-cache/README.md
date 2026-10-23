@@ -41,21 +41,15 @@ commits `flake.lock` with `cached-paths.json`, which lists the
 nix-cachyos-kernel revision, the kernel version and every pushed output path. A
 host checks those paths in the cache before it locks the same revision.
 
-The `check` workflow evaluates every package's derivation on pull requests and
-pushes to `main`. `scripts/check-on-rog.sh` runs the same evaluation without a
-build. A bad driver argument or missing patch fails that check before a merge.
+`ci/checks.sh`, which the pre-push hook runs, evaluates every package's
+derivation without a build. A bad driver argument or missing patch fails that
+check before the push to `main`.
 
-The same cache holds packages that the root flake's hosts would compile, such
-as DankMaterialShell. The
-[`host-packages-cache` workflow](../.github/workflows/host-packages-cache.yml)
-builds them from the hosts' own configuration;
-[nixos-rog.md](../docs/nixos-rog.md#cached-packages) describes it.
+The cache holds nothing else. Each host compiles the other packages that only
+this flake builds ([nixos-rog.md](../docs/nixos-rog.md#packages-no-cache-holds)).
 
 Nothing unfree is pushed. The NVIDIA module builds from
 [open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules).
-The host-packages-cache workflow does not push a package whose closure holds a
-path that cache.nixos.org lacks and that is not a listed package, and that run
-fails.
 
 ## Setup
 

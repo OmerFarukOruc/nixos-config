@@ -13,9 +13,8 @@ in
 {
   nixpkgs.overlays = [ inputs.nix-cachyos-kernel.overlays.pinned ];
   # The Cachix cache holds the CachyOS kernels and NVIDIA open modules that the
-  # kernel-cache workflow builds, and the host packages of
-  # ci/cached-packages.nix. scripts/update-kernel.sh locks only revisions that
-  # the cache holds. A plain nix flake update does not check the cache.
+  # kernel-cache workflow builds. scripts/update-kernel.sh locks only revisions
+  # that the cache holds. A plain nix flake update does not check the cache.
   nix.settings = {
     extra-substituters = [ "https://omerfarukoruc.cachix.org" ];
     extra-trusted-public-keys = [

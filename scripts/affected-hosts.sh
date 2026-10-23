@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# usage: scripts/affected-hosts.sh [--running] [REV]
+# usage: scripts/affected-hosts.sh [--running] [REV | OLD..REV]
 # Prints one line per host: HOST<TAB>STATUS<TAB>DETAIL.
 # Without --running it compares each host's system at REV with the system at
-# REV^, the main that a squash merge landed on. STATUS is affected, which
-# means the host needs a deploy of REV, or unchanged.
+# OLD, or at REV^ without OLD. A push of several commits needs OLD, the main
+# the push landed on. STATUS is affected, which means the host needs a deploy
+# of REV, or unchanged.
 # With --running it compares the system each host runs with REV's system.
 # STATUS is current, behind (the release the host runs is an ancestor of REV;
 # DETAIL lists the subjects of the commits it lacks, so the reader can tell
@@ -16,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage="usage: $0 [--running] [REV]"
+usage="usage: $0 [--running] [REV | OLD..REV]"
 running=false
 if [[ ${1:-} == --running ]]; then
   running=true
@@ -27,15 +28,36 @@ if (($# > 1)) || [[ ${1:-} == -* ]]; then
   exit 2
 fi
 
+rev=${1:-origin/main}
+old_rev=
+if [[ $rev == *..* ]]; then
+  if $running; then
+    echo "$usage" >&2
+    exit 2
+  fi
+  old_rev=${rev%%..*}
+  rev=${rev#*..}
+  if [[ -z $old_rev || -z $rev || $rev == .* ]]; then
+    echo "$usage" >&2
+    exit 2
+  fi
+fi
+
 git fetch -q origin
-if ! sha=$(git rev-parse --verify -q "${1:-origin/main}^{commit}"); then
-  echo "${1:-origin/main} names no commit here." >&2
+if ! sha=$(git rev-parse --verify -q "$rev^{commit}"); then
+  echo "$rev names no commit here." >&2
   exit 1
 fi
-if [[ -z $(git branch -r --contains "$sha") ]]; then
-  echo "$sha is on no branch of origin; push it first." >&2
+if [[ -n $old_rev ]] && ! parent=$(git rev-parse --verify -q "$old_rev^{commit}"); then
+  echo "$old_rev names no commit here." >&2
   exit 1
 fi
+for commit in "$sha" ${old_rev:+"$parent"}; do
+  if [[ -z $(git branch -r --contains "$commit") ]]; then
+    echo "$commit is on no branch of origin; push it first." >&2
+    exit 1
+  fi
+done
 url=$(git remote get-url origin)
 if [[ ! $url =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then
   echo "origin is not a GitHub repository: $url" >&2
@@ -79,7 +101,7 @@ done | jq -s add
 REMOTE
 }
 
-if ! $running && ! parent=$(git rev-parse --verify -q "$sha^"); then
+if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha^"); then
   echo "$sha has no parent to compare with." >&2
   exit 1
 fi

@@ -53,7 +53,7 @@ To go back to a kept generation that the boot menu does not list, do these
 steps:
 
 1. On nixos-rog, pause the updater first.
-   [Hourly updater](nixos-rog.md#hourly-updater) has the pause, the wait, and
+   [Updater](nixos-rog.md#updater) has the pause, the wait, and
    the resume. A host with no updater skips this step.
 
 2. Run these commands. The first one lists the generations. The second one
@@ -151,7 +151,7 @@ steps:
    [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
    describes.
 2. Pause the updater.
-   [Hourly updater](nixos-rog.md#hourly-updater) has the pause, the wait, the
+   [Updater](nixos-rog.md#updater) has the pause, the wait, the
    resume, and the reboot hole. Otherwise the next update deploys a new newest
    generation, and Limine boots that one.
 3. Drop the newer generations and reinstall the boot entries. The running

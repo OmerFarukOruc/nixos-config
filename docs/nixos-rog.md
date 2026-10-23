@@ -1,7 +1,6 @@
 # nixos-rog
 
-- [Hourly updater](#hourly-updater)
-- [PR builds](#pr-builds)
+- [Updater](#updater)
 - [Failures and notifications](#failures-and-notifications)
 - [Secrets](#secrets)
 - [DNS](#dns)
@@ -25,10 +24,10 @@ Boot entries, generations and the GPU mode are in [recovery.md](recovery.md#nixo
 A date in this guide marks a measurement or a reading of upstream source on that
 day. Repeat the measurement before you rely on it.
 
-## Hourly updater
+## Updater
 
 nixos-rog updates itself. The updater is `oruc-auto-update.service`. Every
-hour on AC power, it runs `scripts/auto-update.sh` in its own clone of this
+2 hours on AC power, it runs `scripts/auto-update.sh` in its own clone of this
 repository. Its timer adds up to 10 minutes of random delay. On battery the
 service skips the run.
 
@@ -44,9 +43,9 @@ steps:
    unless nixos-rog runs a system other than the one `main` builds. Then it
    deploys `main` with `./deploy.sh nixos-rog switch`, skips steps 5 to 7 and
    merges nothing.
-5. It builds every other host's system, then runs the checks of
-   [check.yml](../.github/workflows/check.yml) that those builds do not
-   cover: `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
+5. It builds every other host's system, then runs the checks of the
+   pre-push hook ([Check before you deploy](deploy.md#check-before-you-deploy)):
+   `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
    build or a check fails, the update fails with status 76 and the log names
    the host or the check.
 6. It builds nixos-rog's system, then deploys it with
@@ -54,10 +53,7 @@ steps:
 7. It opens a PR from the `auto-update` branch and merges it at once with a
    fast-forward push of the deployed commit to `main`. GitHub refuses that
    push when `main` moved, so `main` gets only a tree that nixos-rog built and
-   runs. The PR body holds dix's comparison of the old and new system. GitHub
-   skips the PR's checks and runs `check`, `hosts`, `unit-cycles` and the
-   host-packages-cache build on the push to `main`; GitHub emails a failed
-   run.
+   runs. The PR body holds dix's comparison of the old and new system.
 
 The updater deploys no other host, but it builds every host, so a build failure
 of nixos-desktop or nixos-latitude also stops its merge. Those two get `main`
@@ -66,9 +62,10 @@ from `upgrade` on the host or from a manual `./deploy.sh <host> switch`
 
 A desktop notification reports each update or failure.
 
-The run holds the build lock that [PR builds](#pr-builds) also take, from
-before it reads `main` until it ends. When a PR build holds the lock for 30
-minutes, the run stops quietly and the next run tries again.
+The run holds a build lock, `/run/nixos-config-build.lock`, from before it
+reads `main` until it ends. The rehearsal unit below takes the same lock. When
+the other unit holds it for 30 minutes, the run stops quietly and the next run
+tries again.
 
 A change merged to `main` reaches nixos-rog with the next run of the updater,
 or with a manual `./deploy.sh nixos-rog switch`.
@@ -77,7 +74,6 @@ or with a manual `./deploy.sh nixos-rog switch`.
 | --- | --- |
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| nixpkgs, dms and sops-nix | They wait up to a day for the cache to hold the packages built from them. See [Cached packages](#cached-packages). |
 | kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
@@ -90,8 +86,8 @@ it resets to the new `main` and repeats steps 1 to 7. When another deploy
 holds nixos-rog's deploy lock (77) or its rollback timer is pending (70), the
 run deploys again every 60 seconds; when `main` moved in the meantime, it
 starts a new round instead. A run has at most 3 rounds. It starts no round and
-no deploy retry after it has held the build lock for 20 minutes, because PR
-builds wait at most an hour for that lock. A round that already started runs
+no deploy retry after it has held the build lock for 20 minutes, so a `main`
+that keeps moving cannot keep the lock from the rehearsal unit. A round that already started runs
 to its end. Each round logs "Round N starts on main at <commit>".
 
 When the bounds run out before the switch, the run leaves nixos-rog as it was
@@ -161,96 +157,25 @@ updates before the next reboot, run
 `sudo systemctl start oruc-auto-update.timer`.
 
 The mask lasts until the next reboot. After the reboot the updater runs again.
-`Persistent=true` runs a missed hourly update soon after boot (on 2026-10-11
+`Persistent=true` runs a missed update soon after boot (on 2026-10-11
 it started about 2 minutes after boot). Pause the updater again after each
 reboot, or it may deploy `main` before you do. [recovery.md](recovery.md#nixos-rog)
 uses this pause when it pins a generation.
 
-### Cached packages
+### Packages no cache holds
 
 cache.nixos.org does not hold the packages that come from this flake's own
-inputs, overlays or settings. `ci/cached-packages.nix` lists the free ones of
-each host: airpods-tui, DankMaterialShell (DMS), Deskflow, the Glass KWin effect and Qt
-style, herdr while `pkgs/herdr.nix` builds a newer release than llm-agents,
-linctl,
-the sddm-astronaut login theme, the lock screen's video wallpaper plugin and
-`sops-install-secrets`, plus the newer libportal that Deskflow links. It reads them from the host's own
-configuration, so they are the exact builds the host would compile.
+inputs, overlays or settings, such as airpods-tui, DankMaterialShell (DMS),
+Deskflow, the Glass KWin effect and Qt style, linctl, the sddm-astronaut login
+theme and the lock screen's video wallpaper plugin. Each host compiles them
+itself when an update changes them. Only the kernel builds elsewhere, on
+GitHub ([kernel-cache](../kernel-cache/README.md)).
 
-Every hour, the [host-packages-cache](../.github/workflows/host-packages-cache.yml)
-workflow moves the inputs with the same `move-inputs.sh`, builds the packages
-that the caches lack and pushes them to the `omerfarukoruc` Cachix cache. It
-also builds them for every push to `main`, so a later deploy of nixos-latitude
-downloads them. On a pull request it builds them and runs the closure check
-without pushing, so a change that would keep a package out of the cache fails
-there. The updater's PR skips this build, because it merges at once. GitHub emails a failed scheduled run of that workflow.
-
-The updater moves the inputs those packages come from only once the cache
-holds every package this host uses. So nixpkgs updates can lag nixos-unstable
-by an hour or two, and the laptop downloads the packages instead of compiling
-them.
-
-After a day without those builds, the inputs move anyway and the laptop
-compiles the packages. A notification says so once.
-
-whisper-cpp is not in the list. `machines/nixos-rog/media.nix` builds it for
-the RTX 4070's CUDA architecture (sm_89) only, and neither cache.nixos.org nor
-the Cachix cache holds that build. Its closure holds unfree NVIDIA libraries, and
-`cachix push` uploads a whole closure, so the public cache must not receive it.
-The laptop compiles whisper-cpp itself, each time an update changes its
-derivation.
-
-## PR builds
-
-Every PR to `main` gets the `host-systems-build` check, which nixos-rog runs.
-The updater's PR skips it, because the updater built every host's system
-before it opened the PR.
-The [workflow](../.github/workflows/host-systems-build.yml) joins the tailnet as
-an ephemeral node with the tag `tag:ci`, logs in to nixos-rog over SSH and
-passes the PR number and head SHA. The key it logs in with runs only
-`scripts/pr-build.sh` (`machines/nixos-rog/pr-build.nix`). The script checks
-with GitHub that the SHA is the head of that open PR, which targets `main` from
-this repository. Then it builds the system of each host whose toplevel
-`drvPath` differs from the PR's merge base, and fails when one does not
-evaluate or build.
-
-The job runs from `main`'s copy of the workflow (`pull_request_target`) and
-never checks out the PR, so a PR cannot change what runs with the tailnet
-login. A change to the workflow takes effect once it is on `main`.
-
-The PR's Nix code still runs on nixos-rog as `oruc`. Pure evaluation can read
-any file `oruc` can read through a `path` flake input or `builtins.fetchTree`,
-and an error message lands in the public job log. The script withholds the SSH
-agent and the Git credential helper, and accepts only PRs whose branch is in
-this repository, so the check trusts the people who can push here, as `main`
-and the updater already do.
-
-The script and the updater hold one lock, `/run/nixos-config-build.lock`, so
-they never evaluate or build at once. The check waits up to an hour for the
-lock. It stops itself after 110 minutes, and when its SSH session ends, such as
-when a newer push cancels the job. nixos-rog keeps the newest 50 logs in
-`~/.cache/nixos-config-pr-build/logs`.
-
-The check fails while nixos-rog is off, asleep or on battery. Rerun it from the
-PR, or with `gh run rerun <run id>`, once nixos-rog is on AC power.
-
-The job reads these secrets of the GitHub environment `host-systems-build`,
-which admits only jobs that run from `main`:
-
-- `TS_CI_CLIENT_ID` and `TS_CI_AUDIENCE`: the tailnet's federated identity
-  (Tailscale admin console, Settings, Trust credentials, "nixos-config
-  host-systems-build"). It accepts GitHub's OIDC token with the subject
-  `repo:OmerFarukOruc@7347742/nixos-config@1415995737:environment:host-systems-build`.
-  This repository was created after 15 July 2026, so GitHub's subject names
-  the owner and repository IDs; `gh api
-  repos/OmerFarukOruc/nixos-config/actions/oidc/customization/sub` prints the
-  prefix. The identity may create auth keys for `tag:ci` only. The tailnet
-  policy, which lives only in the admin console, lets `tag:ci` reach only
-  nixos-rog's port 22, and its tests check that.
-- `ROG_SSH_HOST`: nixos-rog's MagicDNS name. It is a secret so that public run
-  logs show it masked.
-- `ROG_PR_BUILD_KEY`: the private half of the key that `pr-build.nix`
-  authorizes.
+whisper-cpp is one of them. `machines/nixos-rog/media.nix` builds it for the
+RTX 4070's CUDA architecture (sm_89) only, so the laptop compiles it each time
+an update changes its derivation. In a test on 2026-10-23, a cold build of
+nixos-rog's whole system on a GitHub runner with 4 CPUs took 1 h 6 min and the
+other hosts 10 and 8 minutes (job start and end times of the run).
 
 ## Failures and notifications
 
@@ -262,9 +187,9 @@ The exit codes below come from `deploy.sh`, except 76. The
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | Another deploy's rollback timer stays pending (70) past the run's 20 minutes, or the deploy fails with 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical, and "Update published nowhere" when an update, not `main`, fails with 73, which leaves it running |
+| The deploy fails with another status, another host does not evaluate or build (such as after a push that broke it), or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical, and "Update published nowhere" when an update, not `main`, fails with 73, which leaves it running |
 | Any other step of the script fails, such as a Nix evaluation, `git push` after 3 tries or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" when nixos-rog runs the update |
-| A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
+| The rehearsal unit holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
 | Another deploy holds the lock (77) past the run's 20 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | `main` moves in each of the run's rounds | The run stops without a failure. The next run tries again. | "Update not applied", or "Update published nowhere" after a switch |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
@@ -280,7 +205,7 @@ the previous system when it fires, at most 420 seconds after the deploy armed
 it. The stopped run records no failed update, so the next run tries it again.
 That run waits for the rollback to fire, then deploys.
 
-Some messages would repeat every hour, such as a failed app check or a build
+Some messages would repeat every run, such as a failed app check or a build
 that fails. The updater sends such a message once. It counts the message as
 sent only when the desktop shows it. When no desktop session is running, the
 next run sends it again.
@@ -331,7 +256,7 @@ working token until the new one is deployed:
 
 3. Commit the file and land it, then deploy it with
    `./deploy.sh nixos-rog switch`. [deploy.md](deploy.md) has the rules.
-4. Start the updater as in [Hourly updater](#hourly-updater). The new token
+4. Start the updater as in [Updater](#updater). The new token
    works when the log reaches "Everything is current." or the run deploys.
    When the log shows `git ... failed while GitHub answers`, the new token is
    wrong or lacks access to this repository, and the laptop holds it. Skip
@@ -408,8 +333,8 @@ of memory and stops above 14 GiB or 4 GiB of swap. Commands never wait for
 each other. A `heavy` inside another one runs its command directly, and one
 reached over SSH, as in `scripts/lib/rog-copy.sh`, gets a scope of its own.
 `scripts/lib/rog-copy.sh` runs the Nix calls of the `*-on-rog.sh` scripts under
-it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh` and `deploy.sh`'s
-build of the system use it too. The hourly updater runs outside heavy; its
+it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
+build of the system and the checks of the git hooks (`devenv.nix`) use it too. The updater runs outside heavy; its
 unit's `MemoryHigh` slows it above 10 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
 evaluation of this flake on nixos-rog as `heavy nix ...`. The cap covers evaluation only: Nix builds run in

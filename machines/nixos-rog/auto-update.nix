@@ -1,4 +1,4 @@
-# Every hour on AC power, scripts/auto-update.sh moves the flake inputs and the
+# Every 2 hours on AC power, scripts/auto-update.sh moves the flake inputs and the
 # apps in pkgs/ that name a release source to their newest releases, deploys
 # them to this host and merges them to main. The token is a systemd credential,
 # and the script writes private runtime config files for gh and Nix. The token
@@ -54,8 +54,8 @@ let
       # timer never starts it again. The longest run in the journal (24 runs
       # from 2026-10-10 to 2026-10-12) took 3 min 13 s, and the checks before
       # the deploy took 70 s (local_checks alone on a warm store, 2026-10-21).
-      # The rest is room for compiling the packages of ci/cached-packages.nix
-      # when no cache holds them, for up to 30 minutes of waiting for the
+      # The rest is room for compiling the packages that only this flake
+      # builds, which no cache holds, for up to 30 minutes of waiting for the
       # build lock, and for the new rounds that the script starts within 20
       # minutes when main moves. A kill sends the script SIGTERM, and its trap
       # notifies. A kill during deploy.sh leaves the rollback timer to restore
@@ -87,6 +87,9 @@ in
   sops.secrets.github-update-token = { };
 
   systemd.services.oruc-auto-update = updater;
+  # The lock that the updater and its rehearsal take around their evaluations
+  # and builds.
+  systemd.tmpfiles.rules = [ "f /run/nixos-config-build.lock 0600 oruc users -" ];
   # `upgrade --rehearse`: the same run from an older flake.lock, which builds
   # instead of deploying and merges into a throwaway branch
   # (scripts/auto-update.sh). Its own state, so it never marks a real
@@ -121,7 +124,8 @@ in
   systemd.timers.oruc-auto-update = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "hourly";
+      # Every 2 hours.
+      OnCalendar = "0/2:00";
       Persistent = true;
       RandomizedDelaySec = "10min";
     };
