@@ -79,7 +79,9 @@ The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
 ran `direnv allow` has no hooks, and on nixos-rog `heavy` fails without a user session bus,
 which fails the push hook. The hooks do not take the updater's build lock, so
-a push on nixos-rog can run beside an updater run.
+a push on nixos-rog can run beside an updater run. Git holds the SSH
+connection to GitHub open while the pre-push hook runs, and GitHub closes it
+when it stays idle, so `home-manager/modules/git.nix` sends SSH keepalives.
 
 A worktree gets the hooks from the shared `.git/hooks`, but their config is a
 link that the devenv shell writes. Until `direnv allow <worktree>` and a first
