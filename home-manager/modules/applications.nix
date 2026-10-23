@@ -1,6 +1,7 @@
 {
   agents,
   config,
+  inputs,
   lib,
   osConfig,
   pkgs,
@@ -29,11 +30,36 @@ let
         "AcceleratedVideoEncoder"
       ]
     );
+  # Brave Origin 1.98.60 moves to Chromium 156 for its security fixes, and
+  # nixpkgs still builds 1.97.59. Remove the override once nixpkgs has 1.98.60.
+  braveOrigin =
+    if lib.versionOlder pkgs.brave-origin.version "1.98.60" then
+      pkgs.brave-origin.overrideAttrs (
+        finalAttrs: _: {
+          version = "1.98.60";
+          src = pkgs.fetchurl {
+            url = "https://github.com/brave/brave-browser/releases/download/v${finalAttrs.version}/brave-origin_${finalAttrs.version}_amd64.deb";
+            hash = "sha256-VKBbHBK684D7dwqyhhwh87uQJfU3VQ9tNEHxre9S5jk=";
+          };
+        }
+      )
+    else
+      pkgs.brave-origin;
   brave =
     if braveArgs == [ ] then
-      pkgs.brave-origin
+      braveOrigin
     else
-      pkgs.brave-origin.override { commandLineArgs = lib.concatStringsSep " " braveArgs; };
+      braveOrigin.override { commandLineArgs = lib.concatStringsSep " " braveArgs; };
+  # legacyPackages refuses the unfree google-chrome, so import the pinned nixpkgs.
+  securityPkgs = import inputs.nixpkgs-security {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config.allowUnfree = true;
+  };
+  chrome =
+    if lib.versionOlder pkgs.google-chrome.version securityPkgs.google-chrome.version then
+      securityPkgs.google-chrome
+    else
+      pkgs.google-chrome;
   # Days a release must age before a package manager installs it.
   releaseAgeDays = 3;
   # OpenCode 2 from llm-agents installs as opencode2, beside version 1. It is
@@ -67,7 +93,6 @@ in
       file
       firefox
       gitleaks
-      google-chrome
       infisical
       jq
       mcp-nixos
@@ -95,6 +120,7 @@ in
     ])
     ++ [
       brave
+      chrome
       grok
       opencode
     ];

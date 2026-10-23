@@ -1,6 +1,14 @@
-{ config, lib, ... }:
+{
+  config,
+  inputs,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.oruc.machine;
+  securityTailscale =
+    inputs.nixpkgs-security.legacyPackages.${pkgs.stdenv.hostPlatform.system}.tailscale;
 in
 lib.mkIf (cfg.kind == "workstation") {
   networking.networkmanager = {
@@ -10,6 +18,11 @@ lib.mkIf (cfg.kind == "workstation") {
 
   services.tailscale = {
     enable = true;
+    package =
+      if lib.versionOlder pkgs.tailscale.version securityTailscale.version then
+        securityTailscale
+      else
+        pkgs.tailscale;
     extraSetFlags = [
       "--accept-dns=true"
       "--ssh=false"
