@@ -29,6 +29,13 @@ for round in "$@"; do
   fi
   wanted[$round]=1
 done
+# The run gives up after its last allowed round, so a later round never starts.
+max_rounds=$(sed -n 's/^max_rounds=\([0-9]\+\)$/\1/p' scripts/auto-update.sh)
+last=$(printf '%s\n' "${!wanted[@]}" | sort -n | tail -n 1)
+if [[ -z $max_rounds ]] || ((last > max_rounds)); then
+  echo "scripts/auto-update.sh allows ${max_rounds:-an unknown number of} rounds; ROUND must not be higher." >&2
+  exit 2
+fi
 if [[ $(</proc/sys/kernel/hostname) != nixos-rog ]]; then
   echo "The updater units run on nixos-rog only." >&2
   exit 2
@@ -170,6 +177,13 @@ while :; do
   esac
   sleep 5
 done
+# journald can store the run's last lines after the unit ended; they decide the
+# result below.
+sleep 2
+mapfile -t lines < <(journalctl -u "$unit" --since "@$start" -o cat --no-pager)
+for ((i = seen; i < ${#lines[@]}; i++)); do
+  printf '%s\n' "${lines[i]}" | tee -a "$log"
+done
 
 result=$(systemctl show -p Result --value "$unit")
 echo "Result: $result"
@@ -187,15 +201,14 @@ if ((noticed != ${#moved[@]})); then
   status=1
 fi
 # After the last named round the run publishes in the next round, or gives up
-# when that round was the last one auto-update.sh allows (max_rounds, 3).
-last=$(printf '%s\n' "${!wanted[@]}" | sort -n | tail -n 1)
-if ((last < 3)); then
+# when that round was the last one auto-update.sh allows.
+if ((last < max_rounds)); then
   if ! grep -q "^Round $((last + 1)) starts" "$log" || ! grep -qE '/pull/[0-9]+$' "$log"; then
     echo "The run did not publish in round $((last + 1))." >&2
     status=1
   fi
-elif ! grep -q "in round 3, and the bounds allow no further round" "$log"; then
-  echo "The run did not give up in round 3." >&2
+elif ! grep -q "in round $max_rounds, and the bounds allow no further round" "$log"; then
+  echo "The run did not give up in round $max_rounds." >&2
   status=1
 fi
 exit "$status"
