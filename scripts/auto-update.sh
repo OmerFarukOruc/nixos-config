@@ -96,7 +96,7 @@ on_exit() {
     notify critical "Update failed" "Exit $status. See: journalctl -u $unit_name" || true
   fi
   if $unpublished; then
-    notify normal "Update published nowhere" "$host runs an update that main lacks. A later run publishes it; until then a deploy of main from another checkout can exit 78. To drop the update, deploy main with --replace. See: journalctl -u $unit_name" || true
+    notify normal "Update published nowhere" "$host runs an update that main lacks, so a deploy of main from another checkout can exit 78 until main gets it. To drop the update, deploy main with --replace. See: journalctl -u $unit_name" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
   if $base_pushed; then
