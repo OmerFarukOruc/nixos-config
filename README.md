@@ -165,6 +165,7 @@ checkout with Nix. The hourly updater on nixos-rog runs them.
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
+| `scripts/rehearse-moving-main.sh ROUND...` (on nixos-rog) | rehearse this checkout's `scripts/auto-update.sh` while `main` moves at the start of each named round |
 | `scripts/affected-hosts.sh [--running] [REV]` | list the hosts whose system a merged commit changes, or with `--running` the hosts whose running system differs from `main` |
 | `scripts/check-secrets.sh [FILE]` | on nixos-desktop or nixos-rog, decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
