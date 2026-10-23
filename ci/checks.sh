@@ -46,9 +46,14 @@ box_browser() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --impure \
     --expr 'import ./ci/box-browser.nix (builtins.getFlake (toString ./.))') || return 1
-  jq -e '(.userUnits | contains(["box-browser", "box-display"])) and (.systemUnits | contains(["box-display-tailnet"]))' \
-    <<<"$out" >/dev/null || {
+  jq -e '.userUnits | contains(["box-browser", "box-display"])' <<<"$out" >/dev/null || {
     echo "The forced-on host lacks a box browser unit." >&2
+    return 1
+  }
+  # Xvnc has no password, so its command line must keep it on localhost.
+  jq -e '.displayCommand | contains(" -localhost ") and contains(" -SecurityTypes None")' \
+    <<<"$out" >/dev/null || {
+    echo "The box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
     return 1
   }
 }

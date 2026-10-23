@@ -1,12 +1,12 @@
 # A signed-in, headful browser that coding agents share (features.boxBrowser).
-# Xvnc is the display, localhost only, and Omer signs in to sites through a VNC
-# viewer over Tailscale. Chromium runs on that display with a persistent profile
-# and a DevTools port on localhost, and agent-browser drives it through the
-# box-browser wrapper, one session per agent. The host holds box-vnc-password in
-# its own secrets file (docs/box-browser.md).
+# Xvnc is the display, localhost only and with no password, and Omer signs in to
+# sites through a VNC viewer behind an SSH tunnel (box-view, in
+# home-manager/modules/box-view.nix). Chromium runs on that display with a
+# persistent profile and a DevTools port on localhost, and agent-browser drives
+# it through the box-browser wrapper, one session per agent
+# (docs/box-browser.md).
 {
   config,
-  inputs,
   lib,
   pkgs,
   ...
@@ -14,22 +14,10 @@
 let
   displayNumber = 20;
   display = ":${toString displayNumber}";
-  # Xvnc serves display :N on port 5900 + N; the number is spelled out so the
-  # port that tailscale serve publishes is the one Xvnc listens on.
+  # Xvnc serves display :N on port 5900 + N; the number is spelled out because
+  # box-view tunnels to this port.
   vncPort = 5920;
   cdpPort = 9344;
-  password = config.sops.secrets.box-vnc-password.path;
-
-  # Xvnc reads its password from a file in vncpasswd's obfuscated format, so the
-  # plain secret is converted into the runtime directory at each start.
-  vncAuth = pkgs.writeShellApplication {
-    name = "box-display-auth";
-    runtimeInputs = [ pkgs.tigervnc ];
-    text = ''
-      umask 077
-      vncpasswd -f <${password} >"$XDG_RUNTIME_DIR/box-display.passwd"
-    '';
-  };
 
   # Xvnc sends no readiness signal, so the browser waits for its socket. A
   # Chromium that died hard leaves Singleton* files, and a reused process id
@@ -102,19 +90,7 @@ let
   };
 in
 {
-  # A host that imports sops-nix itself loads it once.
-  imports = [ inputs.sops-nix.nixosModules.sops ];
-
   config = lib.mkIf config.oruc.machine.features.boxBrowser {
-    assertions = [
-      {
-        assertion = config.services.tailscale.enable;
-        message = "features.boxBrowser publishes the display with tailscale serve, and this host does not enable Tailscale.";
-      }
-    ];
-
-    sops.secrets.box-vnc-password.owner = "oruc";
-
     # The units run with no login session.
     users.users.oruc.linger = true;
 
@@ -124,19 +100,19 @@ in
     environment.systemPackages = [ boxBrowser ];
 
     systemd.user.services.box-display = {
-      description = "Box browser display: Xvnc ${display}, localhost only";
+      description = "Box browser display: Xvnc ${display}, localhost only, no password";
       wantedBy = [ "default.target" ];
       unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
-        ExecStartPre = lib.getExe vncAuth;
         ExecStart = lib.concatStringsSep " " [
           (lib.getExe' pkgs.tigervnc "Xvnc")
           display
           "-localhost"
           "-rfbport ${toString vncPort}"
           "-nolisten tcp"
-          "-SecurityTypes VncAuth"
-          "-rfbauth %t/box-display.passwd"
+          "-SecurityTypes None"
+          # The viewer's window title.
+          "-desktop box-browser"
           "-geometry 1920x1080"
           "-depth 24"
           "-AlwaysShared"
@@ -174,24 +150,6 @@ in
         Restart = "always";
         RestartSec = 2;
       };
-    };
-
-    # tailscaled keeps a serve entry across restarts, but this unit also puts it
-    # back when the state is gone. It retries until Tailscale is logged in.
-    systemd.services.box-display-tailnet = {
-      description = "Publish the box display's VNC port on the tailnet";
-      after = [ "tailscaled.service" ];
-      wants = [ "tailscaled.service" ];
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${lib.getExe' config.services.tailscale.package "tailscale"} serve --bg --tcp=${toString vncPort} tcp://127.0.0.1:${toString vncPort}";
-        ExecStop = "-${lib.getExe' config.services.tailscale.package "tailscale"} serve --tcp=${toString vncPort} off";
-        Restart = "on-failure";
-        RestartSec = 15;
-      };
-      unitConfig.StartLimitIntervalSec = 0;
     };
   };
 }
