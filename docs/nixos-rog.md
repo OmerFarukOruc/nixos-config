@@ -1040,8 +1040,6 @@ one JSON line for each:
 
 `off` closes the tunnel. VS Code keeps its debugging port until Omer quits it.
 
-- `browser-harness` cannot drive VS Code: Electron answers its first browser
-  command with `Not supported`. Use `run`.
 - `window.dialogStyle` is `custom` in `home-manager/modules/vscode.nix`, so
   VS Code draws its dialogs inside the window, where `eval` and `click` reach
   them. File pickers stay native, outside the window.
