@@ -2,7 +2,7 @@
 # usage: scripts/rehearse-moving-main.sh ROUND...
 # Runs this checkout's scripts/auto-update.sh as a rehearsal on nixos-rog
 # while main moves: the rehearsal reads the test branch rehearsal-moving-main
-# as main, and this script pushes an empty commit to that branch when the run
+# as main, and this script adds an empty commit to that branch when the run
 # logs "Round N starts" for each N in ROUND. `1` makes the run publish in round
 # 2; `1 2 3` makes it give up in round 3. It writes the run's log under
 # ~/.local/state/rehearse-moving-main/ and prints the round lines as they come.
@@ -86,14 +86,24 @@ log=$log_dir/$(date +%Y%m%dT%H%M%S).log
 copy=$(mktemp -d)
 pushed=false
 
-# quiet_push ARG...: pushes to origin. GitHub answers a push of a new branch
-# with a hint to open a pull request; only a failed push shows what it printed.
-quiet_push() {
+# The test branch moves through the GitHub API, not git push: a push would run
+# the pre-push checks of devenv.nix for minutes, and the run would leave the
+# round before the move arrives.
+url=$(git remote get-url origin)
+if [[ ! $url =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then
+  echo "origin is not a GitHub repository: $url" >&2
+  exit 1
+fi
+refs=repos/${BASH_REMATCH[1]%.git}/git
+
+# github ARG...: calls the GitHub API; only a failed call shows its answer.
+github() {
   local output
-  if ! output=$(git push --quiet origin "$@" 2>&1); then
+  if ! output=$(gh api "$@" 2>&1); then
     printf '%s\n' "$output" >&2
     return 1
   fi
+  printf '%s\n' "$output"
 }
 
 # shellcheck disable=SC2329 # the EXIT trap below runs it
@@ -107,7 +117,7 @@ cleanup() {
   sudo -n rm -f -- "$dropin" || true
   sudo -n rmdir -- "$dropin_dir" 2>/dev/null || true
   sudo -n systemctl daemon-reload || true
-  if $pushed && ! quiet_push --delete "$branch"; then
+  if $pushed && ! github -X DELETE "$refs/refs/heads/$branch" >/dev/null; then
     echo "Could not delete $branch on origin; delete it by hand." >&2
   fi
   rm -rf -- "${copy:?}"
@@ -116,17 +126,18 @@ trap cleanup EXIT
 
 # move_main ROUND: adds an empty commit on top of the test branch.
 move_main() {
-  local commit
-  git fetch --quiet origin "$branch"
-  commit=$(git -c commit.gpgsign=false commit-tree -p FETCH_HEAD \
-    -m "test: move $branch at the start of round $1" 'FETCH_HEAD^{tree}')
-  quiet_push "$commit:refs/heads/$branch"
+  local parent tree commit
+  parent=$(github "$refs/ref/heads/$branch" --jq .object.sha)
+  tree=$(github "$refs/commits/$parent" --jq .tree.sha)
+  commit=$(github "$refs/commits" -f message="test: move $branch at the start of round $1" \
+    -f tree="$tree" -f "parents[]=$parent" --jq .sha)
+  github -X PATCH "$refs/refs/heads/$branch" -f sha="$commit" >/dev/null
   echo "Moved $branch to ${commit:0:12} at the start of round $1."
 }
 
 install -m 644 scripts/auto-update.sh "$copy/auto-update.sh"
 git fetch --quiet origin main
-quiet_push "origin/main:refs/heads/$branch"
+github "$refs/refs" -f ref="refs/heads/$branch" -f sha="$(git rev-parse origin/main)" >/dev/null
 pushed=true
 printf '[Service]\nExecStart=\nExecStart=%s %s\nEnvironment=AUTO_UPDATE_REHEARSAL_MAIN=%s\n' \
   "$bash_path" "$copy/auto-update.sh" "$branch" >"$copy/moving-main.conf"
