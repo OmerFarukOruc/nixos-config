@@ -29,7 +29,9 @@ showed on 2026-09-21 ([nixos-latitude.md](nixos-latitude.md#operation)).
 Report it as the blocker only when it is still unreachable.
 `scripts/affected-hosts.sh --running` lists each host whose running system
 differs from `main`, such as one that was offline at the last deploy, so run it
-before you end a session that deployed.
+before you end a session that deployed. For a host that is behind, it lists the
+commits the host lacks; a host behind only by another session's merges is that
+session's to deploy.
 
 This guide uses these terms:
 
