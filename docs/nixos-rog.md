@@ -136,10 +136,12 @@ scripts/rehearse-moving-main.sh 1 2 3  # main moves in every round; the run give
 ```
 
 The script reads a test branch as `main` and moves it when the run logs the
-rounds you name. It prints the round lines and the log path, and exits 0 when
-the run succeeded. Each run took 8 to 14 minutes on 2026-10-23 and shows its popups on the
-desktop, so tell Omer before you start one, and run it after the review's
-fixes, because a later fix means running it again.
+rounds you name. It prints the round lines and the log path. It exits 0 when
+the run ended with exit 0, every named round started, and the run noticed each
+move. The rehearsals of 2026-10-23 took 8 to 14 minutes each (the rehearsal
+unit's journal), so run the script in the background with its output in a
+file. Its popups reach the desktop, so tell Omer before you start one. Run it
+after the review's fixes, because a later fix means running it again.
 
 A manual deploy exits 77 while an update holds the deploy lock, and the updater
 deploys `main` again on top of a generation you restored. To pause the updater
