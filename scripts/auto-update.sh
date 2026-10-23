@@ -35,6 +35,7 @@ unit_name=oruc-auto-update
 pr_title="chore(flake): update inputs to their newest releases"
 rehearsal=false
 title_prefix=
+body_suffix=
 if [[ ${AUTO_UPDATE_REHEARSAL:-} == 1 ]]; then
   rehearsal=true
   unit_name=oruc-auto-update-rehearsal
@@ -43,6 +44,8 @@ if [[ ${AUTO_UPDATE_REHEARSAL:-} == 1 ]]; then
   base_branch=auto-update-rehearsal-base
   main_branch=${AUTO_UPDATE_REHEARSAL_MAIN:-main}
   title_prefix="Rehearsal: "
+  # A body pasted without its title still shows that nothing changed.
+  body_suffix=$'\n'"Rehearsal: $(</proc/sys/kernel/hostname) was not changed."
 fi
 # Set once the rehearsal pushed its base branch, which on_exit deletes.
 base_pushed=false
@@ -79,7 +82,7 @@ notify() {
   local bus
   bus=/run/user/$(id -u)/bus
   [[ -S $bus ]] || return 1
-  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$title_prefix$2" "$3"
+  DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$title_prefix$2" "$3$body_suffix"
 }
 # fail TITLE BODY: the critical popup of a failed run. on_exit sends a generic
 # one for a failed exit that sent none, such as an unset variable under set -u,

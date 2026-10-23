@@ -15,6 +15,7 @@
 Agents run on nixos-desktop or on nixos-rog; `hostname` tells which. These scripts run Nix on a copy of this checkout on nixos-rog, over SSH from either host. [README.md](README.md#everyday-commands) lists every script you run by hand.
 
 - A PR that changes `pkgs/`, `overlays/`, `home-manager/modules/plasma-*.nix`, `scripts/auto-update.sh`, `machines/nixos-rog/auto-update.nix` or `.github/workflows/` gets a review of its final diff from an agent that did not write it, before `pr-land`.
+- A change to `scripts/auto-update.sh` also runs the two rehearsals in [Hourly updater](docs/nixos-rog.md#hourly-updater) once the review's fixes are in.
 - `nix fmt` runs `scripts/check-theme-drift.sh`, which fails on a fixed color in a tracked file. A color in new UI comes from `config.scheme` or `oruc.theme.ansi`; otherwise list the app under the fixed colors in [Theme](docs/architecture.md#theme).
 - Before a commit, run `scripts/check-on-rog.sh --fix`. It formats, then runs `ci/checks.sh`, the checks of CI's `check` job. CI's `hosts` and `unit-cycles` jobs run beside it; the script does not run them.
 - Print one configuration value with `scripts/eval-on-rog.sh [--json] <attribute>`. A bare attribute is a path under nixos-rog's `config`; a flake attribute with `#` reaches another host. A value that is not a string needs `--json`.

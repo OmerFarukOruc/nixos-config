@@ -124,7 +124,22 @@ update's moves happen again. It builds every system and runs the checks, but
 it activates nothing: a deployed tree that never reaches `main` would make every
 later deploy of `main` exit 78. It merges its PR into a throwaway branch,
 `auto-update-rehearsal-base`, which it deletes when it ends. It keeps its own
-state, and its notifications start with "Rehearsal:".
+state. Its notifications start with "Rehearsal:", and their text ends with
+"Rehearsal: nixos-rog was not changed."
+
+To test a change to `scripts/auto-update.sh`, run the rehearsal with that
+change while `main` moves, from the checkout that holds it, on nixos-rog:
+
+```sh
+scripts/rehearse-moving-main.sh 1      # main moves once; the run publishes in round 2
+scripts/rehearse-moving-main.sh 1 2 3  # main moves in every round; the run gives up in round 3
+```
+
+The script reads a test branch as `main` and moves it when the run logs the
+rounds you name. It prints the round lines and the log path, and exits 0 when
+the run succeeded. Each run took 8 to 14 minutes on 2026-10-23 and shows its popups on the
+desktop, so tell Omer before you start one, and run it after the review's
+fixes, because a later fix means running it again.
 
 A manual deploy exits 77 while an update holds the deploy lock, and the updater
 deploys `main` again on top of a generation you restored. To pause the updater
