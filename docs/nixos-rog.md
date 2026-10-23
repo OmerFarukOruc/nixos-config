@@ -405,13 +405,14 @@ shells of idle sessions. That day `nix flake check` of this flake peaked at
 
 ## Power and heat
 
-Six services share the laptop's power settings. Each setting has one owner:
+Seven services share the laptop's power settings. Each setting has one owner:
 
 | Setting | Set in | Applied by |
 |---|---|---|
 | power profile, EPP, CPU boost | power-profiles-daemon's own profile rules; `nixosModules/peripherals.nix` only enables it | power-profiles-daemon |
 | power limits, NVIDIA limits, fan curves | `machines/nixos-rog/asus.nix`, `machines/nixos-rog/fan-curves.json` | asusd, on each profile change |
 | CPU temperature limit, top clock | `machines/nixos-rog/cpu-limits.nix` | `oruc-cpu-limits` |
+| power profile picked in ROG Control Center or `asusctl profile set` | `machines/nixos-rog/profile-sync.nix` | `oruc-profile-sync`, which sets it in power-profiles-daemon |
 | power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
 | battery charge limit (80%) | `machines/nixos-rog/asus.nix` | asusd, when it starts |
 | NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
