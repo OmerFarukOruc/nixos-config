@@ -221,16 +221,13 @@ in
       configFile.kuriikwsfilterrc = lib.mkForce { };
 
       # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
-      # ROG laptop, as in the Noctalia and DMS sessions. Only a machine with a
-      # niri session runs power-profiles-daemon (nixosModules/peripherals.nix),
-      # so only it gets the switch.
-      shortcuts.org_kde_powerdevil.powerProfile =
-        lib.mkIf (sessions.hasDesktop osConfig.oruc.machine "niri")
-          [
-            "Battery"
-            "Meta+B"
-            "Launch (4)"
-          ];
+      # ROG laptop, as in the Noctalia and DMS sessions. Every machine runs
+      # power-profiles-daemon (nixosModules/peripherals.nix).
+      shortcuts.org_kde_powerdevil.powerProfile = [
+        "Battery"
+        "Meta+B"
+        "Launch (4)"
+      ];
 
       # plasma-manager writes powerdevilrc itself, so these files are written
       # here, not linked read-only from the store.
