@@ -385,7 +385,8 @@ if $main_only; then
   # needs no deploy. A failed build goes on to deploy.sh, whose failure records
   # the candidate, so the next runs wait for main to move.
   if new_system=$(build_system "$host") && [[ $new_system == "$(readlink -f /run/current-system)" ]]; then
-    echo "$base $new_system" >"$same"
+    # Only a skip of the next evaluation depends on it.
+    echo "$base $new_system" >"$same" || true
     echo "Everything is current."
     exit 0
   fi
