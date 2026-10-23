@@ -35,6 +35,8 @@
     [
       # keep-sorted start
       deskflow
+      # The dev shell and git hooks of a nixos-config checkout (devenv.nix).
+      devenv
       discord
       kdePackages.ark
       kdePackages.dolphin

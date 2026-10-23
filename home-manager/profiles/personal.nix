@@ -48,7 +48,6 @@ in
     ]
     ++ lib.optional hasNvidia cudaPackages.cudatoolkit
     ++ [
-      devenv
       fastfetch
       frida-tools
       gum

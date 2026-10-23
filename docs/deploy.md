@@ -75,8 +75,9 @@ before its own merge; a commit that does not build for another host therefore
 also fails the updater's next run with status 76. `devenv tasks run ci` builds
 them all before a push.
 
-The gate exists only where the devenv shell loaded. A clone that never loaded
-it has no hooks, and on nixos-rog `heavy` fails without a user session bus,
+The gate exists only where the devenv shell loaded. Every host installs
+devenv, and direnv fails in a checkout where it is missing. A clone that never
+ran `direnv allow` has no hooks, and on nixos-rog `heavy` fails without a user session bus,
 which fails the push hook. The hooks do not take the updater's build lock, so
 a push on nixos-rog can run beside an updater run.
 
