@@ -20,7 +20,8 @@ buildGoModule (finalAttrs: {
 
   env.CGO_ENABLED = 0;
 
-  # The flags of the upstream release build (.goreleaser.yaml).
+  # The upstream release build (.goreleaser.yaml) also sets main.commit and
+  # main.date, so `linctl --version` prints "unknown" for both.
   ldflags = [
     "-s"
     "-w"
