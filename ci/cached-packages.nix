@@ -20,6 +20,7 @@ let
     # pkgs/herdr.nix, until llm-agents packages its version; it leaves with that file.
     "herdr"
     "kwin-glass"
+    "linctl"
     # The dock's task manager, from the macOS Tahoe theme.
     "mac-tahoe-task-manager"
     # The login screen theme.
