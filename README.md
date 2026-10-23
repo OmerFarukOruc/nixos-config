@@ -100,7 +100,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   [`deploy.sh`](deploy.sh)
 - **🔄 A laptop that updates itself.** Every hour on AC power, nixos-rog moves its
   inputs and apps, waits for the caches to hold the expensive builds, deploys the
-  result to itself and squash-merges it to `main`. When nothing moved, it deploys
+  result to itself and merges it to `main`. When nothing moved, it deploys
   a newer `main` to itself.
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
   [`scripts/auto-update.sh`](scripts/auto-update.sh)

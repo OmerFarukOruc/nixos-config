@@ -49,11 +49,14 @@ steps:
    cover: `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
    build or a check fails, the update fails with status 76 and the log names
    the host or the check.
-6. It deploys the result to nixos-rog with `./deploy.sh nixos-rog switch`.
-7. It opens a PR from the `auto-update` branch and squash-merges it to `main`
-   at once. The PR body holds dix's comparison of the old and new system.
-   GitHub skips the PR's checks and runs `check`, `hosts`, `unit-cycles` and
-   the host-packages-cache build on the push to `main`; GitHub emails a failed
+6. It builds nixos-rog's system, then deploys it with
+   `./deploy.sh nixos-rog switch`.
+7. It opens a PR from the `auto-update` branch and merges it at once with a
+   fast-forward push of the deployed commit to `main`. GitHub refuses that
+   push when `main` moved, so `main` gets only a tree that nixos-rog built and
+   runs. The PR body holds dix's comparison of the old and new system. GitHub
+   skips the PR's checks and runs `check`, `hosts`, `unit-cycles` and the
+   host-packages-cache build on the push to `main`; GitHub emails a failed
    run.
 
 The updater deploys no other host, but it builds every host, so a build failure
@@ -63,9 +66,9 @@ from `upgrade` on the host or from a manual `./deploy.sh <host> switch`
 
 A desktop notification reports each update or failure.
 
-The run holds the build lock that [PR builds](#pr-builds) also take, from the
-checkout of `main` until it ends. When a PR build holds the lock
-for 30 minutes, the run stops quietly and the next run tries again.
+The run holds the build lock that [PR builds](#pr-builds) also take, from
+before it reads `main` until it ends. When a PR build holds the lock for 30
+minutes, the run stops quietly and the next run tries again.
 
 A change merged to `main` reaches nixos-rog with the next run of the updater,
 or with a manual `./deploy.sh nixos-rog switch`.
@@ -81,8 +84,21 @@ When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet, or the run cannot tell, llm-agents stays where it is. So the
 laptop does not compile an agent at full load. The next run tries again.
 
-If `main` moves during the build, the host keeps the update. The next run
-merges it on top of the new `main`.
+Coding agents merge and deploy while the updater runs. When `main` moves
+before the switch, or before the push to `main`, the run starts a new round:
+it resets to the new `main` and repeats steps 1 to 7. When another deploy
+holds nixos-rog's deploy lock (77) or its rollback timer is pending (70), the
+run deploys again every 60 seconds; when `main` moved in the meantime, it
+starts a new round instead. A run has at most 3 rounds. It starts no round and
+no deploy retry after it has held the build lock for 20 minutes, because PR
+builds wait at most an hour for that lock. A round that already started runs
+to its end. Each round logs "Round N starts on main at <commit>".
+
+When the bounds run out before the switch, the run leaves nixos-rog as it was
+and shows "Update not applied". When they run out after a switch, nixos-rog
+runs an update that `main` lacks, and the run shows "Update published
+nowhere". A deploy of `main` from another checkout then exits 78 until a later
+run publishes the update, or until you deploy `main` with `--replace`.
 
 A switch leaves the desktop shell, the keyring and other user services on their
 old version. `home-manager/README.md` lists them.
@@ -227,11 +243,12 @@ The exit codes below come from `deploy.sh`, except 76. The
 | --- | --- | --- |
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
-| The deploy fails with 70, 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical |
-| Any other step of the script fails, such as a Nix evaluation, `git push`, `gh pr merge` after 3 tries or an unset variable | The next run tries again. When `gh pr merge` failed, nixos-rog keeps running the update until then. | Critical, once per run |
+| Another deploy's rollback timer stays pending (70) past the run's 20 minutes, or the deploy fails with 71, 74 or 79 | The next run tries the same update again. | Critical |
+| The deploy fails with another status, another host does not evaluate or build, or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. | Critical, and "Update published nowhere" when an update, not `main`, fails with 73, which leaves it running |
+| Any other step of the script fails, such as a Nix evaluation, `git push` after 3 tries or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" when nixos-rog runs the update |
 | A PR build holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
-| Another deploy holds the lock (77) | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
+| Another deploy holds the lock (77) past the run's 20 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
+| `main` moves in each of the run's rounds | The run stops without a failure. The next run tries again. | "Update not applied", or "Update published nowhere" after a switch |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 3 hours | The service stops the run (`TimeoutStartSec`). | Critical |
 | The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
@@ -243,7 +260,7 @@ expired or was revoked, or the account lost access to the repository.
 A stop during `deploy.sh` leaves the rollback timer armed. The timer restores
 the previous system when it fires, at most 420 seconds after the deploy armed
 it. The stopped run records no failed update, so the next run tries it again.
-That run exits 70 if the rollback has not fired yet.
+That run waits for the rollback to fire, then deploys.
 
 Some messages would repeat every hour, such as a failed app check or a build
 that fails. The updater sends such a message once. It counts the message as

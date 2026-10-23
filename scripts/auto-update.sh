@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs on nixos-rog from oruc-auto-update.service. Moves the flake inputs and
 # every app in pkgs/ that names a release source to their newest release,
-# deploys the result to this host with deploy.sh, and squash-merges it to main.
+# deploys the result to this host with deploy.sh, and publishes the commit it
+# deployed to main with a fast-forward push through a PR.
 # The kernel and llm-agents move only while a cache holds the builds they need.
 # Every other host must build here first, and the checks of check.yml must pass
 # here; the run deploys to no other host.
@@ -9,21 +10,27 @@
 # (see below).
 # When nothing moves and this host runs a system other than main's, the run
 # deploys main to this host and merges nothing.
+# When main moves before the switch or before the push, the run starts a new
+# round on the new main, within the bounds at max_rounds below.
 # A candidate that fails another host's build, a check, this host's build or
 # the activation is not tried again until main or an upstream moves. The run
-# retries after this host's deploy.sh status 70, 71, 74, 77, 78 or 79, which are
-# not the candidate's fault.
+# waits and deploys again after this host's deploy.sh status 70 or 77, and
+# retries in the next run after 71, 74, 78 or 79; none is the candidate's fault.
 # With AUTO_UPDATE_REHEARSAL=1 (oruc-auto-update-rehearsal.service, `upgrade
 # --rehearse`) the run starts from main with the flake.lock of before the newest
 # update, so that update's moves happen again. It builds this host's system
 # instead of deploying it, and merges into a throwaway base branch, because a
 # deployed tree that never reaches main makes later deploys of main exit 78.
+# AUTO_UPDATE_REHEARSAL_MAIN names a branch the rehearsal reads in place of
+# main, so a test can move it during a run.
 # -E lets the ERR trap below fire inside functions too.
 set -Eeuo pipefail
 
 repo=OmerFarukOruc/nixos-config
 branch=auto-update
 base_branch=main
+# The branch whose movement starts a new round.
+main_branch=main
 unit_name=oruc-auto-update
 pr_title="chore(flake): update inputs to their newest releases"
 rehearsal=false
@@ -34,10 +41,14 @@ if [[ ${AUTO_UPDATE_REHEARSAL:-} == 1 ]]; then
   pr_title="chore(flake): rehearse an update of the inputs"
   branch=auto-update-rehearsal
   base_branch=auto-update-rehearsal-base
+  main_branch=${AUTO_UPDATE_REHEARSAL_MAIN:-main}
   title_prefix="Rehearsal: "
 fi
 # Set once the rehearsal pushed its base branch, which on_exit deletes.
 base_pushed=false
+# True while this host runs an update that this run deployed and has not
+# published yet.
+unpublished=false
 host=$(</proc/sys/kernel/hostname)
 dir=$STATE_DIRECTORY/repo
 failed=$STATE_DIRECTORY/failed-candidate
@@ -51,6 +62,10 @@ same=$STATE_DIRECTORY/same-system
 # The personal Git config pushes over SSH and signs with an agent key; the
 # service has neither.
 export GIT_CONFIG_GLOBAL=/dev/null
+# git's automatic gc and maintenance run in the foreground, because a detached
+# one would inherit the build lock below and hold it after the run.
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=gc.autoDetach GIT_CONFIG_VALUE_0=false \
+  GIT_CONFIG_KEY_1=maintenance.autoDetach GIT_CONFIG_VALUE_1=false
 export GIT_AUTHOR_NAME="$host auto-update" GIT_AUTHOR_EMAIL="auto-update@$host"
 export GIT_COMMITTER_NAME=$GIT_AUTHOR_NAME GIT_COMMITTER_EMAIL=$GIT_AUTHOR_EMAIL
 
@@ -79,6 +94,9 @@ on_exit() {
   local status=$?
   if ((status != 0)) && ! $reported; then
     notify critical "Update failed" "Exit $status. See: journalctl -u $unit_name" || true
+  fi
+  if $unpublished; then
+    notify normal "Update published nowhere" "$host runs an update that main lacks, so a deploy of main from another checkout can exit 78 until main gets it. To drop the update, deploy main with --replace. See: journalctl -u $unit_name" || true
   fi
   [[ -z $held ]] || rm -rf -- "$held" || true
   if $base_pushed; then
@@ -136,29 +154,11 @@ push() {
     return 1
   fi
 }
-if [[ ! -d $dir/.git ]]; then
-  git "${git_auth[@]}" clone --quiet "https://github.com/$repo.git" "$dir" || remote_failed clone
-fi
-cd "$dir"
-git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
-base=$(git rev-parse origin/main)
-git checkout --quiet --force -B "$branch" "$base"
-git clean -fdxq
-if $rehearsal; then
-  last=$(git log -1 --format=%H --grep='^chore(flake): update inputs' "$base" -- flake.lock)
-  if [[ -z $last ]]; then
-    echo "main holds no update commit that changed flake.lock, so the rehearsal has no older lock to start from." >&2
-    false
-  fi
-  git checkout --quiet "$last^" -- flake.lock
-  git commit --quiet -m "chore(flake): rehearsal base with the flake.lock of before ${last:0:7}"
-  base=$(git rev-parse HEAD)
-  base_pushed=true
-  push "HEAD:refs/heads/$base_branch"
-fi
 
 # The host-systems-build check (scripts/pr-build.sh) takes the same lock, so a
-# PR build and this run never evaluate or build at once.
+# PR build and this run never evaluate or build at once. The run takes it before
+# it reads main, because main often moves while it waits: a PR build that ends
+# frees the lock, and its PR merges seconds later.
 exec {build_lock}>>/run/nixos-config-build.lock
 if ! flock -w 1800 "$build_lock"; then
   echo "A PR build or the other updater unit has held the build lock for 30 min; the next run tries again."
@@ -172,6 +172,52 @@ fi
 if [[ -f $waiting && $(<"$waiting") == lock ]]; then
   rm -f -- "$waiting"
 fi
+locked_at=$SECONDS
+
+if [[ ! -d $dir/.git ]]; then
+  git "${git_auth[@]}" clone --quiet "https://github.com/$repo.git" "$dir" || remote_failed clone
+fi
+cd "$dir"
+
+# fetch_main: updates origin/$main_branch. A second and third try cover a
+# network blip after the switch, where a quiet exit would hide the update.
+fetch_main() {
+  local attempt
+  for attempt in 1 2 3; do
+    git "${git_auth[@]}" fetch --quiet origin "$main_branch" && return 0
+    ((attempt == 3)) || sleep 10
+  done
+  remote_failed fetch
+}
+
+# main_moved: succeeds when main is no longer at the commit this round started
+# from.
+main_moved() {
+  fetch_main
+  [[ $(git rev-parse "origin/$main_branch") != "$main" ]]
+}
+
+# A run starts a new round on the new main when main moves before its switch
+# or before its push, at most max_rounds in all. No round and no deploy retry
+# starts after the run has held the build lock for admit_seconds, because PR
+# builds wait at most 60 min for it (scripts/pr-build.sh). A round that started
+# runs to its end, so the hold can reach admit_seconds plus one round. Of 119
+# runs in the journal (2026-10-16 to 2026-10-23), the longest took 19 min and
+# the slowest deploy 659 s, so the hold stays below that hour.
+max_rounds=3
+admit_seconds=$((20 * 60))
+may_go_on() { ((SECONDS - locked_at < admit_seconds)); }
+may_start_round() { ((round < max_rounds)) && may_go_on; }
+
+# give_up WHEN: main moved WHEN in the last round the bounds allow.
+give_up() {
+  echo "main moved $1 in round $round, and the bounds allow no further round; the next run tries again."
+  # on_exit reports an update this host runs unpublished.
+  if ! $unpublished; then
+    notify normal "Update not applied" "${changes:+$changes$'\n'}main kept moving during $round rounds, so this run left $host as it was. The next run tries again." || true
+  fi
+  exit 0
+}
 
 # Prints the coding agents this host would compile itself because
 # cache.numtide.com does not hold their new build yet, or "unknown" when it
@@ -254,250 +300,323 @@ packages_cached() {
   done <<<"$paths"
 }
 
+held=$(mktemp -d)
+# Each release restores the hold of the same round, since an older one would
+# put back the flake files of an older main.
+hold() { cp flake.nix flake.lock "$held/"; }
+release() { cp "$held/flake.nix" "$held/flake.lock" .; }
+
 # The inputs the packages of ci/cached-packages.nix come from. They move below,
 # once the cache holds those packages. The Glass inputs are pinned to a
 # commit, so they never move here.
 cached_from=(nixpkgs dms sops-nix)
-tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
-# The kernel input moves only through update-kernel.sh, which first checks
-# that the kernel cache holds the new build.
-scripts/update-kernel.sh || echo "The kernel input stays where it is."
-
-held=$(mktemp -d)
-hold() { cp flake.nix flake.lock "$held/"; }
-release() { cp "$held/flake.nix" "$held/flake.lock" .; }
-
-# A new nixpkgs or DMS release needs new builds of the packages in
-# ci/cached-packages.nix, which would compile here at full load. Their inputs
-# wait for the cache, but for a day at most, so one broken build cannot hold
-# back every other package's fixes.
-since=$STATE_DIRECTORY/packages-held-since
-hold
-cached_tags=$(scripts/move-inputs.sh "${cached_from[@]}")
-if cmp -s flake.lock "$held/flake.lock"; then
-  :
-elif packages_cached; then
-  rm -f -- "$since" "$since.notified"
-  [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
-else
-  [[ -f $since && $(<"$since") =~ ^[0-9]+$ ]] || date +%s >"$since"
-  if (($(date +%s) - $(<"$since") < 86400)); then
-    echo "The cache lacks builds for the new ${cached_from[*]}; they stay where they are."
-    release
-  else
-    echo "Builds have been missing from the cache for a day; ${cached_from[*]} move and this host compiles them."
-    if [[ ! -f $since.notified ]]; then
-      notify normal "Builds not in the cache" "nixpkgs waited a day for the host-packages-cache builds. Updates compile them on the laptop until that workflow works again." &&
-        touch "$since.notified"
-    fi
-    [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
-  fi
-fi
-
-# llm-agents moves only while cache.numtide.com holds every coding agent of its
-# new revision. Unlike the inputs above, it has no day limit.
-hold
-nix flake update llm-agents
-if ! cmp -s flake.lock "$held/flake.lock"; then
-  uncached=$(uncached_agents)
-  if [[ -n $uncached ]]; then
-    echo "cache.numtide.com lacks: ${uncached//$'\n'/ }. llm-agents stays where it is."
-    release
-  fi
-fi
-apps=
-# Every app in pkgs/ that update-app.sh can move. A new
-# version joins the candidate only once it builds on its own, so one broken app
-# release never holds back the inputs and the other apps.
-while read -r file; do
-  app=$(basename "$file" .nix)
-  # update-app.sh names the problem on its last stderr line. The first run with
-  # a new problem notifies; a run that succeeds clears it.
-  failed_check=$STATE_DIRECTORY/check-failed-$app
-  if ! version=$(scripts/update-app.sh "$app" 2>"$failed_check.err"); then
-    cat "$failed_check.err"
-    reason=$(tail -n 1 "$failed_check.err")
-    reason=${reason:-update-app.sh failed without a message}
-    echo "$app stays where it is."
-    if [[ ! -f $failed_check || $(<"$failed_check") != "$reason" ]]; then
-      notify normal "$app update check failed" "$reason. $app stays where it is. See: journalctl -u $unit_name" &&
-        echo "$reason" >"$failed_check"
-    fi
-    continue
-  fi
-  rm -f -- "$failed_check" "$failed_check.err"
-  [[ -n $version ]] || continue
-  broken=$STATE_DIRECTORY/broken-$app
-  build_log=$STATE_DIRECTORY/build-$app.log
-  built=true
-  nix build --no-link --impure --expr \
-    "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" \
-    </dev/null 2>"$build_log" || built=false
-  cat "$build_log" >&2
-  if $built; then
-    rm -f -- "$broken" "$build_log"
-    apps+=$'\n'"- $app: $version"
-    continue
-  fi
-  git checkout -- "$file"
-  # shellcheck source=/dev/null
-  . scripts/lib/build-error.sh
-  reason=$(build_error "$build_log")
-  echo "$app $version does not build: ${reason:-no error line}. It stays where it is."
-  # Each run builds it again, since a fix on main or a failed download can
-  # clear the failure, but only the first failure of a version notifies.
-  [[ -f $broken && $(<"$broken") == "$version" ]] && continue
-  notify normal "$app update skipped" "$app $version does not build: ${reason:-no error line}. The other updates go ahead. See: journalctl -u $unit_name" &&
-    echo "$version" >"$broken"
-done < <(printf '%s\n' pkgs/*.nix)
-
-# Without a move, the run deploys main to this host unless the host runs a
-# clean release of it. Each commit on main passed its checks before it merged,
-# so the run skips the commit, the other hosts' builds and the checks, and
-# merges nothing.
-main_only=false
-if git diff --quiet; then
+# The system this host ran before the run, which the PR body compares with.
+old_system=$(readlink -f /run/current-system)
+round=0
+# Each round starts at the top of this loop with plain assignments, so no
+# value of an earlier round's tree carries over. It stays at the top level,
+# outside a function, because bash ignores set -e in a function called from a
+# condition.
+while :; do
+  round=$((round + 1))
+  changes=
+  fetch_main
+  main=$(git rev-parse "origin/$main_branch")
+  base=$main
+  echo "Round $round starts on $main_branch at ${main:0:12}."
+  git checkout --quiet --force -B "$branch" "$base"
+  git clean -fdxq
   if $rehearsal; then
-    echo "Everything is current."
-    exit 0
+    last=$(git log -1 --format=%H --grep='^chore(flake): update inputs' "$base" -- flake.lock)
+    if [[ -z $last ]]; then
+      echo "$main_branch holds no update commit that changed flake.lock, so the rehearsal has no older lock to start from." >&2
+      false
+    fi
+    git checkout --quiet "$last^" -- flake.lock
+    git commit --quiet -m "chore(flake): rehearsal base with the flake.lock of before ${last:0:7}"
+    base=$(git rev-parse HEAD)
+    base_pushed=true
+    push "HEAD:refs/heads/$base_branch"
   fi
-  # shellcheck source=/dev/null
-  . scripts/lib/running-revision.sh
-  if runs_tree_of "$base" ||
-    [[ -f $same && $(<"$same") == "$base $(readlink -f /run/current-system)" ]]; then
-    echo "Everything is current."
-    exit 0
-  fi
-  main_only=true
-fi
 
-candidate=$({
-  echo "$base"
-  git diff
-} | sha256sum)
-if [[ -f $failed && $(<"$failed") == "$candidate" ]]; then
-  echo "This candidate failed before; waiting for main or an upstream to move."
-  exit 0
-fi
+  tags=$(scripts/move-inputs.sh --except "${cached_from[@]}")
+  # The kernel input moves only through update-kernel.sh, which first checks
+  # that the kernel cache holds the new build.
+  scripts/update-kernel.sh || echo "The kernel input stays where it is."
 
-if $main_only; then
-  # A commit that leaves this host's system as it is, such as a docs change,
-  # needs no deploy. A failed build goes on to deploy.sh, whose failure records
-  # the candidate, so the next runs wait for main to move.
-  if new_system=$(build_system "$host") && [[ $new_system == "$(readlink -f /run/current-system)" ]]; then
-    # Only a skip of the next evaluation depends on it.
-    echo "$base $new_system" >"$same" || true
-    echo "Everything is current."
+  # A new nixpkgs or DMS release needs new builds of the packages in
+  # ci/cached-packages.nix, which would compile here at full load. Their inputs
+  # wait for the cache, but for a day at most, so one broken build cannot hold
+  # back every other package's fixes.
+  since=$STATE_DIRECTORY/packages-held-since
+  hold
+  cached_tags=$(scripts/move-inputs.sh "${cached_from[@]}")
+  if cmp -s flake.lock "$held/flake.lock"; then
+    :
+  elif packages_cached; then
+    rm -f -- "$since" "$since.notified"
+    [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
+  else
+    [[ -f $since && $(<"$since") =~ ^[0-9]+$ ]] || date +%s >"$since"
+    if (($(date +%s) - $(<"$since") < 86400)); then
+      echo "The cache lacks builds for the new ${cached_from[*]}; they stay where they are."
+      release
+    else
+      echo "Builds have been missing from the cache for a day; ${cached_from[*]} move and this host compiles them."
+      if [[ ! -f $since.notified ]]; then
+        notify normal "Builds not in the cache" "nixpkgs waited a day for the host-packages-cache builds. Updates compile them on the laptop until that workflow works again." &&
+          touch "$since.notified"
+      fi
+      [[ -n $cached_tags ]] && tags+=${tags:+$'\n'}$cached_tags
+    fi
+  fi
+
+  # llm-agents moves only while cache.numtide.com holds every coding agent of its
+  # new revision. Unlike the inputs above, it has no day limit.
+  hold
+  nix flake update llm-agents
+  if ! cmp -s flake.lock "$held/flake.lock"; then
+    uncached=$(uncached_agents)
+    if [[ -n $uncached ]]; then
+      echo "cache.numtide.com lacks: ${uncached//$'\n'/ }. llm-agents stays where it is."
+      release
+    fi
+  fi
+  apps=
+  # Every app in pkgs/ that update-app.sh can move. A new
+  # version joins the candidate only once it builds on its own, so one broken app
+  # release never holds back the inputs and the other apps.
+  while read -r file; do
+    app=$(basename "$file" .nix)
+    # update-app.sh names the problem on its last stderr line. The first run with
+    # a new problem notifies; a run that succeeds clears it.
+    failed_check=$STATE_DIRECTORY/check-failed-$app
+    if ! version=$(scripts/update-app.sh "$app" 2>"$failed_check.err"); then
+      cat "$failed_check.err"
+      reason=$(tail -n 1 "$failed_check.err")
+      reason=${reason:-update-app.sh failed without a message}
+      echo "$app stays where it is."
+      if [[ ! -f $failed_check || $(<"$failed_check") != "$reason" ]]; then
+        notify normal "$app update check failed" "$reason. $app stays where it is. See: journalctl -u $unit_name" &&
+          echo "$reason" >"$failed_check"
+      fi
+      continue
+    fi
+    rm -f -- "$failed_check" "$failed_check.err"
+    [[ -n $version ]] || continue
+    broken=$STATE_DIRECTORY/broken-$app
+    build_log=$STATE_DIRECTORY/build-$app.log
+    built=true
+    nix build --no-link --impure --expr \
+      "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" \
+      </dev/null 2>"$build_log" || built=false
+    cat "$build_log" >&2
+    if $built; then
+      rm -f -- "$broken" "$build_log"
+      apps+=$'\n'"- $app: $version"
+      continue
+    fi
+    git checkout -- "$file"
+    # shellcheck source=/dev/null
+    . scripts/lib/build-error.sh
+    reason=$(build_error "$build_log")
+    echo "$app $version does not build: ${reason:-no error line}. It stays where it is."
+    # Each run builds it again, since a fix on main or a failed download can
+    # clear the failure, but only the first failure of a version notifies.
+    [[ -f $broken && $(<"$broken") == "$version" ]] && continue
+    notify normal "$app update skipped" "$app $version does not build: ${reason:-no error line}. The other updates go ahead. See: journalctl -u $unit_name" &&
+      echo "$version" >"$broken"
+  done < <(printf '%s\n' pkgs/*.nix)
+
+  # Without a move, the run deploys main to this host unless the host runs a
+  # clean release of it. Each commit on main passed its checks before it merged,
+  # so the run skips the commit, the other hosts' builds and the checks, and
+  # merges nothing.
+  main_only=false
+  if git diff --quiet; then
+    if $rehearsal; then
+      echo "Everything is current."
+      exit 0
+    fi
+    # shellcheck source=/dev/null
+    . scripts/lib/running-revision.sh
+    if runs_tree_of "$base" ||
+      [[ -f $same && $(<"$same") == "$base $(readlink -f /run/current-system)" ]]; then
+      echo "Everything is current."
+      # main already holds what this host runs.
+      unpublished=false
+      exit 0
+    fi
+    main_only=true
+  fi
+
+  candidate=$({
+    echo "$base"
+    git diff
+  } | sha256sum)
+  if [[ -f $failed && $(<"$failed") == "$candidate" ]]; then
+    echo "This candidate failed before; waiting for main or an upstream to move."
     exit 0
   fi
-  echo "$host runs a system other than main's; deploying main at ${base:0:12}."
-else
-  # Inputs that moved to a new release tag are listed by version instead.
-  changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new flake.lock \
-    --arg tagged "$(cut -d: -f1 <<<"$tags")" '
+
+  if $main_only; then
+    # A commit that leaves this host's system as it is, such as a docs change,
+    # needs no deploy. A failed build goes on to deploy.sh, whose failure records
+    # the candidate, so the next runs wait for main to move.
+    if new_system=$(build_system "$host") && [[ $new_system == "$(readlink -f /run/current-system)" ]]; then
+      # Only a skip of the next evaluation depends on it.
+      echo "$base $new_system" >"$same" || true
+      echo "Everything is current."
+      unpublished=false
+      exit 0
+    fi
+    echo "$host runs a system other than main's; deploying main at ${base:0:12}."
+  else
+    # Inputs that moved to a new release tag are listed by version instead.
+    changes=$(jq -rn --slurpfile old <(git show "$base:flake.lock") --slurpfile new flake.lock \
+      --arg tagged "$(cut -d: -f1 <<<"$tags")" '
     ($tagged | split("\n")) as $skip
     | $new[0].nodes | to_entries[] | select(.value.locked.rev) | .key as $name
     | select($skip | index($name) | not)
     | ($old[0].nodes[$name].locked.rev // "none") as $from | .value.locked.rev as $to
     | select($from != $to) | "- \($name): \($from[0:7]) -> \($to[0:7])"')
-  [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
-  changes+=$apps
+    [[ -n $tags ]] && changes+=$'\n'"- ${tags//$'\n'/$'\n'- }"
+    changes+=$apps
 
-  git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
-fi
-
-old_system=$(readlink -f /run/current-system)
-status=0
-if ! $main_only; then
-  other_hosts_build || status=$?
-  if ((status == 0)); then
-    local_checks || status=$?
+    git commit --quiet -am "chore(flake): update inputs to their newest releases" -m "$changes"
   fi
-fi
-if ((status == 0)); then
-  if $rehearsal; then
-    new_system=$(build_system "$host") || status=$?
-  else
-    # main may have moved during the input update. Switching then would
-    # activate a commit the next run drops, because that run resets this
-    # branch to origin/main. A deploy of main itself stays on main.
-    if ! $main_only; then
-      git "${git_auth[@]}" fetch --quiet origin main || remote_failed fetch
-      if [[ $(git rev-parse origin/main) != "$base" ]]; then
-        notify normal "Update not applied" "$changes"$'\n'"main moved before the switch, so this run left $host as it was. The next run rebuilds on the new main." || true
-        exit 0
-      fi
+
+  status=0
+  if ! $main_only; then
+    other_hosts_build || status=$?
+    if ((status == 0)); then
+      local_checks || status=$?
     fi
-    ./deploy.sh "$host" switch || status=$?
+    # This host's own build comes before the check of main below, so that the
+    # deploy after it mostly activates and main has less time to move.
+    if ((status == 0)); then
+      new_system=$(build_system "$host") || status=$?
+    fi
+    # A switch to a tree that main has left behind would activate a commit that
+    # the push below refuses. A deploy of main itself stays on main.
+    if ((status == 0)) && main_moved; then
+      if may_start_round; then
+        echo "main moved before the switch; a new round starts."
+        continue
+      fi
+      give_up "before the switch"
+    fi
+  fi
+  if ((status == 0)) && ! $rehearsal; then
+    # 77 is another deploy to this host and 70 the pending rollback timer of one.
+    # Neither changed this host, so the run waits and deploys again. The run
+    # checks the timer itself first, because deploy.sh finds it only after it
+    # uploaded a release.
+    while :; do
+      status=0
+      if systemctl is-active --quiet deploy-rollback.timer; then
+        echo "A rollback timer from another deploy is pending."
+        status=70
+      else
+        ./deploy.sh "$host" switch || status=$?
+      fi
+      # A 78 right after the check of main can come from a newer main that
+      # another checkout deployed.
+      if ((status == 78)) && may_start_round && main_moved; then
+        echo "main moved and deploy.sh found its release; a new round starts."
+        continue 2
+      fi
+      if ((status != 70 && status != 77)) || ! may_go_on; then
+        break
+      fi
+      echo "deploy.sh cannot deploy now (status $status); trying again in 60 s."
+      sleep 60
+      # The other deploy may have installed a newer main. This tree lacks its
+      # files, so deploy.sh would exit 78.
+      if main_moved; then
+        if may_start_round; then
+          echo "main moved while the deploy waited; a new round starts."
+          continue 2
+        fi
+        give_up "while the deploy waited"
+      fi
+    done
     new_system=$(readlink -f /run/current-system)
   fi
-fi
-if ((status == 77 || status == 78)); then
-  # 77 is another deploy to this host and 78 a running release whose files main
-  # lacks. Neither is the candidate's fault, so the next run tries again. 78
-  # notifies on the first run it holds back; 77 only when it holds back a second
-  # run in a row, because a deploy that holds the lock an hour later is stuck.
-  # A 78 notification that was not delivered leaves no record, so the next run
-  # sends it; a 77 run keeps its record, so the next run sends it again.
-  previous=
-  [[ -f $waiting ]] && previous=$(<"$waiting")
-  record=$status
-  if ((status == 78)) && [[ $previous != 78 ]]; then
-    notify normal "Update waiting" "$host runs a release with changes main lacks. Merge them, or deploy main with --replace. See: journalctl -u $unit_name" || record=
-  elif ((status == 77)) && [[ $previous == 77 ]]; then
-    notify normal "Update waiting" "Another deploy has held $host's deploy lock since the last run. See: journalctl -u $unit_name" || true
+  if ((status == 77 || status == 78)); then
+    # 77 is another deploy to this host and 78 a running release whose files main
+    # lacks. Neither is the candidate's fault, so the next run tries again. 78
+    # notifies on the first run it holds back; 77 only when it holds back a second
+    # run in a row, because a deploy that holds the lock an hour later is stuck.
+    # A 78 notification that was not delivered leaves no record, so the next run
+    # sends it; a 77 run keeps its record, so the next run sends it again.
+    previous=
+    [[ -f $waiting ]] && previous=$(<"$waiting")
+    record=$status
+    if ((status == 78)) && [[ $previous != 78 ]]; then
+      notify normal "Update waiting" "$host runs a release with changes main lacks. Merge them, or deploy main with --replace. See: journalctl -u $unit_name" || record=
+    elif ((status == 77)) && [[ $previous == 77 ]]; then
+      notify normal "Update waiting" "Another deploy has held $host's deploy lock since the last run. See: journalctl -u $unit_name" || true
+    fi
+    if [[ -n $record ]]; then
+      echo "$record" >"$waiting"
+    else
+      rm -f -- "$waiting"
+    fi
+    exit 0
   fi
-  if [[ -n $record ]]; then
-    echo "$record" >"$waiting"
-  else
-    rm -f -- "$waiting"
+  if ((status != 0)); then
+    # 70 is a pending rollback timer from another deploy, 71 a rollback timer
+    # that could not be armed, 74 a full ESP and 79 an unmounted /boot; none is
+    # the candidate's fault, so the next run tries it again.
+    if ((status != 70 && status != 71 && status != 74 && status != 79)); then
+      echo "$candidate" >"$failed"
+    fi
+    # 73 is a switch whose boot entries failed, so the host runs what it
+    # deployed.
+    if ((status == 73)); then
+      if $main_only; then unpublished=false; else unpublished=true; fi
+    fi
+    fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
+    exit 1
   fi
-  exit 0
-fi
-if ((status != 0)); then
-  # 70 is a pending rollback timer from another deploy, 71 a rollback timer
-  # that could not be armed, 74 a full ESP and 79 an unmounted /boot; none is
-  # the candidate's fault, so the next run tries it again.
-  if ((status != 70 && status != 71 && status != 74 && status != 79)); then
-    echo "$candidate" >"$failed"
+  rm -f -- "$failed" "$waiting"
+  if $main_only; then
+    unpublished=false
+    notify normal "System updated" "$host now runs main at ${base:0:12}." || true
+    exit 0
   fi
-  fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
-  exit 1
-fi
-rm -f -- "$failed" "$waiting"
-if $main_only; then
-  notify normal "System updated" "$host now runs main at ${base:0:12}." || true
-  exit 0
-fi
+  $rehearsal || unpublished=true
 
-# deploy.sh copies back a lock that the build completed; keep it in the commit.
-if ! git diff --quiet; then
-  git commit --quiet --amend --no-edit -a
-fi
+  # deploy.sh copies back a lock that the build completed; keep it in the commit.
+  if ! git diff --quiet; then
+    git commit --quiet --amend --no-edit -a
+  fi
 
-# Merge only what this host built. If main moved during the switch, this
-# commit stays unpublished and the next run rebuilds on the new main. The
-# race that remains is main moving during deploy.sh itself.
-git "${git_auth[@]}" fetch --quiet origin main
-if ! $rehearsal && [[ $(git rev-parse origin/main) != "$base" ]]; then
-  notify normal "Update published nowhere" "$changes"$'\n'"main moved during the switch. $host is on this update, and the commit was not published. The next run rebuilds on the new main. A deploy of that main from another checkout can exit 78 until then." || true
-  exit 0
-fi
+  # When main moved during the switch, a new round builds the update on the new
+  # main and switches to that, so main only gets a tree this host runs.
+  if main_moved; then
+    if may_start_round; then
+      echo "main moved during the switch; a new round starts."
+      continue
+    fi
+    give_up "during the switch"
+  fi
 
-push "$branch"
-# GitHub caps a PR body at 65536 characters.
-system_diff=$(dix --color never "$old_system" "$new_system" 2>&1) ||
-  system_diff="dix could not compare the systems."
-if ((${#system_diff} > 50000)); then
-  system_diff="${system_diff:0:50000}
+  push "$branch"
+  # GitHub caps a PR body at 65536 characters.
+  system_diff=$(dix --color never "$old_system" "$new_system" 2>&1) ||
+    system_diff="dix could not compare the systems."
+  if ((${#system_diff} > 50000)); then
+    system_diff="${system_diff:0:50000}
 (cut at 50000 characters)"
-fi
-if $rehearsal; then
-  done_text="built this update in a rehearsal and activated nothing."
-else
-  done_text="built and switched to this update."
-fi
-body="$host $done_text
+  fi
+  if $rehearsal; then
+    done_text="built this update in a rehearsal and activated nothing."
+  else
+    done_text="built and switched to this update."
+  fi
+  body="$host $done_text
 
 $changes
 
@@ -507,25 +626,47 @@ $changes
 $system_diff
 \`\`\`
 </details>"
-gh pr create --repo "$repo" --base "$base_branch" --head "$branch" \
-  --title "$pr_title" --body "$body" ||
-  gh pr edit "$branch" --repo "$repo" --body "$body"
+  gh pr create --repo "$repo" --base "$base_branch" --head "$branch" \
+    --title "$pr_title" --body "$body" ||
+    gh pr edit "$branch" --repo "$repo" --body "$body"
 
-# The PR merges at once, since the checks above ran here; GitHub runs check,
-# hosts, unit-cycles and build again on main after the merge and emails a
-# failure.
-# GitHub can refuse a merge until it has computed the new PR's mergeability. A
-# try that merged on GitHub but failed afterwards, such as in the local branch
-# cleanup, counts as merged.
-pr=$(gh pr view "$branch" --repo "$repo" --json number --jq .number)
-merged=false
-for attempt in 1 2 3; do
-  if gh pr merge "$pr" --repo "$repo" --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)" ||
-    [[ $(gh pr view "$pr" --repo "$repo" --json state --jq .state) == MERGED ]]; then
-    merged=true
-    break
-  fi
-  ((attempt == 3)) || sleep 10
+  # The PR merges at once, since the checks above ran here; GitHub runs check,
+  # hosts, unit-cycles and build again on main after the merge and emails a
+  # failure. A fast-forward push of the commit this host runs merges it, and
+  # GitHub refuses that push when main moved after the check above, where a
+  # squash merge would land on the newer main as a tree no host built. GitHub
+  # marks a PR merged once its head commit is on the base branch, and then
+  # deletes the PR's branch, as the repository's settings ask.
+  # A push that fails while main stays put, such as a server error, is tried
+  # again. A push whose answer got lost can have landed, so the run first
+  # checks whether main holds the commit.
+  pushed=false
+  for attempt in 1 2 3; do
+    if push_output=$(git "${git_auth[@]}" push --quiet origin "HEAD:refs/heads/$base_branch" 2>&1); then
+      pushed=true
+      break
+    fi
+    printf '%s\n' "$push_output" >&2
+    moved=false
+    main_moved && moved=true
+    if [[ $base_branch != "$main_branch" ]]; then
+      git "${git_auth[@]}" fetch --quiet origin "$base_branch" || true
+    fi
+    if git merge-base --is-ancestor HEAD "origin/$base_branch"; then
+      pushed=true
+      break
+    fi
+    if $moved; then
+      if may_start_round; then
+        echo "main moved before the push; a new round starts."
+        continue 2
+      fi
+      give_up "before the push"
+    fi
+    ((attempt == 3)) || sleep 10
+  done
+  $pushed
+  unpublished=false
+  notify normal "System updated" "$changes" || true
+  exit 0
 done
-$merged
-notify normal "System updated" "$changes" || true
