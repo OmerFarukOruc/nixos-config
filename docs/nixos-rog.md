@@ -348,9 +348,16 @@ evaluation of this flake on nixos-rog or nixos-desktop as `heavy nix ...`. The c
 
 On 2026-10-16, Nix evaluations from several agents at once filled the 30 GiB:
 the kernel failed a page allocation, and Claude Code stopped the background
-shells of idle sessions. In the updater rehearsal on 2026-10-24, the combined
-`nix flake check` exceeded heavy's slowdown in samples of its cgroup's
-`memory.current`. `ci/checks.sh` checks each host's derivation type and
+shells of idle sessions.
+
+On 2026-10-24, measurements under `heavy` used each scope's `memory.peak`.
+With the combined `nix flake check`, `ci/checks.sh` peaked at 10.0 GiB.
+`MemoryHigh` held it there, with 181 `high` events in `memory.events` and about
+0.4 GB of swap in `memory.swap.peak`. With one evaluation per host,
+`ci/checks.sh` peaked at 8.5 GiB. `ci/unit-cycles.sh` peaked at 4.9 GiB with one
+host at a time. `devenv test` peaked at 8.8 GiB.
+
+`ci/checks.sh` checks each host's derivation type and
 `drvPath` in a separate process, so the evaluator releases its heap between
 hosts. `nix fmt` checks the formatter; the output gate rejects new output kinds
 or formatter systems until their coverage is added. `ci/unit-cycles.sh` also

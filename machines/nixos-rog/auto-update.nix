@@ -65,8 +65,9 @@ let
       # Slows the run above 12 GiB and never kills it, so the script's traps
       # still report. A MemoryMax kill would skip them. A rehearsal under a
       # 20 GiB limit peaked at 10.4 GiB (memory.peak, 2026-10-24). Samples
-      # each second put the peak in the `nix flake check` of ci/checks.sh,
-      # which evaluates every host in one process. Each of the 6 runs that
+      # each second put the peak in a combined `nix flake check` of every
+      # host. ci/checks.sh uses one evaluation per host instead (8.5 GiB under
+      # heavy, memory.peak, 2026-10-24). Each of the 6 runs that
       # reached a 10 GiB limit swapped 0.3 to 1.3 GiB (journal, 2026-10-23
       # and 2026-10-24).
       MemoryHigh = "12G";
