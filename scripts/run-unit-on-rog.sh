@@ -186,6 +186,11 @@ shell=$(jq -r .shell <<<"$spec")
 name=run-unit-on-rog-$2-$$
 echo "running $2 as root for up to $3 s; it acts on this laptop" >&2
 status=0
+# The unit runs outside this script's processes, so a stopped
+# run-unit-on-rog.sh, which sends TERM to them again and again (rog_stop in
+# scripts/lib/rog-copy.sh), stops it here, with TERM ignored so that
+# systemctl finishes.
+trap 'trap "" TERM; sudo -n systemctl stop "$name.service" 2>/dev/null || true; exit 143' TERM
 sudo -n systemd-run --quiet --pipe --wait --unit="$name" -p RuntimeMaxSec="$3" \
   "${setenv[@]}" "$shell" -e "$script" </dev/null || status=$?
 if ((status == 0)); then
