@@ -8,6 +8,10 @@
 # shellcheck source=/dev/null
 . scripts/lib/rog-host.sh
 ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
+# A local run starts without the caller's Git variables, as an SSH login does.
+# A git hook exports GIT_DIR and GIT_INDEX_FILE, and with them the copy's
+# git add would write to the caller's index.
+ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_DIR)
 ROG_COPY=
 
 # rog_remote [ARG...] < SCRIPT: runs SCRIPT on the host in bash, with the
@@ -23,9 +27,9 @@ rog_remote() {
   local args
   if ((ROG_LOCAL)); then
     if command -v heavy >/dev/null; then
-      heavy bash -s -- "$ROG_COPY" "$@"
+      "${ROG_LOCAL_ENV[@]}" heavy bash -s -- "$ROG_COPY" "$@"
     else
-      bash -s -- "$ROG_COPY" "$@"
+      "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
     fi
     return
   fi
@@ -36,7 +40,7 @@ rog_remote() {
 
 rog_remote_light() {
   if ((ROG_LOCAL)); then
-    bash -s -- "$ROG_COPY" "$@"
+    "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
     return
   fi
   "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
@@ -65,7 +69,7 @@ rog_copy_open() {
   fi
   # The trap below removes the copy, so it must be exactly the new directory.
   if [[ ! $ROG_COPY =~ ^/tmp/check-nixos-config\.[A-Za-z0-9]{8}$ ]]; then
-    echo "mktemp on $ROG_HOST printed an unexpected path: $ROG_COPY" >&2
+    echo "mktemp printed an unexpected path: $ROG_COPY" >&2
     exit 1
   fi
   # shellcheck disable=SC2016 # the remote bash expands $1

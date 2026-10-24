@@ -331,10 +331,12 @@ ssh).
 ## Heavy commands
 
 `heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog
-and nixos-desktop) runs a heavy command at nice 10, in a systemd user scope that the kernel slows above 10 GiB
-of memory and stops above 14 GiB or 4 GiB of swap. Commands never wait for
-each other. A `heavy` inside another one runs its command directly, and one
-reached over SSH, as in `scripts/lib/rog-copy.sh`, gets a scope of its own.
+and nixos-desktop) runs a heavy command at nice 10, in a systemd user scope
+that the kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of
+swap. Commands never wait for each other. A `heavy` inside another one runs its
+command directly, also when `scripts/lib/rog-copy.sh` runs on the same host.
+One reached over SSH, as in `scripts/lib/rog-copy.sh` on nixos-desktop, gets a
+scope of its own.
 `scripts/lib/rog-copy.sh` runs the Nix calls of the `*-on-rog.sh` scripts under
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too. The updater runs outside heavy; its

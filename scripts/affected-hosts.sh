@@ -11,8 +11,8 @@
 # whose merges they are), other (the host runs a release that is not an
 # ancestor of REV, one from a dirty tree, or one with no release record) or
 # unreachable.
-# REV defaults to origin/main and must be pushed, because nixos-rog evaluates
-# it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
+# REV defaults to origin/main and must be pushed, because the evaluating host
+# (nixos-rog, or nixos-desktop while nixos-rog is offline) reads it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
 # usage error.
 set -euo pipefail
 cd "$(dirname "$0")/.."

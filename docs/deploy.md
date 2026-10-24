@@ -77,8 +77,8 @@ them all before a push.
 
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
-ran `direnv allow` has no hooks, and on nixos-rog `heavy` fails without a user session bus,
-which fails the push hook. The hooks do not take the updater's build lock, so
+ran `direnv allow` has no hooks, and on nixos-rog and nixos-desktop `heavy`
+fails without a user session bus, which fails the push hook. The hooks do not take the updater's build lock, so
 a push on nixos-rog can run beside an updater run. Git holds the SSH
 connection to GitHub open while the pre-push hook runs, and GitHub closes it
 when it stays idle, so `home-manager/modules/git.nix` sends SSH keepalives.
@@ -204,9 +204,11 @@ uncommitted edits, and `--allow-dirty` would ship them.
 
 First find the hosts that the push affects. A push can carry several commits,
 so the script compares the system `drvPath` of every host at the pushed commit
-`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog, or
-nixos-desktop while nixos-rog is offline, evaluates both from GitHub, in 70 to 90 seconds (measured on 2026-10-15), so
-this step needs no worktree. From the main checkout, run:
+`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog
+evaluates both from GitHub in 70 to 90 seconds (measured on 2026-10-15), so
+this step needs no worktree. While nixos-rog is offline, nixos-desktop
+evaluates instead and is slower: one revision took about 160 seconds on
+2026-10-24. From the main checkout, run:
 
 ```sh
 git fetch origin
