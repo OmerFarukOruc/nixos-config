@@ -13,6 +13,40 @@ ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 # git add would write to the caller's index.
 ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_DIR)
 ROG_COPY=
+ROG_CHILD=
+
+# rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV in a process group of
+# its own and waits for it. A TERM, INT or HUP to the script stops that whole
+# group, Nix included, before the EXIT trap removes the copy; without it a
+# script stopped by PID, as by timeout, left its Nix process running. Ctrl-C
+# reaches the script only, because CMD's group is not the terminal's, so the
+# trap passes it on.
+rog_run_local() {
+  local rc=0
+  set -m
+  "${ROG_LOCAL_ENV[@]}" "$@" &
+  ROG_CHILD=$!
+  set +m
+  trap 'rog_stop_local TERM 143' TERM
+  trap 'rog_stop_local INT 130' INT
+  trap 'rog_stop_local HUP 129' HUP
+  wait "$ROG_CHILD" || rc=$?
+  trap - TERM INT HUP
+  ROG_CHILD=
+  return "$rc"
+}
+
+# rog_stop_local SIGNAL CODE: sends SIGNAL to the group rog_run_local started,
+# waits for it and exits CODE, which runs the EXIT trap.
+rog_stop_local() {
+  trap - TERM INT HUP
+  if [[ -n $ROG_CHILD ]]; then
+    kill -s "$1" -- "-$ROG_CHILD" 2>/dev/null || true
+    wait "$ROG_CHILD" 2>/dev/null || true
+    ROG_CHILD=
+  fi
+  exit "$2"
+}
 
 # rog_remote [ARG...] < SCRIPT: runs SCRIPT on the host in bash, with the
 # copy's path as $1 and each ARG after it. The host's login shell is zsh, so
@@ -27,9 +61,9 @@ rog_remote() {
   local args
   if ((ROG_LOCAL)); then
     if command -v heavy >/dev/null; then
-      "${ROG_LOCAL_ENV[@]}" heavy bash -s -- "$ROG_COPY" "$@"
+      rog_run_local heavy bash -s -- "$ROG_COPY" "$@"
     else
-      "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
+      rog_run_local bash -s -- "$ROG_COPY" "$@"
     fi
     return
   fi
@@ -40,7 +74,7 @@ rog_remote() {
 
 rog_remote_light() {
   if ((ROG_LOCAL)); then
-    "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
+    rog_run_local bash -s -- "$ROG_COPY" "$@"
     return
   fi
   "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
