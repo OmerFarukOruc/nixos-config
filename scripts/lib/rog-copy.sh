@@ -14,6 +14,7 @@ ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_DIR)
 ROG_COPY=
 ROG_CHILD=
+ROG_PARENT=
 
 # rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV and waits for it. A
 # TERM, INT, QUIT or HUP that reaches the script, even one sent to its PID
@@ -32,35 +33,106 @@ rog_run_local() {
   trap 'rog_stop_local 129' HUP
   # Bash gives a background command /dev/null as stdin unless it names one.
   "${ROG_LOCAL_ENV[@]}" "$@" <&0 &
-  ROG_CHILD=$!
+  ROG_CHILD=$! ROG_PARENT=$BASHPID
   wait "$ROG_CHILD" || rc=$?
   trap - TERM INT QUIT HUP
   ROG_CHILD=
   return "$rc"
 }
 
-# rog_tree PID: prints PID and the PID of every process below it.
+# rog_stat PID: sets ROG_STAT to the fields of /proc/PID/stat after the
+# command name, state first and parent PID second. The name sits in
+# parentheses and may hold spaces and parentheses itself.
+rog_stat() {
+  local stat
+  read -r stat 2>/dev/null <"/proc/$1/stat" || return 1
+  ROG_STAT=${stat##*) }
+}
+
+# rog_alive PID: says whether PID runs. A zombie does not; it waits only for
+# its parent to read its exit code.
+rog_alive() {
+  rog_stat "$1" && [[ ${ROG_STAT%% *} != Z ]]
+}
+
+# rog_tree PID: prints PID and the PID of every live process below it.
 rog_tree() {
   local child
+  rog_alive "$1" || return 0
   echo "$1"
   for child in $(ps -o pid= --ppid "$1"); do
     rog_tree "$child"
   done
 }
 
-# rog_stop_local CODE: sends TERM to the command rog_run_local started and to
-# every process below it, waits for it and exits CODE, which runs the EXIT
-# trap. It sends TERM whatever the signal was, because a background command
-# of a script ignores INT and QUIT.
+# rog_cgroup: prints the local command's cgroup when it differs from the
+# script's own, as under heavy's scope, and nothing otherwise. Bash may have
+# reaped the command already, and then its PID can belong to another process,
+# so the PID counts only while its parent is the shell that started it.
+rog_cgroup() {
+  local own child ppid
+  rog_stat "$ROG_CHILD" || return 0
+  read -r _ ppid _ <<<"$ROG_STAT"
+  [[ $ppid == "$ROG_PARENT" ]] || return 0
+  own=$(</proc/self/cgroup)
+  child=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || return 0
+  [[ $child == "$own" ]] || echo "${child#0::}"
+}
+
+# rog_procs CGROUP [PID...]: prints the PIDs of the local command's live
+# processes. With CGROUP, every process in it counts, also one forked after the
+# last look or re-parented after its parent ended. Without it, the walk from
+# the command counts, plus each PID given that still runs, so a process seen
+# once still counts after its parent ends.
+rog_procs() {
+  local cgroup=$1 pid
+  shift
+  if [[ -n $cgroup ]]; then
+    cat "/sys/fs/cgroup$cgroup/cgroup.procs" 2>/dev/null || true
+    return 0
+  fi
+  {
+    rog_tree "$ROG_CHILD"
+    for pid in "$@"; do
+      if rog_alive "$pid"; then echo "$pid"; fi
+    done
+  } | sort -u
+}
+
+# rog_stop_local CODE: sends TERM to every process of the command
+# rog_run_local started, again each ROG_STOP_STEP until none is left, then
+# KILL to what remains after ROG_STOP_STEPS steps. It waits for the command
+# and exits CODE, which runs the EXIT trap. It sends TERM whatever the signal
+# was, because a background command of a script ignores INT and QUIT. It
+# ignores a second signal, so the KILL step still runs; the stop takes
+# ROG_STOP_STEPS steps at most.
+ROG_STOP_STEP=0.1
+# A guess: Nix printed "interrupted by the user" and ended within 44 ms of TERM
+# on 2026-10-24, so 50 steps, about 5 s, leave it a wide margin.
+ROG_STOP_STEPS=50
 rog_stop_local() {
-  local pids
-  trap - TERM INT QUIT HUP
+  local cgroup='' pids=() step
+  trap '' TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
-    mapfile -t pids < <(rog_tree "$ROG_CHILD")
-    kill -s TERM "${pids[@]}" 2>/dev/null || true
+    for ((step = 0; step < ROG_STOP_STEPS; step++)); do
+      # A signal can come before heavy's systemd-run has moved the command
+      # into its scope, so look again each step. Once found, the cgroup
+      # stays, also after the command itself has ended.
+      [[ -n $cgroup ]] || cgroup=$(rog_cgroup)
+      mapfile -t pids < <(rog_procs "$cgroup" "${pids[@]}")
+      ((${#pids[@]})) || break
+      kill -s TERM "${pids[@]}" 2>/dev/null || true
+      read -rt "$ROG_STOP_STEP" <> <(:) || true
+    done
+    # cgroup.kill sends KILL to the whole cgroup at once, so a process that a
+    # TERM handler started after the last look goes too.
+    if ((${#pids[@]})) && ! { [[ -n $cgroup ]] && echo 1 >"/sys/fs/cgroup$cgroup/cgroup.kill"; } 2>/dev/null; then
+      kill -s KILL "${pids[@]}" 2>/dev/null || true
+    fi
     wait "$ROG_CHILD" 2>/dev/null || true
     ROG_CHILD=
   fi
+  trap - TERM INT QUIT HUP
   exit "$1"
 }
 
