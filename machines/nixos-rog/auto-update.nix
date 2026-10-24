@@ -112,7 +112,7 @@ in
   # The script's traps report a failed exit and the time limit. A run that ends
   # another way skips them, such as a kernel kill for memory (oom-kill, which
   # skips the TERM trap too) or a SIGKILL. This popup goes through
-  # systembus-notify, which machines/nixos-rog/monitoring.nix turns on.
+  # systembus-notify, which nixosModules/monitoring.nix turns on.
   systemd.services.oruc-auto-update-died = {
     description = "Desktop popup for an updater run that ended without reporting";
     serviceConfig.Type = "oneshot";
