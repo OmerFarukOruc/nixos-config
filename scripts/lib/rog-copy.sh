@@ -14,6 +14,7 @@ ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_DIR)
 ROG_COPY=
 ROG_CHILD=
+ROG_PARENT=
 
 # rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV and waits for it. A
 # TERM, INT, QUIT or HUP that reaches the script, even one sent to its PID
@@ -32,18 +33,26 @@ rog_run_local() {
   trap 'rog_stop_local 129' HUP
   # Bash gives a background command /dev/null as stdin unless it names one.
   "${ROG_LOCAL_ENV[@]}" "$@" <&0 &
-  ROG_CHILD=$!
+  ROG_CHILD=$! ROG_PARENT=$BASHPID
   wait "$ROG_CHILD" || rc=$?
   trap - TERM INT QUIT HUP
   ROG_CHILD=
   return "$rc"
 }
 
+# rog_stat PID: sets ROG_STAT to the fields of /proc/PID/stat after the
+# command name, state first and parent PID second. The name sits in
+# parentheses and may hold spaces and parentheses itself.
+rog_stat() {
+  local stat
+  read -r stat 2>/dev/null <"/proc/$1/stat" || return 1
+  ROG_STAT=${stat##*) }
+}
+
 # rog_alive PID: says whether PID runs. A zombie does not; it waits only for
 # its parent to read its exit code.
 rog_alive() {
-  local state
-  read -r _ _ state _ 2>/dev/null <"/proc/$1/stat" && [[ $state != Z ]]
+  rog_stat "$1" && [[ ${ROG_STAT%% *} != Z ]]
 }
 
 # rog_tree PID: prints PID and the PID of every live process below it.
@@ -57,9 +66,14 @@ rog_tree() {
 }
 
 # rog_cgroup: prints the local command's cgroup when it differs from the
-# script's own, as under heavy's scope, and nothing otherwise.
+# script's own, as under heavy's scope, and nothing otherwise. Bash may have
+# reaped the command already, and then its PID can belong to another process,
+# so the PID counts only while its parent is the shell that started it.
 rog_cgroup() {
-  local own child
+  local own child ppid
+  rog_stat "$ROG_CHILD" || return 0
+  read -r _ ppid _ <<<"$ROG_STAT"
+  [[ $ppid == "$ROG_PARENT" ]] || return 0
   own=$(</proc/self/cgroup)
   child=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || return 0
   [[ $child == "$own" ]] || echo "${child#0::}"
