@@ -21,8 +21,9 @@ ROG_CHILD=
 # included, before the EXIT trap removes the copy. Without this, `kill PID`
 # left Nix running. CMD runs in the background so that bash runs the trap
 # during `wait`; for a foreground command bash would hold the trap until Nix
-# ended. CMD stays in the script's process group, so Ctrl-Z, a terminal's
-# signals and a SIGKILL to the group reach it as they would in the foreground.
+# ended. CMD stays in the script's process group, so Ctrl-Z and a SIGKILL to
+# the group reach it as they would in the foreground. As a background command
+# CMD ignores INT and QUIT, so Ctrl-C and Ctrl-\ stop it through the trap.
 rog_run_local() {
   local rc=0
   trap 'rog_stop_local 143' TERM
