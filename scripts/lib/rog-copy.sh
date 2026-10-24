@@ -39,29 +39,50 @@ rog_run_local() {
   return "$rc"
 }
 
-# rog_tree PID: prints PID and the PID of every live process below it. A
-# zombie is left out; it waits only for its parent to read its exit code.
+# rog_alive PID: says whether PID runs. A zombie does not; it waits only for
+# its parent to read its exit code.
+rog_alive() {
+  local state
+  read -r _ _ state _ 2>/dev/null <"/proc/$1/stat" && [[ $state != Z ]]
+}
+
+# rog_tree PID: prints PID and the PID of every live process below it.
 rog_tree() {
-  local child state
-  read -r _ _ state _ 2>/dev/null <"/proc/$1/stat" || return 0
-  [[ $state == Z ]] && return 0
+  local child
+  rog_alive "$1" || return 0
   echo "$1"
   for child in $(ps -o pid= --ppid "$1"); do
     rog_tree "$child"
   done
 }
 
-# rog_procs CGROUP: prints the PIDs of the local command's live processes.
-# When CGROUP is set, the command runs in a cgroup of its own, as under heavy's
-# scope, and every process in it counts, also one forked after the last look
-# or re-parented after its parent ended. Without it, the walk from the command
-# finds only the processes still below it.
+# rog_cgroup: prints the local command's cgroup when it differs from the
+# script's own, as under heavy's scope, and nothing otherwise.
+rog_cgroup() {
+  local own child
+  own=$(</proc/self/cgroup)
+  child=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || return 0
+  [[ $child == "$own" ]] || echo "${child#0::}"
+}
+
+# rog_procs CGROUP [PID...]: prints the PIDs of the local command's live
+# processes. With CGROUP, every process in it counts, also one forked after the
+# last look or re-parented after its parent ended. Without it, the walk from
+# the command counts, plus each PID given that still runs, so a process seen
+# once still counts after its parent ends.
 rog_procs() {
-  if [[ -n $1 ]]; then
-    cat "/sys/fs/cgroup$1/cgroup.procs" 2>/dev/null || true
-  else
-    rog_tree "$ROG_CHILD"
+  local cgroup=$1 pid
+  shift
+  if [[ -n $cgroup ]]; then
+    cat "/sys/fs/cgroup$cgroup/cgroup.procs" 2>/dev/null || true
+    return 0
   fi
+  {
+    rog_tree "$ROG_CHILD"
+    for pid in "$@"; do
+      if rog_alive "$pid"; then echo "$pid"; fi
+    done
+  } | sort -u
 }
 
 # rog_stop_local CODE: sends TERM to every process of the command
@@ -76,15 +97,15 @@ ROG_STOP_STEP=0.1
 # on 2026-10-24, so 50 steps, about 5 s, leave it a wide margin.
 ROG_STOP_STEPS=50
 rog_stop_local() {
-  local cgroup='' own pids=() step
+  local cgroup='' pids=() step
   trap '' TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
-    own=$(</proc/self/cgroup)
-    cgroup=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || cgroup=
-    [[ $cgroup == "$own" ]] && cgroup=
-    cgroup=${cgroup#0::}
     for ((step = 0; step < ROG_STOP_STEPS; step++)); do
-      mapfile -t pids < <(rog_procs "$cgroup")
+      # A signal can come before heavy's systemd-run has moved the command
+      # into its scope, so look again each step. Once found, the cgroup
+      # stays, also after the command itself has ended.
+      [[ -n $cgroup ]] || cgroup=$(rog_cgroup)
+      mapfile -t pids < <(rog_procs "$cgroup" "${pids[@]}")
       ((${#pids[@]})) || break
       kill -s TERM "${pids[@]}" 2>/dev/null || true
       read -rt "$ROG_STOP_STEP" <> <(:) || true
