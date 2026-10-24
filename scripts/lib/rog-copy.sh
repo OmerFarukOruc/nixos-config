@@ -39,28 +39,65 @@ rog_run_local() {
   return "$rc"
 }
 
-# rog_tree PID: prints PID and the PID of every process below it.
+# rog_tree PID: prints PID and the PID of every live process below it. A
+# zombie is left out; it waits only for its parent to read its exit code.
 rog_tree() {
-  local child
+  local child state
+  read -r _ _ state _ 2>/dev/null <"/proc/$1/stat" || return 0
+  [[ $state == Z ]] && return 0
   echo "$1"
   for child in $(ps -o pid= --ppid "$1"); do
     rog_tree "$child"
   done
 }
 
-# rog_stop_local CODE: sends TERM to the command rog_run_local started and to
-# every process below it, waits for it and exits CODE, which runs the EXIT
-# trap. It sends TERM whatever the signal was, because a background command
-# of a script ignores INT and QUIT.
+# rog_procs CGROUP: prints the PIDs of the local command's live processes.
+# When CGROUP is set, the command runs in a cgroup of its own, as under heavy's
+# scope, and every process in it counts, also one forked after the last look
+# or re-parented after its parent ended. Without it, the walk from the command
+# finds only the processes still below it.
+rog_procs() {
+  if [[ -n $1 ]]; then
+    cat "/sys/fs/cgroup$1/cgroup.procs" 2>/dev/null || true
+  else
+    rog_tree "$ROG_CHILD"
+  fi
+}
+
+# rog_stop_local CODE: sends TERM to every process of the command
+# rog_run_local started, again each ROG_STOP_STEP until none is left, then
+# KILL to what remains after ROG_STOP_STEPS steps. It waits for the command
+# and exits CODE, which runs the EXIT trap. It sends TERM whatever the signal
+# was, because a background command of a script ignores INT and QUIT. It
+# ignores a second signal, so the KILL step still runs; the stop takes
+# ROG_STOP_STEPS steps at most.
+ROG_STOP_STEP=0.1
+# A guess: Nix printed "interrupted by the user" and ended within 44 ms of TERM
+# on 2026-10-24, so 50 steps, about 5 s, leave it a wide margin.
+ROG_STOP_STEPS=50
 rog_stop_local() {
-  local pids
-  trap - TERM INT QUIT HUP
+  local cgroup='' own pids=() step
+  trap '' TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
-    mapfile -t pids < <(rog_tree "$ROG_CHILD")
-    kill -s TERM "${pids[@]}" 2>/dev/null || true
+    own=$(</proc/self/cgroup)
+    cgroup=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || cgroup=
+    [[ $cgroup == "$own" ]] && cgroup=
+    cgroup=${cgroup#0::}
+    for ((step = 0; step < ROG_STOP_STEPS; step++)); do
+      mapfile -t pids < <(rog_procs "$cgroup")
+      ((${#pids[@]})) || break
+      kill -s TERM "${pids[@]}" 2>/dev/null || true
+      read -rt "$ROG_STOP_STEP" <> <(:) || true
+    done
+    # cgroup.kill sends KILL to the whole cgroup at once, so a process that a
+    # TERM handler started after the last look goes too.
+    if ((${#pids[@]})) && ! { [[ -n $cgroup ]] && echo 1 >"/sys/fs/cgroup$cgroup/cgroup.kill"; } 2>/dev/null; then
+      kill -s KILL "${pids[@]}" 2>/dev/null || true
+    fi
     wait "$ROG_CHILD" 2>/dev/null || true
     ROG_CHILD=
   fi
+  trap - TERM INT QUIT HUP
   exit "$1"
 }
 
