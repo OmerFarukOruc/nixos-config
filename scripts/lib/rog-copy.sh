@@ -15,24 +15,26 @@ ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_D
 ROG_COPY=
 ROG_CHILD=
 ROG_PARENT=
+ROG_PID_FILE=
+ROG_CALLS=0
 
-# rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV and waits for it. A
-# TERM, INT, QUIT or HUP that reaches the script, even one sent to its PID
-# alone, as `kill PID` does, stops CMD and every process below it, Nix
-# included, before the EXIT trap removes the copy. Without this, `kill PID`
-# left Nix running. CMD runs in the background so that bash runs the trap
-# during `wait`; for a foreground command bash would hold the trap until Nix
-# ended. CMD stays in the script's process group, so Ctrl-Z and a SIGKILL to
-# the group reach it as they would in the foreground. As a background command
-# CMD ignores INT and QUIT, so Ctrl-C and Ctrl-\ stop it through the trap.
-rog_run_local() {
+# rog_run CMD [ARG...]: runs CMD, the local Nix run or the ssh client, and
+# waits for it. A TERM, INT, QUIT or HUP that reaches the script, even one
+# sent to its PID alone, as `kill PID` does, runs rog_stop before the EXIT
+# trap removes the copy. Without this, `kill PID` left Nix running. CMD runs
+# in the background so that bash runs the trap during `wait`; for a foreground
+# command bash would hold the trap until CMD ended. CMD stays in the script's
+# process group, so Ctrl-Z and a SIGKILL to the group reach it as they would
+# in the foreground. As a background command CMD ignores INT and QUIT, so
+# Ctrl-C and Ctrl-\ stop it through the trap.
+rog_run() {
   local rc=0
-  trap 'rog_stop_local 143' TERM
-  trap 'rog_stop_local 130' INT
-  trap 'rog_stop_local 131' QUIT
-  trap 'rog_stop_local 129' HUP
+  trap 'rog_stop 143' TERM
+  trap 'rog_stop 130' INT
+  trap 'rog_stop 131' QUIT
+  trap 'rog_stop 129' HUP
   # Bash gives a background command /dev/null as stdin unless it names one.
-  "${ROG_LOCAL_ENV[@]}" "$@" <&0 &
+  "$@" <&0 &
   ROG_CHILD=$! ROG_PARENT=$BASHPID
   wait "$ROG_CHILD" || rc=$?
   trap - TERM INT QUIT HUP
@@ -65,22 +67,21 @@ rog_tree() {
   done
 }
 
-# rog_cgroup: prints the local command's cgroup when it differs from the
-# script's own, as under heavy's scope, and nothing otherwise. Bash may have
-# reaped the command already, and then its PID can belong to another process,
-# so the PID counts only while its parent is the shell that started it.
+# rog_cgroup: prints ROG_CHILD's cgroup when it differs from its parent's, as
+# under heavy's scope, and nothing otherwise. Bash may have reaped the command
+# already, and then its PID can belong to another process, so with ROG_PARENT
+# set the PID counts only while its parent is the shell that started it.
 rog_cgroup() {
-  local own child ppid
+  local parent child ppid
   rog_stat "$ROG_CHILD" || return 0
   read -r _ ppid _ <<<"$ROG_STAT"
-  [[ $ppid == "$ROG_PARENT" ]] || return 0
-  own=$(</proc/self/cgroup)
+  [[ -z $ROG_PARENT || $ppid == "$ROG_PARENT" ]] || return 0
+  parent=$(cat "/proc/$ppid/cgroup" 2>/dev/null) || return 0
   child=$(cat "/proc/$ROG_CHILD/cgroup" 2>/dev/null) || return 0
-  [[ $child == "$own" ]] || echo "${child#0::}"
+  [[ $child == "$parent" ]] || echo "${child#0::}"
 }
 
-# rog_procs CGROUP [PID...]: prints the PIDs of the local command's live
-# processes. With CGROUP, every process in it counts, also one forked after the
+# rog_procs CGROUP [PID...]: prints the PIDs of ROG_CHILD's live processes. With CGROUP, every process in it counts, also one forked after the
 # last look or re-parented after its parent ended. Without it, the walk from
 # the command counts, plus each PID given that still runs, so a process seen
 # once still counts after its parent ends.
@@ -99,36 +100,69 @@ rog_procs() {
   } | sort -u
 }
 
-# rog_stop_local CODE: sends TERM to every process of the command
-# rog_run_local started, again each ROG_STOP_STEP until none is left, then
-# KILL to what remains after ROG_STOP_STEPS steps. It waits for the command
-# and exits CODE, which runs the EXIT trap. It sends TERM whatever the signal
-# was, because a background command of a script ignores INT and QUIT. It
-# ignores a second signal, so the KILL step still runs; the stop takes
-# ROG_STOP_STEPS steps at most.
+# rog_stop_child: sends TERM to every process of ROG_CHILD, again each
+# ROG_STOP_STEP until none is left, then KILL to what remains after
+# ROG_STOP_STEPS steps. It sends TERM whatever the signal was, because a
+# background command of a script ignores INT and QUIT.
 ROG_STOP_STEP=0.1
 # A guess: Nix printed "interrupted by the user" and ended within 44 ms of TERM
 # on 2026-10-24, so 50 steps, about 5 s, leave it a wide margin.
 ROG_STOP_STEPS=50
-rog_stop_local() {
+rog_stop_child() {
   local cgroup='' pids=() step
+  for ((step = 0; step < ROG_STOP_STEPS; step++)); do
+    # A signal can come before heavy's systemd-run has moved the command
+    # into its scope, so look again each step. Once found, the cgroup
+    # stays, also after the command itself has ended.
+    [[ -n $cgroup ]] || cgroup=$(rog_cgroup)
+    mapfile -t pids < <(rog_procs "$cgroup" "${pids[@]}")
+    ((${#pids[@]})) || break
+    kill -s TERM "${pids[@]}" 2>/dev/null || true
+    read -rt "$ROG_STOP_STEP" <> <(:) || true
+  done
+  # cgroup.kill sends KILL to the whole cgroup at once, so a process that a
+  # TERM handler started after the last look goes too.
+  if ((${#pids[@]})) && ! { [[ -n $cgroup ]] && echo 1 >"/sys/fs/cgroup$cgroup/cgroup.kill"; } 2>/dev/null; then
+    kill -s KILL "${pids[@]}" 2>/dev/null || true
+  fi
+}
+
+# rog_stop_remote: stops the command that rog_remote started on the host,
+# over a second connection, with rog_stop_child. Without this, stopping the
+# ssh client left the remote Nix running until it failed on the copy the EXIT
+# trap removed, and a build that had read the copy went on. The remote shell
+# writes its PID to ROG_PID_FILE before it starts the command; when a signal
+# comes first, the host waits up to ROG_STOP_STEPS steps for the file.
+rog_stop_remote() {
+  {
+    declare -f rog_stat rog_alive rog_tree rog_cgroup rog_procs rog_stop_child
+    declare -p ROG_STOP_STEP ROG_STOP_STEPS ROG_PID_FILE
+    cat <<'REMOTE'
+ROG_CHILD= ROG_PARENT=
+for ((step = 0; step < ROG_STOP_STEPS; step++)); do
+  read -r ROG_CHILD 2>/dev/null <"$ROG_PID_FILE" && break
+  read -rt "$ROG_STOP_STEP" <> <(:) || true
+done
+# The PID counts only while its command line names this copy, because the
+# command may have ended and its PID gone to another process.
+if [[ -n $ROG_CHILD ]] && tr '\0' '\n' <"/proc/$ROG_CHILD/cmdline" 2>/dev/null | grep -qF -- "$1"; then
+  rog_stop_child
+fi
+REMOTE
+  } | rog_remote_light || true
+}
+
+# rog_stop CODE: stops the command rog_run started, and in SSH mode the remote
+# command first, so the ssh client then ends with it. It waits for the command
+# and exits CODE, which runs the EXIT trap. It ignores a second signal, so
+# each KILL step still runs. A local stop takes ROG_STOP_STEPS steps at most;
+# an SSH stop adds the second connection (ConnectTimeout in ROG_SSH) and up to
+# twice ROG_STOP_STEPS steps on the host.
+rog_stop() {
   trap '' TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
-    for ((step = 0; step < ROG_STOP_STEPS; step++)); do
-      # A signal can come before heavy's systemd-run has moved the command
-      # into its scope, so look again each step. Once found, the cgroup
-      # stays, also after the command itself has ended.
-      [[ -n $cgroup ]] || cgroup=$(rog_cgroup)
-      mapfile -t pids < <(rog_procs "$cgroup" "${pids[@]}")
-      ((${#pids[@]})) || break
-      kill -s TERM "${pids[@]}" 2>/dev/null || true
-      read -rt "$ROG_STOP_STEP" <> <(:) || true
-    done
-    # cgroup.kill sends KILL to the whole cgroup at once, so a process that a
-    # TERM handler started after the last look goes too.
-    if ((${#pids[@]})) && ! { [[ -n $cgroup ]] && echo 1 >"/sys/fs/cgroup$cgroup/cgroup.kill"; } 2>/dev/null; then
-      kill -s KILL "${pids[@]}" 2>/dev/null || true
-    fi
+    if [[ -n $ROG_PID_FILE ]]; then rog_stop_remote; fi
+    rog_stop_child
     wait "$ROG_CHILD" 2>/dev/null || true
     ROG_CHILD=
   fi
@@ -146,23 +180,26 @@ rog_stop_local() {
 # so each Nix call gets its own memory cap. rog_remote_light runs without it,
 # for a call that runs no Nix.
 rog_remote() {
-  local args
+  local args rc=0
   if ((ROG_LOCAL)); then
     if command -v heavy >/dev/null; then
-      rog_run_local heavy bash -s -- "$ROG_COPY" "$@"
+      rog_run "${ROG_LOCAL_ENV[@]}" heavy bash -s -- "$ROG_COPY" "$@"
     else
-      rog_run_local bash -s -- "$ROG_COPY" "$@"
+      rog_run "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
     fi
     return
   fi
   args=$(printf '%q ' "$ROG_COPY" "$@")
-  "${ROG_SSH[@]}" "$ROG_HOST" \
-    "if command -v heavy >/dev/null; then exec heavy bash -s -- $args; else exec bash -s -- $args; fi"
+  # Each call gets its own file, so a stop never reads an earlier call's PID.
+  ROG_PID_FILE=$ROG_COPY/.git/rog-pid.$((++ROG_CALLS))
+  rog_run "${ROG_SSH[@]}" "$ROG_HOST" "echo \$\$ >$(printf %q "$ROG_PID_FILE"); if command -v heavy >/dev/null; then exec heavy bash -s -- $args; else exec bash -s -- $args; fi" || rc=$?
+  ROG_PID_FILE=
+  return "$rc"
 }
 
 rog_remote_light() {
   if ((ROG_LOCAL)); then
-    rog_run_local bash -s -- "$ROG_COPY" "$@"
+    rog_run "${ROG_LOCAL_ENV[@]}" bash -s -- "$ROG_COPY" "$@"
     return
   fi
   "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
