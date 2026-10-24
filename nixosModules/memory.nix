@@ -1,4 +1,14 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  memoryPressureSnapshot = pkgs.writers.writePython3Bin "memory-pressure-snapshot" { } (
+    builtins.readFile ./memory-pressure-snapshot.py
+  );
+in
 {
   # systemd-oomd monitors no cgroup until a slice opts in. When memory pressure
   # in a user slice stays above 80% for 30 s, it kills every process in one
@@ -29,6 +39,27 @@
       MemoryMax=20G
       MemorySwapMax=6G
     '';
+  };
+
+  # The kernel's OOM task table names no parent and no command line, and the
+  # processes are gone by the time anyone looks. This service writes every
+  # process with its parent and command line, and each user cgroup's memory,
+  # to ~/.local/state/oom-snapshots/ when memory pressure rises, so the last
+  # snapshot before an OOM kill shows what held the memory up to a minute
+  # before the kill.
+  systemd.user.services.memory-pressure-snapshot = {
+    description = "Write a process snapshot when memory pressure rises";
+    wantedBy = [ "default.target" ];
+    serviceConfig = {
+      ExecStart = "${memoryPressureSnapshot}/bin/memory-pressure-snapshot";
+      Restart = "on-failure";
+      RestartSec = 10;
+      # A guess: a synthetic snapshot of 6888 processes peaked at 24 MiB RSS.
+      MemoryMax = "128M";
+      # Swapped out, the service would fault back in at the moment pressure
+      # peaks, and systemd-oomd's swap kill above would rank it as a candidate.
+      MemorySwapMax = 0;
+    };
   };
 
   # When the kernel OOM killer kills one process of a user unit, systemd stops
