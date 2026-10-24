@@ -23,6 +23,7 @@ in
   imports = [
     ../../home-manager/profiles/workstation.nix
     ../../home-manager/modules/desktop-sync.nix
+    ../../home-manager/modules/heavy.nix
     ../../home-manager/modules/box-view.nix
     ../../home-manager/modules/sshfs-risoluto-dev-1.nix
   ];

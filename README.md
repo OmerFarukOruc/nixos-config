@@ -139,7 +139,8 @@ login sessions, the theme and Home Manager connect.
 
 Run these from nixos-desktop or nixos-rog. `deploy.sh`
 builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
-from either host. `move-inputs.sh`
+from either host, or on nixos-desktop while nixos-rog is offline;
+`run-unit-on-rog.sh` needs nixos-rog online. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
 checkout with Nix. The updater on nixos-rog runs them.

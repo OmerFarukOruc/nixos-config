@@ -1,10 +1,12 @@
 # shellcheck shell=bash disable=SC2119,SC2120 # callers pass rog_remote its ARGs
 # Sourced by the scripts that run Nix on a copy of this checkout (build-on-rog.sh,
 # check-on-rog.sh, eval-on-rog.sh, run-unit-on-rog.sh) after they cd to the
-# checkout's root. They work on a copy on nixos-rog from either host. The copy
-# holds the tracked files and the new files that .gitignore does not exclude,
-# as they are in the working tree.
-ROG_HOST=nixos-rog
+# checkout's root. They work on a copy on nixos-rog from either host, or on
+# this host when scripts/lib/rog-host.sh picks it, as when nixos-rog is
+# offline. The copy holds the tracked files and the new files that .gitignore
+# does not exclude, as they are in the working tree.
+# shellcheck source=/dev/null
+. scripts/lib/rog-host.sh
 ROG_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
 ROG_COPY=
 
@@ -14,25 +16,53 @@ ROG_COPY=
 # never beside a script, because the script already uses the call's stdin: bash
 # drops a piped input and zsh merges it into the script.
 #
-# rog_remote runs under heavy when the host has it (machines/nixos-rog/heavy.nix),
+# rog_remote runs under heavy when the host has it (home-manager/modules/heavy.nix),
 # so each Nix call gets its own memory cap. rog_remote_light runs without it,
 # for a call that runs no Nix.
 rog_remote() {
   local args
+  if ((ROG_LOCAL)); then
+    if command -v heavy >/dev/null; then
+      heavy bash -s -- "$ROG_COPY" "$@"
+    else
+      bash -s -- "$ROG_COPY" "$@"
+    fi
+    return
+  fi
   args=$(printf '%q ' "$ROG_COPY" "$@")
   "${ROG_SSH[@]}" "$ROG_HOST" \
     "if command -v heavy >/dev/null; then exec heavy bash -s -- $args; else exec bash -s -- $args; fi"
 }
 
 rog_remote_light() {
+  if ((ROG_LOCAL)); then
+    bash -s -- "$ROG_COPY" "$@"
+    return
+  fi
   "${ROG_SSH[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$ROG_COPY" "$@")"
 }
 
-# Makes the copy and sets the EXIT trap that removes it, so a caller sets no
-# EXIT trap of its own.
+# rog_path: prints the copy as an rsync location, with the host in front when
+# the copy is on nixos-rog.
+rog_path() {
+  if ((ROG_LOCAL)); then
+    printf '%s/' "$ROG_COPY"
+  else
+    printf '%s:%s/' "$ROG_HOST" "$ROG_COPY"
+  fi
+}
+
+# rog_copy_open [--no-local]: picks the host (rog_pick_host, which gets
+# --no-local), makes the copy and sets the EXIT trap that removes it, so a
+# caller sets no EXIT trap of its own.
 rog_copy_open() {
+  rog_pick_host "$@"
   # Each run gets its own copy, so two runs cannot remove each other's.
-  ROG_COPY=$("${ROG_SSH[@]}" "$ROG_HOST" mktemp -d /tmp/check-nixos-config.XXXXXXXX)
+  if ((ROG_LOCAL)); then
+    ROG_COPY=$(mktemp -d /tmp/check-nixos-config.XXXXXXXX)
+  else
+    ROG_COPY=$("${ROG_SSH[@]}" "$ROG_HOST" mktemp -d /tmp/check-nixos-config.XXXXXXXX)
+  fi
   # The trap below removes the copy, so it must be exactly the new directory.
   if [[ ! $ROG_COPY =~ ^/tmp/check-nixos-config\.[A-Za-z0-9]{8}$ ]]; then
     echo "mktemp on $ROG_HOST printed an unexpected path: $ROG_COPY" >&2
@@ -44,7 +74,7 @@ rog_copy_open() {
   # A tracked file deleted in the working tree is listed but missing; the copy
   # leaves it out, as the working tree does.
   git ls-files -co --exclude-standard -z |
-    rsync -a --from0 --ignore-missing-args --files-from=- ./ "$ROG_HOST:$ROG_COPY/"
+    rsync -a --from0 --ignore-missing-args --files-from=- ./ "$(rog_path)"
   # A git flake, like a checkout. Without git add, Nix would leave the new
   # files out of it.
   rog_remote_light <<'REMOTE'

@@ -330,8 +330,8 @@ ssh).
 
 ## Heavy commands
 
-`heavy <command> [argument...]` (`machines/nixos-rog/heavy.nix`) runs a heavy
-command at nice 10, in a systemd user scope that the kernel slows above 10 GiB
+`heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog
+and nixos-desktop) runs a heavy command at nice 10, in a systemd user scope that the kernel slows above 10 GiB
 of memory and stops above 14 GiB or 4 GiB of swap. Commands never wait for
 each other. A `heavy` inside another one runs its command directly, and one
 reached over SSH, as in `scripts/lib/rog-copy.sh`, gets a scope of its own.
@@ -340,7 +340,7 @@ it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too. The updater runs outside heavy; its
 unit's `MemoryHigh` slows it above 10 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
-evaluation of this flake on nixos-rog as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
+evaluation of this flake on nixos-rog or nixos-desktop as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.
 
 On 2026-10-16, Nix evaluations from several agents at once filled the 30 GiB:

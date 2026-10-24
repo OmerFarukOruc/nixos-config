@@ -91,7 +91,9 @@ after that step; `PREK_ALLOW_NO_CONFIG=1` skips the hooks and with them every
 check.
 
 To check from a host without a loaded shell, these scripts copy the working
-tree to nixos-rog and run Nix there:
+tree to nixos-rog and run Nix there. When Tailscale reports nixos-rog offline,
+they copy it to `/tmp` on nixos-desktop instead and print a line on stderr; on
+any other host they exit 1 at once:
 
 ```sh
 scripts/check-on-rog.sh
@@ -202,8 +204,8 @@ uncommitted edits, and `--allow-dirty` would ship them.
 
 First find the hosts that the push affects. A push can carry several commits,
 so the script compares the system `drvPath` of every host at the pushed commit
-`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog
-evaluates both from GitHub, in 70 to 90 seconds (measured on 2026-10-15), so
+`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog, or
+nixos-desktop while nixos-rog is offline, evaluates both from GitHub, in 70 to 90 seconds (measured on 2026-10-15), so
 this step needs no worktree. From the main checkout, run:
 
 ```sh

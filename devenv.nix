@@ -4,8 +4,8 @@
 # on the host that commits.
 { config, pkgs, ... }:
 let
-  # heavy caps the memory of a heavy command on nixos-rog (docs/nixos-rog.md,
-  # Heavy commands); other hosts run the command as it is.
+  # heavy caps the memory of a heavy command on nixos-rog and nixos-desktop
+  # (docs/nixos-rog.md, Heavy commands); other hosts run the command as it is.
   heavy =
     command:
     "bash -c 'if command -v heavy >/dev/null; then exec heavy ${command}; else exec ${command}; fi'";

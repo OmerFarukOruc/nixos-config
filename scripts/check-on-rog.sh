@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # usage: scripts/check-on-rog.sh [--fix]
 # Runs ci/checks.sh, the checks of the pre-push hook, on nixos-rog, for a copy of
-# this checkout (scripts/lib/rog-copy.sh), from either host.
+# this checkout (scripts/lib/rog-copy.sh), from either host. While nixos-rog
+# is offline, nixos-desktop runs them on a copy of its own.
 # With --fix, it first formats the copy and locks each input that flake.lock
 # lacks, copies the files that changed back here, and then checks.
 set -euo pipefail
@@ -34,7 +35,7 @@ EOF
   # shellcheck disable=SC2016 # the remote bash expands $1
   changed=$(rog_remote_light <<<'cd "$1" && git diff --name-only')
   if [[ -n $changed ]]; then
-    printf '%s\n' "$changed" | rsync -a --files-from=- "$ROG_HOST:$ROG_COPY/" ./
+    printf '%s\n' "$changed" | rsync -a --files-from=- "$(rog_path)" ./
     while read -r file; do echo "fixed: $file"; done <<<"$changed"
   fi
 fi

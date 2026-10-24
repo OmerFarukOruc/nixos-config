@@ -11,9 +11,9 @@
   imports = [
     ../../home-manager/profiles/workstation.nix
     ../../home-manager/modules/desktop-sync.nix
+    ../../home-manager/modules/heavy.nix
     ./easyeffects.nix
     ./hdr.nix
-    ./heavy.nix
     ./hushmic.nix
     ./mpv.nix
     ./oled-care.nix

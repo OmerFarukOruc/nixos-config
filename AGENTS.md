@@ -14,7 +14,7 @@
 
 # Checks
 
-Agents run on nixos-desktop or on nixos-rog; `hostname` tells which. These scripts run Nix on a copy of this checkout on nixos-rog, over SSH from either host. [README.md](README.md#everyday-commands) lists every script you run by hand.
+Agents run on nixos-desktop or on nixos-rog; `hostname` tells which. These scripts run Nix on a copy of this checkout on nixos-rog, over SSH from either host. When Tailscale reports nixos-rog offline, they run on nixos-desktop instead and say so on stderr; on any other host, and for `scripts/run-unit-on-rog.sh`, which acts on the laptop, they exit 1 at once. [README.md](README.md#everyday-commands) lists every script you run by hand.
 
 - A change to `pkgs/`, `overlays/`, `home-manager/modules/plasma-*.nix`, `scripts/auto-update.sh`, `machines/nixos-rog/auto-update.nix`, `devenv.nix`, `ci/` or `.github/workflows/` gets a review of its final diff from an agent that did not write it, before it reaches `main`.
 - A change to `scripts/auto-update.sh` also runs the two rehearsals in [Updater](docs/nixos-rog.md#updater) once the review's fixes are in.
