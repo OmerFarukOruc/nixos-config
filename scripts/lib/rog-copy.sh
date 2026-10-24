@@ -15,37 +15,52 @@ ROG_LOCAL_ENV=(env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_COMMON_D
 ROG_COPY=
 ROG_CHILD=
 
-# rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV in a process group of
-# its own and waits for it. A TERM, INT or HUP to the script stops that whole
-# group, Nix included, before the EXIT trap removes the copy; without it a
-# script stopped by PID, as by timeout, left its Nix process running. Ctrl-C
-# reaches the script only, because CMD's group is not the terminal's, so the
-# trap passes it on.
+# rog_run_local CMD [ARG...]: runs CMD with ROG_LOCAL_ENV and waits for it. A
+# TERM, INT, QUIT or HUP that reaches the script, even one sent to its PID
+# alone, as `kill PID` does, stops CMD and every process below it, Nix
+# included, before the EXIT trap removes the copy. Without this, `kill PID`
+# left Nix running. CMD runs in the background so that bash runs the trap
+# during `wait`; for a foreground command bash would hold the trap until Nix
+# ended. CMD stays in the script's process group, so Ctrl-Z, a terminal's
+# signals and a SIGKILL to the group reach it as they would in the foreground.
 rog_run_local() {
   local rc=0
-  set -m
-  "${ROG_LOCAL_ENV[@]}" "$@" &
+  trap 'rog_stop_local 143' TERM
+  trap 'rog_stop_local 130' INT
+  trap 'rog_stop_local 131' QUIT
+  trap 'rog_stop_local 129' HUP
+  # Bash gives a background command /dev/null as stdin unless it names one.
+  "${ROG_LOCAL_ENV[@]}" "$@" <&0 &
   ROG_CHILD=$!
-  set +m
-  trap 'rog_stop_local TERM 143' TERM
-  trap 'rog_stop_local INT 130' INT
-  trap 'rog_stop_local HUP 129' HUP
   wait "$ROG_CHILD" || rc=$?
-  trap - TERM INT HUP
+  trap - TERM INT QUIT HUP
   ROG_CHILD=
   return "$rc"
 }
 
-# rog_stop_local SIGNAL CODE: sends SIGNAL to the group rog_run_local started,
-# waits for it and exits CODE, which runs the EXIT trap.
+# rog_tree PID: prints PID and the PID of every process below it.
+rog_tree() {
+  local child
+  echo "$1"
+  for child in $(ps -o pid= --ppid "$1"); do
+    rog_tree "$child"
+  done
+}
+
+# rog_stop_local CODE: sends TERM to the command rog_run_local started and to
+# every process below it, waits for it and exits CODE, which runs the EXIT
+# trap. It sends TERM whatever the signal was, because a background command
+# of a script ignores INT and QUIT.
 rog_stop_local() {
-  trap - TERM INT HUP
+  local pids
+  trap - TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
-    kill -s "$1" -- "-$ROG_CHILD" 2>/dev/null || true
+    mapfile -t pids < <(rog_tree "$ROG_CHILD")
+    kill -s TERM "${pids[@]}" 2>/dev/null || true
     wait "$ROG_CHILD" 2>/dev/null || true
     ROG_CHILD=
   fi
-  exit "$2"
+  exit "$1"
 }
 
 # rog_remote [ARG...] < SCRIPT: runs SCRIPT on the host in bash, with the
