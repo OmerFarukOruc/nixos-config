@@ -46,7 +46,8 @@ fi
 
 # shellcheck source=/dev/null
 . scripts/lib/rog-copy.sh
-rog_copy_open
+# The unit acts on the laptop, so no other host can stand in for it.
+rog_copy_open --no-local
 if [[ $user == true ]]; then
   rog_remote "$unit" "$seconds" <<'REMOTE'
 set -euo pipefail

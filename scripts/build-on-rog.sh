@@ -6,7 +6,8 @@
 # none it builds .#nixosConfigurations.nixos-rog.config.system.build.toplevel,
 # which compiles whatever the caches lack. The build creates no result link and
 # activates nothing, and the outputs stay in rog's store until garbage
-# collection. It stops at the first attribute that fails, with that build's
+# collection. While nixos-rog is offline, nixos-desktop builds them in its own
+# store instead. It stops at the first attribute that fails, with that build's
 # exit status.
 set -euo pipefail
 cd "$(dirname "$0")/.."

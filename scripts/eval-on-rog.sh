@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # usage: scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE
 # Evaluates ATTRIBUTE in a copy of this checkout on nixos-rog
-# (scripts/lib/rog-copy.sh) and prints it. Without '#', ATTRIBUTE is a path
+# (scripts/lib/rog-copy.sh), or on nixos-desktop while nixos-rog is offline,
+# and prints it. Without '#', ATTRIBUTE is a path
 # under nixosConfigurations.nixos-rog.config, such as
 # 'systemd.services."oruc-cpu-limits".script'; with '#' it is a flake
 # attribute, such as .#nixosConfigurations.nixos-latitude.config.networking.hostName.

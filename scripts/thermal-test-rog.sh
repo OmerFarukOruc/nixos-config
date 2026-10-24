@@ -141,7 +141,7 @@ if ! flock -n 9; then
   exit 75
 fi
 release=$(readlink -f ~/.local/state/nixos-config-deploy/current)
-# heavy (machines/nixos-rog/heavy.nix) caps the evaluation's memory.
+# heavy (home-manager/modules/heavy.nix) caps the evaluation's memory.
 build() {
   (cd "$release" && heavy nix build --no-link --print-out-paths --no-write-lock-file \
     ".#nixosConfigurations.nixos-rog.pkgs.$1" </dev/null)

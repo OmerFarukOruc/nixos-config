@@ -11,8 +11,8 @@
 # whose merges they are), other (the host runs a release that is not an
 # ancestor of REV, one from a dirty tree, or one with no release record) or
 # unreachable.
-# REV defaults to origin/main and must be pushed, because nixos-rog evaluates
-# it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
+# REV defaults to origin/main and must be pushed, because the evaluating host
+# (nixos-rog, or nixos-desktop while nixos-rog is offline) reads it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
 # usage error.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -66,6 +66,14 @@ fi
 repo=${BASH_REMATCH[1]%.git}
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 this_host=$(</proc/sys/kernel/hostname)
+# nixos-rog evaluates the systems; nixos-desktop stands in while it is offline
+# (scripts/lib/rog-host.sh). Both evaluate from GitHub, so the answer is the
+# same.
+# shellcheck source=/dev/null
+. scripts/lib/rog-host.sh
+rog_pick_host
+eval_host=$ROG_HOST
+if ((ROG_LOCAL)); then eval_host=$this_host; fi
 
 # on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in HOST's home
 # directory, with the ARGs. This host runs SCRIPT without SSH, as deploy.sh
@@ -85,9 +93,9 @@ on_host() {
 
 # systems REV: prints {HOST: {drv, out}} for every host at REV.
 systems() {
-  on_host nixos-rog "github:$repo/$1" <<'REMOTE'
+  on_host "$eval_host" "github:$repo/$1" <<'REMOTE'
 set -e
-# heavy (machines/nixos-rog/heavy.nix) caps the memory of each evaluation. One
+# heavy (home-manager/modules/heavy.nix) caps the memory of each evaluation. One
 # evaluation per host stays under that cap; three systems in one evaluation
 # did not, and systemd-oomd killed it.
 nix=(nix)
