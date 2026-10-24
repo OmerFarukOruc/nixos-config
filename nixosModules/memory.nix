@@ -45,7 +45,8 @@ in
   # processes are gone by the time anyone looks. This service writes every
   # process with its parent and command line, and each user cgroup's memory,
   # to ~/.local/state/oom-snapshots/ when memory pressure rises, so the last
-  # snapshot before an OOM kill shows what spawned the memory.
+  # snapshot before an OOM kill shows what held the memory up to a minute
+  # before the kill.
   systemd.user.services.memory-pressure-snapshot = {
     description = "Write a process snapshot when memory pressure rises";
     wantedBy = [ "default.target" ];
@@ -53,9 +54,11 @@ in
       ExecStart = "${memoryPressureSnapshot}/bin/memory-pressure-snapshot";
       Restart = "on-failure";
       RestartSec = 10;
-      # A guess that keeps the service itself small under the pressure it
-      # watches; one snapshot of 474 processes took 36 KB.
+      # A guess: a synthetic snapshot of 6888 processes peaked at 24 MiB RSS.
       MemoryMax = "128M";
+      # Swapped out, the service would fault back in at the moment pressure
+      # peaks, and systemd-oomd's swap kill above would rank it as a candidate.
+      MemorySwapMax = 0;
     };
   };
 
