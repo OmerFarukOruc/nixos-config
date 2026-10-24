@@ -2,16 +2,15 @@
 {
   # systemd-oomd monitors no cgroup until a slice opts in. When memory pressure
   # in a user slice stays above 80% for 30 s, it kills every process in one
-  # leaf cgroup under it, such as an app's scope or one Konsole tab.
+  # leaf cgroup under it, such as an app's scope or one Ghostty tab.
   systemd.oomd.enableUserSlices = true;
 
-  # zram swaps fast enough that memory pressure can stay under that limit
-  # while swap fills, and then the kernel OOM killer picks the biggest single
-  # process. On 2026-10-24 a tab with thousands of small python3 processes
-  # filled RAM and swap twice, and the kernel killed Ghostty's main process,
-  # which closed every tab. With swap and memory both above 90%, this kills the
-  # leaf cgroup with the most swap instead, such as that one tab
-  # (systemd-oomd.service(8), oomd.conf(5) SwapUsedLimit=).
+  # On 2026-10-24 a tab with about 6400 small python3 processes filled RAM and
+  # swap twice. systemd-oomd did not act on memory pressure, the kernel OOM
+  # killer picked the biggest single process instead, and that was Ghostty's
+  # main process, which closed every tab. With swap and memory both above 90%,
+  # this makes systemd-oomd kill the leaf cgroup with the most swap, such as
+  # that one tab (systemd-oomd.service(8), oomd.conf(5) SwapUsedLimit=).
   systemd.slices.user.sliceConfig.ManagedOOMSwap = "kill";
 
   # Each Ghostty tab is a transient scope, and this drop-in matches every
@@ -20,6 +19,8 @@
   # of RAM and 1.7 GiB of swap, and the runaway tab at 18.9 GiB of RAM and
   # 23.8 GiB of swap. MemoryMax alone would have missed it, so swap has its own
   # cap. The values sit above the normal peaks; they are not measured limits.
+  # The busiest normal tab runs herdr and its agents, so it is the one closest
+  # to the limits; when it passes 20G the kernel kills its largest process.
   systemd.user.units."app-ghostty-surface-transient-.scope" = {
     overrideStrategy = "asDropin";
     text = ''
