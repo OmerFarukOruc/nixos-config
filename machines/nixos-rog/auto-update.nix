@@ -62,11 +62,14 @@ let
       # notifies. A kill during deploy.sh leaves the rollback timer to restore
       # the previous system.
       TimeoutStartSec = "3h";
-      # Slows the run above 10 GiB, as heavy does, and never kills it, so the
-      # script's traps still report. A MemoryMax kill would skip them. The
-      # highest peak of 65 runs from 2026-10-14 to 2026-10-17 was 7.4G
-      # (journal).
-      MemoryHigh = "10G";
+      # Slows the run above 12 GiB and never kills it, so the script's traps
+      # still report. A MemoryMax kill would skip them. A rehearsal under a
+      # 20 GiB limit peaked at 10.4 GiB (memory.peak, 2026-10-24). Samples
+      # each second put the peak in the `nix flake check` of ci/checks.sh,
+      # which evaluates every host in one process. Each of the 6 runs that
+      # reached a 10 GiB limit swapped 0.3 to 1.3 GiB (journal, 2026-10-23
+      # and 2026-10-24).
+      MemoryHigh = "12G";
       User = "oruc";
       StateDirectory = "oruc-auto-update";
       RuntimeDirectory = "oruc-auto-update";
