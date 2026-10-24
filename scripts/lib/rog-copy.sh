@@ -81,10 +81,11 @@ rog_cgroup() {
   [[ $child == "$parent" ]] || echo "${child#0::}"
 }
 
-# rog_procs CGROUP [PID...]: prints the PIDs of ROG_CHILD's live processes. With CGROUP, every process in it counts, also one forked after the
-# last look or re-parented after its parent ended. Without it, the walk from
-# the command counts, plus each PID given that still runs, so a process seen
-# once still counts after its parent ends.
+# rog_procs CGROUP [PID...]: prints the PIDs of ROG_CHILD's live processes.
+# With CGROUP, every process in it counts, also one forked after the last look
+# or re-parented after its parent ended. Without it, the walk from the command
+# counts, plus each PID given that still runs, so a process seen once still
+# counts after its parent ends; one re-parented before any look is missed.
 rog_procs() {
   local cgroup=$1 pid
   shift
@@ -149,15 +150,20 @@ if [[ -n $ROG_CHILD ]] && tr '\0' '\n' <"/proc/$ROG_CHILD/cmdline" 2>/dev/null |
   rog_stop_child
 fi
 REMOTE
-  } | rog_remote_light || true
+  } | timeout -s KILL "$ROG_STOP_SSH_SECONDS" "${ROG_SSH[@]}" "$ROG_HOST" \
+    "bash -s -- $(printf %q "$ROG_COPY")" || true
 }
+# The stop ignores further signals, so a connection that stalls after it
+# opened must not hold it: ConnectTimeout in ROG_SSH bounds only the connect.
+# 30 s, a guess, covers that 15 s, twice ROG_STOP_STEPS steps on the host and
+# a margin.
+ROG_STOP_SSH_SECONDS=30
 
 # rog_stop CODE: stops the command rog_run started, and in SSH mode the remote
 # command first, so the ssh client then ends with it. It waits for the command
 # and exits CODE, which runs the EXIT trap. It ignores a second signal, so
 # each KILL step still runs. A local stop takes ROG_STOP_STEPS steps at most;
-# an SSH stop adds the second connection (ConnectTimeout in ROG_SSH) and up to
-# twice ROG_STOP_STEPS steps on the host.
+# an SSH stop adds ROG_STOP_SSH_SECONDS at most.
 rog_stop() {
   trap '' TERM INT QUIT HUP
   if [[ -n $ROG_CHILD ]]; then
