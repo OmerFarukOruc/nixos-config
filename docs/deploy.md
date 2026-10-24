@@ -123,8 +123,9 @@ fails. The checks do not prove that the hardware and services work after
 activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
-`ci/checks.sh` runs the formatter check, `nix flake check --no-build` and an
-evaluation of each host's system `drvPath`, which the flake check skips. `ci/unit-cycles.sh` runs the ordering-cycle check
+`ci/checks.sh` validates the flake's output kinds and formatter, then checks each
+host's system derivation type and `drvPath` in a separate process.
+`ci/unit-cycles.sh` runs the ordering-cycle check
 of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a
 GitHub runner on 2026-10-13.

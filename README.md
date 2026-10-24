@@ -194,10 +194,9 @@ host without Nix can run `scripts/check-theme-drift.sh` to check a color
 before `scripts/check-on-rog.sh`.
 
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:
-`nix fmt` before the commit, and before the push `ci/checks.sh` (the lock and
-formatter checks, `nix flake check --no-build` and an evaluation of each host's
-system)
-and `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
+`nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,
+formatter and output checks, plus each host's system derivation) and
+`ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
 GitHub runs only the kernel build.
 
 ## Docs

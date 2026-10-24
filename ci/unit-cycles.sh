@@ -2,8 +2,8 @@
 # usage: ci/unit-cycles.sh
 # For every host, builds its /etc/systemd/system through ci/unit-cycles.nix and
 # fails when systemd-analyze finds an ordering cycle in what default.target
-# pulls in. deploy.sh runs the same check on the built system (exit 80). The
-# hosts are checked at once: 22 s instead of 32 s on nixos-rog (2026-10-21).
+# pulls in. deploy.sh runs the same check on the built system (exit 80).
+# Separate evaluators release the heap between hosts.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,17 +36,10 @@ check_host() {
 }
 
 hosts=$(nix eval --json --no-write-lock-file .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]')
-out=$(mktemp -d)
-trap 'rm -rf -- "$out"' EXIT
-declare -A pids
-for host in $hosts; do
-  check_host "$host" >"$out/$host" 2>&1 &
-  pids[$host]=$!
-done
 status=0
-# Each host's output prints whole, in host order.
+# Wait outside check_host so errexit stays active inside the host check.
 for host in $hosts; do
-  wait "${pids[$host]}" || status=1
-  cat "$out/$host"
+  check_host "$host" &
+  wait "$!" || status=1
 done
 exit "$status"

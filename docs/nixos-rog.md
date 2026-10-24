@@ -339,19 +339,24 @@ One reached over SSH, as in `scripts/lib/rog-copy.sh` on nixos-desktop, gets a
 scope of its own.
 `scripts/lib/rog-copy.sh` runs the Nix calls of the `*-on-rog.sh` scripts under
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
-build of the system and the checks of the git hooks (`devenv.nix`) use it too. The updater runs outside heavy; its
-unit's `MemoryHigh` slows it above 12 GiB but never stops it. A repository whose test script follows infra's `heavy` contract, such
+build of the system and the checks of the git hooks (`devenv.nix`) use it too.
+The updater runs outside heavy; its unit's `MemoryHigh` slows it above 12 GiB
+(`machines/nixos-rog/auto-update.nix`) but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
 evaluation of this flake on nixos-rog or nixos-desktop as `heavy nix ...`. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.
 
 On 2026-10-16, Nix evaluations from several agents at once filled the 30 GiB:
 the kernel failed a page allocation, and Claude Code stopped the background
-shells of idle sessions. That day `nix flake check` of this flake peaked at
-4.9 GiB and nixos-rog's toplevel `drvPath` evaluation at 7.3 GiB, which the
-10 GiB and 14 GiB caps leave room for. On 2026-10-24, with three hosts, the
-same `nix flake check` peaked at 10.4 GiB in an updater rehearsal, above
-heavy's 10 GiB slowdown but below its 14 GiB stop.
+shells of idle sessions. In the updater rehearsal on 2026-10-24, the combined
+`nix flake check` exceeded heavy's slowdown in samples of its cgroup's
+`memory.current`. `ci/checks.sh` checks each host's derivation type and
+`drvPath` in a separate process, so the evaluator releases its heap between
+hosts. `nix fmt` checks the formatter; the output gate rejects new output kinds
+or formatter systems until their coverage is added. `ci/unit-cycles.sh` also
+evaluates hosts one at a time. Adding a host therefore does not keep another
+host's evaluator heap in either check. The limits in
+`home-manager/modules/heavy.nix` stay unchanged.
 
 ## Power and heat
 

@@ -20,7 +20,7 @@ check() {
   local name=$1
   shift
   echo "== $name"
-  "$@" || {
+  "$@" 2>&1 | tee -a "$log" || {
     echo "The check \"$name\" failed." >&2
     exit 1
   }
@@ -36,14 +36,25 @@ lock_files() {
   done
 }
 
+# nix fmt checks the formatter, and host_systems checks the host derivations.
+# Refuse outputs they do not cover. nix fmt accepts a formatter name with
+# string context, but nix flake check does not.
 flake_outputs() {
-  nix flake check "${nix_opts[@]}" --no-build --no-write-lock-file 2>&1 | tee "$log"
+  nix eval "${nix_opts[@]}" --json --no-write-lock-file '.#.' --apply '
+    outputs:
+      builtins.attrNames outputs == [ "formatter" "nixosConfigurations" ]
+      && builtins.attrNames outputs.formatter == [ "x86_64-linux" ]
+      && builtins.isString outputs.formatter.x86_64-linux.name
+      && !builtins.hasContext outputs.formatter.x86_64-linux.name
+  ' | jq -e . >/dev/null || {
+    echo "Extend ci/checks.sh coverage before changing output kinds or formatter systems; formatter names must be strings without context." >&2
+    return 1
+  }
 }
 
-# nix flake check --no-build only checks that each host's toplevel is a
-# derivation, so an error inside a host's configuration, such as a package
-# that became a throw, shows only when its drvPath is forced. One evaluation
-# per host keeps each under heavy's memory cap.
+# Force each drvPath as well as the derivation type: a package that throws can
+# hide inside a toplevel that passes the type check. Separate evaluators release
+# the heap between hosts.
 host_systems() {
   local hosts host
   hosts=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
@@ -55,8 +66,12 @@ host_systems() {
   for host in $hosts; do
     echo "$host"
     nix eval "${nix_opts[@]}" --raw --no-write-lock-file \
-      ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath" 2>&1 >/dev/null |
-      tee -a "$log" || return 1
+      ".#nixosConfigurations.$host.config.system.build.toplevel" --apply '
+        toplevel:
+          if builtins.isAttrs toplevel && (toplevel.type or null) == "derivation"
+          then toplevel.drvPath
+          else throw "The host toplevel must be a derivation."
+      ' >/dev/null || return 1
   done
 }
 
@@ -78,9 +93,9 @@ box_browser() {
   }
 }
 
-# With --no-write-lock-file, nix flake check passes an input that flake.lock
-# lacks and only warns, and the input then follows its upstream unpinned. nix
-# fmt writes the lock file, so this check runs first.
+# With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
+# and only warns, so the input follows its upstream unpinned. nix fmt writes
+# the lock file, so the lock check runs first.
 check "lock files" lock_files
 check formatting nix fmt "${nix_opts[@]}" -- --ci
 check "flake outputs" flake_outputs
