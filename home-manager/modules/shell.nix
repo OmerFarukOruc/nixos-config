@@ -106,17 +106,20 @@ in
       mkdir = "mkdir -pv";
       wget = "wget -c";
     };
+    # Claude Code and Codex run each command as `zsh -c`, which reads .zshenv
+    # but not .zshrc, and set CLAUDECODE or CODEX_THREAD_ID. In those shells an
+    # unmatched glob stays as text instead of aborting the command, and a word
+    # that starts with = stays as text instead of a path. A script file, and a
+    # shell a person types in, keep zsh's defaults.
+    envExtra = ''
+      if [[ -n $ZSH_EXECUTION_STRING && ( -n $CLAUDECODE || -n $CODEX_THREAD_ID ) ]]; then
+        setopt nonomatch noequals
+      fi
+    '';
     initContent = lib.mkMerge [
       (lib.mkOrder 500 ''
         export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
         zstyle ':omz:update' mode disabled
-
-        # Agent shells (Claude Code, Codex) run zsh with stdout on a pipe. An
-        # unmatched glob then stays as text instead of aborting the command,
-        # and a word that starts with = stays as text instead of a path.
-        if [[ ! -t 1 ]]; then
-          setopt nonomatch noequals
-        fi
 
         # Keep fzf's file and directory widgets, but leave Ctrl-R to Atuin.
         eval "$(${lib.getExe config.programs.fzf.package} --zsh)"
