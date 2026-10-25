@@ -19,7 +19,7 @@
     ./oled-care.nix
     ../../home-manager/modules/box-view.nix
     ../../home-manager/modules/sshfs-risoluto-dev-1.nix
-    ./warp-launchers.nix
+    ../../home-manager/modules/warp-launchers.nix
   ];
 
   # This sets only these keys, because input.touchpads would also delete every

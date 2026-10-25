@@ -1,7 +1,7 @@
 # Cloudflare WARP as a SOCKS5 proxy on loopback, through usque. It carries
 # only the traffic of an app pointed at it; the WARP launchers in
-# warp-launchers.nix are the fallback for when zapret2 does not get Discord
-# through.
+# home-manager/modules/warp-launchers.nix are the fallback for when zapret2
+# does not get Discord through.
 { lib, pkgs, ... }:
 let
   port = 1080;

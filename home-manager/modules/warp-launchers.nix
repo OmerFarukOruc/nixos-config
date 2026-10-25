@@ -1,5 +1,5 @@
 # Desktop launchers that send Discord and Brave through the WARP proxy of
-# warp.nix, for when zapret2 does not get Discord through.
+# nixosModules/warp.nix, for when zapret2 does not get Discord through.
 {
   config,
   lib,

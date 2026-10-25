@@ -53,7 +53,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
 | Secrets | sops-nix with age on nixos-desktop and nixos-rog |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
-| DPI bypass | zapret2 for Discord on nixos-desktop and nixos-rog |
+| DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog |
 | Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 

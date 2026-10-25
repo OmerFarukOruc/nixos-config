@@ -26,6 +26,7 @@ in
     ../../home-manager/modules/heavy.nix
     ../../home-manager/modules/box-view.nix
     ../../home-manager/modules/sshfs-risoluto-dev-1.nix
+    ../../home-manager/modules/warp-launchers.nix
   ];
 
   # The AWS CLI and the Roles Anywhere credential helper, which reads its key

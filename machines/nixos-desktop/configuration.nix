@@ -7,6 +7,7 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     ../../nixosModules/nextdns.nix
+    ../../nixosModules/warp.nix
     ../../nixosModules/zapret2.nix
     ./fans.nix
     ./gpu.nix
