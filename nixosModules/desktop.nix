@@ -180,6 +180,9 @@ in
         # Video and Wallpaper Engine wallpapers. Wallpaper Engine scenes need
         # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
+        # Claude Code's sound hook (the dotfiles' stop-sound.sh) asks KWin
+        # whether Ghostty is the focused window.
+        pkgs.kdotool
         pkgs.libsecret
       ];
     })
