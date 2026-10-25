@@ -7,12 +7,15 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     ../../nixosModules/nextdns.nix
+    ../../nixosModules/zapret2.nix
     ./fans.nix
     ./gpu.nix
     ./openrgb.nix
   ];
 
   boot.loader.limine.style.interface.branding = "NixOS on desktop";
+  # The wired port with the default route; wlp15s0 is down and left out.
+  services.zapret2.firewall.interfaces = [ "enp14s0" ];
   # Windows Boot Manager is on the Samsung disk's ESP, named by its partition
   # GUID because Limine's boot() means the ESP it booted from.
   boot.loader.limine.extraEntries = ''
