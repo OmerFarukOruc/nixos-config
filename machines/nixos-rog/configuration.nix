@@ -15,6 +15,7 @@
     ./auto-update.nix
     ./claude-usage-read.nix
     ./cpu-limits.nix
+    ../../nixosModules/envfs.nix
     ./graphics.nix
     ./low-battery.nix
     ./media.nix
@@ -51,10 +52,6 @@
     enable = true;
     binfmt = true;
   };
-
-  # Scripts from other repositories run with their `#!/bin/bash` shebangs.
-  # envfs serves /bin and /usr/bin from the PATH of the calling process.
-  services.envfs.enable = true;
 
   # The Windows system partition, read-only, mounted on first access.
   fileSystems."/mnt/windows" = {

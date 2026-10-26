@@ -6,6 +6,7 @@
 {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
     ../../nixosModules/warp.nix
     ../../nixosModules/zapret2.nix
@@ -31,10 +32,6 @@
 
   # Windows keeps the hardware clock in local time.
   time.hardwareClockInLocalTime = true;
-
-  # Scripts from other repositories run with their `#!/bin/bash` shebangs.
-  # envfs serves /bin and /usr/bin from the PATH of the calling process.
-  services.envfs.enable = true;
 
   nix.daemonCPUSchedPolicy = "batch";
 
