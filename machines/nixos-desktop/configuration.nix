@@ -33,6 +33,12 @@
   # Windows keeps the hardware clock in local time.
   time.hardwareClockInLocalTime = true;
 
+  # Runs AppImages directly, through binfmt.
+  programs.appimage = {
+    enable = true;
+    binfmt = true;
+  };
+
   nix.daemonCPUSchedPolicy = "batch";
 
   # Compressed swap in RAM, sized to all of it. No disk swap.
