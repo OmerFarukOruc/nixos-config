@@ -21,7 +21,10 @@ let
 in
 {
   # Home Manager uses these packages (useGlobalPkgs), so its overlays go here.
-  nixpkgs.overlays = [ (import ../overlays/khal.nix) ];
+  nixpkgs.overlays = [
+    (import ../overlays/khal.nix)
+    (import ../overlays/ghostty.nix)
+  ];
 
   imports = [ inputs.home-manager.nixosModules.home-manager ];
 
