@@ -161,6 +161,15 @@ in
       '';
     })
 
+    (lib.mkIf (hasPlasma || hasNiri) {
+      # GTK's automatic font rendering at a fractional scale drops the top pixel
+      # row of Inter at libadwaita's caption size (82 %) under the GL and Vulkan
+      # renderers (observed 2026-10-26 with GTK 4.22.4). Manual follows the
+      # desktop's hinting and antialiasing instead. GTK on Wayland reads it
+      # through the settings portal, which ignores gtk-4.0/settings.ini.
+      dconf.settings."org/gnome/desktop/interface".font-rendering = "manual";
+    })
+
     (lib.mkIf hasNiri {
       # Plasma's platform theme gives every Qt application the colors and icons
       # that kdeglobals names, which theme.nix writes from the scheme. qt6ct is
