@@ -51,7 +51,8 @@ in
         kill -KILL "$pid" || true
       done < "$procs"
       for _ in $(seq 50); do
-        [ -n "$(cat "$procs")" ] || exit 0
+        # systemd removes the cgroup once it is empty.
+        [ -n "$(cat "$procs" 2>/dev/null)" ] || exit 0
         sleep 0.1
       done
       echo "envfs daemons still running: $(tr '\n' ' ' < "$procs")" >&2
