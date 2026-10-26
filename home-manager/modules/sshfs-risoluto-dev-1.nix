@@ -30,6 +30,13 @@ in
       # The user manager has no network-online.target; a start before the
       # network is up fails and Restart tries again.
       StartLimitIntervalSec = 0;
+      # A switch that changes NetworkManager stops it until activation ends,
+      # so a restart then cannot reach the box: it held activation for the 30 s
+      # of ExecStartPost and left the unit waiting to restart, which fails
+      # deploy.sh's user service check (exit 75, journal 2026-10-26 20:08).
+      # The running mount keeps working and reconnects; the next start uses
+      # the new unit.
+      X-SwitchMethod = "keep-old";
     };
     Service = {
       Type = "exec";
