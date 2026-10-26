@@ -53,6 +53,9 @@ unpublished=false
 host=$(</proc/sys/kernel/hostname)
 dir=$STATE_DIRECTORY/repo
 failed=$STATE_DIRECTORY/failed-candidate
+# "<epoch> <status> <invocation id>" of the run that recorded $failed, so a run
+# that skips the candidate can say why.
+failed_why=$STATE_DIRECTORY/failed-candidate.why
 # The deploy.sh exit status that held the last run back.
 waiting=$STATE_DIRECTORY/waiting
 # "<commit> <system>" when main at that commit builds the system this host
@@ -424,7 +427,20 @@ while :; do
     git diff -- . ':!devenv.lock'
   } | sha256sum)
   if [[ -f $failed && $(<"$failed") == "$candidate" ]]; then
-    echo "This candidate failed before; waiting for main or an upstream to move."
+    # shellcheck source=/dev/null
+    . scripts/lib/running-revision.sh
+    if runs_tree_of "$base"; then
+      runs="$host still runs main at ${base:0:12}."
+    else
+      runs="$host keeps the system it runs."
+    fi
+    if read -r failed_at failed_status failed_run 2>/dev/null <"$failed_why"; then
+      error=$(journalctl "_SYSTEMD_INVOCATION_ID=$failed_run" -g '^\s*error: [A-Za-z]' -o cat |
+        sed -E -n '1{s/^[[:space:]]*(error: )?//;s|/nix/store/[a-z0-9]{32}-|/nix/store/…-|g;p}') || true
+      echo "This update failed at $(date -d "@$failed_at" '+%F %H:%M') with exit $failed_status and waits for main or an upstream to move. $runs${error:+ First error: ${error:0:200}}"
+    else
+      echo "This update failed before and waits for main or an upstream to move. $runs"
+    fi
     exit 0
   fi
 
@@ -544,6 +560,7 @@ while :; do
     # that could not be armed, 74 a full ESP and 79 an unmounted /boot; none is
     # the candidate's fault, so the next run tries it again.
     if ((status != 70 && status != 71 && status != 74 && status != 79)); then
+      echo "$(date +%s) $status ${INVOCATION_ID:-}" >"$failed_why"
       echo "$candidate" >"$failed"
     fi
     # 73 is a switch whose boot entries failed, so the host runs what it
@@ -554,7 +571,7 @@ while :; do
     fail "Update failed" "Exit $status. See: journalctl -u $unit_name"
     exit 1
   fi
-  rm -f -- "$failed" "$waiting"
+  rm -f -- "$failed" "$failed_why" "$waiting"
   if $main_only; then
     unpublished=false
     notify normal "System updated" "$host now runs main at ${base:0:12}." || true
