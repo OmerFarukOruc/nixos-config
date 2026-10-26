@@ -4,6 +4,7 @@
     ./modules/appearance.nix
     ./modules/applications.nix
     ./modules/claude-code-theme.nix
+    ./modules/dev-ca.nix
     ./modules/editor
     ./modules/git.nix
     ./modules/herdr.nix
