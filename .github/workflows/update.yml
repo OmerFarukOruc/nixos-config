@@ -6,6 +6,11 @@ name: update
 # public cache holds themselves, so nothing is pushed to a cache here.
 on:
   workflow_dispatch:
+    inputs:
+      always:
+        description: Build and check main itself when nothing moved
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -57,14 +62,24 @@ jobs:
       # The later jobs fetch this commit from the bundle, so each of them builds
       # and checks the same commit.
       - id: commit
+        env:
+          ALWAYS: ${{ inputs.always }}
         run: |
-          if [[ ! -s $RUNNER_TEMP/changes ]]; then
-            echo "Everything is current." >>"$GITHUB_STEP_SUMMARY"
-            echo "changed=false" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ ! -s $RUNNER_TEMP/changes ]]; then
+            echo "Everything is current." >>"$GITHUB_STEP_SUMMARY"
+            if [[ $ALWAYS != true ]]; then
+              echo "changed=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # An empty commit, so the later jobs build and check main's tree.
+            echo "always=true: the build and check jobs run on main itself." >>"$GITHUB_STEP_SUMMARY"
+            git commit --quiet --allow-empty -m "test: build and check main"
+            git bundle create "$RUNNER_TEMP/update.bundle" "HEAD^..HEAD"
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
           printf '%s\n\n' "chore(flake): update inputs to their newest releases" | cat - "$RUNNER_TEMP/changes" >"$RUNNER_TEMP/message"
           # Only the files an update moves. The run executed the updated
           # inputs' code, so an edit anywhere else fails it.

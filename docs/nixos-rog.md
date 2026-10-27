@@ -76,7 +76,8 @@ or with a manual `./deploy.sh nixos-rog switch`.
 `.github/workflows/update.yml` is taking over steps 1 to 5 on GitHub. Started
 by hand (`gh workflow run update.yml`), it moves the inputs and apps with
 `scripts/prepare-update.sh` by the same rules, builds every host's system and
-runs both checks on that commit. It merges nothing yet, and it pushes nothing
+runs both checks on that commit. With `-f always=true` it builds and checks
+`main` itself when nothing moved. It merges nothing yet, and it pushes nothing
 to a cache, so each host still compiles the packages listed under
 [Packages no cache holds](#packages-no-cache-holds).
 
