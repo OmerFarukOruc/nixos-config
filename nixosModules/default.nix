@@ -19,6 +19,7 @@
     ./tailscale.nix
     ./server-access.nix
     ./ssh.nix
+    ./telemetry.nix
     ./workstation.nix
   ];
 }
