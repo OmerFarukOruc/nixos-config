@@ -18,8 +18,11 @@ in
   # claude-accounts tools run under python3. claude-accounts also runs jq, gum
   # (its list table), tmux and ssh (logins on another host). The checkout's
   # pre-commit hook installs ruff and shellcheck through mise at the versions
-  # the checkout pins, for commits typed in a shell too.
+  # the checkout pins, for commits typed in a shell too. The checkout's
+  # sandbox-run, which the shared agent rules require for a probe of a kill or
+  # rm command, runs bwrap.
   home.packages = [
+    pkgs.bubblewrap
     pkgs.python3
     pkgs.mise
     pkgs.jq
