@@ -15,7 +15,7 @@ Omer uses one SSH key, `~/.ssh/id_ed25519_omer`, on every device he works from. 
 ## Language
 
 **This PC**:
-nixos-desktop, where an agent usually runs. An agent can also run on nixos-rog.
+the host Omer is working on, nixos-desktop or nixos-rog. An agent runs on either; `hostname` names the agent's host, which need not be Omer's. When the conversation does not show which host Omer means, name the host in the answer, such as "nixos-rog (the laptop) builds ...".
 _Avoid_: the desktop
 
 **The laptop**:

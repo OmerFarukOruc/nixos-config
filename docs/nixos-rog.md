@@ -151,9 +151,10 @@ cached, on GitHub ([kernel-cache](../kernel-cache/README.md)).
 
 whisper-cpp is one of them. `machines/nixos-rog/media.nix` builds it for the
 RTX 4070's CUDA architecture (sm_89) only, so the laptop compiles it each time
-an update changes its derivation. In a test on 2026-10-23, a cold build of
-nixos-rog's whole system on a GitHub runner with 4 CPUs took 1 h 6 min and the
-other hosts 10 and 8 minutes (job start and end times of the run).
+an update changes its derivation. Each run of the update workflow builds cold.
+In three runs on 2026-10-27, the nixos-rog build job took 95 to 102 min,
+nixos-desktop 28 to 31 min and nixos-latitude 25 to 42 min (job start and end
+times of the runs).
 
 ## Failures and notifications
 
