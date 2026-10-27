@@ -105,7 +105,8 @@ server_record() {
     return 1
   }
   jq -e '.access | .tailscale and .tailscaleSsh and .openssh and (.sshOpenFirewall | not)
-    and .sshListenAddresses == ["127.0.0.1:22"] and .udpPorts == [.tailscalePort]' \
+    and .sshPorts == [2222] and .sshListenAddresses == [] and .sshAuthentication == "publickey"
+    and .udpPorts == [.tailscalePort]' \
     <<<"$out" >/dev/null || {
     echo "The server record's access setup changed: $(jq -c .access <<<"$out")" >&2
     return 1

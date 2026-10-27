@@ -3,7 +3,6 @@
 {
   config,
   inputs,
-  lib,
   ...
 }:
 let
@@ -24,7 +23,6 @@ in
 
   sops = {
     defaultSopsFile = ../../secrets/risoluto-dev-1.yaml;
-    age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets = {
       oruc-password-hash.neededForUsers = true;
       root-password-hash.neededForUsers = true;
@@ -75,6 +73,9 @@ in
   environment.etc."systemd/network/10-public.network".source =
     config.sops.templates."10-public.network".path;
 
+  # A password hash that changes in the sops file applies at the next
+  # activation, and users that this configuration does not declare go away.
+  users.mutableUsers = false;
   users.groups.oruc.gid = 1003;
   users.users.oruc = {
     uid = 1003;
@@ -103,15 +104,15 @@ in
   # Agent sessions run in the user slice, so systemd-oomd must not kill it for
   # swap use (nixosModules/memory.nix). The box has 62 GiB of RAM (observed on
   # 2026-10-27); the numbers below are guesses for many agents, not measurements.
-  systemd.slices.user.sliceConfig.ManagedOOMSwap = lib.mkForce "auto";
-  boot.kernel.sysctl."vm.swappiness" = lib.mkForce 100;
+  systemd.slices.user.sliceConfig.ManagedOOMSwap = "auto";
+  boot.kernel.sysctl."vm.swappiness" = 100;
   zramSwap = {
     enable = true;
     algorithm = "zstd";
     memoryPercent = 100;
     memoryMax = 16 * 1024 * 1024 * 1024;
   };
-  services.journald.settings.Journal.SystemMaxUse = lib.mkForce "2G";
+  services.journald.settings.Journal.SystemMaxUse = "2G";
   # /tmp stays on the disk and loses files nobody touched for 7 days. The file
   # sorts before systemd's tmp.conf, so its age wins.
   systemd.tmpfiles.settings.oruc-tmp."/tmp".q = {

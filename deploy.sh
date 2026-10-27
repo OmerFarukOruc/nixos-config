@@ -37,8 +37,8 @@ host=$1
 action=${2:-switch}
 repo_dir=$(cd "$(dirname "$0")" && pwd)
 # A dead connection ends after 30 s here and after 45 s in the target's sshd
-# (nixosModules/connectivity.nix, nixosModules/server-access.nix). The target's
-# end frees the deploy lock that the connection holds.
+# (nixosModules/ssh.nix). The target's end frees the deploy lock that the
+# connection holds.
 ssh_opts=(-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 deployer=$(</proc/sys/kernel/hostname)
 local_target=false

@@ -1,7 +1,9 @@
 # The host itself: units, firmware, network from the sops template, sshd,
 # firewall, users and disk. Each module's own checks go in a file of their own.
 
-for unit in ["sshd", "sshd-tailnet-listen", "tailscaled", "systemd-networkd"]:
+import socket
+
+for unit in ["sshd", "tailscaled", "systemd-networkd"]:
     machine.wait_for_unit(f"{unit}.service")
 
 # The disk boots through Limine under both firmwares; only OVMF has EFI variables.
@@ -20,9 +22,12 @@ machine.wait_until_succeeds("ip -4 -o addr show scope global | grep -F 10.0.2.15
 machine.succeed("ip -4 route show default | grep -F 'via 10.0.2.2'")
 machine.succeed("ip -6 route show default | grep -F 'via fe80::1'")
 
-# sshd listens on loopback only until the tailnet address exists.
-machine.succeed(r"ss -Htln | grep -E '127\.0\.0\.1:22 '")
-machine.fail(r"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):(22|2222) '")
+# sshd listens on every address, port 2222 only; port 22 on the tailnet address
+# belongs to Tailscale SSH.
+machine.succeed(r"ss -Htln | grep -E '(0\.0\.0\.0|\*):2222 '")
+machine.succeed(r"ss -Htln | grep -E '\[::\]:2222 '")
+machine.fail(r"ss -Htln | grep -E ':22 '")
+machine.succeed("timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222; [[ $line == SSH-2.0-* ]]'")
 
 
 def sshd_settings(user):
@@ -32,6 +37,7 @@ def sshd_settings(user):
 
 oruc = sshd_settings("oruc")
 assert "permitrootlogin prohibit-password" in oruc, "root may log in other than by key"
+assert "port 2222" in oruc, "sshd does not listen on port 2222"
 assert "passwordauthentication no" in oruc, "password logins are on"
 assert "allowusers root" in oruc and "allowusers oruc" in oruc, "AllowUsers is not root and oruc"
 assert (
@@ -57,6 +63,27 @@ machine.succeed("test $(sysctl -n net.ipv6.conf.all.forwarding) = 1")
 machine.succeed("test $(sysctl -n vm.swappiness) = 100")
 machine.succeed("iptables -S nixos-fw | grep -Fx -e '-A nixos-fw -p udp -m udp --dport 41641 -j nixos-fw-accept'")
 machine.fail("iptables -S nixos-fw | grep -E -e '^-A nixos-fw .*-p tcp'")
+machine.succeed("iptables -S nixos-fw | grep -Fx -e '-A nixos-fw -i tailscale0 -j nixos-fw-accept'")
+machine.fail("ip6tables -S nixos-fw | grep -E -e '^-A nixos-fw .*-p tcp'")
+machine.succeed("ip6tables -S nixos-fw | grep -Fx -e '-A nixos-fw -i tailscale0 -j nixos-fw-accept'")
+
+
+# A client outside the VM reaches sshd through eth0, where the firewall drops
+# port 2222. The control rule shows the forwarded connection works, so the drop
+# comes from the firewall alone.
+def ssh_banner():
+    try:
+        with socket.create_connection(("127.0.0.1", 12222), timeout=5) as conn:
+            return conn.recv(64)
+    except OSError:
+        return b""
+
+
+machine.forward_port(12222, 2222)
+assert not ssh_banner().startswith(b"SSH-"), "sshd answers outside the tailnet interface"
+machine.succeed("iptables -I nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
+assert ssh_banner().startswith(b"SSH-"), "the forwarded connection does not reach sshd"
+machine.succeed("iptables -D nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
 
 # The disk layout of disk.nix.
 lsblk = machine.succeed("lsblk -no SIZE,PARTTYPENAME /dev/vda")

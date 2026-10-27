@@ -33,6 +33,6 @@ in
   sops = {
     validateSopsFiles = false;
     defaultSopsFile = lib.mkForce "${secrets}/secrets.yaml";
-    age.sshKeyPaths = lib.mkForce [ "${secrets}/ssh_host_ed25519_key" ];
+    age.sshKeyPaths = [ "${secrets}/ssh_host_ed25519_key" ];
   };
 }

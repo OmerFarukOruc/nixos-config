@@ -29,9 +29,9 @@ the modules for graphical apps, fonts, the wallpaper and the failure popup skip
 a machine with no session. `connectivity.nix` (NetworkManager, SSH and sudo) is
 workstation-only, so the schema rejects `features.remoteAccess` on a server, and
 it rejects `theme.schemes`, because only a workstation gets the `theme` command.
-`nixosModules/tailscale.nix` serves every host, and
-`nixosModules/server-access.nix` adds a server's Tailscale flags and SSH
-([risoluto-dev-1](risoluto-dev-1.md#access)). `ci/server.nix` evaluates a
+`nixosModules/tailscale.nix` and `nixosModules/ssh.nix` (the settings every
+sshd shares) serve every host, and `nixosModules/server-access.nix` adds a
+server's Tailscale flags and SSH ([risoluto-dev-1](risoluto-dev-1.md#access)). `ci/server.nix` evaluates a
 server record with no sessions, and `ci/checks.sh` fails when one of the pieces
 it lists comes in or when the schema stops rejecting one of the three records it
 rejects: `theme.schemes` or `features.remoteAccess` on a server, and `biosDevice`

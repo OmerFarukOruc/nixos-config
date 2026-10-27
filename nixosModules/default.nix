@@ -18,6 +18,7 @@
     ./amd-graphics.nix
     ./tailscale.nix
     ./server-access.nix
+    ./ssh.nix
     ./workstation.nix
   ];
 }

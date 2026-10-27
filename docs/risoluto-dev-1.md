@@ -44,13 +44,10 @@ drops ping.
 
 - Tailscale with its own SSH server (`--ssh`), an exit node, and IP forwarding
   (`useRoutingFeatures = "server"`).
-- OpenSSH on 127.0.0.1:22 and on the tailnet address, port 2222. Port 22 on the
-  tailnet address belongs to Tailscale SSH. The tailnet address is not in this
-  repository, and it exists only while Tailscale is logged in. The unit
-  `sshd-tailnet-listen` reads it from tailscaled every 10 seconds, writes it
-  into `/run/sshd-tailnet.conf`, which `sshd_config` includes, and reloads
-  sshd. Until then, such as on a node that is not logged in, sshd listens on
-  loopback only.
+- OpenSSH on port 2222, on every address, as the workstations run it with
+  `openFirewall = false` (`nixosModules/ssh.nix`). The firewall drops port 2222
+  on the public interface and accepts everything on tailscale0, so only the
+  tailnet reaches sshd. Port 22 on the tailnet address belongs to Tailscale SSH.
 - Root logs in by key, and only with the three keys in the module (Omer's shared
   key, the box's own key and the co-admin's). oruc keeps `~/.ssh/authorized_keys`
   on top of the declared key, because the Grok bots' login rewrites that file.
@@ -76,7 +73,9 @@ key of the box's SSH host key, as for the other hosts (`.sops.yaml`). Edit it
 with `sops` as [Secrets](nixos-rog.md#secrets) describes. It holds the password
 hashes of root and oruc (`neededForUsers`, so they exist before the users do)
 and the public network: the IPv4 address with its prefix, the IPv4 gateway, the
-IPv6 address with its prefix, and three resolvers.
+IPv6 address with its prefix, and three resolvers. Passwords change only in
+this file, because `users.mutableUsers` is false and a `passwd` on the box is
+lost at the next activation.
 
 `configuration.nix` renders those values into a systemd-networkd `.network` file
 with `sops.templates`, so no address is in this public repository. sops-nix
@@ -104,9 +103,11 @@ without QEMU's kernel loader, so the firmware and Limine start the system. The
 Python checks of `ci/server-boot/checks/` run last. They cover the units, the
 address and routes from the sops template, the sshd listeners and settings, the
 users, the firewall, the sysctls, the disk layout, and the swap, journal and
-/tmp settings. A failed build prints the end of the driver's log, and
-`nix log <derivation>` on that host prints all of it. Nix caches a pass until
-the host or the test changes, and `ci/checks.sh` only evaluates both tests.
+/tmp settings. A connection from outside the VM to port 2222 must get no
+answer, and must get sshd's banner once the test opens that port. A failed
+build prints the end of the driver's log, and `nix log <derivation>` on that
+host prints all of it. Nix caches a pass until the host or the test changes,
+and `ci/checks.sh` only evaluates both tests.
 
 To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
 run in path order on `machine` (the booted host), `efi` is True under OVMF, and
@@ -124,9 +125,8 @@ The test shows that the layout installs, that Limine boots from it under both
 firmware types, that the units start, and that the template and the user
 settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets file, that the netcup network works, that
-Tailscale logs in, that sshd takes up a tailnet address, that `sshd_config`
-includes the file with that address, or that the BIOS stage installs from the
-kexec installer. It also does not cover the VGA console. QEMU gives the test
-only a serial console and no guest agent channel, so `qemu-guest-agent` does
-not start. The VM has 1 GiB of RAM instead of 62 GiB, and a 9p `/nix/store`,
-which is disko's test wrapper.
+Tailscale logs in, that a tailnet peer reaches sshd, or that the BIOS stage
+installs from the kexec installer. It also does not cover the VGA console. QEMU
+gives the test only a serial console and no guest agent channel, so
+`qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
+and a 9p `/nix/store`, which is disko's test wrapper.

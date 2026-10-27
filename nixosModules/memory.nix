@@ -22,7 +22,7 @@ in
   # main process, which closed every tab. With swap and memory both above 90%,
   # this makes systemd-oomd kill the leaf cgroup with the most swap, such as
   # that one tab (systemd-oomd.service(8), oomd.conf(5) SwapUsedLimit=).
-  systemd.slices.user.sliceConfig.ManagedOOMSwap = "kill";
+  systemd.slices.user.sliceConfig.ManagedOOMSwap = lib.mkDefault "kill";
 
   # Each Ghostty tab is a transient scope, and this drop-in matches every
   # one by its name prefix. The limits keep a fork loop or a leak inside one
@@ -78,7 +78,7 @@ in
     kernel.sysctl = {
       # zram reads back faster than the SSD, so swap before dropping page cache
       # (Documentation/admin-guide/sysctl/vm.rst, swappiness).
-      "vm.swappiness" = 150;
+      "vm.swappiness" = lib.mkDefault 150;
       # Read one page per swap-in; readahead buys nothing on zram.
       "vm.page-cluster" = 0;
     };

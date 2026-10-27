@@ -113,12 +113,14 @@ in
     ghosttyScope = config.systemd.user.units ? "app-ghostty-surface-transient-.scope";
   };
 
-  # What nixosModules/server-access.nix gives a server.
+  # What nixosModules/server-access.nix and ssh.nix give a server.
   access = {
     tailscale = config.services.tailscale.enable;
     tailscaleSsh = lib.elem "--ssh" config.services.tailscale.extraSetFlags;
     openssh = config.services.openssh.enable;
     sshOpenFirewall = config.services.openssh.openFirewall;
+    sshPorts = config.services.openssh.ports;
+    sshAuthentication = config.services.openssh.settings.AuthenticationMethods;
     sshListenAddresses = map (
       a: "${a.addr}:${toString a.port}"
     ) config.services.openssh.listenAddresses;

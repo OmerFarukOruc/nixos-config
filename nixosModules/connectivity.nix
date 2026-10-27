@@ -15,19 +15,11 @@ lib.mkIf (cfg.kind == "workstation") {
 
   services.openssh = lib.mkIf cfg.features.remoteAccess {
     enable = true;
-    openFirewall = false;
     # Only the keys declared in this repository log in; ~/.ssh/authorized_keys
     # is ignored.
     authorizedKeysInHomedir = false;
     settings = {
-      AuthenticationMethods = "publickey";
-      PasswordAuthentication = false;
-      KbdInteractiveAuthentication = false;
       PermitRootLogin = "no";
-      # Closes the session of a client that stopped answering after 45 s, which
-      # frees a deploy lock that session held.
-      ClientAliveInterval = 15;
-      ClientAliveCountMax = 3;
     };
   };
 
