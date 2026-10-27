@@ -4,7 +4,7 @@
 
 # nixos-config
 
-**A NixOS desktop and two NixOS laptops in one flake, deployed over Tailscale,<br>
+**A NixOS desktop, two NixOS laptops and a server in one flake, deployed over Tailscale,<br>
 with a CachyOS kernel that GitHub compiles so the hosts never do.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
@@ -34,6 +34,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
+| `risoluto-dev-1` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS and UEFI |
 
 `machines/inventory.nix` is the source of truth for this table.
 
@@ -42,7 +43,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Part | Choice |
 | --- | --- |
 | Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built on GitHub |
-| Boot loader | Limine on nixos-rog and nixos-desktop, systemd-boot on nixos-latitude |
+| Boot loader | Limine on nixos-rog, nixos-desktop and risoluto-dev-1, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
 | Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |
@@ -51,7 +52,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Login shell | zsh with oh-my-zsh and Starship |
 | Editors | VS Code, and Neovim through nvf |
 | Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
-| Secrets | sops-nix with age on nixos-desktop and nixos-rog |
+| Secrets | sops-nix with age on nixos-desktop, nixos-rog and risoluto-dev-1 |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog |
@@ -171,6 +172,7 @@ checkout with Nix. The update workflow runs them.
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` |
+| `scripts/boot-server-vm-on-rog.sh [bios \| uefi ...]` | build risoluto-dev-1's disko image with test secrets on nixos-rog and boot it under SeaBIOS and OVMF; exit 1 unless the guest reports the right firmware and active sshd, tailscaled and systemd-networkd |
 | `scripts/check-secrets.sh [FILE]` | on nixos-desktop or nixos-rog, decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
@@ -182,7 +184,7 @@ checkout with Nix. The update workflow runs them.
 
 </details>
 
-`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop or nixos-latitude), `--allow-dirty` for a
+`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop or nixos-latitude; risoluto-dev-1 runs Debian until its move), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
 says when to use either flag. Every deploy command can change boot or running
 system state.
@@ -213,6 +215,7 @@ an update of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [nixos-rog](docs/nixos-rog.md) | the update workflow, the deploy unit and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
+| [risoluto-dev-1](docs/risoluto-dev-1.md) | the server host: disk, boot, access, secrets, and its boot test in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how GitHub builds the kernel and how hosts follow it |

@@ -93,8 +93,8 @@ box_browser() {
   }
 }
 
-# No host is a server, so this evaluates a server record with Limine's BIOS stage
-# and no login sessions (ci/server.nix).
+# Evaluates a server record with Limine's BIOS stage and no login sessions
+# (ci/server.nix), whatever the hosts are, and the schema's rejections.
 server_record() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --impure \
@@ -103,16 +103,39 @@ server_record() {
     echo "The server record gets a workstation piece: $(jq -c '.workstation | with_entries(select(.value)) | keys' <<<"$out")" >&2
     return 1
   }
+  jq -e '.access | .tailscale and .tailscaleSsh and .openssh and (.sshOpenFirewall | not)
+    and .sshListenAddresses == ["127.0.0.1:22"] and .udpPorts == [.tailscalePort]' \
+    <<<"$out" >/dev/null || {
+    echo "The server record's access setup changed: $(jq -c .access <<<"$out")" >&2
+    return 1
+  }
   jq -e '.boot | .enable and .efiSupport and .biosSupport and .biosDevice == "/dev/vda"
     and (.canTouchEfiVariables | not) and .efiInstallAsRemovable and .extraInstallCommands == ""' \
     <<<"$out" >/dev/null || {
     echo "The server record's boot loader does not follow its record: $(jq -c .boot <<<"$out")" >&2
     return 1
   }
-  jq -e '.rogBoot | (.efiInstallAsRemovable | not) and .fallbackCopy' <<<"$out" >/dev/null || {
-    echo "nixos-rog's Limine lost the fallback copy of its EFI binary: $(jq -c .rogBoot <<<"$out")" >&2
+  jq -e '.limineHosts | (keys | contains(["nixos-desktop", "nixos-rog"]))
+    and all(.[]; (.efiInstallAsRemovable | not) and .fallbackCopy)' \
+    <<<"$out" >/dev/null || {
+    echo "A Limine host lost the fallback copy of its EFI binary: $(jq -c .limineHosts <<<"$out")" >&2
     return 1
   }
+  jq -e '.accepted' <<<"$out" >/dev/null || {
+    echo "The schema rejects the server record itself, so the rejection checks below prove nothing." >&2
+    return 1
+  }
+  jq -e '.rejected | to_entries | map(select(.value | not)) | map(.key) | . == []' <<<"$out" >/dev/null || {
+    echo "The schema accepts what a server may not set: $(jq -c '.rejected | with_entries(select(.value | not)) | keys' <<<"$out")" >&2
+    return 1
+  }
+}
+
+# The image that scripts/boot-server-vm-on-rog.sh boots has to evaluate; its
+# boot runs by hand, because it needs KVM and minutes.
+server_vm() {
+  nix eval "${nix_opts[@]}" --raw --impure \
+    --expr '(import ./ci/server-vm.nix (builtins.getFlake (toString ./.))).image.drvPath' >/dev/null
 }
 
 # With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
@@ -128,6 +151,8 @@ echo
 check "box browser feature" box_browser
 echo
 check "server record" server_record
+echo
+check "server boot test image" server_vm
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)

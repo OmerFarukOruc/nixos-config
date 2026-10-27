@@ -7,7 +7,7 @@
 - [Home Manager](#home-manager)
 - [kernel-cache](#kernel-cache)
 
-The flake builds `nixos-desktop`, `nixos-latitude` and `nixos-rog`.
+The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `risoluto-dev-1`.
 
 ## Inventory
 
@@ -23,17 +23,25 @@ A new module goes in one of the two import lists and gates its own config on the
 record.
 
 A machine of kind `server` gets none of the workstation modules. Each of them
-gates on `kind == "workstation"`, on a feature, or on the machine's sessions,
-and the modules for graphical apps, fonts, the wallpaper and the failure popup
-skip a machine with no session. `connectivity.nix` (NetworkManager, Tailscale,
-SSH and sudo) is workstation-only, so the schema rejects `features.remoteAccess`
-on a server. `ci/server.nix` evaluates a server record with no sessions, and
-`ci/checks.sh` fails when one of the pieces it lists comes in.
+gates on `kind == "workstation"`, on a feature, on the machine's `gpu`
+(`intel-graphics.nix` and `amd-graphics.nix`), or on the machine's sessions, and
+the modules for graphical apps, fonts, the wallpaper and the failure popup skip
+a machine with no session. `connectivity.nix` (NetworkManager, SSH and sudo) is
+workstation-only, so the schema rejects `features.remoteAccess` on a server, and
+it rejects `theme.schemes`, because only a workstation gets the `theme` command.
+`nixosModules/tailscale.nix` serves every host, and
+`nixosModules/server-access.nix` adds a server's Tailscale flags and SSH
+([risoluto-dev-1](risoluto-dev-1.md#access)). `ci/server.nix` evaluates a
+server record with no sessions, and `ci/checks.sh` fails when one of the pieces
+it lists comes in or when the schema stops rejecting one of the three records it
+rejects: `theme.schemes` or `features.remoteAccess` on a server, and `biosDevice`
+with systemd-boot.
 
 `nixosModules/bootloader.nix` sets `boot.loader.efi.canTouchEfiVariables` to true
-as a default. A host whose firmware keeps no boot entries sets it to false, and
-Limine then installs its EFI binary at the firmware fallback path only. With
-`biosDevice` in the record, Limine also installs its BIOS stage on that disk.
+as a default. A machine that boots through BIOS sets it to false, because its
+firmware keeps no boot entries to write. Limine then installs its EFI binary at
+the firmware fallback path only. With `biosDevice` in the record, Limine also
+installs its BIOS stage on that disk, so one disk boots through either firmware.
 
 `machines/inventory.nix` holds one value per machine for the typed
 `oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:

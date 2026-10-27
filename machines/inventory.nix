@@ -114,6 +114,19 @@ let
         alwaysOn = true;
       };
     };
+
+    # Omer's dev box: a netcup KVM guest that runs his coding agents. It boots
+    # through BIOS, and Limine keeps it bootable through UEFI too.
+    risoluto-dev-1 = {
+      system = "x86_64-linux";
+      kind = "server";
+      formFactor = "desktop";
+      kernel.profile = "nixos";
+      bootloader = "limine";
+      biosDevice = "/dev/vda";
+      gpu = "unknown";
+      hasBattery = false;
+    };
   };
 
   machineSchema = import ./schema.nix { inherit inputs lib; };
@@ -167,6 +180,14 @@ assert builtins.deepSeq machines true;
     hostModules = [
       ./nixos-rog/configuration.nix
       ./nixos-rog/hardware-configuration.nix
+    ];
+  };
+
+  nixosConfigurations.risoluto-dev-1 = mkMachine {
+    machine = machines.risoluto-dev-1;
+    hostModules = [
+      ./risoluto-dev-1/configuration.nix
+      ./risoluto-dev-1/hardware-configuration.nix
     ];
   };
 }

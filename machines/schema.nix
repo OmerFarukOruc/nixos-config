@@ -83,7 +83,7 @@ let
       type = types.nullOr (types.strMatching "/dev/.+");
       default = null;
       example = "/dev/vda";
-      description = "Disk on which Limine also installs its BIOS stage, for a machine that boots through BIOS or either firmware. The EFI loader is always installed, so the machine needs an EFI system partition. With null Limine installs the EFI loader only.";
+      description = "Disk on which Limine also installs its BIOS stage, for a machine that boots through BIOS or either firmware. The EFI loader is always installed, so the machine needs an EFI system partition. A machine that boots through BIOS also sets boot.loader.efi.canTouchEfiVariables = false in its own files, because its firmware keeps no boot entries. With null Limine installs the EFI loader only.";
     };
 
     launcher = mkOption {

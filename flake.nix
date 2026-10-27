@@ -90,6 +90,12 @@
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # The disk layout of risoluto-dev-1, and the raw image that its boot test
+    # starts under BIOS and UEFI (ci/server-vm.nix).
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # A prebuilt nix-index database, refreshed weekly upstream, for comma and
     # command-not-found.
     nix-index-database = {

@@ -16,6 +16,8 @@
     ./home-manager.nix
     ./intel-graphics.nix
     ./amd-graphics.nix
+    ./tailscale.nix
+    ./server-access.nix
     ./workstation.nix
   ];
 }

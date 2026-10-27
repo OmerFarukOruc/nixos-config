@@ -4,13 +4,13 @@
 # Without --running it compares each host's system at REV with the system at
 # OLD, or at REV^ without OLD. A push of several commits needs OLD, the main
 # the push landed on. STATUS is affected, which means the host needs a deploy
-# of REV, or unchanged.
+# of REV, unchanged, or not-deployed for a host that does not run NixOS yet.
 # With --running it compares the system each host runs with REV's system.
 # STATUS is current, behind (the release the host runs is an ancestor of REV;
 # DETAIL lists the subjects of the commits it lacks, so the reader can tell
 # whose merges they are), other (the host runs a release that is not an
-# ancestor of REV, one from a dirty tree, or one with no release record) or
-# unreachable.
+# ancestor of REV, one from a dirty tree, or one with no release record),
+# unreachable, or not-deployed.
 # REV defaults to origin/main and must be pushed, because the evaluating host
 # (nixos-rog, or nixos-desktop while nixos-rog is offline) reads it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
 # usage error.
@@ -115,10 +115,17 @@ if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha
 fi
 new=$(systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
+# Hosts in the flake that still run another system. Remove a host from this
+# list when it runs NixOS from this repository.
+not_deployed=" risoluto-dev-1 "
 
 if ! $running; then
   old=$(systems "$parent")
   for host in "${hosts[@]}"; do
+    if [[ $not_deployed == *" $host "* ]]; then
+      printf '%s\tnot-deployed\truns Debian until it moves to NixOS\n' "$host"
+      continue
+    fi
     before=$(jq -r --arg h "$host" '.[$h].drv // "none"' <<<"$old")
     after=$(jq -r --arg h "$host" '.[$h].drv' <<<"$new")
     if [[ $before == "$after" ]]; then
@@ -131,6 +138,10 @@ if ! $running; then
 fi
 
 for host in "${hosts[@]}"; do
+  if [[ $not_deployed == *" $host "* ]]; then
+    printf '%s\tnot-deployed\truns Debian until it moves to NixOS\n' "$host"
+    continue
+  fi
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
   # The first line is the running system. The second holds the commit and the
   # dirty flag of the release record that names it.

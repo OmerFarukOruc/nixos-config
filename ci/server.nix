@@ -1,12 +1,16 @@
 # A server record: kind = "server", Limine with its BIOS stage beside the EFI
-# loader, and no login sessions. No host is a server yet, so no other check
-# evaluates this shape. Each value of `workstation` says whether a piece that
-# only a workstation or a desktop needs came in, so all must be false, and
-# `boot` shows that the boot loader follows the record.
+# loader, and no login sessions, without the files of any host (risoluto-dev-1
+# adds its own). Each value of `workstation` says whether a piece that only a
+# workstation or a desktop needs came in, so all must be false. `access` shows
+# the Tailscale and SSH setup of a server, and `boot` shows that the boot loader
+# follows the record. `accepted` and `rejected` run the record through the
+# schema of machines/schema.nix: the record itself must pass, and each change
+# that the schema forbids must fail.
 #
-# Takes the root flake; returns { drvPath, workstation, boot, rogBoot }. rogBoot
-# is the boot loader of a host that can write EFI variables, which keeps the
-# fallback copy.
+# Takes the root flake; returns { drvPath, workstation, access, boot, accepted,
+# rejected, limineHosts }. limineHosts holds the Limine settings of each host
+# that installs Limine and can write EFI variables, which keeps the fallback
+# copy.
 flake:
 let
   inherit (flake) inputs;
@@ -16,16 +20,7 @@ let
     modules = [
       ../nixosModules/default.nix
       {
-        oruc.machine = {
-          name = "server-record";
-          system = "x86_64-linux";
-          kind = "server";
-          formFactor = "desktop";
-          gpu = "unknown";
-          hasBattery = false;
-          bootloader = "limine";
-          biosDevice = "/dev/vda";
-        };
+        oruc.machine = record;
         nixpkgs.hostPlatform = "x86_64-linux";
         boot.loader.efi.canTouchEfiVariables = false;
         fileSystems = {
@@ -45,9 +40,40 @@ let
   inherit (system) config;
   home = config.home-manager.users.oruc;
 
+  # The record as machines/inventory.nix validates it, with changes merged in.
+  machineSchema = import ../machines/schema.nix { inherit inputs lib; };
+  record = {
+    name = "server-record";
+    system = "x86_64-linux";
+    kind = "server";
+    formFactor = "desktop";
+    gpu = "unknown";
+    hasBattery = false;
+    bootloader = "limine";
+    biosDevice = "/dev/vda";
+  };
+  validates =
+    change:
+    (builtins.tryEval (
+      builtins.deepSeq
+        (lib.evalModules {
+          modules = [
+            {
+              options.machine = machineSchema.machineOption;
+              config.machine = lib.recursiveUpdate record change;
+            }
+          ];
+        }).config.machine
+        true
+    )).success;
+
   hasPackage =
     prefixes: packages:
     lib.any (package: lib.any (prefix: lib.hasPrefix prefix (package.name or "")) prefixes) packages;
+  # A host that installs Limine and can write EFI variables keeps the copy of
+  # its EFI binary at the firmware fallback path.
+  isEfiLimine =
+    host: host.config.boot.loader.limine.enable && host.config.boot.loader.efi.canTouchEfiVariables;
   enabledFiles = files: lib.attrNames (lib.filterAttrs (_: file: file.enable) files);
 in
 {
@@ -55,8 +81,6 @@ in
 
   workstation = {
     networkManager = config.networking.networkmanager.enable;
-    tailscale = config.services.tailscale.enable;
-    openssh = config.services.openssh.enable;
     displayManager = config.services.displayManager.enable;
     sddm = config.services.displayManager.sddm.enable;
     plasma = config.services.desktopManager.plasma6.enable;
@@ -89,6 +113,19 @@ in
     ghosttyScope = config.systemd.user.units ? "app-ghostty-surface-transient-.scope";
   };
 
+  # What nixosModules/server-access.nix gives a server.
+  access = {
+    tailscale = config.services.tailscale.enable;
+    tailscaleSsh = lib.elem "--ssh" config.services.tailscale.extraSetFlags;
+    openssh = config.services.openssh.enable;
+    sshOpenFirewall = config.services.openssh.openFirewall;
+    sshListenAddresses = map (
+      a: "${a.addr}:${toString a.port}"
+    ) config.services.openssh.listenAddresses;
+    udpPorts = config.networking.firewall.allowedUDPPorts;
+    tailscalePort = config.services.tailscale.port;
+  };
+
   boot = {
     inherit (config.boot.loader.limine)
       enable
@@ -101,9 +138,16 @@ in
     inherit (config.boot.loader.efi) canTouchEfiVariables;
   };
 
-  rogBoot = {
-    inherit (flake.nixosConfigurations.nixos-rog.config.boot.loader.limine) efiInstallAsRemovable;
-    fallbackCopy =
-      flake.nixosConfigurations.nixos-rog.config.boot.loader.limine.extraInstallCommands != "";
+  accepted = validates { };
+
+  rejected = {
+    themeSchemes = !validates { theme.schemes = [ "catppuccin-mocha" ]; };
+    remoteAccess = !validates { features.remoteAccess = true; };
+    biosDeviceWithSystemdBoot = !validates { bootloader = "systemd-boot"; };
   };
+
+  limineHosts = lib.mapAttrs (_: host: {
+    inherit (host.config.boot.loader.limine) efiInstallAsRemovable;
+    fallbackCopy = host.config.boot.loader.limine.extraInstallCommands != "";
+  }) (lib.filterAttrs (_: isEfiLimine) flake.nixosConfigurations);
 }

@@ -6,6 +6,7 @@ keys:
   - &omer-all-devices ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h
   - &nixos-rog age1dv44zphjr702d598p7p4p35vk7834ttr8escl6geg0cuxx3mcukq6gm6gl
   - &nixos-desktop age1d5e58gp5cf272n7tyt02tmklzdck7d2yj5x2x08fcna3f0pj9vesagcwdh
+  - &risoluto-dev-1 age1aeavmprtx6wrnl99k7lhk5wyl0mjge2a57k4dtxfn8a9ef5lf5gspt0vaw
 creation_rules:
   - path_regex: secrets/nixos-rog\.yaml$
     key_groups:
@@ -17,3 +18,8 @@ creation_rules:
       - age:
           - *omer-all-devices
           - *nixos-desktop
+  - path_regex: secrets/risoluto-dev-1\.yaml$
+    key_groups:
+      - age:
+          - *omer-all-devices
+          - *risoluto-dev-1
