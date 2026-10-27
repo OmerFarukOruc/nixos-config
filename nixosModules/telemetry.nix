@@ -2,7 +2,7 @@
 # processes send to loopback, the journals of sshd and a list of units, and the
 # audit records of auditd. One OpenTelemetry collector (the contrib build)
 # ships all of it over gRPC with TLS to the central endpoint, which the host
-# passes as a file, because the endpoint is not in this public repository.
+# passes.
 #
 # The audit records reach the journal through auditd's syslog plugin and not
 # through journald's own audit socket, because records from that socket carry
@@ -20,7 +20,6 @@ let
 
   stateDirectory = "/var/lib/opentelemetry-collector";
   journalctl = lib.getExe' pkgs.systemd "journalctl";
-  endpoint = "\${env:OTLP_CENTRAL_ENDPOINT}";
 
   # The SigNoz Hosts page lists a host only when its system.* metrics carry
   # host.name.
@@ -75,7 +74,7 @@ let
   # the retry window covers. Logs retry forever, because an audit record has
   # no later copy; metrics and traces stop after 90 minutes.
   exporter = maxElapsed: {
-    inherit endpoint;
+    inherit (cfg) endpoint;
     timeout = "5s";
     tls.insecure = cfg.insecure;
     retry_on_failure = {
@@ -117,13 +116,10 @@ in
       description = "Value of deployment.environment.name on metrics and traces.";
     };
 
-    environmentFile = mkOption {
-      type = types.path;
-      description = ''
-        A systemd environment file that sets `OTLP_CENTRAL_ENDPOINT` to the
-        host and port of the central OTLP gRPC endpoint. A sops template keeps
-        the endpoint out of this repository.
-      '';
+    endpoint = mkOption {
+      type = types.str;
+      example = "otlp.example.com:4317";
+      description = "Host and port of the central OTLP gRPC endpoint.";
     };
 
     insecure = mkOption {
@@ -171,12 +167,6 @@ in
     services.opentelemetry-collector = {
       enable = true;
       package = pkgs.opentelemetry-collector-contrib;
-      # The build runs the collector's validate, which cannot see the
-      # environment file.
-      validateConfigOverrides = [
-        "exporters::otlp_grpc/central::endpoint=stub.invalid:4317"
-        "exporters::otlp_grpc/logs::endpoint=stub.invalid:4317"
-      ];
       settings = {
         extensions = {
           "file_storage/state" = {
@@ -352,12 +342,6 @@ in
           };
         };
       };
-    };
-
-    systemd.services.opentelemetry-collector = {
-      # The endpoint file comes from a sops template, which is rendered while
-      # the system activates, before any unit starts.
-      serviceConfig.EnvironmentFile = cfg.environmentFile;
     };
 
     # The Debian box logs sshd at VERBOSE, which adds lines to what SigNoz

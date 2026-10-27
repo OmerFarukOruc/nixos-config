@@ -88,8 +88,8 @@ advertisements are off.
 ## Telemetry
 
 `nixosModules/telemetry.nix` is for every server. `oruc.telemetry.enable` turns
-it on, and the host passes its environment name, the file that holds the
-endpoint, and the units to ship (`configuration.nix` does this for this box).
+it on, and the host passes its environment name, the endpoint, and the units
+to ship (`configuration.nix` does this for this box).
 The host name defaults to `networking.hostName`. The module holds no host value.
 
 It runs one OpenTelemetry collector, the contrib build, as
@@ -114,9 +114,8 @@ outage loses nothing that the retry window covers.
   listed 16 patterns of infra units. The new box lists `caddy.service` and
   `acme-*.service`, so each service that comes to the box later needs its unit
   in `journalUnits` before its lines ship.
-- The endpoint is the secret `otlp-central-endpoint`. A sops template renders
-  it into `OTLP_CENTRAL_ENDPOINT=...` for the unit's `EnvironmentFile`, and a
-  change restarts the collector.
+- The endpoint is a public DNS name that resolves to a tailnet address, so it
+  answers only on the tailnet. It is a plain option and no secret.
 
 The module also sets sshd's `LogLevel` to `VERBOSE`, which is what the Debian
 box logs at. `Accepted publickey` carries the key's fingerprint at the default
@@ -172,7 +171,7 @@ collector for a second login, and checks that the sink got each record after
 the restart, the unit journal line, and the host metrics. It proves that the
 collector loads its config, that auditd loads the rules, and that the audit and
 sshd records travel through the journal into the collector's pipeline and out
-over OTLP. It does not prove TLS, the real endpoint, the real secret, or
+over OTLP. It does not prove TLS, the real endpoint, or
 delivery to SigNoz, which the cutover proves.
 
 ## Boot test in a VM

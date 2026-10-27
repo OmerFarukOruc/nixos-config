@@ -1,5 +1,5 @@
 # The telemetry of the test machine exports to a sink on loopback instead of the
-# central endpoint (the endpoint value is in ../secrets.yaml). The sink is a
+# central endpoint. The sink is a
 # second collector that writes the logs and metrics it receives to files, one
 # JSON document per line. ../checks/10-telemetry.py reads them.
 { lib, pkgs, ... }:
@@ -27,6 +27,7 @@ let
 in
 {
   oruc.telemetry = {
+    endpoint = lib.mkForce "127.0.0.1:4317";
     insecure = true;
     journalUnits = [ "telemetry-unit-probe.service" ];
   };

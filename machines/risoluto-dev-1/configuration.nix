@@ -32,7 +32,6 @@ in
       network-dns-1 = { };
       network-dns-2 = { };
       network-dns-3 = { };
-      otlp-central-endpoint = { };
     };
     # The public address stays out of this repository, so networkd reads it
     # from a file that sops-nix renders when the system activates. On a boot
@@ -66,14 +65,10 @@ in
     };
   };
 
-  sops.templates."otel-collector.env" = {
-    restartUnits = [ "opentelemetry-collector.service" ];
-    content = "OTLP_CENTRAL_ENDPOINT=${secret "otlp-central-endpoint"}\n";
-  };
   oruc.telemetry = {
     enable = true;
     environment = "development";
-    environmentFile = config.sops.templates."otel-collector.env".path;
+    endpoint = "signoz.statuslantern.com:4317";
     filesystemMounts = [ "/tmp" ];
     journalUnits = [
       "caddy.service"
