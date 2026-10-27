@@ -36,13 +36,14 @@ lock_files() {
   done
 }
 
-# nix fmt checks the formatter, and host_systems checks the host derivations.
-# Refuse outputs they do not cover. nix fmt accepts a formatter name with
-# string context, but nix flake check does not.
+# nix fmt checks the formatter, host_systems checks the host derivations, and
+# server_boot evaluates the boot tests. Refuse outputs they do not cover. nix
+# fmt accepts a formatter name with string context, but nix flake check does
+# not.
 flake_outputs() {
   nix eval "${nix_opts[@]}" --json --no-write-lock-file '.#.' --apply '
     outputs:
-      builtins.attrNames outputs == [ "formatter" "nixosConfigurations" ]
+      builtins.attrNames outputs == [ "checks" "formatter" "nixosConfigurations" ]
       && builtins.attrNames outputs.formatter == [ "x86_64-linux" ]
       && builtins.isString outputs.formatter.x86_64-linux.name
       && !builtins.hasContext outputs.formatter.x86_64-linux.name
@@ -110,7 +111,7 @@ server_record() {
     return 1
   }
   jq -e '.boot | .enable and .efiSupport and .biosSupport and .biosDevice == "/dev/vda"
-    and (.canTouchEfiVariables | not) and .efiInstallAsRemovable and .extraInstallCommands == ""' \
+    and (.canTouchEfiVariables | not) and .efiInstallAsRemovable and .additionalFiles == {}' \
     <<<"$out" >/dev/null || {
     echo "The server record's boot loader does not follow its record: $(jq -c .boot <<<"$out")" >&2
     return 1
@@ -131,11 +132,16 @@ server_record() {
   }
 }
 
-# The image that scripts/boot-server-vm-on-rog.sh boots has to evaluate; its
-# boot runs by hand, because it needs KVM and minutes.
-server_vm() {
-  nix eval "${nix_opts[@]}" --raw --impure \
-    --expr '(import ./ci/server-vm.nix (builtins.getFlake (toString ./.))).image.drvPath' >/dev/null
+# The boot tests of the flake's checks have to evaluate. They run by hand
+# (docs/risoluto-dev-1.md, Boot test), because they need KVM and minutes.
+server_boot() {
+  local out
+  out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
+    --apply 'checks: builtins.mapAttrs (_: test: test.drvPath) checks') || return 1
+  jq -e 'keys | contains(["risoluto-dev-1-boot-bios", "risoluto-dev-1-boot-uefi"])' <<<"$out" >/dev/null || {
+    echo "The flake checks lack a boot test of risoluto-dev-1: $(jq -c keys <<<"$out")" >&2
+    return 1
+  }
 }
 
 # With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
@@ -152,7 +158,7 @@ check "box browser feature" box_browser
 echo
 check "server record" server_record
 echo
-check "server boot test image" server_vm
+check "server boot tests" server_boot
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)

@@ -137,6 +137,16 @@ let
       description = "Whether the machine has a battery.";
     };
 
+    deployed = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether the machine runs this configuration. A machine that sets false
+        runs another system, and scripts/affected-hosts.sh prints it as
+        not-deployed.
+      '';
+    };
+
     autoLogin = mkOption {
       type = types.bool;
       default = false;

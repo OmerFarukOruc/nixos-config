@@ -1,13 +1,11 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
   inherit (config.oruc.machine) bootloader biosDevice;
   limine = config.boot.loader.limine;
-  esp = config.boot.loader.efi.efiSysMountPoint;
   # Every listed generation keeps a kernel and initrd on the ESP. The menu lists
   # the newest this many generations, which is also angrr's newest-N rule. angrr
   # keeps older generations too (one per day, the running one and the booted
@@ -36,9 +34,12 @@ in
         # forgets its entries, for example after a BIOS update. Without
         # canTouchEfiVariables, nixpkgs installs the binary at the fallback path
         # only, and there is nothing to copy.
-        extraInstallCommands = lib.optionalString (!limine.efiInstallAsRemovable) ''
-          ${pkgs.coreutils}/bin/install -D -m 0644 ${esp}/EFI/limine/BOOTX64.EFI ${esp}/EFI/BOOT/BOOTX64.EFI
-        '';
+        # This is the file the installer wrote to \EFI\limine, as long as
+        # enrollConfig and secureBoot stay off; the installer would enroll or
+        # sign that copy in place and leave this one raw.
+        additionalFiles = lib.optionalAttrs (!limine.efiInstallAsRemovable) {
+          "efi/boot/BOOTX64.EFI" = "${limine.package}/share/limine/BOOTX64.EFI";
+        };
         # The BIOS stage goes on the record's disk, next to the EFI loader.
         biosSupport = biosDevice != null;
         biosDevice = lib.mkIf (biosDevice != null) biosDevice;

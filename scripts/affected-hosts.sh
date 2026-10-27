@@ -4,7 +4,8 @@
 # Without --running it compares each host's system at REV with the system at
 # OLD, or at REV^ without OLD. A push of several commits needs OLD, the main
 # the push landed on. STATUS is affected, which means the host needs a deploy
-# of REV, unchanged, or not-deployed for a host that does not run NixOS yet.
+# of REV, unchanged, or not-deployed for a host whose machine record sets
+# deployed = false, one that does not run this configuration yet.
 # With --running it compares the system each host runs with REV's system.
 # STATUS is current, behind (the release the host runs is an ancestor of REV;
 # DETAIL lists the subjects of the commits it lacks, so the reader can tell
@@ -91,7 +92,8 @@ on_host() {
   fi
 }
 
-# systems REV: prints {HOST: {drv, out}} for every host at REV.
+# systems REV: prints {HOST: {drv, out, deployed}} for every host at REV.
+# deployed is the record's field; a REV from before the field counts as true.
 systems() {
   on_host "$eval_host" "github:$repo/$1" <<'REMOTE'
 set -e
@@ -103,8 +105,12 @@ if command -v heavy >/dev/null; then nix=(heavy nix); fi
 hosts=$("${nix[@]}" eval --raw --no-write-lock-file "$1#nixosConfigurations" \
   --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)' </dev/null)
 for host in $hosts; do
-  "${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations.$host.config.system.build.toplevel" \
-    --apply "t: { \"$host\" = { drv = t.drvPath; out = t.outPath; }; }" </dev/null
+  "${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations.$host" \
+    --apply "h: { \"$host\" = {
+      drv = h.config.system.build.toplevel.drvPath;
+      out = h.config.system.build.toplevel.outPath;
+      deployed = h.config.oruc.machine.deployed or true;
+    }; }" </dev/null
 done | jq -s add
 REMOTE
 }
@@ -115,15 +121,17 @@ if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha
 fi
 new=$(systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
-# Hosts in the flake that still run another system. Remove a host from this
-# list when it runs NixOS from this repository.
-not_deployed=" risoluto-dev-1 "
+# not_deployed HOST: succeeds when the record at REV says deploy.sh does not
+# reach HOST.
+not_deployed() {
+  [[ $(jq -r --arg h "$1" '.[$h].deployed' <<<"$new") == false ]]
+}
 
 if ! $running; then
   old=$(systems "$parent")
   for host in "${hosts[@]}"; do
-    if [[ $not_deployed == *" $host "* ]]; then
-      printf '%s\tnot-deployed\truns Debian until it moves to NixOS\n' "$host"
+    if not_deployed "$host"; then
+      printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"
       continue
     fi
     before=$(jq -r --arg h "$host" '.[$h].drv // "none"' <<<"$old")
@@ -138,8 +146,8 @@ if ! $running; then
 fi
 
 for host in "${hosts[@]}"; do
-  if [[ $not_deployed == *" $host "* ]]; then
-    printf '%s\tnot-deployed\truns Debian until it moves to NixOS\n' "$host"
+  if not_deployed "$host"; then
+    printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"
     continue
   fi
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")

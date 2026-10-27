@@ -133,7 +133,7 @@ in
       biosSupport
       biosDevice
       efiInstallAsRemovable
-      extraInstallCommands
+      additionalFiles
       ;
     inherit (config.boot.loader.efi) canTouchEfiVariables;
   };
@@ -148,6 +148,6 @@ in
 
   limineHosts = lib.mapAttrs (_: host: {
     inherit (host.config.boot.loader.limine) efiInstallAsRemovable;
-    fallbackCopy = host.config.boot.loader.limine.extraInstallCommands != "";
+    fallbackCopy = host.config.boot.loader.limine.additionalFiles ? "efi/boot/BOOTX64.EFI";
   }) (lib.filterAttrs (_: isEfiLimine) flake.nixosConfigurations);
 }

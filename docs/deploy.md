@@ -224,7 +224,8 @@ commit you pushed. With one commit, `scripts/affected-hosts.sh <sha>` compares
 it with its parent.
 
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
-or `not-deployed` needs no deploy; `not-deployed` is risoluto-dev-1, which runs
+or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
+`machines/inventory.nix` sets `deployed = false`, now risoluto-dev-1, which runs
 Debian until its move to NixOS.
 
 For each affected host, run this block from the main checkout as one

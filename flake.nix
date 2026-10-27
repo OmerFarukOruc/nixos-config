@@ -83,15 +83,15 @@
     };
     # Google Chrome 156 and Tailscale 1.104.2 carry security fixes and are on
     # nixpkgs master but not yet on nixos-unstable. applications.nix and
-    # connectivity.nix take each package from here only while it is newer than
+    # tailscale.nix take each package from here only while it is newer than
     # the one in nixpkgs. Remove this input once nixpkgs has both versions.
     nixpkgs-security.url = "github:nixos/nixpkgs/1325d382e38ad08c924d600233e7706865d15b84";
     sops-nix = {
       url = "github:Mic92/sops-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # The disk layout of risoluto-dev-1, and the raw image that its boot test
-    # starts under BIOS and UEFI (ci/server-vm.nix).
+    # The disk layout of risoluto-dev-1, and the NixOS VM test that boots it
+    # under BIOS and UEFI (ci/server-boot.nix).
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -118,5 +118,9 @@
     {
       inherit (inventory) nixosConfigurations;
       inherit (tooling) formatter;
+      checks.x86_64-linux = import ./ci/server-boot.nix {
+        inherit inputs;
+        host = inventory.nixosConfigurations.risoluto-dev-1;
+      };
     };
 }

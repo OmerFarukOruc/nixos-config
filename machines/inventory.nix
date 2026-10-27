@@ -116,7 +116,9 @@ let
     };
 
     # Omer's dev box: a netcup KVM guest that runs his coding agents. It boots
-    # through BIOS, and Limine keeps it bootable through UEFI too.
+    # through BIOS, and Limine keeps it bootable through UEFI too. It runs
+    # Debian until the move to NixOS, so no deploy goes to it yet; remove
+    # deployed = false then.
     risoluto-dev-1 = {
       system = "x86_64-linux";
       kind = "server";
@@ -126,6 +128,7 @@ let
       biosDevice = "/dev/vda";
       gpu = "unknown";
       hasBattery = false;
+      deployed = false;
     };
   };
 

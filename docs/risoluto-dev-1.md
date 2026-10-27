@@ -15,8 +15,9 @@ login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/risoluto-dev-1/` (`configuration.nix`, `disk.nix`,
 `hardware-configuration.nix`) and `nixosModules/server-access.nix`.
 
-The box runs Debian until the move to NixOS, so `deploy.sh` does not reach it
-yet, and `scripts/affected-hosts.sh` prints it as `not-deployed`.
+The box runs Debian until the move to NixOS, so no deploy goes to it yet. Its
+record sets `deployed = false`, so `scripts/affected-hosts.sh` prints it as
+`not-deployed`; remove the field at the move.
 
 ## Disk and boot
 
@@ -86,31 +87,46 @@ advertisements are off.
 
 ## Boot test in a VM
 
-`scripts/boot-server-vm-on-rog.sh` builds the host's disko image and boots it
-twice, under SeaBIOS and under OVMF, each with QEMU's standard VGA. It runs on
-nixos-rog, or on nixos-desktop while nixos-rog is offline, like the other
-`-on-rog` scripts. The report came 13 to 15 seconds after the start under KVM
-(observed on 2026-10-27); building the image the first time takes several
-minutes. The script exits 1 unless the report matches the host: the firmware,
-the units, the address and routes from the template, the users, the sshd
-listeners and settings, the firewall, the sysctls, the disk layout and the swap,
-journal and /tmp settings. It also exits 1 when the VGA screen is black 3
-seconds after the start. Limine's menu is on the screen then (a dump on
-2026-10-27 showed it under BIOS), but the check shows only that something was
-drawn.
+Two flake checks boot the host's own configuration with NixOS's VM test driver
+(`ci/server-boot.nix`, disko's `makeDiskoTest`). `risoluto-dev-1-boot-bios`
+boots under SeaBIOS and `risoluto-dev-1-boot-uefi` under OVMF. Both need KVM, so
+they build on nixos-rog (or on nixos-desktop while nixos-rog is offline, as
+`scripts/build-on-rog.sh` does):
 
-`ci/server-vm.nix` builds the image from the host with three changes. The sops
-file holds test values under the real key names, encrypted for an SSH key that
-the build makes. The disk is 16 GiB. The kernel also logs to the serial port,
-and a test unit prints the state of the units, disk, users and network there,
-then powers the VM off.
+```sh
+scripts/build-on-rog.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios \
+  .#checks.x86_64-linux.risoluto-dev-1-boot-uefi
+```
+
+The test installs the host's disk layout (`disk.nix`) and system from an
+installer VM, including Limine's BIOS stage. It then reboots from that disk
+without QEMU's kernel loader, so the firmware and Limine start the system. The
+Python checks of `ci/server-boot/checks/` run last. They cover the units, the
+address and routes from the sops template, the sshd listeners and settings, the
+users, the firewall, the sysctls, the disk layout, and the swap, journal and
+/tmp settings. A failed build prints the end of the driver's log, and
+`nix log <derivation>` on that host prints all of it. Nix caches a pass until
+the host or the test changes, and `ci/checks.sh` only evaluates both tests.
+
+To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
+run in path order on `machine` (the booted host), `efi` is True under OVMF, and
+all files share one Python namespace, so give a variable or a function a name
+that only your file uses. Test values for a new sops key go in
+`ci/server-boot/secrets.yaml`. A NixOS module that only the test machine loads,
+such as a stub of an external service, goes in `ci/server-boot/modules/`.
+
+`ci/server-boot/modules/sops.nix` gives the test machine a sops file with test
+values under the real key names, encrypted for an SSH key that the build makes,
+so sops-nix's real activation runs. The installer's disk is 16 GiB instead of
+the box's 2 TiB, and the root partition takes the rest.
 
 The test shows that the layout installs, that Limine boots from it under both
 firmware types, that the units start, and that the template and the user
 settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets file, that the netcup network works, that
-Tailscale logs in, that sshd takes up a tailnet address (the report only shows
-what the include adds), or that the BIOS stage installs from the kexec
-installer.
-`ci/checks.sh` only evaluates the image's system, so the boot test runs by hand
-when the host, its disk or its boot loader changes.
+Tailscale logs in, that sshd takes up a tailnet address, that `sshd_config`
+includes the file with that address, or that the BIOS stage installs from the
+kexec installer. It also does not cover the VGA console. QEMU gives the test
+only a serial console and no guest agent channel, so `qemu-guest-agent` does
+not start. The VM has 1 GiB of RAM instead of 62 GiB, and a 9p `/nix/store`,
+which is disko's test wrapper.
