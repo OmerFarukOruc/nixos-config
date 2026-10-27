@@ -67,5 +67,15 @@ in
         }
       ) cfg.sites;
     };
+
+    # Every order that installs a new certificate restarts Caddy (reloadServices
+    # of the module), and the orders after the first run at the same time. An
+    # order that has copied its files but not yet run its chmod leaves a
+    # certificate and key that Caddy cannot read. Caddy then exits with status 1,
+    # which its unit never restarts. A restart stops Caddy at once, and its start
+    # waits for the orders that run, so Caddy starts only once they are done.
+    systemd.services.caddy.after = lib.mapAttrsToList (
+      name: _: "acme-order-renew-${name}.service"
+    ) cfg.sites;
   };
 }

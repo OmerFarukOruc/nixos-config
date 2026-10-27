@@ -66,6 +66,29 @@ in
       };
       # For the checks of the test script.
       environment.systemPackages = [ pkgs.openssl ];
+      # Each order copies its files into out/, then chmods and chowns them for
+      # the web server's group. Until that chmod, the files are 0600 and Caddy
+      # cannot read them. Orders that share an account run at the same time,
+      # except the first, which runs alone. An order that is done restarts
+      # Caddy while the others are in that window. A chmod of out/ that waits,
+      # with a longer wait for each order, makes the overlap certain instead of
+      # rare. The line it logs after the wait lets the test check that the wait
+      # still happens after a nixpkgs move.
+      systemd.services = lib.listToAttrs (
+        lib.imap1 (
+          i: name:
+          lib.nameValuePair "acme-order-renew-${name}" {
+            path = lib.mkBefore [
+              (pkgs.writeShellScriptBin "chmod" ''
+                if [ "$#" -eq 3 ] && [ "$3" = out ]; then
+                  sleep ${toString (10 * i)} && echo "test: chmod of out waited ${toString (10 * i)} s" >&2
+                fi
+                exec ${pkgs.coreutils}/bin/chmod "$@"
+              '')
+            ];
+          }
+        ) (lib.attrNames config.oruc.tailnetWeb.sites)
+      );
       security.acme.defaults = {
         dnsProvider = lib.mkForce "exec";
         credentialFiles = lib.mkForce { };

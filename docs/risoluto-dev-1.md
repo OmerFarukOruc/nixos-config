@@ -278,6 +278,18 @@ everywhere and connects from the tailnet only.
   journal, which reaches SigNoz without an alert; a config error exits with
   status 1, which the NixOS module never restarts.
 - The admin API is off, so a change restarts Caddy and does not reload it.
+- Caddy is ordered after the three order units (`acme-order-renew-*`). Every
+  order that installs a new certificate restarts Caddy (the module sets
+  `reloadServices`), and the orders after the first run at the same time. An
+  order that has copied its files but not yet run its `chmod` leaves a
+  certificate and key that Caddy cannot read, so a restart in that window made
+  Caddy exit with status 1 and stay down. A restart stops Caddy at once, and
+  its start waits for the orders that run, so Caddy starts once they are done.
+  The cost is that Caddy waits for the orders at boot, which begin after
+  `network-online.target`, and is down while the last orders of a renewal
+  finish. A deploy that restarts Caddy while an order runs waits for that
+  order too, and `deploy.sh` rolls back a switch that takes longer than its
+  420 second timer.
 - NixOS retries a failed issuance every 15 minutes; the Debian box's lego
   timer ran daily. A wrong token fails at Cloudflare before Let's Encrypt
   validates anything, so the retries do not reach its limit for failed
@@ -432,6 +444,12 @@ test therefore also requires that no unit is still activating after boot and
 that Caddy serves a certificate from the test CA. A failed order on the box
 leaves the self-signed certificate in place and shows only in the journal,
 which reaches SigNoz without an alert.
+
+The test also holds the `chmod` of each order's output for 10, 20 and 30
+seconds, so the orders of the first issuance overlap on purpose. A real order
+passes the `chmod` in milliseconds, so that overlap is rare on the box and
+certain in the test. In each run of this test without the ordering of Caddy
+after the orders, Caddy exited with status 1.
 
 ## Deploy test in a VM
 
