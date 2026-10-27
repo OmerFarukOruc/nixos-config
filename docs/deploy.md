@@ -334,9 +334,11 @@ repeats its line every 2 hours, until `main` moves or someone fixes the cause.
 The host ships the lines of `self-deploy.service` and
 `self-deploy-reboot.service` at priority info and above to SigNoz
 (`oruc.telemetry.journalUnits`, which `nixosModules/deploy-host.nix` sets),
-where the failure line is the signal. The alert rule on it lives in SigNoz, not
-in this repository, and no rule exists yet (not checked), so until one does only
-someone on the host sees a failure. A held-back reboot and an outage of GitHub
+where the failure line is the signal. The SigNoz alert rules live in
+statuslantern-scraper's `deploy/signoz/alerts/`, and none of them reads these
+units yet. A rule there is checked against live data before it is pushed, so
+the rule for these units comes after the host's first NixOS deploy ships its
+lines. Until then only someone on the host sees a failure. A held-back reboot and an outage of GitHub
 during the clone or fetch log at priority warning and do not fail the run. To
 clear the failed state by hand, run
 `sudo systemctl reset-failed self-deploy.service`.
