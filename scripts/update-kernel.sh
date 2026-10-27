@@ -6,7 +6,8 @@
 # kernel and the NVIDIA open module instead of compiling them.
 # Needs no Nix: it copies the locked revisions of the input and of the inputs
 # below it from kernel-cache/flake.lock on GitHub. A person runs it on either
-# host; scripts/auto-update.sh runs it on nixos-rog.
+# host; scripts/auto-update.sh runs it on nixos-rog and
+# scripts/prepare-update.sh on GitHub.
 # Exit status 1 leaves flake.lock unchanged.
 set -euo pipefail
 
@@ -178,7 +179,7 @@ cp -- "$work/candidate.lock" "$repo_dir/flake.lock"
 printf '%s\n' "$change"
 
 printf 'Kernel %s, every built path is in %s.\n' "$(jq -r .version "$work/cached-paths.json")" "$cache"
-# auto-update.sh commits the lock itself; a person at a terminal still has to.
+# The updaters commit the lock themselves; a person at a terminal still has to.
 if [[ -t 1 ]]; then
   printf '%s\n' 'Review and commit flake.lock, then deploy.'
 fi

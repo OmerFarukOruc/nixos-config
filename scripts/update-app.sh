@@ -9,7 +9,8 @@
 # Prints the new version, or nothing when the package is already current or
 # names no source.
 # On a failure it exits non-zero and prints the problem as the last line on
-# stderr; scripts/auto-update.sh uses that line as the notification text and as
+# stderr; scripts/prepare-update.sh shows that line as a warning, and
+# scripts/auto-update.sh uses it as the notification text and as
 # the key that stops a repeated problem from notifying again.
 set -euo pipefail
 

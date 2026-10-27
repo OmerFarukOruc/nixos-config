@@ -73,6 +73,13 @@ tries again.
 A change merged to `main` reaches nixos-rog with the next run of the updater,
 or with a manual `./deploy.sh nixos-rog switch`.
 
+`.github/workflows/update.yml` is taking over steps 1 to 5 on GitHub. Started
+by hand (`gh workflow run update.yml`), it moves the inputs and apps with
+`scripts/prepare-update.sh` by the same rules, builds every host's system and
+runs both checks on that commit. It merges nothing yet, and it pushes nothing
+to a cache, so each host still compiles the packages listed under
+[Packages no cache holds](#packages-no-cache-holds).
+
 | Input | When it moves |
 | --- | --- |
 | kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
@@ -171,8 +178,8 @@ cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings, such as airpods-tui, DankMaterialShell (DMS),
 Deskflow, the Glass KWin effect and Qt style, linctl, the sddm-astronaut login
 theme and the lock screen's video wallpaper plugin. Each host compiles them
-itself when an update changes them. Only the kernel builds elsewhere, on
-GitHub ([kernel-cache](../kernel-cache/README.md)).
+itself when an update changes them. Only the kernel is built elsewhere and
+cached, on GitHub ([kernel-cache](../kernel-cache/README.md)).
 
 whisper-cpp is one of them. `machines/nixos-rog/media.nix` builds it for the
 RTX 4070's CUDA architecture (sm_89) only, so the laptop compiles it each time

@@ -1,7 +1,7 @@
 # The dev shell and the checks a change passes before it lands on main. direnv
-# loads it through .envrc and installs the git hooks below. Only the kernel
-# builds on GitHub (.github/workflows/kernel-cache.yml); every other check runs
-# on the host that commits.
+# loads it through .envrc and installs the git hooks below. GitHub builds only
+# the kernel (.github/workflows/kernel-cache.yml) and checks the updates of
+# .github/workflows/update.yml; every other check runs on the host that commits.
 { config, pkgs, ... }:
 let
   # heavy caps the memory of a heavy command on nixos-rog and nixos-desktop
