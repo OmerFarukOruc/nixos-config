@@ -43,6 +43,17 @@ in
     environment.VK_LOADER_DRIVERS_SELECT = "*radeon*";
   };
 
+  # A monitor on the HDMI port, which the RTX 4070 drives, shows KWin's frames
+  # after KWin copies them from the Radeon. KWin 6.8.1 makes that copy with EGL
+  # and presents before it finishes, so the monitor flickers and shows partly
+  # drawn windows. The variable brings back the Vulkan copy, which 6.8.2 uses
+  # again by default
+  # (https://invent.kde.org/plasma/kwin/-/commit/83ad3261da595f02b4dadbc14d00223ffae0d72c).
+  # A login session reads it at login.
+  environment.sessionVariables = lib.mkIf (lib.versionOlder pkgs.kdePackages.kwin.version "6.8.2") {
+    KWIN_ALLOW_VULKAN_MGPU_COPIES = "1";
+  };
+
   # The NixOS NVIDIA module turns on only when "nvidia" is listed here, also on
   # Wayland. The iGPU driver comes first so nothing keeps the dGPU awake.
   services.xserver.videoDrivers = [
