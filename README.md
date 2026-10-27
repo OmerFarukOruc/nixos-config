@@ -215,7 +215,7 @@ an update of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [nixos-rog](docs/nixos-rog.md) | the update workflow, the deploy unit and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
-| [risoluto-dev-1](docs/risoluto-dev-1.md) | the server host: disk, boot, access, secrets, and its boot test in a VM |
+| [risoluto-dev-1](docs/risoluto-dev-1.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, and its boot test in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how GitHub builds the kernel and how hosts follow it |

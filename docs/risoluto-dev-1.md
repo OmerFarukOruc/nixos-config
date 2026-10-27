@@ -7,6 +7,10 @@
 - [Network and secrets](#network-and-secrets)
 - [Telemetry](#telemetry)
 - [Deploys](#deploys)
+- [Web names](#web-names)
+- [Containers](#containers)
+- [Agent runtime](#agent-runtime)
+- [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
 - [Unit check in a VM](#unit-check-in-a-vm)
 - [Deploy test in a VM](#deploy-test-in-a-vm)
@@ -17,7 +21,9 @@ risoluto-dev-1 is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
 It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/risoluto-dev-1/` (`configuration.nix`, `disk.nix`,
-`hardware-configuration.nix`) and `nixosModules/server-access.nix`.
+`hardware-configuration.nix`, `home.nix`) and `nixosModules/server-access.nix`.
+The host imports four more modules for its services: `tailnet-web.nix`,
+`rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`.
 
 The box runs Debian until the move to NixOS, so no deploy goes to it yet. Its
 record sets `deployed = false`, so `scripts/affected-hosts.sh` prints it as
@@ -60,16 +66,18 @@ drops ping.
 
 ## Install
 
-sops-nix decrypts `secrets/risoluto-dev-1.yaml` while the system activates,
-with the age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that
-key in place, because the network file and both password hashes come from the
-file. An install that makes new host keys boots with no address and no
-password. Install the Debian box's own key before the first boot, for example
+sops-nix decrypts `secrets/risoluto-dev-1.yaml` and `secrets/risoluto-dev-1-acme.yaml` while the
+system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`. The first
+boot needs that key in place, because the network file and both password hashes
+come from the first file, and the Cloudflare token for the certificates from the
+second. An install that makes new host keys boots with no address, no password
+and no certificates. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
 `ssh-to-age < ssh_host_ed25519_key.pub` prints the `risoluto-dev-1` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
-it waits for the move.
+it waits for the move. `scripts/check-secrets.sh` without an argument checks
+both sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
@@ -200,6 +208,112 @@ services.
 When the box moves to NixOS, remove `deployed = false` from its record in
 `machines/inventory.nix`, so the deploy rule of AGENTS.md reaches it.
 
+## Web names
+
+`nixosModules/tailnet-web.nix` serves the names of `oruc.tailnetWeb.sites` with
+Caddy, for the tailnet. The host lists three: OpenChamber on
+127.0.0.1:3000 and the herdr web UIs on 127.0.0.1:7317 (default session) and
+127.0.0.1:7318 (the bots' fleet session). Each name has a public, DNS-only A
+record to the tailnet address, kept outside this repository, so it resolves
+everywhere and connects from the tailnet only.
+
+- `security.acme` issues one Let's Encrypt certificate per name with the
+  Cloudflare DNS-01 challenge. The token is `cloudflare-acme-dns-token` in
+  `secrets/risoluto-dev-1-acme.yaml`, a second sops file with the same two
+  recipients as the main one, because adding a value to the main file needs the
+  shared key's passphrase. lego skips the check against the host's recursive
+  resolvers (`--dns.propagation.disable-rns`), since the resolvers can keep
+  answering NXDOMAIN for the challenge record until lego's time limit.
+- Caddy listens on every address, with the NixOS module's own unit, so it needs
+  no DNS and no tailnet address to start. The firewall opens no port on the
+  public interface and trusts tailscale0 only, so the names answer from the
+  tailnet alone; the boot test proves that a connection through the public
+  interface is dropped.
+- Every site removes the `Tailscale-User-Login` header. The herdr web UI trusts
+  it on a request from loopback as the identity that `tailscale serve` sets,
+  and every request Caddy forwards comes from loopback, so a client could
+  forge it. The Debian Caddyfile strips it on the two herdr sites only;
+  nothing behind the openchamber site reads it, so stripping it there changes
+  no behaviour. Responses stream (`flush_interval -1`), and `grace_period 10s`
+  (the Debian Caddyfile's value) keeps open event streams from holding a
+  restart until systemd's stop timeout. A Caddy failure shows only in the
+  journal, which reaches SigNoz without an alert; a config error exits with
+  status 1, which the NixOS module never restarts.
+- The admin API is off, so a change restarts Caddy and does not reload it.
+- NixOS retries a failed issuance every 15 minutes; the Debian box's lego
+  timer ran daily. A wrong token fails at Cloudflare before Let's Encrypt
+  validates anything, so the retries do not reach its limit for failed
+  validations.
+
+## Containers
+
+`nixosModules/rootless-containers.nix` gives oruc rootless Docker and rootless
+Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
+`/etc/subgid` come from the host record.
+
+- Docker is the NixOS `virtualisation.docker.rootless` unit. The socket is
+  `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in oruc's
+  shells. The daemon settings are the builder's garbage collection at 80 GB.
+  Docker picks the host port of a published container from 32768-60999, and
+  RootlessKit binds it on the host, where an outbound connection could already
+  hold it. So `net.ipv4.ip_local_port_range` of the host is 61000-65535, which
+  leaves 4535 ports per destination address and port for outbound connections.
+  That this suffices is a guess; `ss -Htn state established | wc -l` on the
+  Debian box printed 15 on 2026-10-27. The Debian box instead narrows Docker's
+  range with a wrapper script. A port that a container publishes without an
+  address listens on every address, so tailnet peers reach it, and the firewall
+  blocks the public interface. If `docker.service` (a user unit) fails three
+  times in 60 s it stays failed; nothing alerts, and its journal lines are
+  not in `journalUnits`, which lists system units.
+- Podman has no daemon; the user unit `podman.socket` answers on
+  `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
+  `DOCKER_HOST`, the docker CLI and its Compose plugin.
+- Rootful Docker, sysbox and iocost, which the Debian box has for its CI
+  runners, stay out of the move, because the runners are dropped.
+
+## Agent runtime
+
+`nixosModules/agent-runtime.nix` holds what the agents run against.
+
+- Playwright runs the nixpkgs browsers. `home-manager/modules/playwright.nix`
+  sets `PLAYWRIGHT_BROWSERS_PATH` and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS`
+  for oruc, and the desktops import it too, so the browsers follow nixpkgs and
+  nothing is pinned. A project's npm Playwright version must match
+  `playwright-driver` in nixpkgs, as the
+  [NixOS wiki](https://wiki.nixos.org/wiki/Playwright) says. A Chromium that
+  Playwright downloads itself does not run on NixOS, so the agents must not
+  call `playwright install`.
+- envfs serves `/usr/bin` by the PATH of the caller. The units from the
+  dotfiles checkout call `/usr/bin/zsh` and `/usr/bin/bash` with a PATH that
+  holds nothing of NixOS, so the module adds `bash`, `zsh`, `systemctl` and
+  `podman` to the fallback directory. The units find herdr, claude and the other
+  profile tools through their PATH, which lists `/etc/profiles/per-user/%u/bin`
+  (dotfiles commit 5bfd6d7); there is no `/usr/local/bin` on this host, so a
+  tool that only infra installed there (linctl, micro, lazygit, node and
+  others) is missing until the profile or mise provides it.
+- The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
+  drives labwc. The module installs both desktops with their NixOS modules, and
+  the tools they call (tigervnc, xdotool, X utilities, ffmpeg, ImageMagick,
+  wlr-randr, Chromium; Home Manager gives oruc bubblewrap). No login manager
+  starts. The XFCE module
+  also turns on udisks2, accounts-daemon, gvfs, tumbler, colord, polkit and
+  gnome-keyring. The boot test shows that these tools exist, not that an XFCE
+  or labwc session starts.
+- `features.boxBrowser` is on in the host record, so `box-browser` and its two
+  user units exist ([box-browser.md](box-browser.md)).
+- Home Manager gives oruc the common layer and `home.nix`, which adds the
+  hourly `desktop-sync.sh --config` and the usage timer of the dotfiles checkout.
+  `desktop-sync.sh` there treats the box as a Home Manager host once
+  `/etc/NIXOS` exists.
+
+## Memory and logs
+
+The host sets zram swap of 16 GiB, `vm.swappiness` 100 and journald's cap at 2
+GiB, each over the shared value. The user slice has no systemd-oomd swap kill,
+which `nixosModules/memory.nix` sets on the workstations and which would kill
+agent sessions. `/tmp` stays on the disk, loses files untouched for 7 days, and
+keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
+
 ## Boot test in a VM
 
 Two flake checks boot the host's own configuration with NixOS's VM test driver
@@ -237,14 +351,26 @@ values under the real key names, encrypted for an SSH key that the build makes,
 so sops-nix's real activation runs. The installer's disk is 16 GiB instead of
 the box's 2 TiB, and the root partition takes the rest.
 
+`ci/server-boot/modules/services.nix` and `ci/server-boot/checks/20-services.py`
+cover the web names, the containers and the agent runtime. Caddy starts with
+its config and answers the three names with test certificates, and the
+firewall drops a connection to port 443 from outside. A forged
+`Tailscale-User-Login` does not reach any backend. Docker and Podman answer as
+oruc through their user sockets, a port that Docker publishes lies outside the
+host's outbound range and answers, and a busybox image that the build puts on
+the disk runs under both. `box-browser status` passes, and the Chromium of
+nixpkgs' Playwright, found through oruc's session variables, loads a local page
+headless.
+
 The test shows that the layout installs, that Limine boots from it under both
 firmware types, that the units start, and that the template and the user
 settings work with sops-nix's real activation. It does not show that the box's
-own host key opens the real secrets file, that the netcup network works, that
-Tailscale logs in, that a tailnet peer reaches sshd, or that the BIOS stage
-installs from the kexec installer. It also does not cover the VGA console. QEMU
-gives the test only a serial console and no guest agent channel, so
-`qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
+own host key opens the real secrets files, that the netcup network works, that
+Tailscale logs in, that a tailnet peer reaches sshd, that Let's Encrypt issues the three certificates with the real
+Cloudflare token, or that the BIOS stage installs from the kexec installer. The
+cutover proves the real certificates and the tailnet address. It also does
+not cover the VGA console. QEMU gives the test only a serial console and no
+guest agent channel, so `qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
 and a 9p `/nix/store`, which is disko's test wrapper.
 
 ## Unit check in a VM
@@ -257,6 +383,17 @@ unit would roll back every deploy. Run it with
 `scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-units`. It is separate from
 the boot test because disko's booted machine has a read-only `/nix/store` and no
 database of its closure, which fails the Home Manager units there.
+
+The test also starts a test ACME server (pebble) and a DNS server for the
+challenge (`ci/server-units/acme.nix`), and swaps lego's DNS provider for its
+`exec` provider, so the three certificate orders of the host succeed. The
+Cloudflare provider wiring is not covered; a real order at the cutover proves
+it. A failed order is not in `systemctl --failed`: the order unit has
+`Restart=on-failure` with a 15 minute delay, so it shows as `activating`. The
+test therefore also requires that no unit is still activating after boot and
+that Caddy serves a certificate from the test CA. A failed order on the box
+leaves the self-signed certificate in place and shows only in the journal,
+which reaches SigNoz without an alert.
 
 ## Deploy test in a VM
 

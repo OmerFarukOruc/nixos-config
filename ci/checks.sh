@@ -76,8 +76,9 @@ host_systems() {
   done
 }
 
-# No host turns features.boxBrowser on, so this evaluates the module on
-# nixos-desktop with the feature forced on (ci/box-browser.nix).
+# risoluto-dev-1 turns features.boxBrowser on. This also evaluates the module on
+# nixos-desktop with the feature forced on, to check the display's command line
+# (ci/box-browser.nix).
 box_browser() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --impure \

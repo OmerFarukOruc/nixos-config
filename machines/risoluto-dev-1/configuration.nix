@@ -13,6 +13,10 @@ in
     inputs.disko.nixosModules.disko
     inputs.sops-nix.nixosModules.sops
     ./disk.nix
+    ../../nixosModules/agent-runtime.nix
+    ../../nixosModules/envfs.nix
+    ../../nixosModules/rootless-containers.nix
+    ../../nixosModules/tailnet-web.nix
   ];
 
   # The Limine install runs from a BIOS boot too, where the firmware keeps no
@@ -36,6 +40,7 @@ in
       "amp-runner.service"
       "cliproxy*.service"
       "cursor-worker.service"
+      "docker.service"
       "herdr-*.service"
       "openchamber.service"
     ];
@@ -52,6 +57,9 @@ in
       network-dns-1 = { };
       network-dns-2 = { };
       network-dns-3 = { };
+      # Its own file, because the recipients of the main one need the shared
+      # key's passphrase to add a value.
+      cloudflare-acme-dns-token.sopsFile = ../../secrets/risoluto-dev-1-acme.yaml;
     };
     # The public address stays out of this repository, so networkd reads it
     # from a file that sops-nix renders when the system activates. On a boot
@@ -144,13 +152,35 @@ in
     memoryMax = 16 * 1024 * 1024 * 1024;
   };
   services.journald.settings.Journal.SystemMaxUse = "2G";
-  # /tmp stays on the disk and loses files nobody touched for 7 days. The file
-  # sorts before systemd's tmp.conf, so its age wins.
-  systemd.tmpfiles.settings.oruc-tmp."/tmp".q = {
-    mode = "1777";
-    user = "root";
-    group = "root";
-    age = "7d";
+  # /tmp stays on the disk and loses files nobody touched for 7 days, except
+  # the sockets of tmux and the X servers, which stay while their owners run.
+  # The file sorts before systemd's tmp.conf, so its age wins.
+  systemd.tmpfiles.settings.oruc-tmp = {
+    "/tmp".q = {
+      mode = "1777";
+      user = "root";
+      group = "root";
+      age = "7d";
+    };
+    "/tmp/tmux-*".x = { };
+    "/tmp/.X11-unix".x = { };
+    "/tmp/.ICE-unix".x = { };
+  };
+
+  # oruc's Home Manager layer: the hourly config sync of the dotfiles checkout.
+  home-manager.users.oruc.imports = [ ./home.nix ];
+
+  # The web names of oruc's services. Each has a public, DNS-only A record to
+  # the host's tailnet address, so it answers only on the tailnet. The
+  # services listen on loopback: OpenChamber, then the herdr web UIs of the
+  # default session and of the bots' fleet session.
+  oruc.tailnetWeb = {
+    dnsTokenFile = config.sops.secrets.cloudflare-acme-dns-token.path;
+    sites = {
+      "openchamber.risoluto.dev" = "127.0.0.1:3000";
+      "herdr.risoluto.dev" = "127.0.0.1:7317";
+      "herdr-fleet.risoluto.dev" = "127.0.0.1:7318";
+    };
   };
 
   system.stateVersion = "26.11";

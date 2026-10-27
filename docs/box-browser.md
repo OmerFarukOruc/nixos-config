@@ -4,8 +4,8 @@
 share. Omer signs in to a site once through a VNC viewer, and every agent session
 then drives the same logins with agent-browser, each in its own tab.
 `nixosModules/box-browser.nix` holds the box side and
-`home-manager/modules/box-view.nix` the viewer side. No host turns the feature on
-yet.
+`home-manager/modules/box-view.nix` the viewer side. risoluto-dev-1 turns the
+feature on in its record.
 
 ## Turn it on
 
@@ -59,8 +59,8 @@ window, then close the viewer. The session stays in the profile.
 
 ## Check
 
-`ci/checks.sh` evaluates the module although no host enables it. `ci/box-browser.nix` forces
-the feature on for nixos-desktop, and `ci/checks.sh` builds that system's
+`ci/checks.sh` evaluates the module in risoluto-dev-1's system. `ci/box-browser.nix` forces
+the feature on for nixos-desktop too, and `ci/checks.sh` builds that system's
 `drvPath`, checks the unit names and checks the display's command line. The check
 does not start the units; run `box-browser status` on the host after the first
 deploy.

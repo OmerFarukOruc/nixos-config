@@ -11,6 +11,7 @@
 { inputs, host }:
 let
   pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+  acmeNodes = import ./server-units/acme.nix { inherit inputs; };
 in
 {
   risoluto-dev-1-units = pkgs.testers.runNixOSTest {
@@ -20,8 +21,11 @@ in
       pkgsReadOnly = false;
       specialArgs = { inherit inputs; };
     };
+    nodes.acme = acmeNodes.acme;
+    nodes.dnsserver = acmeNodes.dnsserver;
     nodes.machine = {
       imports = [
+        acmeNodes.client
         ../nixosModules/default.nix
         { oruc.machine = host.config.oruc.machine; }
         ../machines/risoluto-dev-1/configuration.nix

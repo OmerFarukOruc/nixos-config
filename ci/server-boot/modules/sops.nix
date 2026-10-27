@@ -34,5 +34,7 @@ in
     validateSopsFiles = false;
     defaultSopsFile = lib.mkForce "${secrets}/secrets.yaml";
     age.sshKeyPaths = [ "${secrets}/ssh_host_ed25519_key" ];
+    # The Cloudflare token has its own sops file on the box.
+    secrets.cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
   };
 }

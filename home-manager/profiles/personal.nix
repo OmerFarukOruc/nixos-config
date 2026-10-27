@@ -21,6 +21,8 @@ let
     .${gpu} or pkgs.nvtopPackages.full;
 in
 {
+  imports = [ ../modules/playwright.nix ];
+
   # ChatGPT and Grok Bot register their URL schemes with xdg-mime at start;
   # declaring them keeps that rewrite of mimeapps.list identical to the Home
   # Manager file. Thunderbird opens mailto links.
@@ -29,12 +31,6 @@ in
     "x-scheme-handler/grokbot" = [ "grok-bot.desktop" ];
     "x-scheme-handler/sand" = [ "grok-bot.desktop" ];
     "x-scheme-handler/mailto" = [ "thunderbird.desktop" ];
-  };
-
-  home.sessionVariables = {
-    # Playwright uses the nixpkgs browsers; npm's downloaded ones do not run here.
-    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
-    PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
   };
 
   home.packages =

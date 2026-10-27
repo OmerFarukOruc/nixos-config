@@ -130,6 +130,7 @@ let
       hasBattery = false;
       deployed = false;
       deployLogin = "root";
+      features.boxBrowser = true;
     };
   };
 

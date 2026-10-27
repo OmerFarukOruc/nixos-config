@@ -88,6 +88,9 @@ tel_wait("logs.json", "telemetry-probe-1")
 # A user other than root reads a secret, which the credstore rule logs although
 # the read fails.
 machine.execute("runuser -u nobody -- cat /run/secrets/network-dns-1")
+# Wait for the record before the collector stops, so a record that it read at
+# the moment of the stop cannot be lost.
+tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
 
 # The collector is down while a second login and sudo happen. Its cursor in the
 # file store must give it the records afterwards.
@@ -106,14 +109,11 @@ tel_wait("metrics.json", "system.memory.usage")
 assert tel_count("logs.json", "Accepted publickey for oruc") == 2, "the sink did not get exactly the 2 sshd login lines"
 
 # A SYSCALL record exists only for a call that matched a rule. The CONFIG_CHANGE
-# records that load the rules carry the keys too.
+# records that load the rules carry the keys too. The audit records reach the
+# sink after the journal lines above, so each one is waited for.
 for tel_key in ["sudo-exec", "etc-change"]:
-    assert (
-        tel_count("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}") > 0
-    ), f"the sink has no SYSCALL record of the {tel_key} rule"
-assert (
-    tel_count("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore") > 0
-), "the sink has no SYSCALL record of the credstore rule"
+    tel_wait("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}")
+tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
 
 assert tel_attr("logs.json", "service.name", "host-audit") > 0, "the sink has no host-audit logs"
 assert tel_attr("logs.json", "service.name", "infra-units") > 0, "the sink has no infra-units logs"

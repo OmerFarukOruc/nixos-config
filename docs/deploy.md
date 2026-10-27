@@ -127,8 +127,9 @@ activation. To read the last deployed source on the target, run
 
 `ci/checks.sh` validates the flake's output kinds and formatter, then checks each
 host's system derivation type and `drvPath` in a separate process. It also
-evaluates a box-browser host and a server record (`ci/box-browser.nix`,
-`ci/server.nix`), because no host turns those on.
+evaluates a workstation with the box browser forced on (`ci/box-browser.nix`),
+to check the display's command line, and a bare server record (`ci/server.nix`),
+to check what the schema accepts and rejects.
 `ci/unit-cycles.sh` runs the ordering-cycle check
 of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a

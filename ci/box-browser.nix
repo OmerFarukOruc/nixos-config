@@ -1,5 +1,5 @@
-# nixos-desktop with features.boxBrowser forced on. No host turns the feature
-# on, so no other check evaluates nixosModules/box-browser.nix. The unit names
+# nixos-desktop with features.boxBrowser forced on, as a workstation record.
+# risoluto-dev-1, a server, has the feature on in its own record. The unit names
 # show that the feature switched its units on, and the display's command line
 # shows that Xvnc stays on localhost, because with no password the loopback
 # bind is its only protection.
