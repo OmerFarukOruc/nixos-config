@@ -8,6 +8,7 @@
     inputs.sops-nix.nixosModules.sops
     ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
+    ../../nixosModules/nixpkgs-clone.nix
     ../../nixosModules/warp.nix
     ../../nixosModules/zapret2.nix
     ./fans.nix

@@ -161,7 +161,7 @@ specialisation for each other pair (`home-manager/modules/variants.nix`).
 `theme <scheme>` activates one at run time and keeps it across deploys
 ([Switch the scheme](nixos-rog.md#switch-the-scheme)). Every variant adds a
 Home Manager evaluation to each deploy. With two looks and four schemes,
-`scripts/eval-on-rog.sh` took 59 to 66 seconds for nixos-rog's system in 3
+an evaluation of nixos-rog's system on nixos-rog took 59 to 66 seconds in 3
 runs, against 29 to 46 seconds in 4 runs with one scheme (measured
 2026-10-16).
 

@@ -2,7 +2,9 @@
 # usage: scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]
 # Runs the script of the NixOS service UNIT, as this checkout defines it, on
 # nixos-rog for up to SECONDS (default 40, at most 600), on a copy of this
-# checkout (scripts/lib/rog-copy.sh). It first builds the unit file, which
+# checkout there (scripts/lib/work-copy.sh), so the build runs on the laptop
+# too. From another host it exits 1 at once while Tailscale reports nixos-rog
+# offline. It first builds the unit file, which
 # also builds the script and every package of the unit's path. It runs as root
 # with only the unit's environment, so a command missing from the unit's path
 # fails here rather than after a deploy. The script really acts on the laptop.
@@ -45,11 +47,11 @@ if [[ ! $seconds =~ ^[0-9]+$ ]] || ((seconds < 1 || seconds > 600)); then
 fi
 
 # shellcheck source=/dev/null
-. scripts/lib/rog-copy.sh
-# The unit acts on the laptop, so no other host can stand in for it.
-rog_copy_open --no-local
+. scripts/lib/work-copy.sh
+# The unit acts on the laptop, so its copy is there.
+copy_open --on-rog
 if [[ $user == true ]]; then
-  rog_remote "$unit" "$seconds" <<'REMOTE'
+  copy_run "$unit" "$seconds" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 unit=$2 seconds=$3
@@ -145,7 +147,7 @@ fi
 REMOTE
   exit
 fi
-rog_remote "$unit" "$seconds" <<'REMOTE'
+copy_run "$unit" "$seconds" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 # One evaluation gives what the run needs: whether the unit runs as root, its
@@ -187,8 +189,8 @@ name=run-unit-on-rog-$2-$$
 echo "running $2 as root for up to $3 s; it acts on this laptop" >&2
 status=0
 # The unit runs outside this script's processes, so a stopped
-# run-unit-on-rog.sh, which sends TERM to them again and again (rog_stop in
-# scripts/lib/rog-copy.sh), stops it here, with TERM ignored so that
+# run-unit-on-rog.sh, which sends TERM to them again and again (copy_stop in
+# scripts/lib/work-copy.sh), stops it here, with TERM ignored so that
 # systemctl finishes.
 trap 'trap "" TERM; sudo -n systemctl stop "$name.service" 2>/dev/null || true; exit 143' TERM
 sudo -n systemd-run --quiet --pipe --wait --unit="$name" -p RuntimeMaxSec="$3" \

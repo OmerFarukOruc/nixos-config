@@ -2,7 +2,7 @@
 # usage: ci/checks.sh
 # The checks a change passes before it reaches main, in one place for each
 # caller: the pre-push hook and devenv test (devenv.nix),
-# scripts/check-on-rog.sh and .github/workflows/update.yml. It stops at the
+# scripts/check.sh and .github/workflows/update.yml. It stops at the
 # first failure and names it.
 # Evaluation warnings do not fail it; the summary at the end lists them.
 set -euo pipefail
@@ -30,7 +30,7 @@ lock_files() {
   local flake
   for flake in . ./kernel-cache; do
     nix flake metadata "${nix_opts[@]}" --no-update-lock-file "$flake" >/dev/null || {
-      echo "flake.lock of $flake does not match its flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check-on-rog.sh --fix relocks" >&2
+      echo "flake.lock of $flake does not match its flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check.sh --fix relocks" >&2
       return 1
     }
   done

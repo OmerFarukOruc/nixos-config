@@ -3,6 +3,10 @@
 # Prints one JSON object per window of the Plasma session on nixos-rog.
 # Glass's WindowClasses list matches resourceClass or resourceName exactly.
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
+rog_pick_host
 
 ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s <<'EOF'
 set -euo pipefail

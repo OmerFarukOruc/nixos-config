@@ -89,11 +89,10 @@ advertisements are off.
 Two flake checks boot the host's own configuration with NixOS's VM test driver
 (`ci/server-boot.nix`, disko's `makeDiskoTest`). `risoluto-dev-1-boot-bios`
 boots under SeaBIOS and `risoluto-dev-1-boot-uefi` under OVMF. Both need KVM, so
-they build on nixos-rog (or on nixos-desktop while nixos-rog is offline, as
-`scripts/build-on-rog.sh` does):
+they build on the host that runs `scripts/build.sh`:
 
 ```sh
-scripts/build-on-rog.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios \
+scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios \
   .#checks.x86_64-linux.risoluto-dev-1-boot-uefi
 ```
 

@@ -3,7 +3,7 @@
 # including Limine's BIOS stage, reboots from the disk without QEMU's kernel
 # loader, and runs the checks below. efi = false boots the disk through SeaBIOS
 # and efi = true through OVMF. Build it with
-# scripts/build-on-rog.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios (or
+# scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios (or
 # -uefi); Nix caches the result until the host or the test changes.
 #
 # Extend it without editing this file:

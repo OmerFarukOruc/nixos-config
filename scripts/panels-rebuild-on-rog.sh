@@ -10,11 +10,16 @@
 # plasma-panel-settings check. Exits 1 when no Plasma session runs or the
 # rebuild fails.
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline
+# (rog_pick_host, called after the arguments are checked).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 if (($#)); then
   echo "usage: $0" >&2
   exit 64
 fi
 
+rog_pick_host
 ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s <<'EOF'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)

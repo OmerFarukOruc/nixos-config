@@ -22,7 +22,7 @@
     ./monitoring.nix
     ./network.nix
     ../../nixosModules/nextdns.nix
-    ./nixpkgs-clone.nix
+    ../../nixosModules/nixpkgs-clone.nix
     ./powertop.nix
     ./profile-sync.nix
     ./stay-active.nix

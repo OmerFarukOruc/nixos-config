@@ -126,7 +126,7 @@ kernel-cache/          the separate flake that GitHub builds into Cachix
 ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
 .github/               the kernel-cache workflow
 devenv.nix             the dev shell, its linters and the git hooks
-scripts/               checks and builds on nixos-rog, update scripts, the deploy unit and the post-deploy check
+scripts/               checks and builds, scripts that act on nixos-rog, update scripts, the deploy unit and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
@@ -140,10 +140,10 @@ login sessions, the theme and Home Manager connect.
 
 ## Everyday commands
 
-Run these from nixos-desktop or nixos-rog. `deploy.sh`
-builds on the target, and the `-on-rog` scripts run Nix on nixos-rog over SSH
-from either host, or on nixos-desktop while nixos-rog is offline;
-`run-unit-on-rog.sh` needs nixos-rog online. `move-inputs.sh`
+Run these from nixos-desktop or nixos-rog. `deploy.sh` builds on the target.
+The other scripts that run Nix run it on the host you run them on, and the
+`*-on-rog.sh`, `*-nixos-rog.sh` and `thermal-test-rog.sh` scripts act on
+nixos-rog and need it online. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
 checkout with Nix. The update workflow runs them.
@@ -156,7 +156,7 @@ checkout with Nix. The update workflow runs them.
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
 | `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
-| `scripts/check-on-rog.sh` | run `ci/checks.sh`, the formatter, lock and flake checks, on nixos-rog and list each distinct evaluation warning; `--fix` formats |
+| `scripts/check.sh` | run `ci/checks.sh`, the formatter, lock and flake checks, on a copy of the checkout and list each distinct evaluation warning; `--fix` formats |
 
 <details>
 <summary>More commands</summary>
@@ -165,8 +165,8 @@ checkout with Nix. The update workflow runs them.
 | --- | --- |
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
-| `scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
-| `scripts/build-on-rog.sh [ATTRIBUTE...]` | build on nixos-rog from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` and `-uefi` run risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm) |
+| `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
+| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` and `-uefi` run risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
@@ -192,9 +192,7 @@ system state.
 and `.github/workflows/update.yml` runs `scripts/prepare-update.sh`.
 `scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
 `scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
-helpers that other scripts source. Nobody runs these by hand, except that a
-host without Nix can run `scripts/check-theme-drift.sh` to check a color
-before `scripts/check-on-rog.sh`.
+helpers that other scripts source. Nobody runs these by hand.
 
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,

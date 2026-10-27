@@ -9,8 +9,8 @@
 `update-kernel.sh` needs no Nix.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
-Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
-and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
+Bot packages. Run those scripts in a checkout on nixos-desktop or nixos-rog,
+which have Nix, `gh` and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
 no Nix. The update workflow runs all four scripts through
 `scripts/prepare-update.sh`, and `devenv update` for `devenv.lock`
 ([nixos-rog.md](nixos-rog.md#updater)).
@@ -53,7 +53,7 @@ at a CachyOS repository and each new input in `flake.lock` at its usual owner.
 Read every other changed file in full.
 
 Then change the commit in `kernel-cache/flake.nix`, run
-`scripts/check-on-rog.sh --fix`, which locks the new commit in
+`scripts/check.sh --fix`, which locks the new commit in
 `kernel-cache/flake.lock`, and push the change to `main`. The push starts the
 kernel-cache workflow, which builds and records the new revision. The
 update workflow then moves the hosts with `update-kernel.sh`.
@@ -104,7 +104,7 @@ move it, change its commit in `flake.nix`, then run
 `nix flake update kwin-effects-glass` and check that `git diff flake.lock` shows
 the new revision.
 
-To add an input, write it in `flake.nix` and run `scripts/check-on-rog.sh --fix`.
+To add an input, write it in `flake.nix` and run `scripts/check.sh --fix`.
 It locks each input that `flake.lock` lacks or whose URL changed, and copies
 `flake.lock` back. Without `--fix`, the check fails while `flake.lock` lacks an
 input, and so does the pre-push hook.
@@ -138,7 +138,7 @@ never moves them. A Spotify release that the spicetify-cli release cannot patch 
 builds, then opens a blank window. To move them:
 
 1. Set both commits in `flake.nix`, then run
-   `nix flake update nixpkgs-spotify spicetify-nix` on nixos-rog.
+   `nix flake update nixpkgs-spotify spicetify-nix`.
 2. Read the `spotify` and `spicetify-cli` versions at the new nixpkgs commit. The
    "Compatibility" list in the notes of that
    [spicetify-cli release](https://github.com/spicetify/cli/releases) must

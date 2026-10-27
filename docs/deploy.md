@@ -91,31 +91,30 @@ link that the devenv shell writes. Until `direnv allow <worktree>` and a first
 after that step; `PREK_ALLOW_NO_CONFIG=1` skips the hooks and with them every
 check.
 
-To check from a host without a loaded shell, these scripts copy the working
-tree to nixos-rog and run Nix there. When Tailscale reports nixos-rog offline,
-they copy it to `/tmp` on nixos-desktop instead and print a line on stderr; on
-any other host they exit 1 at once:
+To check without a loaded shell, these scripts copy the working tree to `/tmp`
+on the host that runs them and run Nix there, under `heavy` where the host has
+it:
 
 ```sh
-scripts/check-on-rog.sh
-scripts/check-on-rog.sh --fix
-scripts/eval-on-rog.sh '.#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
+scripts/check.sh
+scripts/check.sh --fix
+scripts/eval.sh '.#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
 ```
 
-`check-on-rog.sh` runs `ci/checks.sh`, the checks of the pre-push hook, with
+`check.sh` runs `ci/checks.sh`, the checks of the pre-push hook, with
 import from derivation forbidden. With `--fix` it formats first
-and copies the changed files back before it checks. `eval-on-rog.sh` evaluates
+and copies the changed files back before it checks. `eval.sh` evaluates
 one attribute and does not forbid import from derivation.
 
 To prove that a package or overlay builds before it lands, run
-`scripts/build-on-rog.sh [ATTRIBUTE...]`, because the checks above only
-evaluate. It builds each flake attribute in a copy of this checkout on
-nixos-rog and prints the output paths. With no attribute it builds nixos-rog's
+`scripts/build.sh [ATTRIBUTE...]`, because the checks above only
+evaluate. It builds each flake attribute in a copy of this checkout and prints
+the output paths. With no attribute it builds nixos-rog's
 system, which compiles whatever the caches lack. It creates no result link,
 activates nothing, and stops at the first build that fails.
 
 ```sh
-scripts/build-on-rog.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
+scripts/build.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
 ```
 
 These checks prove only that evaluation succeeds. The deploy builds the
@@ -133,13 +132,13 @@ of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a
 GitHub runner on 2026-10-13.
 
-Without a `#`, `scripts/eval-on-rog.sh` prints one value of nixos-rog's
+Without a `#`, `scripts/eval.sh` prints one value of nixos-rog's
 configuration; give a flake attribute with `#` for another host. A string
 prints raw, and any other value needs `--json`.
 
 Before you deploy a new or changed `script` of a nixos-rog systemd service, run
-it with `scripts/run-unit-on-rog.sh`. It runs the script on nixos-rog as root with only
-the unit's environment, so a command missing from the unit's `path` fails there
+it with `scripts/run-unit-on-rog.sh`. It builds and runs the script on nixos-rog
+as root with only the unit's environment, so a command missing from the unit's `path` fails there
 instead of after the deploy. It refuses, with exit 3, a unit that runs as
 another user or has no `script`. A unit still running at the timeout passes, as
 a long-running unit should.
@@ -152,7 +151,7 @@ may meet its own running instance. A oneshot unit still running at the
 timeout fails, and so does a unit whose condition was not met.
 
 ```sh
-scripts/eval-on-rog.sh 'systemd.services."oruc-cpu-limits".environment.PATH'
+scripts/eval.sh 'systemd.services."oruc-cpu-limits".environment.PATH'
 scripts/run-unit-on-rog.sh oruc-cpu-limits 40
 scripts/run-unit-on-rog.sh --user oled-care
 ```
@@ -208,11 +207,10 @@ uncommitted edits, and `--allow-dirty` would ship them.
 
 First find the hosts that the push affects. A push can carry several commits,
 so the script compares the system `drvPath` of every host at the pushed commit
-`<sha>` with the one at `<old>`, the `main` the push landed on. nixos-rog
-evaluates both from GitHub in 70 to 90 seconds (measured on 2026-10-15), so
-this step needs no worktree. While nixos-rog is offline, nixos-desktop
-evaluates instead and is slower: one revision took about 160 seconds on
-2026-10-24. From the main checkout, run:
+`<sha>` with the one at `<old>`, the `main` the push landed on. The host that
+runs it evaluates both from GitHub, so this step needs no worktree. nixos-rog
+took 70 to 90 seconds (measured on 2026-10-15), and nixos-desktop about 160
+seconds for one revision (2026-10-24). From the main checkout, run:
 
 ```sh
 git fetch origin
@@ -527,7 +525,7 @@ When a rebuild fails, do these steps:
    candidate release that stays on the target for read-only investigation.
 2. Fix the source in this checkout. When you also try a fix with a rebuild on
    the target, apply the same fix here.
-3. Run `scripts/check-on-rog.sh` again.
+3. Run `scripts/check.sh` again.
 4. Run the same deploy command again. For example, rerun the `test` action,
    which does not persist:
 

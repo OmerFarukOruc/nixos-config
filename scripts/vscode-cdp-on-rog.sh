@@ -6,6 +6,10 @@
 # prints one JSON line per step. `off` closes the tunnel. docs/nixos-rog.md,
 # "Drive VS Code", lists the steps and when to use the script.
 set -euo pipefail
+# The work acts on the laptop, so on and the SSH part of off stop at once
+# while it is offline (rog_pick_host).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 
 remote_port=9229
 local_port=19229
@@ -17,6 +21,7 @@ on() {
     echo "http://127.0.0.1:$local_port"
     return
   fi
+  rog_pick_host
   ssh "${ssh_opts[@]}" nixos-rog bash -s -- "$remote_port" <<'EOF'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
@@ -63,6 +68,7 @@ off() {
     fi
     rm -f -- "$pidfile"
   fi
+  rog_pick_host
   ssh "${ssh_opts[@]}" nixos-rog bash -s <<'EOF'
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus

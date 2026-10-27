@@ -33,6 +33,10 @@
 # first line names this script's git blob as script=, so a run cited as
 # evidence can be matched to a commit: git rev-parse REV:scripts/thermal-test-rog.sh.
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline
+# (rog_pick_host, called after the arguments are checked).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 
 host=nixos-rog
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
@@ -77,6 +81,7 @@ fi
 seconds=$((10#$seconds))
 [[ $label =~ ^[A-Za-z0-9._-]+$ ]] || die "--label takes letters, digits, dot, dash and underscore"
 
+rog_pick_host
 # The host takes each curve as N=POINTS, where N is the hwmon pwmN of the fan.
 curves=()
 read -ra groups <<<"$fans"

@@ -25,6 +25,10 @@
 # to a commit: git rev-parse REV:scripts/mic-ab-on-rog.sh.
 # shellcheck disable=SC2016,SC2029 # the remote bash expands the quoted scripts
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline
+# (rog_pick_host, called after the arguments are checked).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 
 host=nixos-rog
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
@@ -55,6 +59,7 @@ case $mode in
   *) die "usage: $0 level VOLUME... | $0 ab [--label LABEL]" 2 ;;
 esac
 
+rog_pick_host
 script_blob=$(git hash-object "$0")
 out=${TMPDIR:-/tmp}/mic-ab/$(date +%Y%m%dT%H%M%S)-${mode}${label:+-$label}
 mkdir -p "$out"

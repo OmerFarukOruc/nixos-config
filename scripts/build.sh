@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# usage: scripts/build-on-rog.sh [ATTRIBUTE...]
-# Builds each flake ATTRIBUTE in a copy of this checkout on nixos-rog
-# (scripts/lib/rog-copy.sh) and prints each output path. Each ATTRIBUTE is a
+# usage: scripts/build.sh [ATTRIBUTE...]
+# Builds each flake ATTRIBUTE in a copy of this checkout on this host
+# (scripts/lib/work-copy.sh) and prints each output path. Each ATTRIBUTE is a
 # flake attribute such as .#nixosConfigurations.nixos-rog.pkgs.deskflow; with
 # none it builds .#nixosConfigurations.nixos-rog.config.system.build.toplevel,
 # which compiles whatever the caches lack. The build creates no result link and
-# activates nothing, and the outputs stay in rog's store until garbage
-# collection. While nixos-rog is offline, nixos-desktop builds them in its own
-# store instead. It stops at the first attribute that fails, with that build's
+# activates nothing, and the outputs stay in this host's store until garbage
+# collection. It stops at the first attribute that fails, with that build's
 # exit status.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,9 +24,9 @@ for attr in "${attrs[@]}"; do
 done
 
 # shellcheck source=/dev/null
-. scripts/lib/rog-copy.sh
-rog_copy_open
-rog_remote "${attrs[@]}" <<'REMOTE'
+. scripts/lib/work-copy.sh
+copy_open
+copy_run "${attrs[@]}" <<'REMOTE'
 set -e
 cd "$1"
 shift

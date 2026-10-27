@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# usage: scripts/eval-on-rog.sh [--json] [--abort-on-warn] ATTRIBUTE
-# Evaluates ATTRIBUTE in a copy of this checkout on nixos-rog
-# (scripts/lib/rog-copy.sh), or on nixos-desktop while nixos-rog is offline,
-# and prints it. Without '#', ATTRIBUTE is a path
+# usage: scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE
+# Evaluates ATTRIBUTE in a copy of this checkout on this host
+# (scripts/lib/work-copy.sh) and prints it. Without '#', ATTRIBUTE is a path
 # under nixosConfigurations.nixos-rog.config, such as
 # 'systemd.services."oruc-cpu-limits".script'; with '#' it is a flake
 # attribute, such as .#nixosConfigurations.nixos-latitude.config.networking.hostName.
@@ -33,9 +32,9 @@ attr=$1
 [[ $attr == *#* ]] || attr=.#nixosConfigurations.nixos-rog.config.$attr
 
 # shellcheck source=/dev/null
-. scripts/lib/rog-copy.sh
-rog_copy_open
-rog_remote "$format" "$attr" "${options[@]}" <<'REMOTE'
+. scripts/lib/work-copy.sh
+copy_open
+copy_run "$format" "$attr" "${options[@]}" <<'REMOTE'
 set -e
 cd "$1"
 nix eval "$2" --no-write-lock-file "${@:4}" "$3" </dev/null

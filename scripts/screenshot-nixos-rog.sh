@@ -4,8 +4,13 @@
 # it to OUTPUT. --window first opens a Ghostty window that is not maximized,
 # so the shot shows the Glass blur and edges around it, and closes it after.
 # --crop keeps only the area of W by H pixels at X, Y, in the screen's pixels;
-# 2560x60+0+0 holds the top 60 rows of nixos-rog's 2560x1600 screen.
+# 2560x60+0+0 holds the top 60 rows of nixos-rog's 2560x1600 screen. The crop
+# runs on the calling host, so no Nix runs on the laptop.
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline
+# (rog_pick_host, called after the arguments are checked).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 
 usage="usage: scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png"
 window=false
@@ -34,9 +39,14 @@ if (($# != 1)); then
 fi
 out=$1
 
+if [[ -n $crop ]] && ! command -v nix >/dev/null; then
+  echo "--crop runs ImageMagick through nix on this host, and nix is not on PATH." >&2
+  exit 1
+fi
+rog_pick_host
 # stdout carries the PNG, so everything else on the host writes to stderr.
 status=0
-ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog "bash -s -- $(printf '%q ' "$window" "$crop")" <<'EOF' >"$out" || status=$?
+ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog "bash -s -- $(printf '%q ' "$window")" <<'EOF' >"$out" || status=$?
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
@@ -66,22 +76,29 @@ if [[ $1 == true ]]; then
   fi
 fi
 spectacle --background --nonotify --fullscreen --output "$dir/shot.png" >&2
-if [[ -n ${2:-} ]]; then
-  # The flake registry pins nixpkgs to the running system's, so this needs no
-  # download of nixpkgs, only of ImageMagick on its first use.
-  size=$(nix run nixpkgs#imagemagick -- "$dir/shot.png" -crop "$2" +repage \
-    -write "$dir/crop.png" -format '%wx%h' info: </dev/null)
-  # ImageMagick only warns about an area outside the screen and exits 0, so
-  # the size of the result is checked.
-  if [[ $size != "${2%%+*}" ]]; then
-    echo "The crop $2 got $size pixels; it must lie inside the screen." >&2
-    exit 1
-  fi
-  mv -- "$dir/crop.png" "$dir/shot.png"
-fi
 cat "$dir/shot.png"
 EOF
 if ((status)); then
   rm -f -- "$out"
   exit "$status"
+fi
+if [[ -n $crop ]]; then
+  cropped=$(mktemp "$out.XXXXXX")
+  trap 'rm -f -- "$cropped"' EXIT
+  # The flake registry pins nixpkgs to the running system's, so this needs no
+  # download of nixpkgs, only of ImageMagick on its first use.
+  size=$(nix run nixpkgs#imagemagick -- "png:$out" -crop "$crop" +repage \
+    -write "png:$cropped" -format '%wx%h' info: </dev/null) || status=$?
+  # ImageMagick only warns about an area outside the screen and exits 0, so
+  # the size of the result is checked.
+  if ((status == 0)) && [[ $size != "${crop%%+*}" ]]; then
+    echo "The crop $crop got $size pixels; it must lie inside the screen." >&2
+    status=1
+  fi
+  if ((status)); then
+    rm -f -- "$out"
+    exit "$status"
+  fi
+  # cat keeps the mode the shell gave OUTPUT; mktemp's file has mode 600.
+  cat -- "$cropped" >"$out"
 fi

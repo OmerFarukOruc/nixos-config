@@ -6,7 +6,6 @@
   systemd.services =
     lib.genAttrs
       [
-        "nixpkgs-clone"
         "oruc-cpu-limits"
         "oruc-low-battery"
         "usque"

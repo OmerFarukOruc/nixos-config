@@ -2,6 +2,10 @@
 # Checks a running nixos-rog from nixos-desktop and writes a JSON report.
 # Rerun it after any deploy to the laptop and compare the reports.
 set -euo pipefail
+# The work acts on the laptop, so a run stops at once while it is offline
+# (rog_pick_host, called after the arguments are checked).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/rog-host.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -89,6 +93,7 @@ while (($# > 0)); do
   shift
 done
 
+rog_pick_host
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 if [[ -z $report ]]; then
