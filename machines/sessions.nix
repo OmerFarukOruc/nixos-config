@@ -19,6 +19,12 @@ rec {
       throw "Unknown shell ${shell}. Known shells: ${lib.concatStringsSep ", " selectors.shellNames}";
 
   hasAnyDesktop = machine: machine.sessions != [ ];
+
+  # Whether oruc works in a graphical session that the machine has no login
+  # session for: the streamed desktop of a server. The modules that give a
+  # graphical user fonts, a browser and a keyboard layout ask this; the login
+  # screen, Ghostty and the shells ask hasAnyDesktop.
+  hasGraphicalUser = machine: hasAnyDesktop machine || machine.features.streamedDesktop;
   desktops = machine: lib.unique (map (session: session.desktop) machine.sessions);
 
   hasDesktop = machine: desktop: builtins.elem (knownDesktop desktop) (desktops machine);

@@ -10,10 +10,12 @@
 - [Web names](#web-names)
 - [Containers](#containers)
 - [Agent runtime](#agent-runtime)
+- [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
 - [Unit check in a VM](#unit-check-in-a-vm)
 - [Deploy test in a VM](#deploy-test-in-a-vm)
+- [Desktop test in a VM](#desktop-test-in-a-vm)
 
 ## What it is
 
@@ -23,7 +25,9 @@ login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/risoluto-dev-1/` (`configuration.nix`, `disk.nix`,
 `hardware-configuration.nix`, `home.nix`) and `nixosModules/server-access.nix`.
 The host imports four more modules for its services: `tailnet-web.nix`,
-`rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`.
+`rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
+`features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
+([Streamed desktop](#streamed-desktop)).
 
 The box runs Debian until the move to NixOS, so no deploy goes to it yet. Its
 record sets `deployed = false`, so `scripts/affected-hosts.sh` prints it as
@@ -348,8 +352,9 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
 - The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
   drives labwc. The module installs both desktops with their NixOS modules, and
   the tools they call (tigervnc, xdotool, X utilities, ffmpeg, ImageMagick,
-  wlr-randr, Chromium; Home Manager gives oruc bubblewrap). No login manager
-  starts. The XFCE module
+  wlr-randr, Chromium; Home Manager gives oruc bubblewrap). Those two sessions
+  start on demand, and the only login manager is the streamed desktop's
+  ([Streamed desktop](#streamed-desktop)). The XFCE module
   also turns on udisks2, accounts-daemon, gvfs, tumbler, colord, polkit and
   gnome-keyring. The boot test shows that these tools exist, not that an XFCE
   or labwc session starts.
@@ -359,6 +364,69 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   hourly `desktop-sync.sh --config` and the usage timer of the dotfiles checkout.
   `desktop-sync.sh` there treats the box as a Home Manager host once
   `/etc/NIXOS` exists.
+
+## Streamed desktop
+
+`features.streamedDesktop` of the record turns on
+`nixosModules/streamed-desktop.nix`: a light XFCE desktop for oruc on a virtual
+display, which Omer reaches from another machine over the tailnet through two
+routes. Both stay in the configuration until Omer picks one. A server with this
+feature has no login session in its record; `sessions.hasGraphicalUser` (`machines/sessions.nix`) tells the modules
+that give a graphical user fonts, a browser and the keyboard layout to apply
+([Inventory](architecture.md#inventory)).
+
+- **Sunshine and Moonlight.** LightDM logs oruc in at boot on an X server with
+  the dummy video driver (`services.xserver.videoDrivers`) at 1920x1080, with
+  no GPU and no screen, and runs XFCE. LightDM's check that logind calls the
+  seat graphical is off, because the box has no display hardware. Sunshine is
+  the NixOS module's user unit, which the session starts. It captures the X
+  display (`capture = "x11"`) and encodes with x264 (`encoder = "software"`).
+  Moonlight on another machine pairs with it and shows the desktop.
+- **xrdp.** Each RDP login of oruc starts a desktop of its own on an X server
+  with the xorgxrdp driver, and a reconnect finds the same session again
+  (sesman keeps a disconnected session). `overlays/xrdp.nix` builds xrdp with
+  x264, because nixpkgs builds it without an H.264 encoder; xrdp's own
+  `gfx.toml` then prefers H.264, and a client that asks for it (FreeRDP's
+  `/gfx:AVC420`) gets it. The session runs under `dbus-run-session`, because
+  the XFCE of the Sunshine route already owns the session manager's name on
+  oruc's systemd user bus, and a second `xfce4-session` on that bus ends at
+  once. sesman refuses root logins, which it allows by default. xrdp's logs go
+  to the journal, where the NixOS module sends them to `/dev/null`.
+- **Nothing on the public interface.** Neither route opens a firewall port, and
+  the Avahi service that the Sunshine module turns on (it opens UDP 5353) is
+  off. Both routes answer on tailscale0, which the firewall trusts, and the
+  assertion of `nixosModules/tailscale.nix` fails the evaluation when a port
+  gets opened. xrdp and Sunshine listen on every address, as sshd does, so the
+  firewall is the only guard. The idle screen lock is off, because it would ask
+  a Moonlight user for oruc's password after a minute; reaching the stream
+  takes the tailnet and a paired client.
+- **First use.** RDP logs in as oruc with oruc's password (the hash is in
+  `secrets/risoluto-dev-1.yaml`). Sunshine's web UI creates its admin user and
+  password at the first visit, and takes the PIN that Moonlight shows when it
+  pairs. Sunshine counts the tailnet's 100.64.0.0/10 as LAN (`src/network.cpp`
+  of Sunshine), so with its default any tailnet peer could create that account
+  first. `origin_web_ui_allowed = "pc"` makes the UI answer only on the box:
+  forward the port with `ssh -L 47990:localhost:47990 <box>` and open
+  `https://localhost:47990`. The user and password stay in
+  `~/.config/sunshine/` of oruc and in no repository file.
+- **Other desktops of oruc.** The Cursor worker and the Amp runner start their
+  own XFCE and labwc sessions, each on a session bus of its own (`dbus-launch`
+  and `dbus-run-session`, read from the Debian box on 2026-10-27), so they do
+  not meet the LightDM session on oruc's systemd user bus.
+- **Console.** The netcup console keeps its login on tty1 for recovery.
+  LightDM runs on VT 7 (`minimum-vt`), and the module clears the conflict that
+  nixpkgs sets between the display manager and tty1. LightDM switches the
+  screen to VT 7 when it starts, so the console should show a black screen
+  until Ctrl+Alt+F1 brings back the login (not seen on the netcup console). The boot test requires `getty@tty1`.
+- **After a logout** from the LightDM session, `graphical-session.target` ends,
+  Sunshine stops, and LightDM shows its greeter. `systemctl restart
+  display-manager` as root logs oruc in again.
+- **Logs.** `journalUnits` lists `display-manager.service`, `xrdp.service` and
+  `xrdp-sesman.service`. Sunshine is a user unit, so its lines are not in
+  `journalUnits` (the same gap as `docker.service`); read them with
+  `journalctl _SYSTEMD_USER_UNIT=sunshine.service`.
+- **Audio** is not set up or tested. PipeWire runs on the box already, because
+  the XFCE module turns it on.
 
 ## Memory and logs
 
@@ -485,3 +553,94 @@ ESP and the private Nix config that a test token becomes.
 The test does not show that a deploy over SSH as root reaches the box, that the
 box fetches the real main from GitHub, that the real flake evaluates (the boot
 tests and `ci/checks.sh` do), or that a deployed system boots; it never reboots.
+
+## Desktop test in a VM
+
+The flake check `risoluto-dev-1-desktop` (`ci/server-desktop.nix`) is a NixOS
+test of the [streamed desktop](#streamed-desktop), and it needs KVM. Run it
+with `scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-desktop`; it takes
+about 10 minutes once everything is built (the passing run on
+nixos-desktop). `machine`
+runs the host's own modules, as the
+[unit check](#unit-check-in-a-vm) does, with 6 GiB of RAM and 4 cores. A second
+node, `client`, runs an X session with FreeRDP and Moonlight.
+
+`machine` has a second network card that the test renames to tailscale0, which
+the firewall trusts. So a connection from `client` through eth1 stands for the
+public interface, and one through tailscale0 for the tailnet. Tailscale runs
+without a tun device in the test, because the renamed card holds that name. The
+test also puts back the dummy video driver, which qemu-vm replaces with
+modesetting. `ci/server-desktop/machine.nix` holds these changes and the
+workload of the CPU measurements.
+
+`ci/server-desktop/test.py` checks these. It measures the CPU in three places:
+with no client before the RDP login, for xrdp after the RDP checks, and for
+Sunshine at the end.
+
+1. No unit has failed or is still starting after boot, with LightDM, xrdp and
+   Sunshine running.
+2. XFCE runs for oruc on the dummy display, and xrandr reports 1920x1080.
+3. Each of the five TCP ports of both routes (3389, 47984, 47989, 47990, 48010)
+   gets no answer from the public interface, and answers on tailscale0. A rule
+   that opens each port for a moment shows that the firewall alone causes the
+   drop. The rules of the firewall accept nothing but tailscale0, loopback,
+   replies and Tailscale's own UDP port (and, on IPv6, ICMPv6 and the DHCPv6
+   client port). Sunshine's web UI
+   answers a tailnet peer with 403.
+4. FreeRDP, asking for H.264, logs in as oruc and gets XFCE, and xrdp's log says
+   it matched H.264 and used x264. After a disconnect the session keeps
+   running, and sesman logs a reconnect to the same XFCE and its windows.
+5. Moonlight pairs with Sunshine (the PIN goes through Sunshine's API), streams
+   the desktop, and the log of that stream shows the software encoder. A move of the
+   client's pointer lands on the same spot of the desktop, and keys typed on
+   the client reach a program on the desktop.
+6. The CPU use of `machine` for each route ([measurements](#cpu-measurements)).
+
+The test does not show Moonlight or an RDP client from the tailnet, a real
+Tailscale connection, audio, or the netcup CPU. The cutover proves the first
+two.
+
+### CPU measurements
+
+These are VM numbers: `machine` has 4 cores of nixos-desktop's CPU, not the
+netcup box's, so they compare the routes with each other and say little about
+the box. Each cell is the average busy cores of the whole machine over 30
+seconds, from `/proc/stat` (`ci/server-desktop/cpu.py`). The load runs on
+`machine` itself as oruc, in the display of the route: Chromium on a
+20000-line page that a script scrolls, and Chromium on a 20 s looping 1080p VP9
+video. The table is from the last of four runs that passed. Across the four,
+every cell varied by at most 0.12 cores, except one Sunshine video cell of 1.10
+cores (the others were 1.72, 1.62 and 1.62). In that run the Moonlight client
+aborted (SIGABRT) in the middle of the cell, so the `sunshine` process encoded
+for half of the 30 seconds (0.45 cores instead of about 0.9) and the cell is not
+a valid measurement. The test now fails when the client disconnects during a
+Sunshine cell, so such a run has to be repeated. In the table's run the host's
+steal time (CPU that the host took from the VM) was at most 0.06 cores, but it
+reached 1.1 and 1.4 cores in two failed runs and 0.37 cores in one cell of
+another passing run, so a noisy host gives different numbers.
+
+| Load | no client | xrdp | Sunshine |
+| ---- | --------- | ---- | -------- |
+| idle desktop | 0.07 | 0.08 | 0.99 |
+| scrolling page | 0.65 | 0.91 | 1.64 |
+| video 1080p | 0.60 | 0.84 | 1.62 |
+
+"no client" is the login session of the Sunshine route with nobody connected,
+so it is what Chromium and the X server cost alone. xrdp has one RDP client
+connected, which asks for H.264 at 1920x1080 (`/gfx:AVC420`) and gets x264 from
+xrdp. Sunshine has Moonlight connected at 1920x1080, 60 fps, H.264, with the
+software encoder at the bitrate that Moonlight asks for at that size (14.988
+Mbit/s in Sunshine's log) and the software decoder on the client. On top of the "no client" load, the streaming
+route costs this much in its own processes:
+
+- xrdp: the `xrdp` process used 0.20 cores while scrolling and 0.16 while
+  playing video, and the Xorg of the session used 0.15 and 0.08 (the X server
+  of the "no client" session used 0.08 and 0.04).
+- Sunshine: the `sunshine` process used 0.83 cores on an idle desktop, 0.87
+  while scrolling and 0.92 while playing video.
+
+So xrdp costs about nothing when the screen is still and about 0.25
+cores more than the bare desktop when it moves, and Sunshine costs about one
+core even when the screen is still. The netcup box has its own CPU speed and
+core count, so the cutover repeats the measurement there with the same load
+before Omer picks a route.

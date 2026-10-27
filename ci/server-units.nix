@@ -26,23 +26,7 @@ in
     nodes.dnsserver = acmeNodes.dnsserver;
     # The host's modules are those of mkMachine in machines/inventory.nix. The
     # acme client and the sops stub are the test's additions.
-    nodes.machine = {
-      imports = [
-        acmeNodes.client
-        ../nixosModules/default.nix
-        { oruc.machine = host.config.oruc.machine; }
-        ../machines/risoluto-dev-1/configuration.nix
-        ../machines/risoluto-dev-1/hardware-configuration.nix
-        # Test values for the sops file, as in the boot test.
-        ./server-boot/modules/sops.nix
-      ];
-      virtualisation = {
-        memorySize = 2048;
-        # The host names /dev/vda as Limine's BIOS device, and qemu-vm sets the
-        # same option from this one.
-        bootLoaderDevice = "/dev/vda";
-      };
-    };
+    nodes.machine = import ./server-units/machine.nix { inherit host acmeNodes; };
     testScript = builtins.readFile ./server-units/test.py;
   };
 }

@@ -130,7 +130,10 @@ let
       hasBattery = false;
       deployed = false;
       deployLogin = "root";
-      features.boxBrowser = true;
+      features = {
+        boxBrowser = true;
+        streamedDesktop = true;
+      };
     };
   };
 

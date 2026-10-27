@@ -54,9 +54,9 @@ in
       };
     };
     console.keyMap = "trq";
-    # The SDDM greeter and niri, through /etc/niri/host.kdl, read their layout
-    # from here.
-    services.xserver.xkb.layout = lib.mkIf (sessions.hasAnyDesktop cfg) "tr";
+    # The SDDM greeter and niri, through /etc/niri/host.kdl, and the streamed
+    # desktop of a server read their layout from here.
+    services.xserver.xkb.layout = lib.mkIf (sessions.hasGraphicalUser cfg) "tr";
 
     nix = {
       settings = {

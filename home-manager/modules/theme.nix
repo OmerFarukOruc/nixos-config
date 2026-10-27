@@ -16,6 +16,7 @@ let
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
   hasDesktop = sessions.hasAnyDesktop cfg;
+  hasFonts = sessions.hasGraphicalUser cfg;
 
   # A warm-burnout-* scheme brings Warm Burnout's own VS Code and Neovim
   # themes, which color syntax beyond the 16 Base16 slots.
@@ -99,10 +100,10 @@ let
   colorsOnce = import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } "oruc-plasma-colors";
 in
 {
-  fonts.fontconfig.enable = hasDesktop;
+  fonts.fontconfig.enable = hasFonts;
 
   # These packages provide the families named by oruc.theme.fonts.
-  home.packages = lib.optionals hasDesktop (
+  home.packages = lib.optionals hasFonts (
     with pkgs;
     [
       inter

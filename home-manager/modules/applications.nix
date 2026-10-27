@@ -9,8 +9,11 @@
   ...
 }:
 let
-  # A machine with no desktop session gets the command-line tools only.
+  # A machine with no desktop session gets the command-line tools only, and
+  # with a streamed desktop only the browsers and fonts of a graphical user.
+  # Ghostty and the terminal variable need a login session.
   hasDesktop = sessions.hasAnyDesktop osConfig.oruc.machine;
+  hasScreen = sessions.hasGraphicalUser osConfig.oruc.machine;
   # Brave keeps the key that encrypts its cookies and passwords in KWallet
   # under Plasma and in the Secret Service under niri, and neither session
   # can read the other's. On a machine with Plasma it uses KWallet in every
@@ -83,7 +86,7 @@ let
         --run 'if [ -z "''${SSH_CONNECTION:-}" ]; then export GROK_CLIPBOARD_NO_OSC52=1; fi'
     '';
   };
-  # Skipped without a desktop session. They stay in the list below, and the list
+  # Skipped without a graphical user. They stay in the list below, and the list
   # is filtered, so that the order of the packages on a desktop stays as it is.
   desktopPackages = [
     pkgs.firefox
@@ -94,7 +97,7 @@ let
   ];
 in
 {
-  home.packages = lib.subtractLists (lib.optionals (!hasDesktop) desktopPackages) (
+  home.packages = lib.subtractLists (lib.optionals (!hasScreen) desktopPackages) (
     with pkgs;
     [
       # keep-sorted start
@@ -297,7 +300,7 @@ in
     '';
   };
 
-  xdg.mimeApps = lib.mkIf hasDesktop {
+  xdg.mimeApps = lib.mkIf hasScreen {
     enable = true;
     defaultApplications = {
       "text/html" = [ "brave-origin.desktop" ];
@@ -311,10 +314,9 @@ in
   };
   # Apps that register their own URL scheme rewrite mimeapps.list. Every such
   # scheme is declared, so the next switch replaces the file without a backup.
-  xdg.configFile."mimeapps.list" = lib.mkIf hasDesktop { force = true; };
+  xdg.configFile."mimeapps.list" = lib.mkIf hasScreen { force = true; };
 
-  home.sessionVariables = lib.mkIf hasDesktop {
-    BROWSER = "brave-origin";
-    TERMINAL = "ghostty";
-  };
+  home.sessionVariables =
+    lib.optionalAttrs hasScreen { BROWSER = "brave-origin"; }
+    // lib.optionalAttrs hasDesktop { TERMINAL = "ghostty"; };
 }

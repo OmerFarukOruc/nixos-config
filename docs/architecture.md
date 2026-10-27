@@ -25,17 +25,28 @@ record.
 A machine of kind `server` gets none of the workstation modules. Each of them
 gates on `kind == "workstation"`, on a feature, on the machine's `gpu`
 (`intel-graphics.nix` and `amd-graphics.nix`), or on the machine's sessions, and
-the modules for graphical apps, fonts, the wallpaper and the failure popup skip
-a machine with no session. `connectivity.nix` (NetworkManager, SSH and sudo) is
-workstation-only, so the schema rejects `features.remoteAccess` on a server, and
+the modules for graphical apps, the wallpaper and the failure popup skip a
+machine with no session, and the fonts skip one with no graphical user.
+`connectivity.nix` (NetworkManager, SSH and sudo) is workstation-only, so the schema rejects `features.remoteAccess` on a server, and
 it rejects `theme.schemes`, because only a workstation gets the `theme` command.
 `nixosModules/tailscale.nix` and `nixosModules/ssh.nix` (the settings every
 sshd shares) serve every host, and `nixosModules/server-access.nix` adds a
 server's Tailscale flags and SSH ([risoluto-dev-1](risoluto-dev-1.md#access)). `ci/server.nix` evaluates a
 server record with no sessions, and `ci/checks.sh` fails when one of the pieces
-it lists comes in or when the schema stops rejecting one of the three records it
-rejects: `theme.schemes` or `features.remoteAccess` on a server, and `biosDevice`
-with systemd-boot.
+it lists comes in or when the schema stops rejecting one of the four records it
+rejects: `theme.schemes` or `features.remoteAccess` on a server, `biosDevice`
+with systemd-boot, and `features.streamedDesktop` on a workstation.
+
+A server has a desktop through `features.streamedDesktop`, not through a login
+session: `nixosModules/streamed-desktop.nix` runs XFCE on a virtual display for
+oruc and streams it over the tailnet ([Streamed desktop](risoluto-dev-1.md#streamed-desktop)).
+`features.remoteDesktop` stays the workstation's switch for Sunshine on its own
+screen, and it still requires `remoteAccess`. The session list of such a server
+stays empty, so the modules that ask `sessions.hasAnyDesktop` (the login screen,
+Ghostty, the wallpaper, VS Code, the launchers) skip it. The modules that give a
+graphical user fonts, a browser, its certificate database and the keyboard layout
+ask `sessions.hasGraphicalUser`, which is true for a login session or a streamed
+desktop. `ci/checks.sh` lists the pieces a server with a streamed desktop gets.
 
 `nixosModules/bootloader.nix` sets `boot.loader.efi.canTouchEfiVariables` to true
 as a default. A machine that boots through BIOS sets it to false, because its

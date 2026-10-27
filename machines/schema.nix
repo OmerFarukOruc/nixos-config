@@ -190,6 +190,7 @@ let
         options = {
           remoteAccess = mkFeature "Enable remote shell access.";
           remoteDesktop = mkFeature "Host a remote desktop with Sunshine.";
+          streamedDesktop = mkFeature "Run a light XFCE desktop on a virtual display, reached over the tailnet through Sunshine and xrdp (nixosModules/streamed-desktop.nix). A server's counterpart of remoteDesktop.";
           docker = mkFeature "Enable the Docker daemon and client tooling.";
           diskSelfTests = mkFeature "Schedule the smartd short and long disk self-tests.";
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
@@ -223,6 +224,10 @@ let
     assert lib.assertMsg (
       (!machine.features.remoteDesktop) || machine.features.remoteAccess
     ) "The remoteDesktop feature requires remoteAccess.";
+    # A workstation has a screen and a login session; remoteDesktop streams them.
+    assert lib.assertMsg (
+      machine.kind == "server" || !machine.features.streamedDesktop
+    ) "Only server machines may set features.streamedDesktop; a workstation uses remoteDesktop.";
     assert lib.assertMsg (
       lib.length (lib.unique machine.sessions) == lib.length machine.sessions
     ) "Each session must pair a different desktop and shell.";

@@ -19,6 +19,8 @@
     ./amd-graphics.nix
     ./tailscale.nix
     ./server-access.nix
+    ./streamed-desktop.nix
+    ./sunshine-avahi.nix
     ./ssh.nix
     ./telemetry.nix
     ./workstation.nix

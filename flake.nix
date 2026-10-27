@@ -127,6 +127,10 @@
           inherit inputs;
           host = inventory.nixosConfigurations.risoluto-dev-1;
         }
+        // import ./ci/server-desktop.nix {
+          inherit inputs;
+          host = inventory.nixosConfigurations.risoluto-dev-1;
+        }
         // import ./ci/self-deploy.nix { inherit inputs; };
     };
 }

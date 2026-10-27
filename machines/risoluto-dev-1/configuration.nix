@@ -107,6 +107,9 @@ in
     journalUnits = [
       "caddy.service"
       "acme-*.service"
+      "display-manager.service"
+      "xrdp.service"
+      "xrdp-sesman.service"
     ];
   };
 
