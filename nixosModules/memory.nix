@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  sessions,
   ...
 }:
 let
@@ -31,15 +32,17 @@ in
   # cap. The values sit above the normal peaks; they are not measured limits.
   # The busiest normal tab runs herdr and its agents, so it is the one closest
   # to the limits; when it passes 20G the kernel kills its largest process.
-  systemd.user.units."app-ghostty-surface-transient-.scope" = {
-    overrideStrategy = "asDropin";
-    text = ''
-      [Scope]
-      TasksMax=4096
-      MemoryMax=20G
-      MemorySwapMax=6G
-    '';
-  };
+  systemd.user.units."app-ghostty-surface-transient-.scope" =
+    lib.mkIf (sessions.hasAnyDesktop config.oruc.machine)
+      {
+        overrideStrategy = "asDropin";
+        text = ''
+          [Scope]
+          TasksMax=4096
+          MemoryMax=20G
+          MemorySwapMax=6G
+        '';
+      };
 
   # The kernel's OOM task table names no parent and no command line, and the
   # processes are gone by the time anyone looks. This service writes every

@@ -6,7 +6,9 @@
   config,
   inputs,
   lib,
+  osConfig,
   pkgs,
+  sessions,
   ...
 }:
 let
@@ -225,7 +227,7 @@ in
     '';
   };
 
-  config = {
+  config = lib.mkIf (sessions.hasAnyDesktop osConfig.oruc.machine) {
     oruc.vscodeSettings = {
       # Ghostty's font, which every host installs. A missing family falls
       # back to a proportional font and breaks the column layout.

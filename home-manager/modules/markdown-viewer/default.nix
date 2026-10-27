@@ -1,7 +1,9 @@
 {
   config,
   lib,
+  osConfig,
   pkgs,
+  sessions,
   ...
 }:
 let
@@ -126,25 +128,28 @@ let
   ];
 in
 {
-  home.packages = [ viewer ];
+  # The viewer opens a browser, so only a machine with a desktop session gets it.
+  config = lib.mkIf (sessions.hasAnyDesktop osConfig.oruc.machine) {
+    home.packages = [ viewer ];
 
-  xdg.configFile."oruc/pandoc-md-theme.css".text = themeCss;
+    xdg.configFile."oruc/pandoc-md-theme.css".text = themeCss;
 
-  xdg.desktopEntries.pandoc-md-viewer = {
-    name = "Markdown Viewer (Pandoc)";
-    comment = "Render Markdown files as styled HTML in the browser";
-    exec = "${lib.getExe viewer} %f";
-    mimeType = mimeTypes;
-    terminal = false;
-    noDisplay = true;
-    categories = [
-      "Utility"
-      "Viewer"
-    ];
+    xdg.desktopEntries.pandoc-md-viewer = {
+      name = "Markdown Viewer (Pandoc)";
+      comment = "Render Markdown files as styled HTML in the browser";
+      exec = "${lib.getExe viewer} %f";
+      mimeType = mimeTypes;
+      terminal = false;
+      noDisplay = true;
+      categories = [
+        "Utility"
+        "Viewer"
+      ];
+    };
+
+    xdg.mimeApps.defaultApplications = lib.genAttrs mimeTypes (_: [ "pandoc-md-viewer.desktop" ]);
+
+    # Oh My Zsh aliases md to mkdir -p; the shell already aliases mkdir to mkdir -pv.
+    programs.zsh.shellAliases.md = "pandoc-md-viewer";
   };
-
-  xdg.mimeApps.defaultApplications = lib.genAttrs mimeTypes (_: [ "pandoc-md-viewer.desktop" ]);
-
-  # Oh My Zsh aliases md to mkdir -p; the shell already aliases mkdir to mkdir -pv.
-  programs.zsh.shellAliases.md = "pandoc-md-viewer";
 }

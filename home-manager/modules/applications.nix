@@ -9,6 +9,8 @@
   ...
 }:
 let
+  # A machine with no desktop session gets the command-line tools only.
+  hasDesktop = sessions.hasAnyDesktop osConfig.oruc.machine;
   # Brave keeps the key that encrypts its cookies and passwords in KWallet
   # under Plasma and in the Secret Service under niri, and neither session
   # can read the other's. On a machine with Plasma it uses KWallet in every
@@ -81,9 +83,18 @@ let
         --run 'if [ -z "''${SSH_CONNECTION:-}" ]; then export GROK_CLIPBOARD_NO_OSC52=1; fi'
     '';
   };
+  # Skipped without a desktop session. They stay in the list below, and the list
+  # is filtered, so that the order of the packages on a desktop stays as it is.
+  desktopPackages = [
+    pkgs.firefox
+    pkgs.nerd-fonts.caskaydia-cove
+    pkgs.sourcegit
+    brave
+    chrome
+  ];
 in
 {
-  home.packages =
+  home.packages = lib.subtractLists (lib.optionals (!hasDesktop) desktopPackages) (
     with pkgs;
     [
       # keep-sorted start
@@ -123,7 +134,8 @@ in
       chrome
       grok
       opencode
-    ];
+    ]
+  );
 
   # Claude Code gets the NixOS MCP server, so it looks up option and package
   # names instead of guessing them. Home Manager delivers the server list as
@@ -187,7 +199,7 @@ in
     ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true''
   ];
 
-  programs.ghostty = {
+  programs.ghostty = lib.mkIf hasDesktop {
     enable = true;
     enableZshIntegration = true;
     settings = {
@@ -285,7 +297,7 @@ in
     '';
   };
 
-  xdg.mimeApps = {
+  xdg.mimeApps = lib.mkIf hasDesktop {
     enable = true;
     defaultApplications = {
       "text/html" = [ "brave-origin.desktop" ];
@@ -299,9 +311,9 @@ in
   };
   # Apps that register their own URL scheme rewrite mimeapps.list. Every such
   # scheme is declared, so the next switch replaces the file without a backup.
-  xdg.configFile."mimeapps.list".force = true;
+  xdg.configFile."mimeapps.list" = lib.mkIf hasDesktop { force = true; };
 
-  home.sessionVariables = {
+  home.sessionVariables = lib.mkIf hasDesktop {
     BROWSER = "brave-origin";
     TERMINAL = "ghostty";
   };

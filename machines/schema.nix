@@ -76,7 +76,14 @@ let
         "limine"
       ];
       default = "systemd-boot";
-      description = "UEFI boot loader that installs this machine's generations.";
+      description = "UEFI boot loader that installs this machine's generations. Limine can also install a BIOS stage (biosDevice).";
+    };
+
+    biosDevice = mkOption {
+      type = types.nullOr (types.strMatching "/dev/.+");
+      default = null;
+      example = "/dev/vda";
+      description = "Disk on which Limine also installs its BIOS stage, for a machine that boots through BIOS or either firmware. The EFI loader is always installed, so the machine needs an EFI system partition. With null Limine installs the EFI loader only.";
     };
 
     launcher = mkOption {
@@ -180,6 +187,17 @@ let
     assert lib.assertMsg (
       machine.kind == "workstation" || desktops == [ ]
     ) "Only workstation machines may offer a desktop session.";
+    assert lib.assertMsg (
+      machine.kind == "workstation" || machine.theme.schemes == [ ]
+    ) "Only workstation machines may list theme.schemes, because only they get the theme command.";
+    # nixosModules/connectivity.nix, which sets up SSH and sudo for this feature,
+    # is workstation-only.
+    assert lib.assertMsg (
+      machine.kind == "workstation" || !machine.features.remoteAccess
+    ) "Only workstation machines may set features.remoteAccess.";
+    assert lib.assertMsg (
+      machine.biosDevice == null || machine.bootloader == "limine"
+    ) "Only the limine boot loader installs a BIOS stage, so ${machine.name} cannot set biosDevice.";
     assert lib.assertMsg (
       (!machine.features.remoteDesktop) || machine.features.remoteAccess
     ) "The remoteDesktop feature requires remoteAccess.";

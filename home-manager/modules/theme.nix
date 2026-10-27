@@ -15,6 +15,7 @@ let
   theme = config.oruc.theme;
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
+  hasDesktop = sessions.hasAnyDesktop cfg;
 
   # A warm-burnout-* scheme brings Warm Burnout's own VS Code and Neovim
   # themes, which color syntax beyond the 16 Base16 slots.
@@ -98,15 +99,18 @@ let
   colorsOnce = import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } "oruc-plasma-colors";
 in
 {
-  fonts.fontconfig.enable = true;
+  fonts.fontconfig.enable = hasDesktop;
 
   # These packages provide the families named by oruc.theme.fonts.
-  home.packages = with pkgs; [
-    inter
-    nerd-fonts.jetbrains-mono
-    noto-fonts
-    noto-fonts-color-emoji
-  ];
+  home.packages = lib.optionals hasDesktop (
+    with pkgs;
+    [
+      inter
+      nerd-fonts.jetbrains-mono
+      noto-fonts
+      noto-fonts-color-emoji
+    ]
+  );
 
   programs.ghostty = {
     # Home Manager validates each theme file with an unquoted path, so the
@@ -192,8 +196,9 @@ in
 
   xdg.dataFile = {
     # An attribute name cannot carry the store path's context.
-    "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}".source =
-      theme.wallpaper;
+    "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}" =
+      lib.mkIf hasDesktop
+        { source = theme.wallpaper; };
     "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
       text = opaqueScheme;
     };

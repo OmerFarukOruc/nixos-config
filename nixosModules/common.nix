@@ -1,4 +1,13 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  sessions,
+  ...
+}:
+let
+  cfg = config.oruc.machine;
+in
 {
   config = {
     nixpkgs.config.allowUnfree = true;
@@ -47,7 +56,7 @@
     console.keyMap = "trq";
     # The SDDM greeter and niri, through /etc/niri/host.kdl, read their layout
     # from here.
-    services.xserver.xkb.layout = "tr";
+    services.xserver.xkb.layout = lib.mkIf (sessions.hasAnyDesktop cfg) "tr";
 
     nix = {
       settings = {
@@ -137,8 +146,8 @@
 
     # A phone's carrier sees tethered packets with the phone's own TTL: 65
     # here, 64 after the phone's hop. Containers get a network namespace of
-    # their own, which starts at 64.
-    boot.kernel.sysctl = {
+    # their own, which starts at 64. Only a workstation is tethered.
+    boot.kernel.sysctl = lib.mkIf (cfg.kind == "workstation") {
       "net.ipv4.ip_default_ttl" = 65;
       "net.ipv6.conf.all.hop_limit" = 65;
       "net.ipv6.conf.default.hop_limit" = 65;

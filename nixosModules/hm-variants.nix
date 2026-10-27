@@ -200,7 +200,7 @@ let
   };
 in
 {
-  config = lib.mkIf (config.home-manager.users ? oruc) {
+  config = lib.mkIf (cfg.kind == "workstation" && config.home-manager.users ? oruc) {
     assertions = [
       {
         assertion = packageDrift == { };

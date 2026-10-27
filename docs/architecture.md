@@ -22,11 +22,24 @@ turns itself on from the machine record. It reads `kind`, `gpu` or a
 A new module goes in one of the two import lists and gates its own config on the
 record.
 
+A machine of kind `server` gets none of the workstation modules. Each of them
+gates on `kind == "workstation"`, on a feature, or on the machine's sessions,
+and the modules for graphical apps, fonts, the wallpaper and the failure popup
+skip a machine with no session. `connectivity.nix` (NetworkManager, Tailscale,
+SSH and sudo) is workstation-only, so the schema rejects `features.remoteAccess`
+on a server. `ci/server.nix` evaluates a server record with no sessions, and
+`ci/checks.sh` fails when one of the pieces it lists comes in.
+
+`nixosModules/bootloader.nix` sets `boot.loader.efi.canTouchEfiVariables` to true
+as a default. A host whose firmware keeps no boot entries sets it to false, and
+Limine then installs its EFI binary at the firmware fallback path only. With
+`biosDevice` in the record, Limine also installs its BIOS stage on that disk.
+
 `machines/inventory.nix` holds one value per machine for the typed
 `oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:
 
 - the host name, system, kind, form factor, GPU class and battery flag
-- the boot loader
+- the boot loader, and for Limine the disk that also gets its BIOS stage
 - the kernel profile and the Base16 scheme
 - the login sessions, described in [Login sessions](#login-sessions)
 - the launcher

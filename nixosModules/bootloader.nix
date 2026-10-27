@@ -5,7 +5,8 @@
   ...
 }:
 let
-  inherit (config.oruc.machine) bootloader;
+  inherit (config.oruc.machine) bootloader biosDevice;
+  limine = config.boot.loader.limine;
   esp = config.boot.loader.efi.efiSysMountPoint;
   # Every listed generation keeps a kernel and initrd on the ESP. The menu lists
   # the newest this many generations, which is also angrr's newest-N rule. angrr
@@ -15,7 +16,8 @@ let
 in
 {
   config = lib.mkMerge [
-    { boot.loader.efi.canTouchEfiVariables = true; }
+    # A server on firmware that has no writable NVRAM sets it to false.
+    { boot.loader.efi.canTouchEfiVariables = lib.mkDefault true; }
 
     (lib.mkIf (bootloader == "systemd-boot") {
       # Secure Boot must be off in the firmware.
@@ -31,11 +33,15 @@ in
         efiSupport = true;
         # The binary goes to \EFI\limine and gets its own NVRAM entry. A copy
         # at the firmware fallback path boots the same menu after the firmware
-        # forgets its entries, for example after a BIOS update.
-        efiInstallAsRemovable = false;
-        extraInstallCommands = ''
+        # forgets its entries, for example after a BIOS update. Without
+        # canTouchEfiVariables, nixpkgs installs the binary at the fallback path
+        # only, and there is nothing to copy.
+        extraInstallCommands = lib.optionalString (!limine.efiInstallAsRemovable) ''
           ${pkgs.coreutils}/bin/install -D -m 0644 ${esp}/EFI/limine/BOOTX64.EFI ${esp}/EFI/BOOT/BOOTX64.EFI
         '';
+        # The BIOS stage goes on the record's disk, next to the EFI loader.
+        biosSupport = biosDevice != null;
+        biosDevice = lib.mkIf (biosDevice != null) biosDevice;
         maxGenerations = generations;
         # A solid menu in the machine's base16 scheme, without a wallpaper.
         style =

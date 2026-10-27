@@ -93,6 +93,28 @@ box_browser() {
   }
 }
 
+# No host is a server, so this evaluates a server record with Limine's BIOS stage
+# and no login sessions (ci/server.nix).
+server_record() {
+  local out
+  out=$(nix eval "${nix_opts[@]}" --json --impure \
+    --expr 'import ./ci/server.nix (builtins.getFlake (toString ./.))') || return 1
+  jq -e '.workstation | to_entries | map(select(.value)) | map(.key) | . == []' <<<"$out" >/dev/null || {
+    echo "The server record gets a workstation piece: $(jq -c '.workstation | with_entries(select(.value)) | keys' <<<"$out")" >&2
+    return 1
+  }
+  jq -e '.boot | .enable and .efiSupport and .biosSupport and .biosDevice == "/dev/vda"
+    and (.canTouchEfiVariables | not) and .efiInstallAsRemovable and .extraInstallCommands == ""' \
+    <<<"$out" >/dev/null || {
+    echo "The server record's boot loader does not follow its record: $(jq -c .boot <<<"$out")" >&2
+    return 1
+  }
+  jq -e '.rogBoot | (.efiInstallAsRemovable | not) and .fallbackCopy' <<<"$out" >/dev/null || {
+    echo "nixos-rog's Limine lost the fallback copy of its EFI binary: $(jq -c .rogBoot <<<"$out")" >&2
+    return 1
+  }
+}
+
 # With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
 # and only warns, so the input follows its upstream unpinned. nix fmt writes
 # the lock file, so the lock check runs first.
@@ -104,6 +126,8 @@ check "kernel-cache packages" nix eval "${nix_opts[@]}" --json --no-write-lock-f
   ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
 echo
 check "box browser feature" box_browser
+echo
+check "server record" server_record
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)
