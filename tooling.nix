@@ -81,7 +81,7 @@ in
           includes = [
             "deploy.sh"
             "docs/deploy.md"
-            "scripts/auto-update.sh"
+            "scripts/pull-main.sh"
           ];
         };
         # A fixed color in a tracked file. The script skips Markdown, lock files

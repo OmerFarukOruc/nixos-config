@@ -483,7 +483,7 @@ release_dir=$HOME/$2
 action=$3
 
 # heavy (home-manager/modules/heavy.nix) caps the evaluation's memory on a host
-# that has it. The updater's PATH lacks it, so its deploy runs plain nix
+# that has it. The deploy unit's PATH lacks it, so its deploy runs plain nix
 # under the unit's own MemoryHigh.
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
@@ -509,7 +509,7 @@ fi
 # never reaches that target. The candidate's systemd-analyze reads only the
 # candidate's units; it exits 0 also when it finds a cycle. Without --man=no it
 # looks up each unit's man pages and fails where man is not on PATH, as in the
-# updater's service.
+# deploy unit's service.
 analysis=$(SYSTEMD_UNIT_PATH="$new/etc/systemd/system" "$new/sw/bin/systemd-analyze" verify --man=no default.target 2>&1) ||
   printf '%s\n' "$analysis" 'systemd-analyze could not check the new units for an ordering cycle.' >&2
 if grep -q 'Found ordering cycle' <<<"$analysis"; then

@@ -11,8 +11,9 @@
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
 Bot packages. Run those scripts in a checkout on nixos-rog, which has Nix, `gh`
 and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
-no Nix. The updater on nixos-rog runs all four scripts, and `devenv update` for
-`devenv.lock` ([nixos-rog.md](nixos-rog.md#updater)).
+no Nix. The update workflow runs all four scripts through
+`scripts/prepare-update.sh`, and `devenv update` for `devenv.lock`
+([nixos-rog.md](nixos-rog.md#updater)).
 
 Each script changes files in that checkout and commits nothing. Commit the
 change and push it to `main` as [AGENTS.md](../AGENTS.md) describes, then
@@ -55,7 +56,7 @@ Then change the commit in `kernel-cache/flake.nix`, run
 `scripts/check-on-rog.sh --fix`, which locks the new commit in
 `kernel-cache/flake.lock`, and push the change to `main`. The push starts the
 kernel-cache workflow, which builds and records the new revision. The
-updater on nixos-rog then moves the hosts with `update-kernel.sh`.
+update workflow then moves the hosts with `update-kernel.sh`.
 
 ### When the cache lacks the kernel
 
@@ -110,13 +111,13 @@ input, and so does the pre-push hook.
 
 `move-inputs.sh` never moves the kernel or llm-agents, because each of them
 moves only once a cache holds its builds. It moves every input, or only the
-inputs it names. The updater on nixos-rog runs it.
+inputs it names. The update workflow runs it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
 then compile the kernel and the llm-agents packages. Move the kernel with
 `scripts/update-kernel.sh`. To move one input by hand, use `nix flake update <input>`, or
 `scripts/update-release-tags.sh <input>` for an input pinned to a release tag.
-The updater moves llm-agents once cache.numtide.com holds its builds
+The update workflow moves llm-agents once cache.numtide.com holds its builds
 ([nixos-rog.md](nixos-rog.md#updater)).
 
 ## Release tags
@@ -132,8 +133,8 @@ and locks them. It moves one of these sets:
 ## Spotify and Spicetify
 
 `home-manager/modules/spicetify.nix` builds Spotify from `nixpkgs-spotify` and
-patches it with `spicetify-nix`. Both inputs pin a commit, so the updater never
-moves them. A Spotify release that the spicetify-cli release cannot patch still
+patches it with `spicetify-nix`. Both inputs pin a commit, so the update workflow
+never moves them. A Spotify release that the spicetify-cli release cannot patch still
 builds, then opens a blank window. To move them:
 
 1. Set both commits in `flake.nix`, then run
@@ -167,11 +168,10 @@ repository that its `passthru.aptIndex` names.
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 
-The updater on nixos-rog builds each moved app on its own first. A version that
-does not build stays out of the update and sends one notification, which
-quotes the build's last error line. The other updates go ahead.
+The update workflow builds each moved app on its own first. A version that
+does not build stays out of the update and shows a warning on the run's page,
+which quotes the build's last error line. The other updates go ahead.
 
 When an app's update check fails, the app stays where it is. Examples are an
 unreadable feed or index, or a feed file that is not the one the package
-downloads. The updater sends one notification per distinct error, until a
-check succeeds.
+downloads. Each run shows the error as a warning until a check succeeds.

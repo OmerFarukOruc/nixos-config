@@ -72,16 +72,15 @@ devenv tasks run ci
 The hooks see the staged tree, because prek sets unstaged edits aside while a
 hook runs. Commit everything before you push, so the checked tree is the
 pushed one. No hook builds a host's system. The deploy builds it on the target
-and changes nothing when the build fails, and the updater builds every host
-before its own merge; a commit that does not build for another host therefore
-also fails the updater's next run with status 76. `devenv tasks run ci` builds
-them all before a push.
+and changes nothing when the build fails, and the update workflow builds every
+host before its own merge; a commit that does not build for another host
+therefore also fails the workflow's next run. `devenv tasks run ci` builds them
+all before a push.
 
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
 ran `direnv allow` has no hooks, and on nixos-rog and nixos-desktop `heavy`
-fails without a user session bus, which fails the push hook. The hooks do not take the updater's build lock, so
-a push on nixos-rog can run beside an updater run. Git holds the SSH
+fails without a user session bus, which fails the push hook. Git holds the SSH
 connection to GitHub open while the pre-push hook runs, and GitHub closes it
 when it stays idle, so `home-manager/modules/git.nix` sends SSH keepalives.
 
@@ -261,7 +260,7 @@ on a branch.
 ## Upgrade a host to main
 
 Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
-it runs the [updater](nixos-rog.md#updater) now. On every other
+it runs the [deploy unit](nixos-rog.md#deploy-unit) now. On every other
 host it deploys `main` to that host in these steps:
 
 1. It clones this repository over https into
@@ -281,8 +280,8 @@ one `--replace`, 1 when it runs as root, and with Git's status when the clone or
 fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's
-home. It never moves an input, because the updater on nixos-rog owns
-`flake.lock`. After exit 78, merge the work of the running release into
+home. It never moves an input, because the update workflow owns
+`flake.lock` ([Updater](nixos-rog.md#updater)). After exit 78, merge the work of the running release into
 `main`, or run `upgrade --replace` once its owner agrees that the deploy may
 drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
 
@@ -388,7 +387,7 @@ misbehaves.
 
 ## Exit codes
 
-The table lists every code from 64 to 99 that `deploy.sh` and the updater set.
+The table lists every code from 64 to 99 that `deploy.sh` and `scripts/pull-main.sh` set.
 `nix fmt` runs `scripts/check-exit-codes.sh`, which fails when the table and the
 scripts differ. A failed activation returns the exit status of
 `switch-to-configuration`, such as 4. Other failures exit with other codes,
@@ -404,7 +403,6 @@ such as 1.
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
-| 76 | Another host does not evaluate or build, or a check before the merge fails. The [updater](nixos-rog.md#updater) sets this status, not `deploy.sh`, and then exits 1. | Not deployed. |
 | 77 | Another deploy holds the lock on the host. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |

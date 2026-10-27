@@ -1,10 +1,15 @@
 name: update
 
 # Moves the flake inputs and the apps in pkgs/ to their newest releases
-# (scripts/prepare-update.sh), then builds every host's system and runs the
-# checks of the pre-push hook on the result. Hosts compile the packages that no
-# public cache holds themselves, so nothing is pushed to a cache here.
+# (scripts/prepare-update.sh), builds every host's system, runs the checks of
+# the pre-push hook on the result and merges it to main. Hosts compile the
+# packages that no public cache holds themselves, so nothing is pushed to a
+# cache here. nixos-rog deploys main by itself (scripts/pull-main.sh).
 on:
+  # Every 6 hours. A cold build of nixos-rog's system took 1 h 6 min on
+  # 2026-10-23 (docs/nixos-rog.md).
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
       always:
@@ -33,10 +38,12 @@ jobs:
     outputs:
       base: ${{ steps.base.outputs.sha }}
       changed: ${{ steps.commit.outputs.changed }}
+      # true only for an update commit, not for the empty commit of always.
+      moved: ${{ steps.commit.outputs.moved }}
       hosts: ${{ steps.base.outputs.hosts }}
     steps:
-      # No job pushes, and the jobs run the updated inputs' code, so no
-      # checkout keeps the token in .git/config.
+      # Only the merge job pushes. This job runs the updated inputs' code, so
+      # its checkout keeps no token in .git/config.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -96,7 +103,7 @@ jobs:
             cat "$RUNNER_TEMP/changes"
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
-          echo "changed=true" >>"$GITHUB_OUTPUT"
+          printf 'changed=true\nmoved=true\n' >>"$GITHUB_OUTPUT"
 
       - if: steps.commit.outputs.changed == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -140,7 +147,7 @@ jobs:
           github_access_token: ${{ github.token }}
           extra_nix_config: ${{ env.NIX_EXTRA }}
       # A second try covers a download that failed once, such as a substituter
-      # timeout, as the laptop updater's build does.
+      # timeout.
       - name: Build ${{ matrix.host }}
         env:
           HOST: ${{ matrix.host }}
@@ -171,8 +178,138 @@ jobs:
       - name: ci/checks.sh
         run: ci/checks.sh
       # ci/checks.sh forbids import from derivation itself; this covers
-      # ci/unit-cycles.sh, as the updater did.
+      # ci/unit-cycles.sh too.
       - name: ci/unit-cycles.sh
         env:
           NIX_CONFIG: allow-import-from-derivation = false
         run: ci/unit-cycles.sh
+
+  # main moves several times a day, and a run takes over an hour. When main
+  # moved, the update commit is put on the new main and both checks run again;
+  # the new main's own commits passed them at their push. Main's commits must
+  # not touch the files the update moves, so the two never conflict.
+  recheck:
+    needs: [prepare, build, check]
+    if: needs.prepare.outputs.moved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      ready: ${{ steps.place.outputs.ready }}
+      parent: ${{ steps.place.outputs.parent }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: update-bundle
+          path: ${{ runner.temp }}
+      - id: place
+        env:
+          BASE: ${{ needs.prepare.outputs.base }}
+        run: |
+          main=$(git rev-parse HEAD)
+          git fetch --quiet "$RUNNER_TEMP/update.bundle" HEAD
+          update=$(git rev-parse FETCH_HEAD)
+          if [[ $main == "$BASE" ]]; then
+            cp "$RUNNER_TEMP/update.bundle" "$RUNNER_TEMP/merge.bundle"
+            printf 'ready=true\nparent=%s\nrecheck=false\n' "$main" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          moved=$(git diff --name-only "$BASE" "$main" -- flake.nix flake.lock devenv.lock pkgs)
+          if [[ -n $moved ]]; then
+            echo "::warning::main changed $(tr '\n' ' ' <<<"$moved")since the run started, so this update is not merged; the next run starts from it."
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git cherry-pick --quiet "$update"
+          git bundle create "$RUNNER_TEMP/merge.bundle" "HEAD^..HEAD"
+          echo "main moved to ${main:0:12}; the update was put on it and is checked again." >>"$GITHUB_STEP_SUMMARY"
+          printf 'ready=true\nparent=%s\nrecheck=true\n' "$main" >>"$GITHUB_OUTPUT"
+      - if: steps.place.outputs.recheck == 'true'
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+        with:
+          github_access_token: ${{ github.token }}
+          extra_nix_config: ${{ env.NIX_EXTRA }}
+      - if: steps.place.outputs.recheck == 'true'
+        name: ci/checks.sh
+        run: ci/checks.sh
+      - if: steps.place.outputs.recheck == 'true'
+        name: ci/unit-cycles.sh
+        env:
+          NIX_CONFIG: allow-import-from-derivation = false
+        run: ci/unit-cycles.sh
+      - if: steps.place.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: merge-bundle
+          path: ${{ runner.temp }}/merge.bundle
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  # Only this job may push, and it runs no code from the repository or its
+  # inputs.
+  merge:
+    needs: recheck
+    if: needs.recheck.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: merge-bundle
+          path: ${{ runner.temp }}
+      - name: Push the update to main
+        env:
+          PARENT: ${{ needs.recheck.outputs.parent }}
+        run: |
+          git fetch --quiet "$RUNNER_TEMP/merge.bundle" HEAD
+          commit=$(git rev-parse FETCH_HEAD)
+          [[ $(git rev-parse "$commit^") == "$PARENT" ]] || {
+            echo "::error::The update commit does not sit on the main that recheck checked."
+            exit 1
+          }
+          # The same rule as the commit step, checked again on what is pushed.
+          other=$(git diff --name-only "$PARENT" "$commit" -- . ':!flake.nix' ':!flake.lock' ':!devenv.lock' ':!pkgs')
+          [[ -z $other ]] || {
+            echo "::error::The update changes files outside its own: $other"
+            exit 1
+          }
+          ! git diff --quiet "$PARENT" "$commit" || {
+            echo "::error::The update commit changes nothing."
+            exit 1
+          }
+          # main accepts only a fast-forward. A push that fails while main
+          # stays put, such as a server error, is tried again. A push whose
+          # answer got lost can have landed, so main is checked first.
+          for attempt in 1 2 3; do
+            if git push --quiet origin "$commit:refs/heads/main"; then
+              echo "Merged ${commit:0:12} to main." >>"$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            # A failed fetch leaves origin/main as it was, and the next push
+            # either lands or is refused as not a fast-forward.
+            git fetch --quiet origin main || true
+            if git merge-base --is-ancestor "$commit" origin/main; then
+              echo "Merged ${commit:0:12} to main." >>"$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [[ $(git rev-parse origin/main) != "$PARENT" ]]; then
+              echo "::warning::main moved again before the push, so this update is not merged; the next run starts from it."
+              exit 0
+            fi
+            ((attempt == 3)) || sleep 10
+          done
+          echo "::error::The push to main failed three times while main stayed at ${PARENT:0:12}."
+          exit 1

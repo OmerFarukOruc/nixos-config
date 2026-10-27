@@ -26,60 +26,47 @@ day. Repeat the measurement before you rely on it.
 
 ## Updater
 
-nixos-rog updates itself. The updater is `oruc-auto-update.service`. Every
-2 hours on AC power, it runs `scripts/auto-update.sh` in its own clone of this
-repository. Its timer adds up to 10 minutes of random delay. On battery the
-service skips the run.
+Two parts keep the hosts current. `.github/workflows/update.yml` moves the
+inputs and apps on GitHub and merges them to `main`. On nixos-rog,
+`oruc-auto-update.service` deploys the newest `main` to the laptop. nixos-desktop
+and nixos-latitude get `main` from `upgrade` on the host or from a manual
+`./deploy.sh <host> switch` ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)).
 
-Each run collects its input and app changes into one update, and does these
-steps:
+The workflow runs every 6 hours and when started by hand
+(`gh workflow run update.yml`). Its jobs:
 
-1. It moves every input that the table below does not name with
-   `move-inputs.sh`.
-2. It moves the inputs in the table by the rules there.
-3. It moves each app with `update-app.sh`. [updates.md](updates.md) has the
-   input, kernel and app steps. When an input or app moved, it also moves
+1. **prepare** runs `scripts/prepare-update.sh` on `main`. It moves every
+   input that the table below does not name with `move-inputs.sh`, moves the
+   inputs in the table by the rules there, and moves each app with
+   `update-app.sh`; [updates.md](updates.md) has those steps. An app joins the
+   update only when it builds on its own. When something moved, it also moves
    `devenv.lock` with `devenv update`, while the dev shell of `devenv.nix`
-   still builds with it (`devenv build shell`). The first failure in a row
-   notifies.
-4. When no input or app moved, it logs "Everything is current." and stops,
-   unless nixos-rog runs a system other than the one `main` builds. Then it
-   deploys `main` with `./deploy.sh nixos-rog switch`, skips steps 5 to 7 and
-   merges nothing.
-5. It builds every other host's system, then runs the checks of the
-   pre-push hook ([Check before you deploy](deploy.md#check-before-you-deploy)):
-   `ci/checks.sh` and `ci/unit-cycles.sh`. When a system does not
-   build or a check fails, the update fails with status 76 and the log names
-   the host or the check.
-6. It builds nixos-rog's system, then deploys it with
-   `./deploy.sh nixos-rog switch`.
-7. It opens a PR from the `auto-update` branch and merges it at once with a
-   fast-forward push of the deployed commit to `main`. GitHub refuses that
-   push when `main` moved, so `main` gets only a tree that nixos-rog built and
-   runs. The PR body holds dix's comparison of the old and new system.
+   still builds with it (`devenv build shell`). It commits only `flake.nix`,
+   `flake.lock`, `devenv.lock` and `pkgs/`, and fails when the run changed
+   another file. A move that stays out shows as a warning on the run's page.
+   When nothing moved, the run ends with "Everything is current."
+2. **build** builds each host's system on its own runner, with one retry.
+3. **check** runs the checks of the pre-push hook
+   ([Check before you deploy](deploy.md#check-before-you-deploy)):
+   `ci/checks.sh` and `ci/unit-cycles.sh`.
+4. **recheck** runs on every update. When `main` moved during the run, which
+   takes over an hour, it puts the update commit on the new `main` and runs
+   both checks again. When the new `main` changed `flake.nix`, `flake.lock`,
+   `devenv.lock` or `pkgs/`, it merges nothing, shows a warning on the run's
+   page, and the next run starts from that `main`.
+5. **merge** pushes the commit to `main`. `main` takes only a fast-forward, so
+   when `main` moved again, it merges nothing, shows a warning, and the next
+   run tries again.
+   Only this job may push, and it runs no code from the repository or its
+   inputs.
 
-The updater deploys no other host, but it builds every host, so a build failure
-of nixos-desktop or nixos-latitude also stops its merge. Those two get `main`
-from `upgrade` on the host or from a manual `./deploy.sh <host> switch`
-([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)).
+A failed job fails the run, and GitHub sends its usual mail about a failed
+workflow run. Nothing merges, and the next run tries again from `main`. With
+`-f always=true`, a run started by hand builds and checks `main` itself when
+nothing moved, and merges nothing.
 
-A desktop notification reports each update or failure.
-
-The run holds a build lock, `/run/nixos-config-build.lock`, from before it
-reads `main` until it ends. The rehearsal unit below takes the same lock. When
-the other unit holds it for 30 minutes, the run stops quietly and the next run
-tries again.
-
-A change merged to `main` reaches nixos-rog with the next run of the updater,
-or with a manual `./deploy.sh nixos-rog switch`.
-
-`.github/workflows/update.yml` is taking over steps 1 to 5 on GitHub. Started
-by hand (`gh workflow run update.yml`), it moves the inputs and apps with
-`scripts/prepare-update.sh` by the same rules, builds every host's system and
-runs both checks on that commit. With `-f always=true` it builds and checks
-`main` itself when nothing moved. It merges nothing yet, and it pushes nothing
-to a cache, so each host still compiles the packages listed under
-[Packages no cache holds](#packages-no-cache-holds).
+The workflow pushes nothing to a cache, so each host still compiles the
+packages listed under [Packages no cache holds](#packages-no-cache-holds).
 
 | Input | When it moves |
 | --- | --- |
@@ -88,90 +75,70 @@ to a cache, so each host still compiles the packages listed under
 | kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
-not hold yet, or the run cannot tell, llm-agents stays where it is. So the
-laptop does not compile an agent at full load. The next run tries again.
+not hold yet for nixos-rog's system, or the run cannot tell, llm-agents stays
+where it is. So the laptop does not compile an agent at full load. The next run
+tries again.
 
-Coding agents merge and deploy while the updater runs. When `main` moves
-before the switch, or before the push to `main`, the run starts a new round:
-it resets to the new `main` and repeats steps 1 to 7. When another deploy
-holds nixos-rog's deploy lock (77) or its rollback timer is pending (70), the
-run deploys again every 60 seconds; when `main` moved in the meantime, it
-starts a new round instead. A run has at most 3 rounds. It starts no round and
-no deploy retry after it has held the build lock for 20 minutes, so a `main`
-that keeps moving cannot keep the lock from the rehearsal unit. A round that already started runs
-to its end. Each round logs "Round N starts on main at <commit>".
+### Deploy unit
 
-When the bounds run out before the switch, the run leaves nixos-rog as it was
-and shows "Update not applied". When they run out after a switch, nixos-rog
-runs an update that `main` lacks, and the run shows "Update published
-nowhere". A deploy of `main` from another checkout then exits 78 until a later
-run publishes the update, or until you deploy `main` with `--replace`.
+Every 2 hours on AC power, `oruc-auto-update.service` runs
+`scripts/pull-main.sh` in its own clone of this repository. Its timer adds up
+to 10 minutes of random delay. On battery the service skips the run. Each run:
 
-A switch leaves the desktop shell, the keyring and other user services on their
-old version. `home-manager/README.md` lists them.
+1. fetches `main`;
+2. stops when the deploy of this `main` failed before, and prints when it
+   failed, its exit status and the first `error:` line of that run;
+3. stops when nixos-rog runs `main`, or when `main` builds the system it runs,
+   such as after a docs change;
+4. otherwise deploys `main` with `./deploy.sh nixos-rog switch`.
+
+A desktop notification reports each deploy or failure. A switch leaves the
+desktop shell, the keyring and other user services on their old version.
+`home-manager/README.md` lists them.
 
 `oruc-auto-update.service` reads a fine-grained GitHub token,
-`github-update-token`, limited to this repository. The script writes private
-Nix and gh config files under the service's runtime directory. Child-process
-environments carry only the file paths. systemd removes the directory after
-the run. Processes of `oruc` can still read those files; this removes the
-token from inherited environments without isolating the service from that user.
+`github-update-token`, limited to this repository. The script writes it to a
+private Nix config file and a private `gh` config under the service's runtime
+directory. Nix's GitHub fetches then stay within the API limit, and
+`deploy.sh` can ask `gh` which pull request merged a running release.
+Child-process environments carry only the file paths. systemd removes the directory after the run. Processes of `oruc`
+can still read the file; this removes the token from inherited environments
+without isolating the service from that user.
 
-To run the updater now, run `upgrade` on nixos-rog. It prints the updater's
-log while it runs and exits with the run's status. From nixos-desktop:
+To deploy `main` now, run `upgrade` on nixos-rog. It prints the unit's log
+while it runs and exits with the run's status. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade
 ```
 
-To see a run that moves something when nothing upstream moved, run
-`upgrade --rehearse`. The rehearsal unit, `oruc-auto-update-rehearsal.service`,
-starts from `main` with the `flake.lock` of before the newest update, so that
-update's moves happen again. It builds every system and runs the checks, but
-it activates nothing: a deployed tree that never reaches `main` would make every
-later deploy of `main` exit 78. It merges its PR into a throwaway branch,
-`auto-update-rehearsal-base`, which it deletes when it ends. It keeps its own
-state. Its notifications start with "Rehearsal:", and their text ends with
-"Rehearsal: nixos-rog was not changed."
+To test a change to `scripts/prepare-update.sh` or `update.yml`, land it and
+run `gh workflow run update.yml`; add `-f always=true` when nothing upstream
+moved. To test a change to `scripts/pull-main.sh`, deploy it to nixos-rog and
+run `upgrade`.
 
-To test a change to `scripts/auto-update.sh`, run the rehearsal with that
-change while `main` moves, from the checkout that holds it, on nixos-rog:
-
-```sh
-scripts/rehearse-moving-main.sh 1      # main moves once; the run publishes in round 2
-scripts/rehearse-moving-main.sh 1 2 3  # main moves in every round; the run gives up in round 3
-```
-
-The script reads a test branch as `main` and moves it when the run logs the
-rounds you name. It prints the run's round, move and PR lines and the log
-path. It exits 0 when the run ended with exit 0, every named round started, the
-run noticed each move, and it then published in the next round, or gave up in
-round 3. The rehearsals of 2026-10-23 took 8 to 14 minutes each (the rehearsal
-unit's journal), so run the script in the background with its output in a
-file. Its popups reach the desktop, so tell Omer before you start one. Run it
-after the review's fixes, because a later fix means running it again.
-
-A manual deploy exits 77 while an update holds the deploy lock, and the updater
-deploys `main` again on top of a generation you restored. To pause the updater
-on nixos-rog until the next reboot:
+A manual deploy exits 77 while the unit holds the deploy lock, and the unit
+deploys `main` again on top of a generation you restored. To pause the unit on
+nixos-rog until the next reboot:
 
 ```sh
 sudo systemctl mask --runtime --now oruc-auto-update.timer
 ```
 
 Use a mask, not a stop. An activation can restart a timer that was only
-stopped. The mask does not stop an update that is already running. Run
+stopped. The mask does not stop a run that is already going. Run
 `systemctl is-active oruc-auto-update.service` and wait until it prints
 `inactive` before you restore a generation or deploy by hand. To resume
-updates before the next reboot, run
+before the next reboot, run
 `sudo systemctl unmask --runtime oruc-auto-update.timer` and then
 `sudo systemctl start oruc-auto-update.timer`.
 
-The mask lasts until the next reboot. After the reboot the updater runs again.
-`Persistent=true` runs a missed update soon after boot (on 2026-10-11
-it started about 2 minutes after boot). Pause the updater again after each
-reboot, or it may deploy `main` before you do. [recovery.md](recovery.md#nixos-rog)
-uses this pause when it pins a generation.
+The mask lasts until the next reboot. After the reboot the unit runs again.
+`Persistent=true` runs a missed run soon after boot (on 2026-10-11 it started
+about 2 minutes after boot). Pause the unit again after each reboot, or it may
+deploy `main` before you do. [recovery.md](recovery.md#nixos-rog) uses this
+pause when it pins a generation. The pause does not stop the workflow, which
+only merges to `main`.
 
 ### Packages no cache holds
 
@@ -190,41 +157,34 @@ other hosts 10 and 8 minutes (job start and end times of the run).
 
 ## Failures and notifications
 
-The exit codes below come from `deploy.sh`, except 76. The
+The workflow's failures show on GitHub, as above. This table covers the deploy
+unit on nixos-rog. The exit codes come from `deploy.sh`; the
 [exit-code table in deploy.md](deploy.md#exit-codes) says what each one means.
 
 | Event | What happens | Notification |
 | --- | --- | --- |
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
-| Another deploy's rollback timer stays pending (70) past the run's 20 minutes, or the deploy fails with 71, 74 or 79 | The next run tries the same update again. | Critical |
-| The deploy fails with another status, another host does not evaluate or build (such as after a push that broke it), or a check before the deploy fails (76) | The run does not try that update again until `main` or an upstream moves. Each run that skips it prints when it failed, its exit status and the first `error:` line of that run. | Critical, and "Update published nowhere" when an update, not `main`, fails with 73, which leaves it running |
-| Any other step of the script fails, such as a Nix evaluation, `git push` after 3 tries or an unset variable | The next run tries again. When the push to `main` failed, nixos-rog keeps running the update until then. | Critical, once per run, and "Update published nowhere" when nixos-rog runs the update |
-| The rehearsal unit holds the build lock for 30 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row |
-| Another deploy holds the lock (77) past the run's 20 minutes | The run stops without a failure. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
-| `main` moves in each of the run's rounds | The run stops without a failure. The next run tries again. | "Update not applied", or "Update published nowhere" after a switch |
+| The deploy fails with 71, 74 or 79 | The next run tries the same `main` again. | Critical |
+| The deploy fails with another status, such as a build that fails on nixos-rog | The unit does not deploy that `main` again until `main` moves. Each run that skips it prints when it failed, its exit status and the first `error:` line of that run. | Critical; after 73, which leaves nixos-rog on the new system with the old boot default, the popup says so |
+| Any other step of the script fails, such as an unset variable | The next run tries again. | Critical |
+| Another deploy's rollback timer is pending (70), or another deploy holds the lock (77) | The run stops without a failure, and before an upload when the timer is pending. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
 | nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
 | The run reaches 3 hours | The service stops the run (`TimeoutStartSec`). | Critical |
-| The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the updater waits at most 5 seconds for it |
+| The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the unit waits at most 5 seconds for it |
 | The run ends without reporting, such as a kernel kill for memory or a SIGKILL | `oruc-auto-update-died.service` reads the result systemd gives it. | Critical "Update died" with that result |
 
-A clone or fetch fails while GitHub answers when, for example, the token
-expired or was revoked, or the account lost access to the repository.
+A clone or fetch fails while GitHub answers when, for example, the account
+lost access to the repository.
 
 A stop during `deploy.sh` leaves the rollback timer armed. The timer restores
 the previous system when it fires, at most 420 seconds after the deploy armed
-it. The stopped run records no failed update, so the next run tries it again.
-That run waits for the rollback to fire, then deploys.
-
-Some messages would repeat every run, such as a failed app check or a build
-that fails. The updater sends such a message once. It counts the message as
-sent only when the desktop shows it. When no desktop session is running, the
-next run sends it again.
+it. The stopped run records no failed deploy, so the next run tries again.
 
 ## Secrets
 
 `secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`),
-and the updater's GitHub token (`github-update-token`). sops encrypts the
+and the deploy unit's GitHub token (`github-update-token`). sops encrypts the
 file for two recipients, which `.sops.yaml` lists:
 
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
@@ -252,7 +212,7 @@ working token until the new one is deployed:
 
 1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
    tokens). Set the repository access to this repository only, the permissions
-   Contents and Pull requests to read and write, and no expiration. When the
+   Contents and Pull requests to read-only, and no expiration. When the
    repository moves to a new GitHub repository, edit the token's repository
    access by hand, because a fine-grained token names its repositories.
 2. From the repository root of a checkout on nixos-rog, write the token into
@@ -267,13 +227,12 @@ working token until the new one is deployed:
 
 3. Commit the file and land it, then deploy it with
    `./deploy.sh nixos-rog switch`. [deploy.md](deploy.md) has the rules.
-4. Start the updater as in [Updater](#updater). The new token
-   works when the log reaches "Everything is current." or the run deploys.
-   When the log shows `git ... failed while GitHub answers`, the new token is
-   wrong or lacks access to this repository, and the laptop holds it. Skip
-   step 5, because the old token still works on GitHub. Create a corrected token,
-   repeat steps 2 to 4 with it, and in step 5 delete both the old token and the
-   wrong one.
+4. Run `upgrade` on nixos-rog ([Deploy unit](#deploy-unit)). The new token
+   works when the run ends without a GitHub `401` error from Nix. When Nix
+   reports `401`, the new token is wrong or lacks access to this repository,
+   and the laptop holds it. Skip step 5, because the old token still works on
+   GitHub. Create a corrected token, repeat steps 2 to 4 with it, and in step 5
+   delete both the old token and the wrong one.
 5. Delete the old token on the same GitHub page.
 
 ## DNS
@@ -348,7 +307,7 @@ scope of its own.
 `scripts/lib/rog-copy.sh` runs the Nix calls of the `*-on-rog.sh` scripts under
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too.
-The updater runs outside heavy; its unit's `MemoryHigh` slows it above 12 GiB
+The deploy unit runs outside heavy; its `MemoryHigh` slows it above 12 GiB
 (`machines/nixos-rog/auto-update.nix`) but never stops it. A repository whose test script follows infra's `heavy` contract, such
 as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
 evaluation of this flake on nixos-rog or nixos-desktop as `heavy nix ...`. The cap covers evaluation only: Nix builds run in

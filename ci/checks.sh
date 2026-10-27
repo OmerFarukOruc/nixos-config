@@ -2,8 +2,8 @@
 # usage: ci/checks.sh
 # The checks a change passes before it reaches main, in one place for each
 # caller: the pre-push hook and devenv test (devenv.nix),
-# scripts/check-on-rog.sh, the updater (scripts/auto-update.sh) and
-# .github/workflows/update.yml. It stops at the first failure and names it.
+# scripts/check-on-rog.sh and .github/workflows/update.yml. It stops at the
+# first failure and names it.
 # Evaluation warnings do not fail it; the summary at the end lists them.
 set -euo pipefail
 cd "$(dirname "$0")/.."

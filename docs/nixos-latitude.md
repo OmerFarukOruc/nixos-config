@@ -64,7 +64,7 @@ use three 10-second windows.
 
 - nixos-latitude gets `main` from `upgrade` on the host or from
   `./deploy.sh nixos-latitude switch`
-  ([deploy.md](deploy.md#upgrade-a-host-to-main)); nixos-rog's updater
+  ([deploy.md](deploy.md#upgrade-a-host-to-main)); the update workflow
   builds its system but does not deploy it
   ([nixos-rog.md](nixos-rog.md#updater)).
   `scripts/affected-hosts.sh --running` lists nixos-latitude while it runs a

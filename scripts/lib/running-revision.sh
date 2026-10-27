@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Sourced by upgrade (nixosModules/upgrade.nix) and scripts/auto-update.sh from
+# Sourced by upgrade (nixosModules/upgrade.nix) and scripts/pull-main.sh from
 # their clones of main; scripts/affected-hosts.sh sends it ahead of the script it
 # runs on each host over SSH.
 # running_revision: prints "<revision> <dirty> <action>" from the release record

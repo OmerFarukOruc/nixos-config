@@ -52,9 +52,9 @@ nixos-latitude, read the files in
 To go back to a kept generation that the boot menu does not list, do these
 steps:
 
-1. On nixos-rog, pause the updater first.
-   [Updater](nixos-rog.md#updater) has the pause, the wait, and
-   the resume. A host with no updater skips this step.
+1. On nixos-rog, pause the deploy unit first.
+   [Deploy unit](nixos-rog.md#deploy-unit) has the pause, the wait, and
+   the resume. A host with no deploy unit skips this step.
 
 2. Run these commands. The first one lists the generations. The second one
    makes the generation you picked the current one, and the third one activates
@@ -150,10 +150,10 @@ steps:
    `switch-generation` and `switch-to-configuration switch` as
    [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
    describes.
-2. Pause the updater.
-   [Updater](nixos-rog.md#updater) has the pause, the wait, the
-   resume, and the reboot hole. Otherwise the next update deploys a new newest
-   generation, and Limine boots that one.
+2. Pause the deploy unit.
+   [Deploy unit](nixos-rog.md#deploy-unit) has the pause, the wait, the
+   resume, and the reboot hole. Otherwise the next deploy of `main` makes a new
+   newest generation, and Limine boots that one.
 3. Drop the newer generations and reinstall the boot entries. The running
    system is the generation from step 1, so this command writes its boot entries:
 

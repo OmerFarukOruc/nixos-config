@@ -97,12 +97,13 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   the user's running services. A deploy that breaks any of them restores the
   previous system, even when the connection drops.
   [`deploy.sh`](deploy.sh)
-- **🔄 A laptop that updates itself.** Every 2 hours on AC power, nixos-rog moves
-  its inputs and apps, waits for the caches to hold the kernel and the coding
-  agents, builds every host, deploys the result to itself and merges it to `main`. When nothing moved, it deploys
-  a newer `main` to itself.
+- **🔄 Updates checked on GitHub.** Every 6 hours a GitHub workflow moves the
+  inputs and apps, waits for the caches to hold the kernel and the coding
+  agents, builds every host, runs the checks and merges the result to `main`.
+  Every 2 hours on AC power, nixos-rog deploys the newest `main` to itself.
+  [`.github/workflows/update.yml`](.github/workflows/update.yml),
   [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
-  [`scripts/auto-update.sh`](scripts/auto-update.sh)
+  [`scripts/pull-main.sh`](scripts/pull-main.sh)
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
   with the age key derived from that host's SSH host key.
   [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
@@ -124,7 +125,7 @@ kernel-cache/          the separate flake that GitHub builds into Cachix
 ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
 .github/               the kernel-cache workflow
 devenv.nix             the dev shell, its linters and the git hooks
-scripts/               checks and builds on nixos-rog, update scripts, the updater and the post-deploy check
+scripts/               checks and builds on nixos-rog, update scripts, the deploy unit and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
@@ -144,13 +145,13 @@ from either host, or on nixos-desktop while nixos-rog is offline;
 `run-unit-on-rog.sh` needs nixos-rog online. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
 `nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
-checkout with Nix. The updater on nixos-rog runs them.
+checkout with Nix. The update workflow runs them.
 
 | Command | What it does |
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade [--rehearse \| --replace]` (on any host) | bring this host to the newest `main`; on nixos-rog run the updater now, which moves inputs and apps, deploys nixos-rog and merges to `main`, and on every other host deploy `main` to it; `--rehearse`, on nixos-rog only, repeats the newest update's moves without activating anything; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
+| `upgrade [--replace]` (on any host) | deploy the newest `main` to this host; on nixos-rog run the deploy unit now; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
 | `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
 | `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
@@ -169,7 +170,6 @@ checkout with Nix. The updater on nixos-rog runs them.
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
-| `scripts/rehearse-moving-main.sh ROUND...` (on nixos-rog) | rehearse this checkout's `scripts/auto-update.sh` while `main` moves at the start of each named round |
 | `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` |
 | `scripts/check-secrets.sh [FILE]` | on nixos-desktop or nixos-rog, decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
@@ -187,7 +187,7 @@ dirty tree and `--replace` to drop a running release's files; [Deploy](docs/depl
 says when to use either flag. Every deploy command can change boot or running
 system state.
 
-`scripts/auto-update.sh` is the updater that `oruc-auto-update.service` runs,
+`scripts/pull-main.sh` is the deploy unit that `oruc-auto-update.service` runs,
 and `.github/workflows/update.yml` runs `scripts/prepare-update.sh`.
 `scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
 `scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
@@ -199,8 +199,8 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,
 formatter and output checks, plus each host's system derivation) and
 `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
-GitHub builds the kernel, and `.github/workflows/update.yml` checks an update
-of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
+GitHub builds the kernel, and `.github/workflows/update.yml` checks and merges
+an update of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
 
 ## Docs
 
@@ -211,7 +211,7 @@ of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
 | [Box browser](docs/box-browser.md) | the shared signed-in Chromium for coding agents, the `box-view` command that opens it and its wrapper command |
 | [Updates](docs/updates.md) | the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
-| [nixos-rog](docs/nixos-rog.md) | the updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
+| [nixos-rog](docs/nixos-rog.md) | the update workflow, the deploy unit and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |

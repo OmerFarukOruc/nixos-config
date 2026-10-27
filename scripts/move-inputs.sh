@@ -7,8 +7,7 @@
 # Moves every input, or only the INPUTs named.
 # nix-cachyos-kernel and llm-agents never move here, because each moves only
 # once a cache holds its builds: update-kernel.sh moves the kernel, and
-# auto-update.sh and prepare-update.sh check cache.numtide.com before they
-# move llm-agents.
+# prepare-update.sh checks cache.numtide.com before it moves llm-agents.
 # Prints "input: old -> new" for each input it moved to a new release.
 set -euo pipefail
 cd "$(dirname "$0")/.."

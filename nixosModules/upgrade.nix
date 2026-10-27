@@ -1,6 +1,6 @@
 # `upgrade` brings this host to the newest main. On a host that sets
-# oruc.upgrade.updater it starts that updater unit and shows its log while it
-# runs; `upgrade --rehearse` starts the unit's rehearsal instead. On every other
+# oruc.upgrade.updater it starts that unit and shows its log while it runs, so
+# a run never races the unit's timer. On every other
 # host it deploys the newest main to this host with deploy.sh, from a clone that
 # only upgrade uses (docs/deploy.md, Upgrade a host to main).
 {
@@ -17,23 +17,19 @@ let
     text = ''
       unit=${updater}.service
       identifier=${updater}
-      if (($# == 1)) && [[ $1 == --rehearse ]]; then
-        unit=${updater}-rehearsal.service
-        identifier=${updater}-rehearsal
-      elif (($#)); then
-        echo "usage: upgrade [--rehearse]" >&2
+      if (($#)); then
+        echo "usage: upgrade" >&2
         exit 2
       fi
       # The unit's ConditionACPower skips a run on battery, and systemctl start
-      # still exits 0. The rehearsal unit, which no timer holds, is unloaded
-      # once it ends, so its ConditionResult cannot tell afterwards.
+      # still exits 0.
       if ! ${config.systemd.package}/bin/systemd-ac-power; then
-        echo "The updater runs only on AC power. Plug in and run upgrade again." >&2
+        echo "The deploy runs only on AC power. Plug in and run upgrade again." >&2
         exit 1
       fi
       # Asks for the password before the log starts, so the two do not share a line.
       sudo -v
-      # The updater's output and systemd's start and end lines. --unit would
+      # The unit's output and systemd's start and end lines. --unit would
       # also show the session lines of every sudo call inside the run.
       journalctl --follow --lines 0 --output cat \
         _SYSTEMD_UNIT="$unit" SYSLOG_IDENTIFIER="$identifier" + _PID=1 UNIT="$unit" &
@@ -113,7 +109,7 @@ in
     type = lib.types.nullOr lib.types.str;
     default = null;
     example = "oruc-auto-update";
-    description = "Base name of the systemd unit that `upgrade` starts instead of deploying main; `upgrade --rehearse` starts `<name>-rehearsal.service`. With null, `upgrade` deploys the newest main to this host.";
+    description = "Base name of the systemd unit that `upgrade` starts instead of deploying main itself. With null, `upgrade` deploys the newest main to this host.";
   };
 
   config.environment.systemPackages = [ (if updater == null then deployMain else runUpdater) ];

@@ -1,6 +1,5 @@
 # shellcheck shell=bash
-# Sourced by scripts/auto-update.sh from its clone of main and by
-# scripts/prepare-update.sh.
+# Sourced by scripts/prepare-update.sh.
 # build_error LOG: prints the line of a failed nix build's stderr that names
 # the cause, for a notification. That is the last line of the builder's log
 # (Nix prefixes those with "> "), or the first "error:" line when the build
