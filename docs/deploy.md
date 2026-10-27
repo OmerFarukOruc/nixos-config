@@ -4,6 +4,7 @@
 - [Deploy](#deploy)
 - [Deploy a change on main](#deploy-a-change-on-main)
 - [Upgrade a host to main](#upgrade-a-host-to-main)
+- [Self-deploy of a server](#self-deploy-of-a-server)
 - [What the deploy does](#what-the-deploy-does)
 - [Exit codes](#exit-codes)
 - [One deploy at a time](#one-deploy-at-a-time)
@@ -14,7 +15,8 @@
 Run deploy commands from nixos-desktop or nixos-rog. `deploy.sh` builds on the
 target; a deploy of a host from that host runs locally. The SSH alias of each
 host in `~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONTEXT.md)
-lists the aliases.
+lists the aliases. A server is the exception, because its deploys log in as
+root ([Self-deploy of a server](#self-deploy-of-a-server)).
 
 Every deploy command in this guide can change boot or running system state.
 Omer's request for a change also approves its deploy. After the change reaches
@@ -262,7 +264,8 @@ on a branch.
 ## Upgrade a host to main
 
 Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
-it runs the [deploy unit](nixos-rog.md#deploy-unit) now. On every other
+it runs the [deploy unit](nixos-rog.md#deploy-unit) now, and on a host that
+runs [self-deploy](#self-deploy-of-a-server) it starts that unit. On every other
 host it deploys `main` to that host in these steps:
 
 1. It clones this repository over https into
@@ -286,6 +289,105 @@ home. It never moves an input, because the update workflow owns
 `flake.lock` ([Updater](nixos-rog.md#updater)). After exit 78, merge the work of the running release into
 `main`, or run `upgrade --replace` once its owner agrees that the deploy may
 drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
+
+## Self-deploy of a server
+
+A server deploys itself, so it follows `main` without anyone at a keyboard. The
+host sets `oruc.deploy.self.enable`, and `nixosModules/deploy-host.nix` then
+adds two timers. It does not use `system.autoUpgrade`, which would skip the
+deploy lock and the rollback when sshd or tailscaled break.
+
+**The deploy timer.** `self-deploy.timer` starts `self-deploy.service` at minute
+30 of every even hour, with up to 10 minutes of random delay. The calendar is in
+UTC, because `nixosModules/common.nix` sets the timezone to Europe/Istanbul.
+Every 2 hours matches nixos-rog's deploy unit
+([Deploy unit](nixos-rog.md#deploy-unit)). The update workflow merges at most
+every 6 hours, so `main` reaches the server within 2 hours and 10 minutes of a
+merge. A run that finds nothing to deploy costs one `git fetch` and one
+evaluation. The service runs `scripts/self-deploy.sh` as root. Each run:
+
+1. fetches `main` into its own clone, `/var/lib/self-deploy/repo`;
+2. stops when the host runs a clean release of `main` and boots the same system;
+3. stops, with the run failed, when the deploy of this `main` failed before, and
+   prints when it failed and its exit status;
+4. stops when `main` evaluates to the system that already runs and the host
+   boots it;
+5. otherwise runs `./deploy.sh <host> switch` on the host itself, with the
+   deploy lock, the rollback timer and the checks of
+   [What the deploy does](#what-the-deploy-does).
+
+A main whose deploy failed is not deployed again until `main` moves, as on
+nixos-rog. Exit 70 and 77 (another deploy is under way) do not fail the run, but
+the same status in two runs in a row does, because a deploy that long is stuck.
+Exit 71, 74 and 79 fail the run, and the next run tries again. Exit 78 fails the
+run until the work of the running release reaches `main`, or until someone runs
+`./deploy.sh --replace <host> switch` from a checkout of `main` on nixos-desktop
+or nixos-rog.
+
+**Who sees a failure.** A failed run leaves `self-deploy.service` in the failed
+state, which `systemctl --failed` lists, and writes its reason at journal
+priority err (`journalctl -u self-deploy -p err`). The run stays failed, and
+repeats its line every 2 hours, until `main` moves or someone fixes the cause.
+The host ships the lines of `self-deploy.service` and
+`self-deploy-reboot.service` at priority info and above to SigNoz
+(`oruc.telemetry.journalUnits`, which `nixosModules/deploy-host.nix` sets),
+where the failure line is the signal. The alert rule on it lives in SigNoz, not in this
+repository, and no rule exists yet (not checked), so until one does only someone
+on the host sees a failure. A held-back reboot and an outage of GitHub log at
+priority warning and do not fail the run. To clear the failed state by hand,
+run `sudo systemctl reset-failed self-deploy.service`.
+
+**Limits.** The server has no GitHub token. Nix then reaches GitHub within the
+limit for a client without a token, 60 requests an hour, and the lock file has 38
+GitHub inputs. A run that has to fetch most of them again can fail on the limit,
+and the host then keeps its system until `main` moves, as after any failed
+deploy. `deploy.sh` cannot ask `gh` which pull request merged a running release
+either. A release that someone test-deployed from a branch, and that later
+merged as a squash, then makes the run exit 78 until someone runs `--replace`.
+
+**Why root.** A deploy from nixos-desktop or nixos-rog logs in as root over
+Tailscale SSH, because oruc's sudo needs a password on a server and a deploy
+cannot type it. Passwordless sudo comes only with the `remoteAccess` feature
+(`nixosModules/connectivity.nix`), which the schema allows on workstations only.
+The `deployLogin` field of the host's machine record (`machines/schema.nix`)
+names that user, and `deploy.sh` and `scripts/affected-hosts.sh` log in as it,
+since the `risoluto-dev-1` alias in `~/.ssh/config` logs in as oruc for the
+editors. The timer's deploys
+run as root with `HOME=/root` as well. So the lock, the release records and
+`scripts/affected-hosts.sh --running` use one set, under
+`/root/.local/state/nixos-config-deploy/`, for a timer deploy and a remote one.
+Run a deploy on the box itself as root too (`sudo -i`); one as oruc keeps its
+lock and records in oruc's home, where the timer's deploys and
+`scripts/affected-hosts.sh --running` do not look.
+`upgrade` on the host starts the unit, because a deploy as oruc would write its
+records to oruc's home.
+
+**The reboot.** `self-deploy-reboot.timer` starts `self-deploy-reboot.service`
+at 02:10 UTC every day (`*-*-* 02:10:00 UTC`). The service schedules a reboot
+in one minute when the kernel, the initrd or the kernel modules of
+`/run/booted-system` differ from those of `/run/current-system`, the test that
+NixOS's own upgrade reboot uses. It skips the night, with a warning, when the
+boot default is not the running system (a `test` deploy), or when a deploy runs,
+holds the lock or has armed a rollback timer. It never starts a deploy. A deploy
+that starts within that one minute can still be cut short by the reboot, and
+the host then boots the previous system, the boot default that the deploy had
+not yet replaced. Limine counts no boot attempts, so a new kernel that does not
+boot leaves the host down until someone opens the provider's console and picks
+the previous entry from Limine's menu; nothing reports it. The telemetry work
+that ships the journal is where an alert on a missing host belongs.
+
+**The session check.** The deploy user's running services form the session
+check of step 10 below. The running system lists the services to leave out in
+`/etc/nixos-config-deploy/session-ignore`, one shell glob per line. A host sets
+the list with `oruc.deploy.sessionIgnore`; a host without the option has no
+file and leaves out nothing more. On risoluto-dev-1 the list holds the
+long-running agents of oruc. A deploy of that host runs as root, whose session
+has none of them, so the list matters only for a deploy as oruc.
+
+To pause the deploys on the host until the next reboot, run
+`sudo systemctl mask --runtime --now self-deploy.timer`, as for nixos-rog, and
+wait until `systemctl is-active self-deploy.service` prints `inactive` or
+`failed`.
 
 ## What the deploy does
 
@@ -320,6 +422,8 @@ The deploy runs these steps in order:
     - apps that a launcher started (`app-*`)
     - `systemd-run` jobs (`run-*`)
     - transient D-Bus services (`dbus-*`)
+    - services that the running system lists for this check
+      ([The session check](#self-deploy-of-a-server))
 
     When the deploy cannot list the services, it stops before it arms the
     rollback timer.

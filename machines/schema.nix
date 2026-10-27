@@ -147,6 +147,18 @@ let
       '';
     };
 
+    deployLogin = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "root";
+      description = ''
+        The user that deploy.sh and scripts/affected-hosts.sh log in as over
+        SSH. null keeps the login of the host's SSH alias. A server sets root,
+        because its user's sudo asks for a password that a deploy cannot type.
+        The release records of a deploy are in this user's home.
+      '';
+    };
+
     autoLogin = mkOption {
       type = types.bool;
       default = false;

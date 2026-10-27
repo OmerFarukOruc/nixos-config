@@ -1,0 +1,178 @@
+import textwrap
+
+dp_state = "/root/.local/state/nixos-config-deploy"
+dp_systems = ["good", "broken", "initrd"]
+
+machine.start()
+machine.wait_for_unit("multi-user.target")
+
+# The self-deploy timers must not fire during the test.
+for dp_timer in ["self-deploy", "self-deploy-reboot"]:
+    machine.succeed(f"systemctl is-active --quiet {dp_timer}.timer")
+dp_calendar = lambda timer: machine.succeed(f"systemctl show -p TimersCalendar {timer}.timer")
+assert "00/2:30:00 UTC" in dp_calendar("self-deploy"), "the deploy calendar is not in UTC"
+assert "02:10:00 UTC" in dp_calendar("self-deploy-reboot"), "the reboot calendar is not 02:10 UTC"
+machine.succeed("systemctl mask --runtime --now self-deploy.timer self-deploy-reboot.timer")
+
+assert machine.succeed("systemctl show self-deploy.service -p User --value").strip() == "root"
+assert "SELF_DEPLOY_REPOSITORY=file:///var/lib/server-test/main.git" in machine.succeed(
+    "systemctl show self-deploy.service -p Environment --value"
+)
+# deploy.sh connects as root, so oruc keeps a sudo password.
+assert "password is required" in machine.execute("runuser -u oruc -- sudo -n true 2>&1")[1], "oruc's sudo asks for no password"
+machine.succeed("sudo -n true")
+# oruc.upgrade starts the deploy unit only on a host without a battery.
+machine.succeed("systemd-ac-power")
+
+# The session check of deploy.sh, as oruc, with the function from the deploy.sh
+# that the main below holds.
+machine.copy_from_host(deploy_sh, "/tmp/deploy.sh")
+machine.wait_until_succeeds(
+    "runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet other-test.service"
+    " && runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet herdr-test.service"
+)
+dp_listed = machine.succeed(
+    "fn=$(sed -n '/^session_services() {/,/^}/p' /tmp/deploy.sh);"
+    " runuser -u oruc -- bash -c 'on_target() { bash -s; }; eval \"$1\"; session_services' _ \"$fn\" 2>&1"
+).split()
+print(f"session services: {dp_listed}")
+assert "other-test.service" in dp_listed, "the session check lists no service of oruc"
+assert "herdr-test.service" not in dp_listed, "the session check does not ignore herdr-*.service"
+
+# The system profile that an installation makes.
+machine.succeed("nix-env --profile /nix/var/nix/profiles/system --set /run/current-system")
+
+# A flake whose output for the host is the store path of one specialisation.
+dp_out = {name: machine.succeed(f"readlink -f /run/current-system/specialisation/{name}").strip() for name in dp_systems}
+machine.succeed("mkdir -p /var/lib/server-test/flakes")
+for dp_name, dp_path in dp_out.items():
+    dp_flake = textwrap.dedent(
+        f"""\
+        {{
+          outputs = _: {{
+            nixosConfigurations.risoluto-dev-1.config.system.build.toplevel =
+              builtins.appendContext "{dp_path}" {{ "{dp_path}" = {{ path = true; }}; }};
+          }};
+        }}
+        """
+    )
+    machine.succeed(f"cat > /var/lib/server-test/flakes/{dp_name}.nix <<'EOF'\n{dp_flake}EOF")
+
+machine.copy_from_host(running_revision_sh, "/tmp/running-revision.sh")
+machine.succeed(
+    textwrap.dedent(
+        """
+        cat > /var/lib/server-test/lib.sh <<'EOF'
+        export HOME=/root
+        main=/var/lib/server-test/main.git
+        work=/var/lib/server-test/work
+        system() { readlink -f "$1"; }
+        records() { ls /root/.local/state/nixos-config-deploy/releases/*.source | wc -l; }
+        unit_log() {
+          journalctl "_SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value self-deploy.service)" -o cat --no-pager "$@"
+        }
+        # publish NAME: makes the flake of that system the newest main.
+        publish() {
+          install -m 0644 /var/lib/server-test/flakes/$1.nix "$work/flake.nix"
+          git -C "$work" add -A
+          git -C "$work" commit -q -m "$1"
+          git -C "$work" push -q "$main" HEAD:main
+        }
+        EOF
+        git init -q --bare -b main /var/lib/server-test/main.git
+        git init -q -b main /var/lib/server-test/work
+        cd /var/lib/server-test/work
+        git config user.name test
+        git config user.email test@example.invalid
+        install -D -m 0755 /tmp/deploy.sh deploy.sh
+        install -D -m 0644 /tmp/running-revision.sh scripts/lib/running-revision.sh
+        echo '{"nodes":{"root":{}},"root":"root","version":7}' > flake.lock
+        """
+    )
+)
+
+
+def dp_sh(command):
+    return machine.succeed(f". /var/lib/server-test/lib.sh; {command}").strip()
+
+
+def dp_run(command):
+    return machine.execute(f". /var/lib/server-test/lib.sh; {command}")
+
+
+def dp_deploy():
+    """Runs the unit, shows the end of its journal and returns its exit status."""
+    status, _ = dp_run("timeout 900 systemctl start self-deploy.service")
+    print(f"self-deploy.service ended with status {status}; its journal ends:")
+    print(dp_sh("unit_log | tail -n 14 | cut -c1-240 | sed 's/^/  | /'"))
+    return status
+
+
+def dp_system(path):
+    return dp_sh(f"system {path}")
+
+
+print("phase: the booted kernel and initrd run")
+machine.succeed("systemctl start self-deploy-reboot.service")
+machine.fail("test -e /run/systemd/shutdown/scheduled")
+assert "No reboot" in machine.succeed("journalctl -u self-deploy-reboot.service -o cat --no-pager -n 6")
+
+print("phase: a good main")
+dp_sh("publish good")
+dp_sha = dp_sh('git -C "$work" rev-parse HEAD')
+assert dp_deploy() == 0, "the timer's deploy of a good main failed"
+assert dp_system("/run/current-system") == dp_out["good"], "the good system does not run"
+assert dp_system("/nix/var/nix/profiles/system") == dp_out["good"], "the good system is not the boot default"
+dp_record = machine.succeed(
+    "bash -c '. /var/lib/server-test/work/scripts/lib/running-revision.sh; running_revision'"
+).strip()
+print(f"release record of the running system: {dp_record}")
+assert dp_record == f"{dp_sha} false switch", "the release record of the running system does not name main"
+assert machine.succeed(f"stat -c %U {dp_state}/releases").strip() == "root", "the release records do not belong to root"
+machine.fail("systemctl is-active --quiet deploy-rollback.timer")
+# switch-to-configuration boot wrote Limine's entries to the ESP on /boot.
+machine.succeed("findmnt -no FSTYPE /boot | grep -Fx vfat")
+print(machine.succeed("ls -R /boot | head -n 30"))
+machine.succeed("test -e /boot/EFI/BOOT/BOOTX64.EFI && test -s /boot/limine/limine.conf")
+dp_releases = dp_sh("records")
+
+print("phase: the same main again")
+assert dp_deploy() == 0, "the second run failed"
+assert "already runs" in dp_sh("unit_log"), "the second run does not find the host on main"
+assert dp_sh("records") == dp_releases, "the second run left a new release"
+
+print("phase: a main that breaks sshd")
+dp_sh("publish broken")
+dp_sha = dp_sh('git -C "$work" rev-parse HEAD')
+assert dp_deploy() != 0, "the deploy of a broken main succeeded"
+assert "Restoring the previous system now" in dp_sh("unit_log"), "the deploy did not roll back"
+assert dp_system("/run/current-system") == dp_out["good"], "the good system does not run again"
+assert dp_system("/nix/var/nix/profiles/system") == dp_out["good"], "the good system is not the boot default again"
+machine.succeed("systemctl is-active --quiet sshd.service")
+machine.fail("systemctl is-active --quiet deploy-rollback.timer")
+assert "keeps its system until main moves" in dp_sh("unit_log -p err"), "the failure is not in the journal at priority err"
+machine.succeed("systemctl is-failed --quiet self-deploy.service")
+machine.succeed(f"grep -q '^{dp_sha} ' /var/lib/self-deploy/failed-main")
+
+print("phase: the broken main again")
+dp_releases = dp_sh("records")
+assert dp_deploy() != 0, "the next run of a broken main succeeded"
+assert "failed at" in dp_sh("unit_log -p err"), "the next run does not wait for main to move"
+assert "Deploying main at" not in dp_sh("unit_log"), "the next run started a deploy"
+assert dp_sh("records") == dp_releases, "the next run left a new release"
+
+print("phase: a main with another initrd")
+dp_sh("publish initrd")
+assert dp_deploy() == 0, "the deploy of the next main failed"
+assert dp_system("/run/current-system") == dp_out["initrd"], "the initrd system does not run"
+machine.succeed("test ! -e /var/lib/self-deploy/failed-main")
+assert dp_system("/run/booted-system/initrd") != dp_system("/run/current-system/initrd"), "the booted initrd is the running one"
+# A deploy that holds the lock of deploy.sh, as a remote deploy does.
+machine.succeed(f"( flock -n 9 && systemctl start self-deploy-reboot.service ) 9>>{dp_state}/deploy.lock")
+assert "waits for the next night" in machine.succeed("journalctl -u self-deploy-reboot.service -o cat --no-pager -n 6")
+machine.fail("test -e /run/systemd/shutdown/scheduled")
+machine.succeed("systemctl start self-deploy-reboot.service")
+machine.succeed("test -e /run/systemd/shutdown/scheduled")
+machine.succeed(f"grep -q '^self-deploy-reboot.service since ' {dp_state}/deploy.owner")
+machine.succeed("shutdown -c")
+machine.succeed("test ! -e /run/systemd/shutdown/scheduled")

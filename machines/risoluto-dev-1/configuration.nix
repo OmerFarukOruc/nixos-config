@@ -21,6 +21,26 @@ in
 
   services.qemuGuest.enable = true;
 
+  # smartd failed to start in the boot test (smartd.service: Failed with result
+  # 'exit-code'), whose virtio disk is the kind this host has. A unit that fails
+  # during a switch makes the switch exit 4, which deploy.sh rolls back.
+  # nixosModules/monitoring.nix enables smartd unless a host says otherwise.
+  services.smartd.enable = false;
+
+  # The box keeps itself on main (docs/deploy.md, Self-deploy of a server).
+  oruc.deploy = {
+    self.enable = true;
+    # Long-running agents, which a switch may restart. The user services that a
+    # timer or socket starts are left out already.
+    sessionIgnore = [
+      "amp-runner.service"
+      "cliproxy*.service"
+      "cursor-worker.service"
+      "herdr-*.service"
+      "openchamber.service"
+    ];
+  };
+
   sops = {
     defaultSopsFile = ../../secrets/risoluto-dev-1.yaml;
     secrets = {

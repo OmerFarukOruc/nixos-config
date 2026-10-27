@@ -43,7 +43,6 @@ ssh_opts=(-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=
 deployer=$(</proc/sys/kernel/hostname)
 local_target=false
 [[ $host == "$deployer" ]] && local_target=true
-
 # Runs the script on stdin with bash on the target, with the arguments given.
 # The arguments travel as a quoted "set --" line ahead of the script, because
 # ssh joins its own arguments into one string for the remote login shell.
@@ -56,7 +55,7 @@ on_target() {
   elif $local_target; then
     (cd && bash -s)
   else
-    ssh "${ssh_opts[@]}" "$host" bash -s
+    ssh "${ssh_opts[@]}" "$target" bash -s
   fi
 }
 
@@ -72,6 +71,22 @@ case "$action" in
     exit 64
     ;;
 esac
+
+# The machine record names the user to log in as (machines/schema.nix,
+# deployLogin). A host that deploys itself needs no login. The release records
+# are in that user's home.
+target=$host
+if ! $local_target; then
+  eval_nix=(nix)
+  if command -v heavy >/dev/null; then eval_nix=(heavy nix); fi
+  if ! login=$("${eval_nix[@]}" eval --raw --no-write-lock-file \
+    "$repo_dir#nixosConfigurations.$host.config.oruc.machine.deployLogin" \
+    --apply 'login: if login == null then "" else login'); then
+    printf 'Could not read deployLogin of %s from the machine records.\n' "$host" >&2
+    exit 1
+  fi
+  target=${login:+$login@}$host
+fi
 
 if [[ $action == prune ]]; then
   on_target <<'REMOTE'
@@ -155,7 +170,7 @@ revision=$(git -C "$repo_dir" rev-parse HEAD)
 release_id="$(date -u +%Y%m%dT%H%M%SZ)-${revision:0:12}-$$"
 release_relative=".local/state/nixos-config-deploy/releases/$release_id"
 # rsync ignores -e for a local path.
-release_target=$host:$release_relative
+release_target=$target:$release_relative
 $local_target && release_target=$HOME/$release_relative
 rsync_cmd=(rsync -az -e "ssh ${ssh_opts[*]}")
 
@@ -402,7 +417,7 @@ fresh_login() {
   if $local_target; then
     on_target
   else
-    ssh "${ssh_opts[@]}" -o BatchMode=yes -o ControlPath=none "$host" bash -s
+    ssh "${ssh_opts[@]}" -o BatchMode=yes -o ControlPath=none "$target" bash -s
   fi
 }
 
@@ -427,14 +442,27 @@ REMOTE
 # running services form the session: the compositor, the shell, the keyring.
 # Services a timer, socket or path started, apps a launcher or autostart
 # started (app-*), systemd-run jobs (run-*) and transient D-Bus services
-# (dbus-*) come and go on their own and are left out.
+# (dbus-*) come and go on their own and are left out. So are the services that
+# the running system lists in /etc/nixos-config-deploy/session-ignore, one shell
+# glob per line (oruc.deploy.sessionIgnore): long-running agents that a switch
+# may restart and that no deploy should undo.
 session_services() {
   on_target <<'REMOTE'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 [[ -S $XDG_RUNTIME_DIR/bus ]] || exit 0
+ignore=()
+[[ ! -r /etc/nixos-config-deploy/session-ignore ]] || mapfile -t ignore </etc/nixos-config-deploy/session-ignore
 listing=$(systemctl --user list-units --type=service --state=running --plain --no-legend |
-  awk '$1 !~ /^(app|run|dbus)-/ { print $1 }')
+  awk '$1 !~ /^(app|run|dbus)-/ { print $1 }' |
+  while read -r unit; do
+    for glob in "${ignore[@]}"; do
+      # The glob is a pattern on purpose.
+      # shellcheck disable=SC2053
+      [[ $unit == $glob ]] && continue 2
+    done
+    printf '%s\n' "$unit"
+  done)
 [[ -n $listing ]] || exit 0
 mapfile -t units <<<"$listing"
 systemctl --user show -p Id -p TriggeredBy -- "${units[@]}" |

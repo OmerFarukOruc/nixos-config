@@ -129,6 +129,7 @@ let
       gpu = "unknown";
       hasBattery = false;
       deployed = false;
+      deployLogin = "root";
     };
   };
 

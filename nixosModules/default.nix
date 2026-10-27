@@ -9,6 +9,7 @@
     ./common.nix
     ./tools.nix
     ./upgrade.nix
+    ./deploy-host.nix
     ./monitoring.nix
     ./memory.nix
     ./theme.nix

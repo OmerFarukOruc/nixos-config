@@ -30,7 +30,7 @@ let
 in
 {
   services.smartd = {
-    enable = true;
+    enable = lib.mkDefault true;
     autodetect = true;
     defaults.autodetected = lib.mkIf config.oruc.machine.features.diskSelfTests "-a -o on -S on -s (S/../.././02|L/../../7/03)";
     # nixpkgs runs the notifier, and with it systembus-notify, only while a

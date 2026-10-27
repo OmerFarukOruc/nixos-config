@@ -166,7 +166,7 @@ checkout with Nix. The update workflow runs them.
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
-| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` and `-uefi` run risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm) |
+| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` and `-uefi` run risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-units` its [unit check](docs/risoluto-dev-1.md#unit-check-in-a-vm), and `.#checks.x86_64-linux.risoluto-dev-1-self-deploy` its [deploy test](docs/risoluto-dev-1.md#deploy-test-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
@@ -189,7 +189,10 @@ says when to use either flag. Every deploy command can change boot or running
 system state.
 
 `scripts/pull-main.sh` is the deploy unit that `oruc-auto-update.service` runs,
-and `.github/workflows/update.yml` runs `scripts/prepare-update.sh`.
+and `.github/workflows/update.yml` runs `scripts/prepare-update.sh`. A server runs
+`scripts/self-deploy.sh` and `scripts/self-deploy-reboot.sh` from its timers to
+deploy itself and to reboot for a new kernel
+([Self-deploy of a server](docs/deploy.md#self-deploy-of-a-server)).
 `scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
 `scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
 helpers that other scripts source. Nobody runs these by hand.

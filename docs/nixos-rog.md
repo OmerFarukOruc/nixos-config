@@ -128,7 +128,7 @@ sudo systemctl mask --runtime --now oruc-auto-update.timer
 Use a mask, not a stop. An activation can restart a timer that was only
 stopped. The mask does not stop a run that is already going. Run
 `systemctl is-active oruc-auto-update.service` and wait until it prints
-`inactive` before you restore a generation or deploy by hand. To resume
+`inactive` or `failed` before you restore a generation or deploy by hand. To resume
 before the next reboot, run
 `sudo systemctl unmask --runtime oruc-auto-update.timer` and then
 `sudo systemctl start oruc-auto-update.timer`.

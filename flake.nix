@@ -118,9 +118,15 @@
     {
       inherit (inventory) nixosConfigurations;
       inherit (tooling) formatter;
-      checks.x86_64-linux = import ./ci/server-boot.nix {
-        inherit inputs;
-        host = inventory.nixosConfigurations.risoluto-dev-1;
-      };
+      checks.x86_64-linux =
+        import ./ci/server-boot.nix {
+          inherit inputs;
+          host = inventory.nixosConfigurations.risoluto-dev-1;
+        }
+        // import ./ci/server-units.nix {
+          inherit inputs;
+          host = inventory.nixosConfigurations.risoluto-dev-1;
+        }
+        // import ./ci/self-deploy.nix { inherit inputs; };
     };
 }

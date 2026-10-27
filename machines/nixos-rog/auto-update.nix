@@ -4,6 +4,8 @@
 # private runtime Nix config for GitHub's API limit. The token stays out of
 # child-process environments; the file remains readable by oruc.
 #
+# The server copy of this unit is nixosModules/deploy-host.nix; change both.
+#
 # The shared `upgrade` command (nixosModules/upgrade.nix) runs this unit now and
 # shows its log while it runs.
 {

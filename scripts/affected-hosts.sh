@@ -72,23 +72,28 @@ repo=${BASH_REMATCH[1]%.git}
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 this_host=$(</proc/sys/kernel/hostname)
 
-# on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in HOST's home
-# directory, with the ARGs. This host runs SCRIPT without SSH, as deploy.sh
-# does.
+# on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in the home directory of
+# HOST's deploy user (deployLogin in its machine record, machines/schema.nix),
+# with the ARGs. $new holds the records once systems has run. This host
+# runs SCRIPT without SSH, as deploy.sh does.
 on_host() {
-  local host=$1
+  local host=$1 target=$1 login=
   shift
+  if [[ -n ${new:-} ]]; then
+    login=$(jq -r --arg h "$host" '.[$h].deployLogin // empty' <<<"$new")
+    if [[ -n $login ]]; then target=$login@$host; fi
+  fi
   if [[ $host == "$this_host" ]]; then
     (cd && bash -s -- "$@")
   elif (($#)); then
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-    ssh "${ssh_opts[@]}" "$host" "bash -s -- $(printf '%q ' "$@")"
+    ssh "${ssh_opts[@]}" "$target" "bash -s -- $(printf '%q ' "$@")"
   else
-    ssh "${ssh_opts[@]}" "$host" 'bash -s'
+    ssh "${ssh_opts[@]}" "$target" 'bash -s'
   fi
 }
 
-# systems REV: prints {HOST: {drv, out, deployed}} for every host at REV.
+# systems REV: prints {HOST: {drv, out, deployed, deployLogin}} for every host at REV.
 # deployed is the record's field; a REV from before the field counts as true.
 systems() {
   on_host "$this_host" "github:$repo/$1" <<'REMOTE'
@@ -106,6 +111,7 @@ for host in $hosts; do
       drv = h.config.system.build.toplevel.drvPath;
       out = h.config.system.build.toplevel.outPath;
       deployed = h.config.oruc.machine.deployed or true;
+      deployLogin = h.config.oruc.machine.deployLogin or null;
     }; }" </dev/null
 done | jq -s add
 REMOTE

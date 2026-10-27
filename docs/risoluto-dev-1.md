@@ -6,7 +6,10 @@
 - [Install](#install)
 - [Network and secrets](#network-and-secrets)
 - [Telemetry](#telemetry)
+- [Deploys](#deploys)
 - [Boot test in a VM](#boot-test-in-a-vm)
+- [Unit check in a VM](#unit-check-in-a-vm)
+- [Deploy test in a VM](#deploy-test-in-a-vm)
 
 ## What it is
 
@@ -18,7 +21,8 @@ login session, no workstation module, and the kernel from nixpkgs. Its files are
 
 The box runs Debian until the move to NixOS, so no deploy goes to it yet. Its
 record sets `deployed = false`, so `scripts/affected-hosts.sh` prints it as
-`not-deployed`; remove the field at the move.
+`not-deployed`; remove the field at the move. After the move, the box deploys
+itself ([Deploys](#deploys)).
 
 ## Disk and boot
 
@@ -112,7 +116,8 @@ outage loses nothing that the retry window covers.
   priority info and above, from the end of the journal on a first start. The
   name keeps the old one so existing SigNoz queries match. The Debian box
   listed 16 patterns of infra units. The new box lists `caddy.service` and
-  `acme-*.service`, so each service that comes to the box later needs its unit
+  `acme-*.service`, and `nixosModules/deploy-host.nix` adds `self-deploy.service`
+  and `self-deploy-reboot.service`, so each service that comes to the box later needs its unit
   in `journalUnits` before its lines ship.
 - The endpoint is a public DNS name that resolves to a tailnet address, so it
   answers only on the tailnet. It is a plain option and no secret.
@@ -174,6 +179,27 @@ sshd records travel through the journal into the collector's pipeline and out
 over OTLP. It does not prove TLS, the real endpoint, or
 delivery to SigNoz, which the cutover proves.
 
+## Deploys
+
+After the move, the box keeps itself on `main`. `self-deploy.timer` runs
+`./deploy.sh risoluto-dev-1 switch` on the box every 2 hours, as root, with
+deploy.sh's lock and rollback, and `self-deploy-reboot.timer` reboots at 02:10
+UTC when the kernel or the initrd changed. The files are
+`nixosModules/deploy-host.nix`, `scripts/self-deploy.sh` and
+`scripts/self-deploy-reboot.sh`; [Self-deploy of a server](deploy.md#self-deploy-of-a-server)
+has the details, the failure signal and how to pause the timer.
+
+A deploy from nixos-desktop or nixos-rog logs in as root, not as oruc, because
+oruc's sudo asks for a password (`deployLogin` in the machine record). The release
+records of both kinds of deploy are in `/root/.local/state/nixos-config-deploy/`.
+The long-running agent units of oruc are in `oruc.deploy.sessionIgnore` in
+`configuration.nix`. deploy.sh's session check leaves them out of a deploy as
+oruc. A deploy as root, which is every deploy above, checks only root's own
+services.
+
+When the box moves to NixOS, remove `deployed = false` from its record in
+`machines/inventory.nix`, so the deploy rule of AGENTS.md reaches it.
+
 ## Boot test in a VM
 
 Two flake checks boot the host's own configuration with NixOS's VM test driver
@@ -220,3 +246,43 @@ installs from the kexec installer. It also does not cover the VGA console. QEMU
 gives the test only a serial console and no guest agent channel, so
 `qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
 and a 9p `/nix/store`, which is disko's test wrapper.
+
+## Unit check in a VM
+
+The flake check `risoluto-dev-1-units` (`ci/server-units.nix`) boots the host's
+own modules in a plain NixOS test and fails when any unit has failed after boot,
+Home Manager's included. A unit that fails during a switch makes
+`switch-to-configuration` exit 4, which `deploy.sh` rolls back, so one failed
+unit would roll back every deploy. Run it with
+`scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-units`. It is separate from
+the boot test because disko's booted machine has a read-only `/nix/store` and no
+database of its closure, which fails the Home Manager units there.
+
+## Deploy test in a VM
+
+The flake check `risoluto-dev-1-self-deploy` (`ci/self-deploy.nix`) is a NixOS
+test of the deploy path of [Deploys](#deploys), and it needs KVM like the boot
+tests. Run it with
+`scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-self-deploy`. It
+is not part of the boot test, because disko's test machine mounts a read-only
+`/nix/store` that a deploy cannot write to.
+
+The node is named risoluto-dev-1 and loads `nixosModules/upgrade.nix`,
+`nixosModules/deploy-host.nix` and `nixosModules/telemetry.nix` (whose option the
+second one sets), not the host's whole configuration. Its ESP is
+a 4 GiB second disk with Limine, because `deploy.sh` wants 1 GiB of free space
+there and qemu-vm's own ESP has 256 MiB. Three specialisations of the node are
+the systems to deploy: a good one, one whose sshd fails to restart, and one
+with another initrd. The VM has no network, so a local repository stands for
+GitHub, and each main in it holds a test flake that answers for the host with
+the store path of one specialisation. `ci/self-deploy/test.py` holds the
+checks. They start `self-deploy.service` against a good main, the same main
+again, a main that breaks sshd (the previous system returns, the unit fails and
+the next run waits for main to move) and a main with another initrd (the reboot
+unit schedules a reboot, and waits while a deploy holds the lock). They also
+check the timer calendars, the ignore list of the session check, oruc's sudo
+password and the boot entries on the ESP.
+
+The test does not show that a deploy over SSH as root reaches the box, that the
+box fetches the real main from GitHub, that the real flake evaluates (the boot
+tests and `ci/checks.sh` do), or that a deployed system boots; it never reboots.
