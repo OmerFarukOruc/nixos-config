@@ -15,7 +15,7 @@ assert "02:10:00 UTC" in dp_calendar("self-deploy-reboot"), "the reboot calendar
 machine.succeed("systemctl mask --runtime --now self-deploy.timer self-deploy-reboot.timer")
 
 assert machine.succeed("systemctl show self-deploy.service -p User --value").strip() == "root"
-assert "SELF_DEPLOY_REPOSITORY=file:///var/lib/server-test/main.git" in machine.succeed(
+assert "DEPLOY_REPOSITORY=https://github.com/OmerFarukOruc/nixos-config.git" in machine.succeed(
     "systemctl show self-deploy.service -p Environment --value"
 )
 # deploy.sh connects as root, so oruc keeps a sudo password.
@@ -45,6 +45,23 @@ machine.succeed("nix-env --profile /nix/var/nix/profiles/system --set /run/curre
 # A flake whose output for the host is the store path of one specialisation.
 dp_out = {name: machine.succeed(f"readlink -f /run/current-system/specialisation/{name}").strip() for name in dp_systems}
 machine.succeed("mkdir -p /var/lib/server-test/flakes")
+
+# The unit loads the GitHub token as a credential, and github_config turns it
+# into a private nix.conf. Every deploy run below then evaluates and builds with
+# that file included. This run reads the files back without the token value.
+machine.succeed("install -m 0600 /dev/null /var/lib/server-test/github-token")
+machine.succeed("printf ghp_TestToken0123456789 > /var/lib/server-test/github-token")
+dp_unit = machine.succeed("systemctl cat self-deploy.service")
+assert "LoadCredential=github-token:/var/lib/server-test/github-token" in dp_unit, dp_unit
+dp_lib = machine.succeed("systemctl show self-deploy.service -p Environment --value").split("DEPLOY_LIB=")[1].split()[0]
+dp_config = machine.succeed(
+    "systemd-run --wait --pipe -p RuntimeDirectory=github-config-test -p Environment=PATH=/run/current-system/sw/bin "
+    "-p LoadCredential=github-token:/var/lib/server-test/github-token "
+    f"bash -c '. {dp_lib}; github_config; stat -c %a \"$RUNTIME_DIRECTORY/nix.conf\" \"$RUNTIME_DIRECTORY/gh/hosts.yml\"; "
+    "cut -d= -f1 \"$RUNTIME_DIRECTORY/nix.conf\"; echo \"$NIX_CONFIG\" | cut -d\" \" -f1'"
+)
+assert dp_config.split() == ["600", "600", "access-tokens", "include"], dp_config
+assert "ghp_" not in dp_config
 for dp_name, dp_path in dp_out.items():
     dp_flake = textwrap.dedent(
         f"""\
@@ -57,6 +74,21 @@ for dp_name, dp_path in dp_out.items():
         """
     )
     machine.succeed(f"cat > /var/lib/server-test/flakes/{dp_name}.nix <<'EOF'\n{dp_flake}EOF")
+
+# A main whose evaluation cannot download an input, as when GitHub refuses the
+# request. The address answers no connection, so nix fails with its download error.
+machine.succeed(
+    "cat > /var/lib/server-test/flakes/download.nix <<'EOF'\n"
+    '{ inputs.dep.url = "https://127.0.0.1:9/dep.tar.gz"; outputs = _: { }; }\n'
+    "EOF"
+)
+
+# A main whose own evaluation fails, which no download explains.
+machine.succeed(
+    "cat > /var/lib/server-test/flakes/throw.nix <<'EOF'\n"
+    '{ outputs = _: { nixosConfigurations.risoluto-dev-1.config.system.build.toplevel = throw "main is broken"; }; }\n'
+    "EOF"
+)
 
 machine.copy_from_host(running_revision_sh, "/tmp/running-revision.sh")
 machine.succeed(
@@ -176,3 +208,25 @@ machine.succeed("test -e /run/systemd/shutdown/scheduled")
 machine.succeed(f"grep -q '^self-deploy-reboot.service since ' {dp_state}/deploy.owner")
 machine.succeed("shutdown -c")
 machine.succeed("test ! -e /run/systemd/shutdown/scheduled")
+
+print("phase: a main whose input cannot be downloaded")
+dp_releases = dp_sh("records")
+dp_sh("publish download")
+dp_sha = dp_sh('git -C "$work" rev-parse HEAD')
+assert dp_deploy() != 0, "the run succeeded on a main that cannot be evaluated"
+assert "could not download an input" in dp_sh("unit_log -p err"), "the failure is not in the journal at priority err"
+machine.succeed("test ! -e /var/lib/self-deploy/failed-main")
+assert "Deploying main at" not in dp_sh("unit_log"), "the run started a deploy"
+assert dp_sh("records") == dp_releases, "the run left a new release"
+
+print("phase: a main whose evaluation fails")
+dp_sh("publish throw")
+dp_sha = dp_sh('git -C "$work" rev-parse HEAD')
+assert dp_deploy() != 0, "the run succeeded on a main that throws"
+assert "could not download" not in dp_sh("unit_log"), "an evaluation error was taken for a download error"
+machine.succeed(f"grep -q '^{dp_sha} ' /var/lib/self-deploy/failed-main")
+
+# Main moves on to a system that downloads nothing, and the next run goes through.
+dp_sh("publish initrd")
+assert dp_deploy() == 0, "the run after the download error failed"
+assert "already runs" in dp_sh("unit_log"), "the next run does not find the host on main"

@@ -305,7 +305,9 @@ Every 2 hours matches nixos-rog's deploy unit
 ([Deploy unit](nixos-rog.md#deploy-unit)). The update workflow merges at most
 every 6 hours, so `main` reaches the server within 2 hours and 10 minutes of a
 merge. A run that finds nothing to deploy costs one `git fetch` and one
-evaluation. The service runs `scripts/self-deploy.sh` as root. Each run:
+evaluation. The service runs `scripts/self-deploy.sh` as root. The unit is the
+one that nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`), and the
+clone and deploy steps are in `scripts/lib/pull-main.sh`. Each run:
 
 1. fetches `main` into its own clone, `/var/lib/self-deploy/repo`;
 2. stops when the host runs a clean release of `main` and boots the same system;
@@ -332,19 +334,29 @@ repeats its line every 2 hours, until `main` moves or someone fixes the cause.
 The host ships the lines of `self-deploy.service` and
 `self-deploy-reboot.service` at priority info and above to SigNoz
 (`oruc.telemetry.journalUnits`, which `nixosModules/deploy-host.nix` sets),
-where the failure line is the signal. The alert rule on it lives in SigNoz, not in this
-repository, and no rule exists yet (not checked), so until one does only someone
-on the host sees a failure. A held-back reboot and an outage of GitHub log at
-priority warning and do not fail the run. To clear the failed state by hand,
-run `sudo systemctl reset-failed self-deploy.service`.
+where the failure line is the signal. The alert rule on it lives in SigNoz, not
+in this repository, and no rule exists yet (not checked), so until one does only
+someone on the host sees a failure. A held-back reboot and an outage of GitHub
+during the clone or fetch log at priority warning and do not fail the run. To
+clear the failed state by hand, run
+`sudo systemctl reset-failed self-deploy.service`.
 
-**Limits.** The server has no GitHub token. Nix then reaches GitHub within the
-limit for a client without a token, 60 requests an hour, and the lock file has 38
-GitHub inputs. A run that has to fetch most of them again can fail on the limit,
-and the host then keeps its system until `main` moves, as after any failed
-deploy. `deploy.sh` cannot ask `gh` which pull request merged a running release
-either. A release that someone test-deployed from a branch, and that later
-merged as a squash, then makes the run exit 78 until someone runs `--replace`.
+**Limits.** The unit loads a GitHub token as a credential when the host sets
+`oruc.deploy.self.githubTokenFile`, and `scripts/lib/pull-main.sh` writes it to a
+private Nix config and `gh` config for the run, as nixos-rog's unit does
+([Deploy unit](nixos-rog.md#deploy-unit)). risoluto-dev-1 sets it to its sops
+secret ([Rotate the box's token](risoluto-dev-1.md#rotate-the-boxs-token)).
+Without a token Nix reaches GitHub within the limit for a client without one, 60
+requests an hour, and `deploy.sh` cannot ask `gh` which pull request merged a
+running release. A release that someone test-deployed from a branch, and that
+later merged as a squash, then makes the run exit 78 until someone runs
+`--replace`.
+
+A failed download in the evaluation, such as GitHub's API limit or an outage
+after the fetch succeeded, says nothing about `main`. The run fails and writes
+its reason at priority err, records no failed `main`, and the next run tries
+again. While the cause lasts, every run fails the same way, every 2 hours.
+nixos-rog's run does the same for its build.
 
 **Why root.** A deploy from nixos-desktop or nixos-rog logs in as root over
 Tailscale SSH, because oruc's sudo needs a password on a server and a deploy

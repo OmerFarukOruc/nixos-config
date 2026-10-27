@@ -68,11 +68,16 @@ in
         };
         # The test makes the main with git, and deploy.sh checks the tree with it.
         programs.git.enable = true;
+        # The VM has no network. The unit clones the real URL, and git sends it to
+        # the local repository that holds the test's main.
+        programs.git.config.url."file:///var/lib/server-test/main.git".insteadOf =
+          "https://github.com/OmerFarukOruc/nixos-config.git";
 
         oruc.deploy = {
           self = {
             enable = true;
-            repository = "file:///var/lib/server-test/main.git";
+            # The test writes a token of the right shape here before a run.
+            githubTokenFile = "/var/lib/server-test/github-token";
           };
           sessionIgnore = [ "herdr-*.service" ];
         };

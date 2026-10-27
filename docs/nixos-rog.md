@@ -96,6 +96,11 @@ A desktop notification reports each deploy or failure. A switch leaves the
 desktop shell, the keyring and other user services on their old version.
 `home-manager/README.md` lists them.
 
+A server's [self-deploy](deploy.md#self-deploy-of-a-server) shares this unit's
+definition (`nixosModules/deploy-unit.nix`) and the clone, token and deploy
+steps of the script (`scripts/lib/pull-main.sh`). The notifications and the wait
+for a failed `main` stay in `scripts/pull-main.sh`.
+
 `oruc-auto-update.service` reads a fine-grained GitHub token,
 `github-update-token`, limited to this repository. The script writes it to a
 private Nix config file and a private `gh` config under the service's runtime
@@ -114,7 +119,8 @@ ssh -t nixos-rog upgrade
 
 To test a change to `scripts/prepare-update.sh` or `update.yml`, land it and
 run `gh workflow run update.yml`; add `-f always=true` when nothing upstream
-moved. To test a change to `scripts/pull-main.sh`, deploy it to nixos-rog and
+moved. To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
+`nixosModules/deploy-unit.nix`, deploy it to nixos-rog and
 run `upgrade`.
 
 A manual deploy exits 77 while the unit holds the deploy lock, and the unit
@@ -166,6 +172,7 @@ unit on nixos-rog. The exit codes come from `deploy.sh`; the
 | --- | --- | --- |
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
+| The build of `main` fails on a download, such as GitHub's API limit | The run fails and records nothing against `main`. The next run tries again. | Critical |
 | The deploy fails with 71, 74 or 79 | The next run tries the same `main` again. | Critical |
 | The deploy fails with another status, such as a build that fails on nixos-rog | The unit does not deploy that `main` again until `main` moves. Each run that skips it prints when it failed, its exit status and the first `error:` line of that run. | Critical; after 73, which leaves nixos-rog on the new system with the old boot default, the popup says so |
 | Any other step of the script fails, such as an unset variable | The next run tries again. | Critical |

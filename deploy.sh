@@ -43,6 +43,7 @@ ssh_opts=(-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=
 deployer=$(</proc/sys/kernel/hostname)
 local_target=false
 [[ $host == "$deployer" ]] && local_target=true
+
 # Runs the script on stdin with bash on the target, with the arguments given.
 # The arguments travel as a quoted "set --" line ahead of the script, because
 # ssh joins its own arguments into one string for the remote login shell.

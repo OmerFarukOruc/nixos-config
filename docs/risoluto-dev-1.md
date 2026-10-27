@@ -66,18 +66,20 @@ drops ping.
 
 ## Install
 
-sops-nix decrypts `secrets/risoluto-dev-1.yaml` and `secrets/risoluto-dev-1-acme.yaml` while the
-system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`. The first
-boot needs that key in place, because the network file and both password hashes
-come from the first file, and the Cloudflare token for the certificates from the
-second. An install that makes new host keys boots with no address, no password
-and no certificates. Install the Debian box's own key before the first boot, for example
+sops-nix decrypts `secrets/risoluto-dev-1.yaml`,
+`secrets/risoluto-dev-1-acme.yaml` and `secrets/risoluto-dev-1-github.yaml`
+while the system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`.
+The first boot needs that key in place, because the network file and both
+password hashes come from the first file, the Cloudflare token for the
+certificates from the second, and the deploy unit's GitHub token from the third.
+An install that makes new host keys boots with no address, no password, no
+certificates and no deploy token. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
 `ssh-to-age < ssh_host_ed25519_key.pub` prints the `risoluto-dev-1` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
 it waits for the move. `scripts/check-secrets.sh` without an argument checks
-both sops files; with a file argument it compares only the main file.
+all three sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
@@ -96,6 +98,42 @@ renders it while the system activates, which on a boot runs before systemd
 starts networkd. A switch that changes the file restarts networkd. The IPv4
 gateway is on-link (`GatewayOnLink`), the IPv6 gateway is `fe80::1`, and router
 advertisements are off.
+
+### Rotate the box's token
+
+The deploy unit ([Deploys](#deploys)) reads a fine-grained GitHub token,
+`github-update-token`, so that Nix's GitHub fetches stay within the API limit
+and `deploy.sh` can ask `gh` which pull request merged a running release. The
+token has its own file, `secrets/risoluto-dev-1-github.yaml`, encrypted for the
+same two recipients as the file above (`.sops.yaml`). GitHub lists the token as
+"risoluto-dev-1 self-deploy". It does not expire. Rotate it when it may have
+leaked, in this order, so the box keeps a working token until the new one runs.
+The steps apply after the move to NixOS:
+
+1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
+   tokens). Set the repository access to this repository only, the permissions
+   Contents and Pull requests to read-only, and no expiration.
+2. From the repository root, write the token into the file without printing it.
+   The command waits for the token on a hidden prompt. `jq -R` turns it into
+   the JSON that `sops encrypt` reads from stdin, so it never appears in a
+   process list. `sops encrypt` needs public keys only, so no password is
+   asked:
+
+   ```sh
+   read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/risoluto-dev-1-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/risoluto-dev-1-github.yaml.new && mv secrets/risoluto-dev-1-github.yaml.new secrets/risoluto-dev-1-github.yaml; unset token
+   ```
+
+3. Land the file, then deploy it with `./deploy.sh risoluto-dev-1 switch`, or
+   wait for the timer. [deploy.md](deploy.md) has the rules.
+4. On the box, run `sudo systemctl start self-deploy.service` and read
+   `journalctl -u self-deploy`. The new token works when the run ends without a
+   GitHub `401` error from Nix. When Nix reports `401`, the new token is wrong
+   or lacks access to this repository. Skip step 5, create a corrected token,
+   and repeat steps 2 to 4 with it.
+5. Delete the old token on the same GitHub page.
+
+After an edit, `scripts/check-secrets.sh` on the box decrypts every sops file
+with the host key and compares their key names with the declared secrets.
 
 ## Telemetry
 
@@ -193,7 +231,7 @@ After the move, the box keeps itself on `main`. `self-deploy.timer` runs
 `./deploy.sh risoluto-dev-1 switch` on the box every 2 hours, as root, with
 deploy.sh's lock and rollback, and `self-deploy-reboot.timer` reboots at 02:10
 UTC when the kernel or the initrd changed. The files are
-`nixosModules/deploy-host.nix`, `scripts/self-deploy.sh` and
+`nixosModules/deploy-host.nix`, `nixosModules/deploy-unit.nix`, `scripts/self-deploy.sh` and
 `scripts/self-deploy-reboot.sh`; [Self-deploy of a server](deploy.md#self-deploy-of-a-server)
 has the details, the failure signal and how to pause the timer.
 
@@ -416,9 +454,11 @@ the store path of one specialisation. `ci/self-deploy/test.py` holds the
 checks. They start `self-deploy.service` against a good main, the same main
 again, a main that breaks sshd (the previous system returns, the unit fails and
 the next run waits for main to move) and a main with another initrd (the reboot
-unit schedules a reboot, and waits while a deploy holds the lock). They also
-check the timer calendars, the ignore list of the session check, oruc's sudo
-password and the boot entries on the ESP.
+unit schedules a reboot, and waits while a deploy holds the lock) and a main
+whose evaluation cannot download an input (the unit fails, records no failed
+main, and the next main deploys). They also check the timer calendars, the
+ignore list of the session check, oruc's sudo password, the boot entries on the
+ESP and the private Nix config that a test token becomes.
 
 The test does not show that a deploy over SSH as root reaches the box, that the
 box fetches the real main from GitHub, that the real flake evaluates (the boot

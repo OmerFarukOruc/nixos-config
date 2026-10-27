@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Sourced by upgrade (nixosModules/upgrade.nix), scripts/pull-main.sh and
-# scripts/self-deploy.sh from their clones of main; scripts/affected-hosts.sh sends it ahead of the script it
-# runs on each host over SSH.
+# scripts/self-deploy.sh from their clones of main. scripts/affected-hosts.sh
+# sends it ahead of the script it runs on each host over SSH.
 # running_revision: prints "<revision> <dirty> <action>" from the release record
 # whose system= line names the running system (docs/deploy.md, Release records
 # and cleanup), or nothing when no record names it. When several records name

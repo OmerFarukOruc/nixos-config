@@ -2,10 +2,11 @@
 # unit. A unit that fails during a switch makes switch-to-configuration exit 4,
 # which deploy.sh rolls back, so a host with a failed unit after boot would roll
 # back every deploy. smartd failed on the virtual disk that way before the box
-# turned it off. The boot test of ci/server-boot.nix cannot hold this check: its
-# booted machine has a read-only /nix/store and no database of its closure, so
-# the Home Manager units fail there for reasons that the box does not have. This
-# test uses qemu-vm's standard store, which is writable and registered.
+# turned it off. The boot test of ci/server-boot.nix cannot hold this check,
+# because its booted machine has a read-only /nix/store and no database of its
+# closure, so the Home Manager units fail there for reasons that the box does
+# not have. This test uses qemu-vm's standard store, which is writable and
+# registered.
 #
 # Takes the inputs and the host (a nixosSystem); returns the flake checks.
 { inputs, host }:
@@ -23,6 +24,8 @@ in
     };
     nodes.acme = acmeNodes.acme;
     nodes.dnsserver = acmeNodes.dnsserver;
+    # The host's modules are those of mkMachine in machines/inventory.nix. The
+    # acme client and the sops stub are the test's additions.
     nodes.machine = {
       imports = [
         acmeNodes.client

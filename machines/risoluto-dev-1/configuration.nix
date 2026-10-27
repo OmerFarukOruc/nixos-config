@@ -33,7 +33,10 @@ in
 
   # The box keeps itself on main (docs/deploy.md, Self-deploy of a server).
   oruc.deploy = {
-    self.enable = true;
+    self = {
+      enable = true;
+      githubTokenFile = config.sops.secrets.github-update-token.path;
+    };
     # Long-running agents, which a switch may restart. The user services that a
     # timer or socket starts are left out already.
     sessionIgnore = [
@@ -60,6 +63,9 @@ in
       # Its own file, because the recipients of the main one need the shared
       # key's passphrase to add a value.
       cloudflare-acme-dns-token.sopsFile = ../../secrets/risoluto-dev-1-acme.yaml;
+      # The deploy unit's token (docs/risoluto-dev-1.md, Rotate the box's
+      # token) has its own file.
+      github-update-token.sopsFile = ../../secrets/risoluto-dev-1-github.yaml;
     };
     # The public address stays out of this repository, so networkd reads it
     # from a file that sops-nix renders when the system activates. On a boot

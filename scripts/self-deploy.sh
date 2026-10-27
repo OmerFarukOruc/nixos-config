@@ -2,8 +2,10 @@
 # Runs as root on a server from self-deploy.service. Deploys the newest main to
 # this host with deploy.sh, which keeps its lock, its release records and its
 # rollback (docs/deploy.md, Self-deploy of a server).
-# Twin of scripts/pull-main.sh, which does the same for nixos-rog; a change to
-# the clone, outage or status handling belongs in both.
+# Twin of scripts/pull-main.sh, which does the same for nixos-rog.
+# scripts/lib/pull-main.sh holds the steps that both share. This script keeps
+# what differs: a failure is the unit's own status and a priority err line,
+# where nixos-rog shows a popup.
 # A main whose deploy failed is not deployed again until main moves, as on
 # nixos-rog. After the activation, a try has restarted services and undone it,
 # and a failed build fails again. After deploy.sh's status 70, 71, 74, 77 or 79
@@ -13,7 +15,7 @@
 # journal shipper can alert on. A leading <N> sets the priority of a journal line.
 set -euo pipefail
 
-repo=${SELF_DEPLOY_REPOSITORY:?}
+repo=${DEPLOY_REPOSITORY:?}
 unit_name=self-deploy
 host=$(</proc/sys/kernel/hostname)
 dir=$STATE_DIRECTORY/repo
@@ -24,6 +26,10 @@ waiting=$STATE_DIRECTORY/waiting
 profile=/nix/var/nix/profiles/system
 # The personal Git config of a login shell is not for this service.
 export GIT_CONFIG_GLOBAL=/dev/null
+# shellcheck source=/dev/null
+. "${DEPLOY_LIB:?}"
+# Set by sync_main and deploy_main.
+main='' status='' outcome=''
 
 warn() { printf '<4>%s\n' "$*" >&2; }
 reported=false
@@ -42,40 +48,13 @@ trap on_exit EXIT
 # system shuts down.
 trap 'fail "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u $unit_name"; exit 143' TERM
 
-# A failed clone or fetch is quiet only during a network outage. Any other
-# failure, such as lost repository access, would stop every deploy with no
-# sign, so it fails the run.
-remote_failed() {
-  # Any HTTP answer, even an error status, shows that GitHub is reachable.
-  if curl -sS --max-time 20 --retry 2 -o /dev/null https://github.com; then
-    fail "git $1 failed while GitHub answers."
-    exit 1
-  fi
-  warn "GitHub is unreachable; the next run tries again."
-  exit 0
-}
-
 # Any run that does not end in 70 or 77 clears this, an outage included.
 previous=
 [[ ! -f $waiting ]] || previous=$(<"$waiting")
 rm -f -- "$waiting"
 
-if [[ ! -d $dir/.git ]]; then
-  git clone --quiet "$repo" "$dir" || remote_failed clone
-fi
-cd "$dir"
-fetched=false
-for attempt in 1 2 3; do
-  if git fetch --quiet origin main; then
-    fetched=true
-    break
-  fi
-  ((attempt == 3)) || sleep 10
-done
-$fetched || remote_failed fetch
-git checkout --quiet --force --detach origin/main
-git clean -fdxq
-main=$(git rev-parse HEAD)
+github_config
+sync_main "$repo" "$dir"
 
 current=$(readlink -f /run/current-system)
 # The boot default is the running system. After a test deploy, or after
@@ -103,32 +82,30 @@ if [[ -f $failed ]] && read -r failed_main failed_at failed_status <"$failed" &&
 fi
 
 # A commit that leaves this host's system as it is, such as a docs change,
-# needs no deploy. When the evaluation fails, deploy.sh fails on it too and
-# records this main.
-new_system=$(nix eval --raw --no-write-lock-file ".#nixosConfigurations.$host.config.system.build.toplevel") || new_system=
+# needs no deploy. A failed evaluation that is not a failed download is main's
+# own: deploy.sh fails on it too and records this main.
+eval_log=$RUNTIME_DIRECTORY/eval.log
+new_system=$(nix eval --raw --no-write-lock-file ".#nixosConfigurations.$host.config.system.build.toplevel" 2>"$eval_log") || new_system=
+cat "$eval_log" >&2
+[[ -n $new_system ]] || exit_on_download_failure "$eval_log"
 if $settled && [[ $new_system == "$current" ]]; then
   echo "$host already runs the system of main at ${main:0:12}."
   exit 0
 fi
 
-# deploy.sh uploads a release before it finds a pending rollback timer, so
-# asking first keeps a held-back run from leaving a release behind.
-status=0
-if systemctl is-active --quiet deploy-rollback.timer; then
-  status=70
-else
-  echo "Deploying main at ${main:0:12} to $host."
-  ./deploy.sh "$host" switch || status=$?
-fi
-case $status in
-  0)
+deploy_main
+case $outcome in
+  done)
     rm -f -- "$failed"
     echo "$host now runs main at ${main:0:12}."
     ;;
-  70 | 77)
-    # 70 is the pending rollback timer of another deploy and 77 another deploy
-    # holding the lock. Neither changed this host, and the next run tries again.
-    # The same status twice in a row means a stuck deploy, which fails the run.
+  wait)
+    if ((status == 78)); then
+      fail "$host runs a release with changes that main lacks. Merge them into main, or run ./deploy.sh --replace $host switch from a checkout of main on nixos-desktop or nixos-rog. See: journalctl -u $unit_name"
+      exit 1
+    fi
+    # The next run tries again. The same status twice in a row means a stuck
+    # deploy, which fails the run.
     echo "$status" >"$waiting"
     if [[ $previous == "$status" ]]; then
       fail "Another deploy has held up $host since the last run (status $status). See: journalctl -u $unit_name"
@@ -136,19 +113,11 @@ case $status in
     fi
     warn "Another deploy is under way on $host (status $status). The next run tries again."
     ;;
-  78)
-    fail "$host runs a release with changes that main lacks. Merge them into main, or run ./deploy.sh --replace $host switch from a checkout of main on nixos-desktop or nixos-rog. See: journalctl -u $unit_name"
-    exit 1
-    ;;
-  71 | 74 | 79)
-    # 71 is a rollback timer that could not be armed, 74 a full ESP and 79 an
-    # unmounted /boot. None is main's fault, so the next run tries again.
+  retry)
     fail "deploy.sh exit $status. The next run tries again. See: journalctl -u $unit_name"
     exit 1
     ;;
-  *)
-    # 73 is a switch whose boot entries failed. This host runs main, but the
-    # next boot starts the previous system.
+  failed)
     echo "$main $(date +%s) $status" >"$failed"
     if ((status == 73)); then
       fail "$host runs main at ${main:0:12}, but its boot entries failed, so the next boot starts the previous system. See: journalctl -u $unit_name"
