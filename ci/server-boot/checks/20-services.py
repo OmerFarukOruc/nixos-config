@@ -207,6 +207,25 @@ machine.wait_until_succeeds(
     f"curl -s --max-time 5 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{svc_port}/busybox | grep -Fx 200"
 )
 svc_oruc(f"{svc_docker} rm -f {svc_cid}")
+# A client from an address other than loopback, as a tailnet peer is, makes
+# RootlessKit 3 try to keep the client's source address (--source-ip-transparent,
+# on by default), which it never tries for a loopback client. Here the client
+# uses the host's own global address.
+svc_addr = machine.succeed(
+    "ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n 1"
+).strip()
+svc_cid = svc_oruc(
+    f"{svc_docker} run -d --rm -p 8080 probe:1 httpd -f -p 8080 -h /bin"
+).strip()
+svc_port = int(
+    svc_oruc(
+        f"{svc_docker} port {svc_cid} 8080/tcp | head -n 1 | sed 's/.*://'"
+    ).strip()
+)
+machine.wait_until_succeeds(
+    f"curl -s --max-time 5 -o /dev/null -w '%{{http_code}}' http://{svc_addr}:{svc_port}/busybox | grep -Fx 200"
+)
+svc_oruc(f"{svc_docker} rm -f {svc_cid}")
 svc_podman_docker = f"env DOCKER_HOST=unix://{svc_rt}/podman/podman.sock docker"
 svc_oruc(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
 svc_oruc(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")

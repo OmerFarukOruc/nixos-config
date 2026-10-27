@@ -304,17 +304,21 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
 - Docker is the NixOS `virtualisation.docker.rootless` unit. The socket is
   `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in oruc's
   shells. The daemon settings are the builder's garbage collection at 80 GB.
-  Docker picks the host port of a published container from 32768-60999, and
-  RootlessKit binds it on the host, where an outbound connection could already
-  hold it. So `net.ipv4.ip_local_port_range` of the host is 61000-65535, which
-  leaves 4535 ports per destination address and port for outbound connections.
-  That this suffices is a guess; `ss -Htn state established | wc -l` on the
-  Debian box printed 15 on 2026-10-27. The Debian box instead narrows Docker's
-  range with a wrapper script. A port that a container publishes without an
-  address listens on every address, so tailnet peers reach it, and the firewall
-  blocks the public interface. If `docker.service` (a user unit) fails three
-  times in 60 s it stays failed; nothing alerts, and its journal lines are
-  not in `journalUnits`, which lists system units.
+  `overlays/rootlesskit.nix` moves RootlessKit from 2.x to 3.3.0, the version
+  Docker 29.9.1 ships, until nixpkgs has 3.0.0 or later. With 2.x, a
+  connection to a published port could make the kernel kill dockerd and its
+  containers. Docker picks the host port of a published container from
+  32768-60999, and RootlessKit binds it on the host, where an outbound
+  connection could already hold it. So `net.ipv4.ip_local_port_range` of the
+  host is 61000-65535, which leaves 4535 ports per destination address and
+  port for outbound connections. That this suffices is a guess; `ss -Htn state
+  established | wc -l` on the Debian box printed 15 on 2026-10-27. The Debian
+  box instead narrows Docker's range with a wrapper script. A port that a
+  container publishes without an address listens on every address, so tailnet
+  peers reach it, and the firewall blocks the public interface. If
+  `docker.service` (a user unit) fails three times in 60 s it stays failed;
+  nothing alerts, and its journal lines are not in `journalUnits`, which lists
+  system units.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
   `DOCKER_HOST`, the docker CLI and its Compose plugin.

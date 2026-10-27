@@ -3,6 +3,10 @@
 # record). oruc is in no docker group; each daemon answers on a socket in
 # $XDG_RUNTIME_DIR.
 _: {
+  # RootlessKit 3, because 2.x lets the kernel kill dockerd after connections to
+  # a published port (overlays/rootlesskit.nix).
+  nixpkgs.overlays = [ (import ../overlays/rootlesskit.nix) ];
+
   # Rootless Docker picks the host port of a published container from the
   # ip_local_port_range of RootlessKit's network namespace, which is the kernel
   # default 32768-60999 (Documentation/networking/ip-sysctl.rst), and RootlessKit
