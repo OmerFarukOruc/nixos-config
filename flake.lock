@@ -592,6 +592,7 @@
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",
         "spicetify-nix": "spicetify-nix",
+        "stay-green": "stay-green",
         "tinted-vscode": "tinted-vscode",
         "vscode-vibrancy": "vscode-vibrancy",
         "warm-burnout": "warm-burnout"
@@ -636,6 +637,22 @@
         "owner": "Gerg-L",
         "repo": "spicetify-nix",
         "rev": "50246f67d72e042291e426823dd61567b796fea9",
+        "type": "github"
+      }
+    },
+    "stay-green": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793183406,
+        "narHash": "sha256-x6Yzqv/Iexj4G9/srM0Y+QdJSN96rqukr8hPFJu6bRI=",
+        "owner": "OmerFarukOruc",
+        "repo": "stay-green",
+        "rev": "497b202f29c50983b0551b883af41f5e7e0292bb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OmerFarukOruc",
+        "repo": "stay-green",
         "type": "github"
       }
     },

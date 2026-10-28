@@ -6,6 +6,7 @@
 {
   agents,
   config,
+  inputs,
   lib,
   osConfig,
   pkgs,
@@ -14,6 +15,7 @@
 let
   herdrWebUi = pkgs.callPackage ../../pkgs/herdr-web-ui.nix { };
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
+  stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   home = config.home.homeDirectory;
 in
 {
@@ -33,6 +35,7 @@ in
     pkgs.defuddle
     pkgs.glow
     (pkgs.callPackage ../../pkgs/impeccable.nix { })
+    stayGreen
     pkgs.wrangler
   ];
 
@@ -159,6 +162,103 @@ in
       };
       Install.WantedBy = [ "default.target" ];
     };
+  };
+
+  # CLIProxyAPI, which serves the Claude, Codex, Gemini and Grok CLI logins as
+  # one OpenAI-compatible API, on rootless Podman through the docker compose
+  # CLI (cliproxy/compose.yml). The unit owns the stack, so no container starts
+  # before its config exists. docs/risoluto-dev-1.md describes the share node.
+  systemd.user.services.cliproxy =
+    let
+      up = "${./cliproxy}/cliproxy-up.sh";
+    in
+    {
+      Unit = {
+        Description = "CLIProxyAPI (loopback; tailnet-exposed via cliproxy-share)";
+        After = [
+          "network-online.target"
+          "podman.socket"
+        ];
+        Wants = [ "network-online.target" ];
+        Requires = [ "podman.socket" ];
+      };
+      Service = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = up;
+        ExecReload = "${up} update";
+        ExecStop = "${up} stop";
+        Environment = [
+          "PATH=${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.curl
+              pkgs.gnugrep
+              pkgs.jq
+            ]
+          }:/run/current-system/sw/bin"
+          "CLIPROXY_RENDERED_CONFIG=${osConfig.sops.templates."cliproxy-config.yaml".path}"
+          "CLIPROXY_DNS_TOKEN_FILE=${osConfig.sops.secrets.cliproxy-cloudflare-dns-token.path}"
+        ];
+        EnvironmentFile = osConfig.sops.templates."cliproxy.env".path;
+        Restart = "on-failure";
+        RestartSec = 5;
+        # A first start builds the tls-proxy image.
+        TimeoutStartSec = "15min";
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
+  # Pulls new cliproxy and Tailscale images daily and recreates the containers
+  # whose image changed. It fails when cliproxy.service is not active.
+  systemd.user.services.cliproxy-update = {
+    Unit = {
+      Description = "CLIProxyAPI image update";
+      After = [ "cliproxy.service" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user reload cliproxy.service";
+    };
+  };
+  systemd.user.timers.cliproxy-update = {
+    Unit.Description = "Daily CLIProxyAPI image update";
+    Timer = {
+      OnCalendar = "*-*-* 04:30 Europe/Istanbul";
+      Persistent = true;
+      RandomizedDelaySec = "15m";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
+  # Keeps Omer's Teams status Available in working hours, with the sign-in in
+  # ~/.local/state/stay-green. A failed run means the sign-in expired or was
+  # revoked; sign in again from a workstation with
+  # `stay-green login risoluto-dev-1`. The timer starts a run every 4 minutes
+  # around the clock, and a run outside the schedule does nothing.
+  systemd.user.services.stay-green = {
+    Unit.Description = "Mark Omer's Teams status Available";
+    Service = {
+      Type = "oneshot";
+      Environment = [
+        "STAY_GREEN_SCHEDULE=Mon-Fri 09:00-18:00"
+        "STAY_GREEN_TIME_ZONE=Europe/Istanbul"
+      ];
+      ExecStart = "${lib.getExe stayGreen} run";
+      # A stuck run would hold back the next ones.
+      TimeoutStartSec = "2min";
+      NoNewPrivileges = true;
+      MemoryMax = "64M";
+    };
+  };
+  systemd.user.timers.stay-green = {
+    Unit.Description = "Keep Omer's Teams status Available in working hours";
+    Timer = {
+      OnCalendar = "*-*-* *:00/4:00";
+      AccuracySec = "10s";
+      # A run missed while the box was down is of no use later.
+      Persistent = false;
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 
   # /etc/zshenv replaces a unit's PATH, so every zsh, interactive or not, gets

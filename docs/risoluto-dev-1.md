@@ -10,6 +10,7 @@
 - [Web names](#web-names)
 - [Containers](#containers)
 - [Agent runtime](#agent-runtime)
+- [CLIProxyAPI](#cliproxyapi)
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
@@ -70,13 +71,15 @@ drops ping.
 ## Install
 
 sops-nix decrypts `secrets/risoluto-dev-1.yaml`,
-`secrets/risoluto-dev-1-acme.yaml`, `secrets/risoluto-dev-1-github.yaml` and
-`secrets/risoluto-dev-1-services.yaml` while the system activates, with the
+`secrets/risoluto-dev-1-acme.yaml`, `secrets/risoluto-dev-1-github.yaml`,
+`secrets/risoluto-dev-1-services.yaml` and
+`secrets/risoluto-dev-1-cliproxy.yaml` while the system activates, with the
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
 file, the Cloudflare token for the certificates from the second, the deploy
 unit's GitHub token from the third, and OpenChamber's passwords and the
-herdr web UI's token from the fourth (`machines/risoluto-dev-1/services.nix`).
+herdr web UI's token from the fourth, and CLIProxyAPI's keys from the fifth
+(`machines/risoluto-dev-1/services.nix`).
 An install that makes new host keys boots with no address, no password, no
 certificates and no deploy token. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
@@ -84,7 +87,7 @@ with `nixos-anywhere --copy-host-keys`, and check that
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
 it waits for the move. `scripts/check-secrets.sh` without an argument checks
-all four sops files; with a file argument it compares only the main file.
+the sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
@@ -396,6 +399,48 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   (`X-SwitchMethod = "keep-old"`), so the new version starts at their next
   restart. Their secrets come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
+- `stay-green.timer` keeps Omer's Teams status Available on weekdays from 09:00
+  to 18:00 Istanbul time with `pkgs/stay-green.nix`, built from the
+  `stay-green` flake input. The sign-in is in `~/.local/state/stay-green`. A
+  failed run usually means the sign-in expired or was revoked; sign in again
+  from a workstation with `stay-green login risoluto-dev-1`. Read a run with
+  `journalctl --user -u stay-green.service -n 20`.
+
+## CLIProxyAPI
+
+`cliproxy.service`, a user unit of oruc in `home.nix`, serves the Claude,
+Codex, Gemini and Grok CLI logins as one OpenAI-compatible API on 127.0.0.1:8317.
+It runs `machines/risoluto-dev-1/cliproxy/cliproxy-up.sh`, which starts the
+compose stack of that folder on rootless Podman through the docker CLI
+([Containers](#containers)). The unit owns the stack, so no container starts
+before its config exists.
+
+- The keys, the management key, the share node's `ts.net` name, its Tailscale
+  auth key and the Cloudflare token are in `secrets/risoluto-dev-1-cliproxy.yaml`.
+  sops-nix renders the app's config from them (`services.nix`), and
+  `cliproxy-up.sh` copies it to `$XDG_RUNTIME_DIR/cliproxy`, because the
+  management panel can change it. After a key changes, run
+  `systemctl --user restart cliproxy.service`.
+- The `share` profile adds `cliproxy-share`, a Tailscale container that joins
+  the tailnet as its own node `cliproxy`, so a friend shared on that node reaches
+  only the API. Its Serve config forwards port 443 as raw TCP to `tls-proxy`, a
+  Caddy with the Cloudflare DNS provider that `cliproxy-up.sh` builds from
+  `cliproxy/tls-proxy/`. Caddy serves the `ts.net` name with the certificate
+  from the sidecar's tailscaled, and `cliproxy.risoluto.dev` with a Let's
+  Encrypt certificate from the DNS-01 challenge.
+- `cliproxy.risoluto.dev` is a public, DNS-only A record to the share node's
+  tailnet address, so it answers only on the tailnet. `cliproxy-up.sh` runs
+  `cliproxy/dns-record.sh apply` after every start and update; the script
+  changes only that one record. `dns-record.sh plan` prints what it would do.
+- `cliproxy-update.timer` reloads the unit daily at 04:30 Istanbul time. The
+  reload pulls the CLIProxyAPI and Tailscale images, rebuilds `tls-proxy`, and
+  recreates the containers whose image changed.
+- OAuth token files, logs, the sidecar's Tailscale state and Caddy's
+  certificates stay in `~/.local/state/fleet/cliproxy`.
+- A provider's OAuth login in the panel redirects to a callback port on
+  127.0.0.1 of the box (8085, 1455, 54545, 51121 or 11451, by provider).
+  Forward that port from a workstation before the login, for example
+  `ssh -N -L 1455:127.0.0.1:1455 oruc@risoluto-dev-1`.
 
 ## Streamed desktop
 

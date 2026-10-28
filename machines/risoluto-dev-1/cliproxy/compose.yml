@@ -1,0 +1,80 @@
+# CLIProxyAPI on risoluto-dev-1, run by user oruc with rootless Podman
+# through the docker compose CLI. Loopback publish only.
+#
+# Do not start this file by itself. cliproxy-up.sh copies the config that
+# sops-nix renders first. A bare `up` with an empty config file would start an
+# unauthenticated proxy.
+#
+# Image updates come from cliproxy-update.timer (docs/risoluto-dev-1.md). A restart uses
+# the local image, so a registry outage cannot stop it.
+
+services:
+  cliproxy:
+    image: ${CLIPROXY_IMAGE:?set CLIPROXY_IMAGE}
+    pull_policy: missing
+    container_name: cliproxy
+    # systemd renders the tmpfs config before it starts this container.
+    # Podman must not start it independently after a reboot.
+    restart: "no"
+    environment:
+      TZ: Europe/Istanbul
+    ports:
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:${CLIPROXY_PORT:?set CLIPROXY_PORT}:8317"
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:8085:8085"
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:1455:1455"
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:54545:54545"
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:51121:51121"
+      - "${CLIPROXY_BIND:?set CLIPROXY_BIND}:11451:11451"
+    volumes:
+      - ${CLIPROXY_CONFIG_PATH:?set CLIPROXY_CONFIG_PATH}:/CLIProxyAPI/config.yaml
+      - ${CLIPROXY_AUTH_PATH:?set CLIPROXY_AUTH_PATH}:/root/.cli-proxy-api
+      - ${CLIPROXY_LOG_PATH:?set CLIPROXY_LOG_PATH}:/CLIProxyAPI/logs
+      - ${CLIPROXY_PLUGIN_PATH:?set CLIPROXY_PLUGIN_PATH}:/CLIProxyAPI/plugins
+
+  # Separate tailnet node. Share this machine, not risoluto-dev-1.
+  # Starts only with `--profile share` when CLIPROXY_TS_AUTHKEY is set.
+  # Serve is tailnet-only. Do not add AllowFunnel.
+  # Leave the container hostname unset.
+  # Serve forwards port 443 as raw TCP to tls-proxy (ts-serve/serve.json).
+  share-node:
+    profiles: ["share"]
+    image: ${CLIPROXY_TS_IMAGE:?set CLIPROXY_TS_IMAGE}
+    container_name: cliproxy-share
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Istanbul
+      TS_AUTHKEY: ${CLIPROXY_TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: cliproxy
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_EXTRA_ARGS: --advertise-tags=tag:cliproxy
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_SOCKET: /var/run/tailscale/tailscaled.sock
+    volumes:
+      - ${CLIPROXY_TS_STATE:?set CLIPROXY_TS_STATE}:/var/lib/tailscale
+      - ${CLIPROXY_TS_SERVE_DIR:?set CLIPROXY_TS_SERVE_DIR}:/config:ro
+      - ${CLIPROXY_TS_SOCKET_DIR:?set CLIPROXY_TS_SOCKET_DIR}:/var/run/tailscale
+    depends_on:
+      - cliproxy
+
+  # TLS for both names of the node (tls-proxy/Caddyfile). No host port.
+  tls-proxy:
+    profiles: ["share"]
+    # cliproxy-up.sh builds this image from tls-proxy/Dockerfile.
+    image: ${CLIPROXY_TLS_IMAGE:?set CLIPROXY_TLS_IMAGE}
+    pull_policy: never
+    container_name: cliproxy-tls-proxy
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Istanbul
+      CLIPROXY_PUBLIC_HOST: ${CLIPROXY_PUBLIC_HOST:?set CLIPROXY_PUBLIC_HOST}
+      CLIPROXY_SHARE_HOST: ${CLIPROXY_SHARE_HOST:?set CLIPROXY_SHARE_HOST}
+    volumes:
+      - ${CLIPROXY_CADDY_DATA:?set CLIPROXY_CADDY_DATA}:/data
+      - ./tls-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CLIPROXY_TS_SOCKET_DIR:?set CLIPROXY_TS_SOCKET_DIR}:/var/run/tailscale
+      - ${CLIPROXY_CLOUDFLARE_TOKEN_PATH:?set CLIPROXY_CLOUDFLARE_TOKEN_PATH}:/run/secrets/cloudflare-dns-token:ro
+    depends_on:
+      - cliproxy
+      - share-node

@@ -107,6 +107,12 @@
       url = "github:illixion/vscode-vibrancy-continued/v1.6.0";
       flake = false;
     };
+    # Omer's Teams presence keeper, pkgs/stay-green.nix. It follows main, so
+    # the update workflow moves it with the other inputs.
+    stay-green = {
+      url = "github:OmerFarukOruc/stay-green";
+      flake = false;
+    };
   };
 
   outputs =

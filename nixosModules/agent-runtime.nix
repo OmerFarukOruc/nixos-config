@@ -38,7 +38,6 @@
     chromium
     cmake
     ffmpeg
-    gettext # envsubst, which cliproxy-up.sh calls
     imagemagick
     parallel
     python3

@@ -43,6 +43,19 @@ in
       openchamber-ui-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       opencode-server-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       herdr-web-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-    };
+    }
+    //
+      lib.genAttrs
+        [
+          "cliproxy-api-key-omer"
+          "cliproxy-api-key-friend"
+          "cliproxy-management-key"
+          "cliproxy-cloudflare-dns-token"
+          "cliproxy-ts-authkey"
+          "cliproxy-share-host"
+        ]
+        (_: {
+          sopsFile = lib.mkForce "${secrets}/secrets.yaml";
+        });
   };
 }

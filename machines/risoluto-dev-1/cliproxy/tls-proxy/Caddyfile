@@ -1,0 +1,25 @@
+# TLS for both names of the cliproxy tailnet node. The share sidecar forwards its port 443 here as raw TCP.
+{
+	admin off
+	auto_https disable_redirects
+	grace_period 10s
+}
+
+(api) {
+	reverse_proxy cliproxy:8317 {
+		flush_interval -1
+	}
+}
+
+# cliproxy-up.sh renders the CLIPROXY_PUBLIC_HOST site (Let's Encrypt through the DNS-01 challenge)
+# into the data volume when it has a Cloudflare token. Without one the file is absent, and an
+# import glob that matches nothing is skipped.
+import /data/public-host*.caddy
+
+# The *.ts.net certificate comes from the sidecar's tailscaled through the shared socket.
+https://{$CLIPROXY_SHARE_HOST} {
+	tls {
+		get_certificate tailscale
+	}
+	import api
+}
