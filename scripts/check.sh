@@ -25,7 +25,7 @@ copy_open
 if [[ $fix == true ]]; then
   copy_run <<'EOF'
 cd "$1"
-nix fmt || echo "nix fmt reported problems; the check below shows them." >&2
+nix fmt --no-update-lock-file || echo "nix fmt reported problems; the check below shows them." >&2
 for flake in . ./kernel-cache; do
   nix flake lock "$flake" || echo "nix flake lock $flake failed; the check below shows why." >&2
 done

@@ -22,7 +22,7 @@ in
     nix-fmt = {
       enable = true;
       name = "nix fmt";
-      entry = "nix fmt";
+      entry = "nix fmt --no-update-lock-file";
       pass_filenames = false;
       always_run = true;
     };
