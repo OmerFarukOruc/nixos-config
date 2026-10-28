@@ -1,15 +1,19 @@
-_: {
+{ lib, ... }:
+let
+  kernelDefaultPpFeatureMask = lib.fromHexString "fff7bfff";
+  ppOverdriveBit = lib.fromHexString "4000";
+in
+{
   # 0x400 turns on HDMI 2.1 FRL, which the 4K 160 Hz monitor on HDMI-A-1
   # needs; mainline 7.3 still leaves it off (DC_FRL_MASK in amd_shared.h).
   # 0x2 keeps the multi-monitor bit of the default mask, which 0x400 alone
   # would clear.
   boot.kernelParams = [ "amdgpu.dcfeaturemask=0x402" ];
 
-  # Overdrive lets LACT change power, clocks and voltage. The mask is the
-  # kernel's default, 0xfff7bfff, plus the overdrive bit 0x4000.
   hardware.amdgpu.overdrive = {
     enable = true;
-    ppfeaturemask = "0xfff7ffff";
+    ppfeaturemask =
+      "0x" + lib.toLower (lib.toHexString (lib.bitOr kernelDefaultPpFeatureMask ppOverdriveBit));
   };
 
   # LACT owns the GPU fan. Power, clocks and voltage stay stock. The file is
