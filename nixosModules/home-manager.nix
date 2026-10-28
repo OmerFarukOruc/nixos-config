@@ -34,9 +34,7 @@ in
     backupCommand = homeManagerBackup;
     extraSpecialArgs = {
       inherit inputs sessions;
-      agents = llmAgents // {
-        herdr = pkgs.callPackage ../pkgs/herdr.nix { inherit (llmAgents) herdr; };
-      };
+      agents = llmAgents;
     };
     sharedModules = [
       inputs.nix-index-database.homeModules.nix-index
