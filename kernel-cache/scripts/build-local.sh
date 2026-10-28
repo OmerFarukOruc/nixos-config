@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# Builds kernel variants on this machine in a nixos/nix container and pushes
-# them to Cachix, for when the GitHub runner is too slow or times out.
-# A later workflow run then finds every path in the cache and records it.
-#
-# usage: CACHIX_AUTH_TOKEN=... scripts/build-local.sh [--rev <sha>] [--record] <variant>...
-#   --rev     nix-cachyos-kernel revision to build (default: the one in flake.lock)
-#   --record  start the GitHub workflow afterwards, so it records the build
-# The token is read from the environment and reaches the container through a
-# 0600 env file, never a command-line argument.
 set -euo pipefail
 
 cache=omerfarukoruc
 cache_key='omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c='
-# Provides only the cachix client; it need not match the kernel-cache lock.
 nixpkgs=github:nixos/nixpkgs/3ed67ec0a4d3c7ab4ae1f04f8ee8df07bfa506a2
-# Keeps the compilers and earlier builds between runs.
 volume=nix-kernel-cache-store
-# The kernel-cache directory, mounted into the container as /src.
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 
 rev='' record=false variants=()

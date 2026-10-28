@@ -4,12 +4,8 @@ let
   pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
 in
 {
-  # nix fmt formats and lints. treefmt runs the formatters on a file in
-  # ascending priority, so nixfmt lays out what deadnix and statix rewrote.
   formatter.x86_64-linux =
     let
-      # statix takes one path per run; treefmt passes many files. A finding in
-      # any file fails the run.
       statix = pkgs.writeShellScript "statix-files" ''
         status=0
         for f in "$@"; do
@@ -65,13 +61,11 @@ in
           command = "shellcheck";
           includes = [
             "*.sh"
-            # The bash tools of pkgs/claude-tools have no extension.
             "pkgs/claude-tools/bin/claude-accounts"
             "pkgs/claude-tools/bin/claude-login-browser"
           ];
           priority = 2;
         };
-        # The Python tools of pkgs/claude-tools have no extension either.
         ruff = {
           command = "ruff";
           options = [
@@ -91,7 +85,6 @@ in
             "pkgs/claude-tools/bin/orch-watch"
           ];
         };
-        # Relative links and their heading anchors. --offline skips web links.
         lychee = {
           command = "lychee";
           options = [
@@ -110,14 +103,11 @@ in
             "scripts/pull-main.sh"
           ];
         };
-        # A fixed color in a tracked file. The script skips Markdown, lock files
-        # and assets/ itself.
         theme-drift = {
           command = lib.getExe pkgs.bash;
           options = [ "scripts/check-theme-drift.sh" ];
           includes = [ "*" ];
         };
-        # A document whose first list is a contents list names each of its headings.
         doc-contents = {
           command = lib.getExe pkgs.bash;
           options = [ "scripts/check-doc-contents.sh" ];

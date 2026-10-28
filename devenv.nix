@@ -1,11 +1,5 @@
-# The dev shell and the checks a change passes before it lands on main. direnv
-# loads it through .envrc and installs the git hooks below. GitHub builds only
-# the kernel (.github/workflows/kernel-cache.yml) and checks the updates of
-# .github/workflows/update.yml; every other check runs on the host that commits.
 { config, pkgs, ... }:
 let
-  # heavy caps the memory of a heavy command on nixos-rog and nixos-desktop
-  # (docs/nixos-rog.md, Heavy commands); other hosts run the command as it is.
   heavy =
     command:
     "bash -c 'if command -v heavy >/dev/null; then exec heavy ${command}; else exec ${command}; fi'";
@@ -25,8 +19,6 @@ in
   ];
 
   git-hooks.hooks = {
-    # nix fmt rewrites what it formats. pre-commit then stops the commit, and a
-    # second git add takes the rewrite.
     nix-fmt = {
       enable = true;
       name = "nix fmt";
@@ -34,9 +26,6 @@ in
       pass_filenames = false;
       always_run = true;
     };
-    # prek sets unstaged edits aside before a hook runs, so the checks see the
-    # staged tree. That is the pushed tree only when everything staged is
-    # committed and the push sends HEAD.
     checks = {
       enable = true;
       name = "ci/checks.sh";
@@ -55,9 +44,6 @@ in
     };
   };
 
-  # devenv test runs ci:checks and ci:unit-cycles; devenv tasks run ci also
-  # builds every host's system. Each task waits for the one before it, so at
-  # most one heavy scope runs at a time.
   tasks = {
     "ci:checks" = {
       exec = heavy "ci/checks.sh";

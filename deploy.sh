@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Deploy from nixos-desktop or nixos-rog. The target builds its own system.
-# A host deploys itself when HOST is its own host name; the steps then run
-# locally instead of over SSH.
 set -euo pipefail
 
 usage() {
@@ -36,9 +33,6 @@ fi
 host=$1
 action=${2:-switch}
 repo_dir=$(cd "$(dirname "$0")" && pwd)
-# A dead connection ends after 30 s here and after 45 s in the target's sshd
-# (nixosModules/ssh.nix). The target's end frees the deploy lock that the
-# connection holds.
 ssh_opts=(-o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
 deployer=$(</proc/sys/kernel/hostname)
 local_target=false
@@ -73,9 +67,6 @@ case "$action" in
     ;;
 esac
 
-# The machine record names the user to log in as (machines/schema.nix,
-# deployLogin). A host that deploys itself needs no login. The release records
-# are in that user's home.
 target=$host
 if ! $local_target; then
   eval_nix=(nix)
@@ -99,7 +90,6 @@ current=
 if [[ -L $state_dir/current ]]; then
   current=$(readlink -f -- "$state_dir/current")
 fi
-# The records of the releases that run or boot let the next deploy check them.
 live=()
 for link in /run/current-system /nix/var/nix/profiles/system; do
   system=$(readlink -f -- "$link" || true)
@@ -153,7 +143,6 @@ deploy_state_dir=$(mktemp -d)
 trap 'rm -rf -- "$deploy_state_dir"' EXIT
 manifest="$deploy_state_dir/manifest"
 
-# Include intentional dirty files but never ignored files.
 while IFS= read -r -d '' path; do
   if [[ -f "$repo_dir/$path" || -L "$repo_dir/$path" ]]; then
     printf '%s\0' "$path"
@@ -161,7 +150,6 @@ while IFS= read -r -d '' path; do
 done < <(git -C "$repo_dir" ls-files -co --exclude-standard -z) |
   LC_ALL=C sort -zu >"$manifest"
 
-# The Git blob of every uploaded file, one "<blob><TAB><path>" line each.
 blobs="$deploy_state_dir/blobs"
 tr '\0' '\n' <"$manifest" >"$deploy_state_dir/paths"
 paste <(cd "$repo_dir" && git hash-object --stdin-paths <"$deploy_state_dir/paths") \
@@ -170,14 +158,10 @@ paste <(cd "$repo_dir" && git hash-object --stdin-paths <"$deploy_state_dir/path
 revision=$(git -C "$repo_dir" rev-parse HEAD)
 release_id="$(date -u +%Y%m%dT%H%M%SZ)-${revision:0:12}-$$"
 release_relative=".local/state/nixos-config-deploy/releases/$release_id"
-# rsync ignores -e for a local path.
 release_target=$target:$release_relative
 $local_target && release_target=$HOME/$release_relative
 rsync_cmd=(rsync -az -e "ssh ${ssh_opts[*]}")
 
-# Where the release came from, next to the release as <id>.source. The promotion
-# adds the system it built, which is how a later deploy finds the release that
-# runs on the target.
 branch=$(git -C "$repo_dir" branch --show-current)
 record="deployer=$deployer
 source=$repo_dir
@@ -188,12 +172,8 @@ action=$action
 claude_config_dir=${CLAUDE_CONFIG_DIR:-}
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# One deploy at a time per target. A shell on the target holds the lock while it
-# reads this script's open pipe, so the lock goes when this script exits or its
-# connection drops.
 acquire_lock() {
   local state='' holder
-  # No arguments, so the target shell reads this pipe directly and ends with it.
   coproc DEPLOY_LOCK { on_target; }
   trap '' PIPE
   {
@@ -236,8 +216,6 @@ REMOTE
   esac
 }
 
-# Prints the system the target runs, which a rollback restores. A rollback
-# timer from an earlier deploy means the target is not settled, so it exits 70.
 target_system() {
   on_target <<'REMOTE'
 set -euo pipefail
@@ -250,9 +228,6 @@ readlink -f /run/current-system
 REMOTE
 }
 
-# A dropped connection frees the lock, and another deploy may have run since.
-# Take the lock again and repeat the checks before the target changes. The
-# running system is read again, because the rollback must restore that one.
 ensure_lock() {
   [[ -n ${DEPLOY_LOCK_PID:-} ]] && kill -0 "$DEPLOY_LOCK_PID" 2>/dev/null && return 0
   printf 'The deploy lock on %s dropped with its connection. Taking it again.\n' "$host" >&2
@@ -263,10 +238,6 @@ ensure_lock() {
   previous_system=$(target_system) || return $?
 }
 
-# Prints each path whose version in the live release ($1, a blobs file) is
-# neither the candidate's nor anywhere in this checkout's history. A squash
-# merge keeps the final version of each file, so work whose deployed files match
-# what merged passes.
 dropped_paths() {
   local history="$deploy_state_dir/history" mismatches="$deploy_state_dir/mismatches"
   awk -F '\t' '
@@ -284,12 +255,6 @@ dropped_paths() {
   ' "$history" "$mismatches"
 }
 
-# Prints the number of a merged PR that holds the release whose record is $1,
-# when the merge is in this checkout's history. A squash merge keeps only the
-# final version of each file, so a test deploy of an earlier commit of that PR
-# holds versions that are in no commit here, though the work merged. A dirty
-# release holds edits no commit has, so it never matches. Without GitHub, the
-# release does not match and the check refuses as before.
 merged_pr_of_release() {
   local revision pr merge
   grep -qx 'dirty=false' -- "$1" || return 1
@@ -300,15 +265,11 @@ merged_pr_of_release() {
       printf '%s\n' "$pr"
       return 0
     fi
-    # The commit's own PR list; a search would also match a PR that only cites
-    # the SHA in its text.
   done < <(cd "$repo_dir" && timeout 30 gh api "repos/{owner}/{repo}/commits/$revision/pulls" \
     --jq '.[] | select(.merged_at) | "\(.number) \(.merge_commit_sha // "")"' 2>/dev/null)
   return 1
 }
 
-# Prints how to continue after the release check refused. It reads only local
-# refs, so a fetch that has not run yet can leave a stale clone unnamed.
 checkout_hint() {
   local behind
   if ! git -C "$repo_dir" rev-parse -q --verify refs/remotes/origin/main >/dev/null; then
@@ -328,10 +289,6 @@ checkout_hint() {
   printf '%s\n' 'Merge that work into this checkout, or rerun with --replace after its owner agrees.' >&2
 }
 
-# A deploy replaces what runs on the target and its boot default. Refuse when
-# either came from another checkout and holds files this deploy would drop.
-# The current link names only the last promoted release, which a reboot or a
-# later test deploy can leave behind, so the records are matched by system.
 check_live_releases() {
   local live role id from_host from_dir record_file dropped pr
   local -A seen=()
@@ -412,8 +369,6 @@ REMOTE
 rollback_seconds=420
 activation_seconds=180
 
-# A new SSH connection proves the target is still reachable; a host that
-# deploys itself checks the same units locally.
 fresh_login() {
   if $local_target; then
     on_target
@@ -439,14 +394,6 @@ REMOTE
   return 1
 }
 
-# SSH can still answer while the switch broke the desktop. The deploy user's
-# running services form the session: the compositor, the shell, the keyring.
-# Services a timer, socket or path started, apps a launcher or autostart
-# started (app-*), systemd-run jobs (run-*) and transient D-Bus services
-# (dbus-*) come and go on their own and are left out. So are the services that
-# the running system lists in /etc/nixos-config-deploy/session-ignore, one shell
-# glob per line (oruc.deploy.sessionIgnore): long-running agents that a switch
-# may restart and that no deploy should undo.
 session_services() {
   on_target <<'REMOTE'
 set -euo pipefail
@@ -458,7 +405,6 @@ listing=$(systemctl --user list-units --type=service --state=running --plain --n
   awk '$1 !~ /^(app|run|dbus)-/ { print $1 }' |
   while read -r unit; do
     for glob in "${ignore[@]}"; do
-      # The glob is a pattern on purpose.
       # shellcheck disable=SC2053
       [[ $unit == $glob ]] && continue 2
     done
@@ -471,17 +417,12 @@ systemctl --user show -p Id -p TriggeredBy -- "${units[@]}" |
 REMOTE
 }
 
-# A session service that the switch broke has failed or waits to restart. One
-# that exited cleanly, or that the new system dropped, is fine.
 check_session() {
   (($#)) || return 0
   on_target "$@" <<'REMOTE'
 set -uo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
-# With systemd's default limit of 5 starts in 10 s, a service that crashes on
-# start has failed for good by then.
 sleep 20
-# A failed query, such as a user bus lost in the switch, fails the check.
 broken=$(systemctl --user show -p Id -p ActiveState -p SubState -- "$@" | awk -F= '
   $1 == "Id" { id = $2 } $1 == "ActiveState" { state = $2 }
   $1 == "SubState" && (state == "failed" || $2 == "auto-restart") { print id }') || {
@@ -496,10 +437,8 @@ REMOTE
 
 new_system=
 previous_system=
-# The packages the new system no longer holds, as dix lists them.
 removed_packages=
 
-# Build first. Nothing changes on the target until this succeeds.
 build_candidate() {
   previous_system=$(target_system) || return $?
   local output
@@ -511,20 +450,14 @@ host=$1
 release_dir=$HOME/$2
 action=$3
 
-# heavy (home-manager/modules/heavy.nix) caps the evaluation's memory on a host
-# that has it. The deploy unit's PATH lacks it, so its deploy runs plain nix
-# under the unit's own MemoryHigh.
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
 new=$("${nix[@]}" build --no-link --print-out-paths \
   "$release_dir#nixosConfigurations.$host.config.system.build.toplevel")
 
-# What the new system changes, for the deployer to read before it activates.
-# The first deploy that adds dix runs on a system without it.
 if command -v dix >/dev/null; then
   if diff=$(dix --color never "$(readlink -f /run/current-system)" "$new" 2>&1); then
     printf '%s\n' "$diff" >&2
-    # The deploy names these again when it ends, where the deployer reads them.
     removed=$(awk '/^REMOVED$/ { r = 1; next } r && /^\[R/ { print $2; next } { r = 0 }' <<<"$diff" |
       paste -sd ' ') || removed=
     [[ -z $removed ]] || printf 'removed=%s\n' "$removed"
@@ -546,19 +479,12 @@ if grep -q 'Found ordering cycle' <<<"$analysis"; then
   exit 80
 fi
 
-# When the ESP did not mount, the boot entries would land in the root
-# filesystem's /boot, where the firmware never looks.
 if [[ $action != test ]] && ! mountpoint -q /boot; then
   printf '%s\n' '/boot is not mounted, so the boot entries would miss the ESP.' \
     'Nothing on the target changed. Mount the ESP and deploy again.' >&2
   exit 79
 fi
 
-# Each boot entry copies its kernel and initrd to the ESP before the installer
-# removes old ones, so a nearly full ESP fails halfway through. Count every
-# distinct kernel and initrd of the candidate and its specialisations, even
-# those already on the ESP, and stop before anything on the target changes.
-# Every host has a 4 GiB ESP; 1 GiB left free covers a few more generations.
 esp_headroom=$((1024 * 1024 * 1024))
 check_esp_space() {
   local esp=/boot needed=0 free path
@@ -590,8 +516,6 @@ REMOTE
   removed_packages=$(sed -n 's/^removed=//p' <<<"$output")
 }
 
-# The timer stops only after the rollback succeeded. When it failed, the timer
-# stays armed and repeats the restore at its deadline.
 roll_back_now() {
   local rollback_status=0
   on_target <<'REMOTE' || rollback_status=$?
@@ -610,9 +534,6 @@ REMOTE
   esac
 }
 
-# After a dropped connection the activation keeps running in its unit, which
-# records "<release> <exit status>" when it ends. Prints that status, "lost" when
-# the unit ended without one, or "running" when none came before the deadline.
 wait_activation() {
   local deadline=$1 result
   while :; do
@@ -626,7 +547,6 @@ if [[ -z $status ]] && systemctl is-active --quiet deploy-activate.service; then
   echo running
   exit 0
 fi
-# The unit may have ended between the two reads.
 [[ -n $status ]] || status=$(sed -n "s/^$release //p" "$status_file" 2>/dev/null)
 echo "${status:-lost}"
 REMOTE
@@ -640,8 +560,6 @@ REMOTE
   printf '%s\n' "$result"
 }
 
-# Arm the rollback, then activate in a system service so an SSH drop during
-# the network restart cannot kill the activation.
 activate_with_rollback() {
   local activate_status=0 session_list activation_deadline
   local -a session=()
@@ -665,7 +583,6 @@ sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-rollback \
   --on-active="$seconds" --timer-property=AccuracySec=1s \
   "$previous/bin/switch-to-configuration" test || exit 71
 
-# The unit records its own exit status, which --wait loses when SSH drops.
 started=$(date +%s)
 sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-activate \
   --service-type=exec --wait "$BASH" -c '
@@ -674,8 +591,6 @@ status=$?
 printf "%s %s\n" "$2" "$status" >/run/deploy-activate.status
 exit "$status"' _ "$new" "$release"
 status=$?
-# Only this activation's output; systemd's lines for the unit repeat its whole
-# command line.
 sudo journalctl --no-pager -o cat _SYSTEMD_UNIT=deploy-activate.service --since "@$started" | tail -n 30
 
 exit "$status"
@@ -719,9 +634,6 @@ REMOTE
   fi
 }
 
-# Disarm the rollback only while the target still runs the candidate, make the
-# confirmed build the boot default unless the action is test, and promote the
-# release.
 finish_release() {
   on_target "$action" "$release_relative" "$new_system" <<'REMOTE'
 set -euo pipefail
@@ -742,10 +654,6 @@ if [[ $action != boot ]]; then
 fi
 
 
-# The two steps nixos-rebuild runs for boot, applied to the build that was
-# already made instead of a second evaluation. When the boot loader install
-# fails, the system profile and the boot entries go back to the previous
-# generation, so the next boot does not depend on a half-written ESP.
 if [[ $action != test ]]; then
   profile=/nix/var/nix/profiles/system
   previous_link=$(readlink "$profile")
@@ -784,20 +692,15 @@ printf 'Promoted release %s.\n' "$release_dir"
 REMOTE
 }
 
-# The build locks inputs that the uploaded flake.lock lacks. Fetch that lock
-# before the target changes, so a copy failure cannot follow a promotion.
 deploy() {
   build_candidate || return $?
   "${rsync_cmd[@]}" "$release_target/flake.lock" "$deploy_state_dir/flake.lock" || return $?
-  # Record the lock the build completed, the version a later commit keeps.
   local lock_blob
   lock_blob=$(git -C "$repo_dir" hash-object -- "$deploy_state_dir/flake.lock") || return $?
   awk -F '\t' -v lock="$lock_blob" \
     'BEGIN { OFS = FS } $2 == "flake.lock" { $1 = lock } { print }' "$blobs" >"$blobs.final" || return $?
   "${rsync_cmd[@]}" "$blobs.final" "$release_target.blobs" || return $?
   ensure_lock || return $?
-  # From here the pending rollback timer stops any other deploy at its build
-  # step, so a lock that drops during activation needs no retake.
   if [[ $action != boot ]]; then
     activate_with_rollback || return $?
   fi

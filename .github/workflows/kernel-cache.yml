@@ -1,8 +1,6 @@
 name: kernel-cache
 
 on:
-  # The host updates merge to main too; only changes to these paths start
-  # a build.
   push:
     branches: [main]
     paths:
@@ -30,10 +28,7 @@ defaults:
     working-directory: kernel-cache
 
 jobs:
-  # This job picks the revision and every later job locks exactly that one.
   lock:
-    # Repository variable CACHIX_CACHE names the Cachix cache; the
-    # CACHIX_AUTH_TOKEN secret may push to it.
     if: vars.CACHIX_CACHE != ''
     runs-on: ubuntu-latest
     outputs:
@@ -41,9 +36,6 @@ jobs:
       sha: ${{ steps.rev.outputs.sha }}
       variants: ${{ steps.rev.outputs.variants }}
     steps:
-      # The tip of main, not the commit that queued this run. A run that waited
-      # behind another one would otherwise build its older lock and record it
-      # over the newer one.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -66,19 +58,16 @@ jobs:
   build:
     needs: lock
     runs-on: ubuntu-latest
-    # GitHub's limit for a job on a hosted runner.
     timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
         variant: ${{ fromJSON(needs.lock.outputs.variants) }}
     steps:
-      # The same flake.nix that the lock job read.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.lock.outputs.sha }}
 
-      # An LTO kernel build needs more than the runner's free disk.
       - uses: wimpysworld/nothing-but-nix@687c797a730352432950c707ab493fcc951818d7 # v10
 
       - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
@@ -87,14 +76,11 @@ jobs:
         with:
           name: ${{ vars.CACHIX_CACHE }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # Pushed explicitly below, so the push finishes before the record job.
           skipPush: true
 
       - name: Lock the chosen revision
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
 
-      # Build times vary between runs of the same work, so record the runner's
-      # CPU next to them.
       - name: Show the runner's CPU
         run: |
           echo "$(nproc) CPUs: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)"
@@ -106,8 +92,6 @@ jobs:
           read -ra targets <<<"$installables"
           nix build --print-build-logs --no-link --print-out-paths "${targets[@]}" >"$RUNNER_TEMP/paths"
 
-      # Pushes each output with its closure; Cachix skips paths that
-      # cache.nixos.org already serves.
       - name: Push to Cachix
         run: cachix push "${{ vars.CACHIX_CACHE }}" <"$RUNNER_TEMP/paths"
 
@@ -120,13 +104,9 @@ jobs:
   record:
     needs: [lock, build]
     runs-on: ubuntu-latest
-    # Only this job pushes to main. The build job runs upstream code and keeps
-    # a read-only token.
     permissions:
       contents: write
     steps:
-      # The tree the build job pushed. A later main is recorded only when it did
-      # not change the kernel-cache nix or patches that produced those paths.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.lock.outputs.sha }}
@@ -149,9 +129,6 @@ jobs:
       - name: Lock the chosen revision
         run: nix flake lock --override-input nix-cachyos-kernel "github:xddxdd/nix-cachyos-kernel/${{ needs.lock.outputs.rev }}"
 
-      # Hosts read this file to check the cache before they lock this revision.
-      # The version comes from the x86_64-v3 kernel, evaluated on the tree the
-      # build job checked out. The paths are the ones that job pushed.
       - name: Record the cached paths
         run: |
           version=$(nix eval --raw '.#packages.x86_64-linux.kernel-x86_64-v3.version')
@@ -160,8 +137,6 @@ jobs:
             '{ rev: $rev, version: $version, paths: (split("\n") | map(select(length > 0))) }' \
             all-paths >cached-paths.json
 
-      # Runs only after every variant was built and pushed, so the lock on main
-      # names a revision whose paths are all in the cache.
       - name: Commit the lock and the cached paths
         run: |
           if git diff --quiet -- flake.lock cached-paths.json && git ls-files --error-unmatch cached-paths.json >/dev/null 2>&1; then
@@ -173,7 +148,5 @@ jobs:
           git commit -m "chore: record the cached nix-cachyos-kernel build"
           git branch -f kernel-cache-record HEAD
           git switch kernel-cache-record
-          # Host updates merge to main while the build runs. Cachix already
-          # has the paths this commit names.
           git pull --rebase origin main
           git push origin HEAD:main

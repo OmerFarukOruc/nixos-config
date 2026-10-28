@@ -5,7 +5,6 @@ binds {
     XF86AudioMicMute allow-when-locked=true { spawn "noctalia" "msg" "mic-mute"; }
     XF86MonBrightnessUp allow-when-locked=true { spawn "noctalia" "msg" "brightness-up"; }
     XF86MonBrightnessDown allow-when-locked=true { spawn "noctalia" "msg" "brightness-down"; }
-    // The power-profile key of a laptop; steps through the power profiles.
     XF86Launch4 { spawn "noctalia" "msg" "power-cycle"; }
     Mod+N hotkey-overlay-title="Control Center" { spawn "noctalia" "msg" "panel-toggle" "control-center"; }
     Mod+M hotkey-overlay-title="Task Manager" { spawn "ghostty" "-e" "btop"; }
