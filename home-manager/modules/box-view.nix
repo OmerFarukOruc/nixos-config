@@ -1,8 +1,7 @@
 { lib, pkgs, ... }:
 let
   defaultHost = "risoluto-dev-1";
-  # Xvnc's port on the box, vncPort in nixosModules/box-browser.nix.
-  remotePort = 5920;
+  boxBrowserVncPort = 5920;
 
   boxView = pkgs.writeShellApplication {
     name = "box-view";
@@ -49,7 +48,7 @@ let
 
       ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes -o ConnectTimeout=10 \
         -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-        -L "127.0.0.1:$port:127.0.0.1:${toString remotePort}" "oruc@$host" \
+        -L "127.0.0.1:$port:127.0.0.1:${toString boxBrowserVncPort}" "oruc@$host" \
         </dev/null 2>"$log" &
       tunnel_pid=$!
 
