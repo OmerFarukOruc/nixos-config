@@ -28,9 +28,7 @@ let
       ${pkgs.xdotool}/bin/xdotool click --repeat 40 --delay 50 4
     done
   '';
-  # XFCE's session manager restarts a client that dies, and a killed Chromium
-  # would come back, so Chromium does not join the session.
-  browse = pkgs.writeShellScript "browse" ''
+  browseOutsideXfceSession = pkgs.writeShellScript "browse" ''
     unset SESSION_MANAGER
     exec ${pkgs.chromium}/bin/chromium --user-data-dir="$(mktemp -d /tmp/sd-chromium.XXXXXX)" --no-first-run \
       --no-default-browser-check --password-store=basic --disable-gpu --window-position=0,0 --window-size=1920,1080 \
@@ -65,7 +63,7 @@ in
     "streamed-desktop/workload".source = workload;
     "streamed-desktop/cpu.py".source = ./cpu.py;
     "streamed-desktop/scroll".source = scroll;
-    "streamed-desktop/browse".source = browse;
+    "streamed-desktop/browse".source = browseOutsideXfceSession;
   };
   environment.systemPackages = with pkgs; [
     xev
