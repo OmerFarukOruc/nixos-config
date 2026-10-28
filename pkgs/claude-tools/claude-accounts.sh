@@ -53,7 +53,6 @@ if [ -n "${ZSH_VERSION:-}" ] && type compdef >/dev/null 2>&1; then
   _claude_accounts() { compadd $(_claude_accounts_words $((CURRENT - 1))); }
   compdef _claude_accounts claude-accounts
 elif [ -n "${BASH_VERSION:-}" ] && type complete >/dev/null 2>&1; then
-  # shellcheck disable=SC2207 # one completion per word
-  _claude_accounts() { COMPREPLY=($(compgen -W "$(_claude_accounts_words "$COMP_CWORD")" -- "${COMP_WORDS[COMP_CWORD]}")); }
+  _claude_accounts() { mapfile -t COMPREPLY < <(compgen -W "$(_claude_accounts_words "$COMP_CWORD")" -- "${COMP_WORDS[COMP_CWORD]}"); }
   complete -F _claude_accounts claude-accounts
 fi
