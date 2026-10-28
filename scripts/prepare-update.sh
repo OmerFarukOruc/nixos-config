@@ -86,7 +86,10 @@ for file in pkgs/*.nix; do
     continue
   fi
   cat "$work/build.log" >&2
-  git checkout -- "$file"
+  # An npm wrapper project keeps its package.json and lockfile in pkgs/NAME/.
+  restore=("$file")
+  grep -q '^  passthru.npmPackage = ' "$file" && [[ -d pkgs/$app ]] && restore+=("pkgs/$app")
+  git checkout -- "${restore[@]}"
   # shellcheck source=/dev/null
   . scripts/lib/build-error.sh
   reason=$(build_error "$work/build.log")

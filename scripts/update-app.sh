@@ -4,6 +4,16 @@
 # hash from the vendor's checksum. The file names one source:
 #   passthru.aptIndex     an APT Packages index that lists package NAME
 #   passthru.releaseFeed  an electron-builder latest-linux.yml feed
+#   passthru.npmPackage   an npm package, at its latest dist-tag. With a
+#                         pkgs/NAME/ folder, the package is a wrapper project
+#                         there: the script rewrites its package.json and
+#                         lockfile and sets npmDepsHash instead of hash.
+#   passthru.githubRepo   OWNER/REPO, at its newest release tagged v and
+#                         digits. The script sets the source hash and the
+#                         outputHash line of the fixed-output derivation
+#                         that holds the locked dependencies. That hash also
+#                         changes with nixpkgs' bun, so the script learns it
+#                         again when bun is not the passthru.depsBun version.
 # A package whose url also embeds a build ID names it in a buildId line, and
 # the script moves it to the build ID in the feed's URL for the new version.
 # Prints the new version, or nothing when the package is already current or
@@ -13,15 +23,19 @@
 set -euo pipefail
 
 name=${1:?usage: update-app.sh NAME}
-file=$(cd "$(dirname "$0")/.." && pwd)/pkgs/$name.nix
+root=$(cd "$(dirname "$0")/.." && pwd)
+file=$root/pkgs/$name.nix
 
 attr() { sed -n "s/^  $1 = \"\(.*\)\";$/\1/p" "$file"; }
 index=$(attr passthru.aptIndex)
 feed=$(attr passthru.releaseFeed)
+npm=$(attr passthru.npmPackage)
+github=$(attr passthru.githubRepo)
+wrapper=$(dirname "$file")/$name
 current=$(attr version)
 build=$(attr buildId)
 newbuild=
-[[ -n $index$feed ]] || exit 0
+[[ -n $index$feed$npm$github ]] || exit 0
 [[ -n $current ]] || {
   echo "$file names no version" >&2
   exit 1
@@ -37,6 +51,19 @@ if [[ -n $index ]]; then
     awk -v name="$name" '/^Package:/ { p = $2 } /^Version:/ { v = $2 } /^SHA256:/ && p == name { print v, $2 }' |
     sort -V | tail -n 1) || entry=
   read -r latest sha <<<"$entry"
+elif [[ -n $github ]]; then
+  auth=()
+  token=${GITHUB_TOKEN:-${GH_TOKEN:-}}
+  [[ -n $token ]] && auth=(-H "Authorization: Bearer $token")
+  latest=$(curl -fsSL --max-time 20 --retry 2 "${auth[@]}" "https://api.github.com/repos/$github/releases?per_page=30" |
+    jq -r '.[] | select(.draft | not) | select(.prerelease | not) | .tag_name | select(test("^v[0-9][0-9.]*$"))' |
+    sed 's/^v//' | sort -V | tail -n 1) || latest=
+  # The hash of the unpacked tag, which is what fetchFromGitHub checks.
+  sha=$([[ -n $latest ]] && nix flake prefetch --json "github:$github/v$latest" | jq -r .hash) || sha=
+elif [[ -n $npm ]]; then
+  meta=$(curl -fsSL --max-time 20 --retry 2 "https://registry.npmjs.org/$npm") || meta=
+  latest=$(jq -r '."dist-tags".latest // empty' <<<"$meta" 2>/dev/null) || latest=
+  sha=$(jq -r --arg v "$latest" '.versions[$v].dist.integrity // empty' <<<"$meta" 2>/dev/null) || sha=
 else
   # The top-level sha512 is the base64 digest of the file at the top-level path,
   # which must be the file the package's url names.
@@ -74,13 +101,23 @@ else
   fi
 fi
 [[ -n $latest && -n $sha ]] || {
-  echo "could not read $name from ${index:-$feed}" >&2
+  echo "could not read $name from ${index:-${feed:-${github:-npm}}}" >&2
   exit 1
 }
-[[ $latest == "$current" && $newbuild == "$build" ]] && exit 0
+if [[ -n $github ]]; then
+  depsbun=$(attr passthru.depsBun)
+  bunv=$(nix eval --raw --impure --expr \
+    "(builtins.getFlake \"path:$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.bun.version") || {
+    echo "could not read the bun version of nixpkgs" >&2
+    exit 1
+  }
+fi
+[[ $latest == "$current" && $newbuild == "$build" && ${depsbun:-} == "${bunv:-}" ]] && exit 0
 
 if [[ -n $index ]]; then
   sri=$(nix hash convert --hash-algo sha256 --to sri "$sha")
+elif [[ -n $npm || -n $github ]]; then
+  sri=$sha
 else
   sri=sha512-$sha
 fi
@@ -88,6 +125,32 @@ fi
 # file as it was.
 edited=$(mktemp)
 trap 'rm -f -- "$edited"' EXIT
+if [[ -n $npm && -d $wrapper ]]; then
+  # npm writes the new lockfile in a scratch copy, so a failure leaves the
+  # folder as it was; prefetch-npm-deps gives the hash of what it locks.
+  scratch=$(mktemp -d)
+  trap 'rm -f -- "$edited"; rm -rf -- "$scratch"' EXIT
+  jq --arg v "$latest" --arg p "$npm" '.version = $v | .dependencies[$p] = $v' "$wrapper/package.json" >"$scratch/package.json"
+  (cd "$scratch" && nix shell --inputs-from "$root" nixpkgs#nodejs_24 -c npm install --package-lock-only --ignore-scripts --min-release-age=0 >&2) ||
+    {
+      echo "npm could not lock $npm $latest" >&2
+      exit 1
+    }
+  deps=$(nix run --inputs-from "$root" nixpkgs#prefetch-npm-deps -- "$scratch/package-lock.json") || {
+    echo "prefetch-npm-deps failed for $npm $latest" >&2
+    exit 1
+  }
+  sed -e "s|^  version = \".*\";|  version = \"$latest\";|" \
+    -e "s|^  npmDepsHash = \".*\";|  npmDepsHash = \"$deps\";|" "$file" >"$edited"
+  if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "  npmDepsHash = \"$deps\";" "$edited"; then
+    echo "could not set version $latest and npmDepsHash in $file" >&2
+    exit 1
+  fi
+  cp "$scratch/package.json" "$scratch/package-lock.json" "$wrapper/"
+  cat "$edited" >"$file"
+  echo "$latest"
+  exit 0
+fi
 sed -e "s|^  version = \".*\";|  version = \"$latest\";|" \
   -e "s|^    hash = \"sha[0-9]*-.*\";|    hash = \"$sri\";|" \
   -e "s|^  buildId = \".*\";|  buildId = \"$newbuild\";|" "$file" >"$edited"
@@ -95,6 +158,27 @@ if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \
   { [[ -n $build ]] && ! grep -qxF "  buildId = \"$newbuild\";" "$edited"; }; then
   echo "could not set version $latest and its hash${build:+ and build ID} in $file" >&2
   exit 1
+fi
+if [[ -n $github ]]; then
+  # The dependencies' hash is known only after a build with the new source,
+  # which a placeholder hash makes Nix report.
+  sed -i "s|^    outputHash = \".*\";|    outputHash = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\";|" "$edited"
+  probe=$(dirname "$file")/.$name.probe.nix
+  trap 'rm -f -- "$edited" "$probe"' EXIT
+  cp "$edited" "$probe"
+  deps=$(nix build --no-link --impure --expr \
+    "(builtins.getFlake \"path:$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.callPackage $probe { }" \
+    2>&1 >/dev/null | sed -n 's/^ *got: *//p' | head -n 1) || true
+  if [[ -z $deps ]]; then
+    echo "could not learn the dependencies' hash of $name $latest" >&2
+    exit 1
+  fi
+  sed -i -e "s|^    outputHash = \".*\";|    outputHash = \"$deps\";|" \
+    -e "s|^  passthru.depsBun = \".*\";|  passthru.depsBun = \"$bunv\";|" "$edited"
+  if ! grep -qxF "    outputHash = \"$deps\";" "$edited" || ! grep -qxF "  passthru.depsBun = \"$bunv\";" "$edited"; then
+    echo "could not set the dependencies' hash and bun version in $file" >&2
+    exit 1
+  fi
 fi
 cat "$edited" >"$file"
 echo "$latest"
