@@ -38,7 +38,8 @@ let
     '';
   };
 
-  # agent-browser comes from PATH: mise installs it for the agents' user.
+  # agent-browser comes from PATH: Home Manager installs it for the agents'
+  # user (home-manager/modules/agent-cli.nix).
   boxBrowser = pkgs.writeShellApplication {
     name = "box-browser";
     runtimeInputs = [

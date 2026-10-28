@@ -9,9 +9,11 @@
 `update-kernel.sh` needs no Nix.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
-Bot packages. Run those scripts in a checkout on nixos-desktop or nixos-rog,
-which have Nix, `gh` and `jq`. `update-app.sh antigravity-hub` and `update-app.sh openchamber` need
-no Nix. The update workflow runs all four scripts through
+Bot packages, npm and `prefetch-npm-deps` through Nix for cf and
+openchamber-web, and a build for the herdr web UI. Run those scripts in a
+checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
+`update-app.sh antigravity-hub`, `update-app.sh openchamber` and
+`update-app.sh impeccable` need no Nix. The update workflow runs all four scripts through
 `scripts/prepare-update.sh`, and `devenv update` for `devenv.lock`
 ([nixos-rog.md](nixos-rog.md#updater)).
 
@@ -154,8 +156,8 @@ release, with no waiting period, and prints the new version. It
 prints nothing when the app is current or when the package names no release
 source.
 
-Antigravity, ChatGPT, Claude Desktop, Grok Bot and OpenChamber name their
-release source.
+Antigravity, ChatGPT, Claude Desktop, Grok Bot, OpenChamber, OpenChamber's
+web server, cf, impeccable and the herdr web UI name their release source.
 airpods-tui, herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
 them and their version and hash move by hand.
 
@@ -167,6 +169,8 @@ repository that its `passthru.aptIndex` names.
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
+| herdr web UI | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the `outputHash` of the Bun dependencies. It learns that hash again when nixpkgs' bun is not the `passthru.depsBun` version, because the hash follows bun |
+| cf, impeccable, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
 
 The update workflow builds each moved app on its own first. A version that
 does not build stays out of the update and shows a warning on the run's page,

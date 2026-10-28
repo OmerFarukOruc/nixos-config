@@ -70,11 +70,13 @@ drops ping.
 ## Install
 
 sops-nix decrypts `secrets/risoluto-dev-1.yaml`,
-`secrets/risoluto-dev-1-acme.yaml` and `secrets/risoluto-dev-1-github.yaml`
-while the system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`.
-The first boot needs that key in place, because the network file and both
-password hashes come from the first file, the Cloudflare token for the
-certificates from the second, and the deploy unit's GitHub token from the third.
+`secrets/risoluto-dev-1-acme.yaml`, `secrets/risoluto-dev-1-github.yaml` and
+`secrets/risoluto-dev-1-services.yaml` while the system activates, with the
+age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
+place, because the network file and both password hashes come from the first
+file, the Cloudflare token for the certificates from the second, the deploy
+unit's GitHub token from the third, and OpenChamber's passwords and the
+herdr web UI's token from the fourth (`machines/risoluto-dev-1/services.nix`).
 An install that makes new host keys boots with no address, no password, no
 certificates and no deploy token. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
@@ -82,7 +84,7 @@ with `nixos-anywhere --copy-host-keys`, and check that
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
 it waits for the move. `scripts/check-secrets.sh` without an argument checks
-all three sops files; with a file argument it compares only the main file.
+all four sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
@@ -384,6 +386,16 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   hourly `desktop-sync.sh --config` and the usage timer of the dotfiles checkout.
   `desktop-sync.sh` there treats the box as a Home Manager host once
   `/etc/NIXOS` exists.
+- `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
+  and the box's own list) and runs Omer's agent services as user services of
+  oruc: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
+  UI (`pkgs/herdr-web-ui.nix`, 127.0.0.1:7317), herdr's default session, the
+  Amp runner and the Cursor worker. The update workflow moves those packages
+  like the others ([updates.md](updates.md#apps)). A deploy leaves a running
+  OpenChamber, herdr session, Amp runner and Cursor worker alone
+  (`X-SwitchMethod = "keep-old"`), so the new version starts at their next
+  restart. Their secrets come from `services.nix`; after a secret changes,
+  restart the user service, because sops-nix restarts only system units.
 
 ## Streamed desktop
 

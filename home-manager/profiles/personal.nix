@@ -21,7 +21,10 @@ let
     .${gpu} or pkgs.nvtopPackages.full;
 in
 {
-  imports = [ ../modules/playwright.nix ];
+  imports = [
+    ../modules/agent-cli.nix
+    ../modules/playwright.nix
+  ];
 
   # ChatGPT and Grok Bot register their URL schemes with xdg-mime at start;
   # declaring them keeps that rewrite of mimeapps.list identical to the Home
@@ -52,7 +55,6 @@ in
       jadx
       kdePackages.kate
       lmstudio
-      mitmproxy
       nvtop
       obsidian
       openssl
@@ -74,9 +76,5 @@ in
       (pkgs.callPackage ../../pkgs/linctl.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
     ]
-    ++ (with agents; [
-      agent-browser
-      antigravity-cli
-      pi
-    ]);
+    ++ [ agents.antigravity-cli ];
 }

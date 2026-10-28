@@ -36,8 +36,8 @@ allows for `oruc@<host>`.
   failure of the tunnel or the viewer also shows as a desktop notification, since
   the menu entry has no terminal.
 
-The wrapper runs the first `agent-browser` on `PATH`; this repository does not pin
-one for the host.
+The wrapper runs the first `agent-browser` on `PATH`, which Home Manager installs
+from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
 
 ## Sign in
 

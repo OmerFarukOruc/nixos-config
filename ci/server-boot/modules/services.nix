@@ -71,4 +71,19 @@ in
         7318
       ]
   );
+
+  # The echo backends above own ports 3000 and 7317, so oruc's OpenChamber and
+  # herdr web UI stay off. The Amp runner and the Cursor worker need Omer's
+  # logins, which the test has not.
+  home-manager.users.oruc.systemd.user.services =
+    lib.genAttrs
+      [
+        "amp-runner"
+        "cursor-worker"
+        "herdr-web-ui"
+        "openchamber"
+      ]
+      (_: {
+        Install.WantedBy = lib.mkForce [ ];
+      });
 }
