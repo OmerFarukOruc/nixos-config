@@ -278,9 +278,11 @@ sd_pair = json.loads(
         f"{SD_API} -H 'Content-Type: application/json' -d '{json.dumps({'pairing_id': sd_pending['pairings'][0]['id'], 'pin': '1234', 'name': 'test'})}' https://localhost:47990/api/pin"
     )
 )
-assert sd_pair["status"] is True, sd_pair
+# Sunshine answers false when the client did not finish the pairing within its
+# ping timeout, so the client's log goes out before the check.
 machine.sleep(5)
 print(client.succeed("cat /tmp/moonlight-pair.log"))
+assert sd_pair["status"] is True, sd_pair
 
 SD_MOONLIGHT = (
     "env DISPLAY=:0 moonlight --video-decoder software --video-codec H.264 --1080 --fps 60"
