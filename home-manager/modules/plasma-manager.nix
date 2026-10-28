@@ -264,7 +264,7 @@ in
     };
 
     home.packages = lib.mkIf (osConfig.oruc.login.video != null) [
-      (pkgs.kdePackages.callPackage ../../pkgs/smart-video-wallpaper.nix { })
+      (pkgs.callPackage ../../pkgs/smart-video-wallpaper.nix { })
     ];
   };
 }

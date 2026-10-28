@@ -28,6 +28,8 @@ buildGoModule (finalAttrs: {
     "-X main.version=${finalAttrs.version}"
   ];
 
+  passthru.githubRepo = "KyaniteHQ/linctl";
+
   meta = {
     description = "Linear CLI with pinned workspace and team targets";
     homepage = "https://github.com/KyaniteHQ/linctl";

@@ -36,6 +36,8 @@ rustPlatform.buildRustPackage (finalAttrs: {
   ];
   checkFlags = [ "--skip=bluez_tests::" ];
 
+  passthru.githubRepo = "annoyedmilk/airpods-tui";
+
   meta = {
     description = "Terminal UI and daemon for AirPods over Apple's AACP control channel";
     homepage = "https://github.com/annoyedmilk/airpods-tui";

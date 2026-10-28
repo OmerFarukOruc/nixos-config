@@ -3,17 +3,22 @@
   stdenv,
   fetchFromGitHub,
   cmake,
-  extra-cmake-modules,
   gettext,
-  qtbase,
-  qtdeclarative,
-  qtmultimedia,
-  ki18n,
-  kcmutils,
-  knighttime,
-  libplasma,
-  plasma5support,
+  kdePackages,
 }:
+let
+  inherit (kdePackages)
+    extra-cmake-modules
+    qtbase
+    qtdeclarative
+    qtmultimedia
+    ki18n
+    kcmutils
+    knighttime
+    libplasma
+    plasma5support
+    ;
+in
 stdenv.mkDerivation (finalAttrs: {
   pname = "smart-video-wallpaper";
   version = "2.16.0";
@@ -49,6 +54,8 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   dontWrapQtApps = true;
+
+  passthru.githubRepo = "luisbocanegra/plasma-smart-video-wallpaper-reborn";
 
   meta = {
     description = "Plasma wallpaper plugin that plays videos on the desktop and lock screen";

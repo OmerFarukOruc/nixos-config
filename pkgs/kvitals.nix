@@ -25,6 +25,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
 
+  passthru.githubRepo = "yassine20011/kvitals";
+
   meta = {
     description = "Live system vitals in the Plasma panel";
     homepage = "https://github.com/yassine20011/kvitals";

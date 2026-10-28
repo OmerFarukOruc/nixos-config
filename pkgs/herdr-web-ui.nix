@@ -12,7 +12,7 @@ let
   version = "0.4.19";
   src = fetchFromGitHub {
     owner = "devswha";
-    repo = "herdr-web-ui";
+    repo = "ovis";
     tag = "v${version}";
     hash = "sha256-0MKjG/i4GSqLQIISqCJi5PbyAsax2EGADsV9Spj6IzU=";
   };
@@ -63,12 +63,12 @@ stdenv.mkDerivation {
   # platforms' prebuilds stay as they are.
   autoPatchelfIgnoreMissingDeps = true;
 
-  passthru.githubRepo = "devswha/herdr-web-ui";
+  passthru.githubRepo = "devswha/ovis";
   passthru.depsBun = "1.4.2";
 
   meta = {
     description = "Web UI for herdr sessions";
-    homepage = "https://github.com/devswha/herdr-web-ui";
+    homepage = "https://github.com/devswha/ovis";
     license = lib.licenses.mit;
     mainProgram = "herdr-web-ui";
   };

@@ -9,11 +9,13 @@
 #                         there: the script rewrites its package.json and
 #                         lockfile and sets npmDepsHash instead of hash.
 #   passthru.githubRepo   OWNER/REPO, at its newest release tagged v and
-#                         digits. The script sets the source hash and the
-#                         outputHash line of the fixed-output derivation
-#                         that holds the locked dependencies. That hash also
+#                         digits. The script sets the source hash and, when
+#                         the file has one, the hash of its locked
+#                         dependencies: a cargoHash or vendorHash line, or
+#                         the outputHash line of a fixed-output derivation.
+#                         With a passthru.depsBun line that outputHash also
 #                         changes with nixpkgs' bun, so the script learns it
-#                         again when bun is not the passthru.depsBun version.
+#                         again when bun is not that version.
 # A package whose url also embeds a build ID names it in a buildId line, and
 # the script moves it to the build ID in the feed's URL for the new version.
 # Prints the new version, or nothing when the package is already current or
@@ -98,8 +100,8 @@ fi
   echo "could not read $name from ${index:-${feed:-${github:-npm}}}" >&2
   exit 1
 }
-if [[ -n $github ]]; then
-  depsbun=$(attr passthru.depsBun)
+depsbun=$(attr passthru.depsBun)
+if [[ -n $depsbun ]]; then
   bunv=$(nix eval --raw --impure --expr \
     "(builtins.getFlake \"path:$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.bun.version") || {
     echo "could not read the bun version of nixpkgs" >&2
@@ -149,24 +151,35 @@ if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \
   echo "could not set version $latest and its hash${build:+ and build ID} in $file" >&2
   exit 1
 fi
-if [[ -n $github ]]; then
-  sed -i "s|^    outputHash = \".*\";|    outputHash = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\";|" "$edited"
+deps_line='^(    outputHash|  cargoHash|  vendorHash) = "'
+if [[ -n $github ]] && grep -qE "$deps_line" "$edited"; then
+  key=$(grep -m 1 -oE "$deps_line" "$edited" | sed 's/ = "$//')
+  sed -i "s|^$key = \".*\";|$key = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\";|" "$edited"
   probe=$(dirname "$file")/.$name.probe.nix
-  trap 'rm -f -- "$edited" "$probe"' EXIT
+  probelog=$(mktemp)
+  trap 'rm -f -- "$edited" "$probe" "$probelog"' EXIT
   cp "$edited" "$probe"
-  deps=$(nix build --no-link --impure --expr \
+  nix build --no-link --impure --expr \
     "(builtins.getFlake \"path:$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.callPackage $probe { }" \
-    2>&1 >/dev/null | sed -n 's/^ *got: *//p' | head -n 1) || true
+    >/dev/null 2>"$probelog" || true
+  deps=$(sed -n 's/^ *got: *//p' "$probelog" | head -n 1)
   if [[ -z $deps ]]; then
-    echo "could not learn the dependencies' hash of $name $latest" >&2
+    cat "$probelog" >&2
+    echo "could not learn the dependencies' hash of $name $latest: $(grep -m 1 'error:' "$probelog" | sed 's/^ *//')" >&2
     exit 1
   fi
-  sed -i -e "s|^    outputHash = \".*\";|    outputHash = \"$deps\";|" \
-    -e "s|^  passthru.depsBun = \".*\";|  passthru.depsBun = \"$bunv\";|" "$edited"
-  if ! grep -qxF "    outputHash = \"$deps\";" "$edited" || ! grep -qxF "  passthru.depsBun = \"$bunv\";" "$edited"; then
-    echo "could not set the dependencies' hash and bun version in $file" >&2
+  sed -i "s|^$key = \".*\";|$key = \"$deps\";|" "$edited"
+  grep -qxF "$key = \"$deps\";" "$edited" || {
+    echo "could not set the dependencies' hash in $file" >&2
     exit 1
-  fi
+  }
+fi
+if [[ -n $depsbun ]]; then
+  sed -i "s|^  passthru.depsBun = \".*\";|  passthru.depsBun = \"$bunv\";|" "$edited"
+  grep -qxF "  passthru.depsBun = \"$bunv\";" "$edited" || {
+    echo "could not set the bun version in $file" >&2
+    exit 1
+  }
 fi
 cat "$edited" >"$file"
 echo "$latest"
