@@ -84,9 +84,7 @@ git show HEAD:flake.lock >"$work/base.lock"
 git show HEAD:devenv.lock >"$work/base-devenv.lock"
 cp flake.nix flake.lock "$work/"
 
-# The devenv of main's nixpkgs, which a cache holds, rather than one from the
-# nixpkgs this run moves to.
-devenv=$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#devenv)/bin/devenv
+cached_devenv_of_main=$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#devenv)/bin/devenv
 
 # eval_error: prints "HOST does not evaluate: LINE" for the first host whose system does not
 # evaluate, with the first error line of that evaluation, or nothing.
@@ -175,7 +173,7 @@ mapfile -t follow < <(grep -l '^  passthru.depsBun = ' pkgs/*.nix || true)
 # cachix/devenv moves about 4 times a day (29 commits on main from 2026-10-16
 # to 2026-10-23), so it moves only with another move.
 git diff --quiet && exit 0
-if ! { "$devenv" update && "$devenv" build shell; } >"$work/devenv.log" 2>&1; then
+if ! { "$cached_devenv_of_main" update && "$cached_devenv_of_main" build shell; } >"$work/devenv.log" 2>&1; then
   tail -n 20 "$work/devenv.log" >&2
   git checkout -- devenv.lock
   warn "devenv update or devenv build shell failed; devenv.lock stays where it is."
