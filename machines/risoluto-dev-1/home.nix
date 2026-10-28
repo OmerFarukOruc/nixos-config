@@ -240,7 +240,8 @@ in
     Service = {
       Type = "oneshot";
       Environment = [
-        "STAY_GREEN_SCHEDULE=Mon-Fri 09:00-18:00"
+        # systemd splits an unquoted value at the space.
+        "\"STAY_GREEN_SCHEDULE=Mon-Fri 09:00-18:00\""
         "STAY_GREEN_TIME_ZONE=Europe/Istanbul"
       ];
       ExecStart = "${lib.getExe stayGreen} run";

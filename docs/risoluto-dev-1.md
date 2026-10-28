@@ -420,7 +420,9 @@ before its config exists.
   sops-nix renders the app's config from them (`services.nix`), and
   `cliproxy-up.sh` copies it to `$XDG_RUNTIME_DIR/cliproxy`, because the
   management panel can change it. After a key changes, run
-  `systemctl --user restart cliproxy.service`.
+  `systemctl --user restart cliproxy.service`. A deploy that changes a file
+  of the folder restarts the unit too, which stops the containers for the
+  length of a start.
 - The `share` profile adds `cliproxy-share`, a Tailscale container that joins
   the tailnet as its own node `cliproxy`, so a friend shared on that node reaches
   only the API. Its Serve config forwards port 443 as raw TCP to `tls-proxy`, a
@@ -431,7 +433,9 @@ before its config exists.
 - `cliproxy.risoluto.dev` is a public, DNS-only A record to the share node's
   tailnet address, so it answers only on the tailnet. `cliproxy-up.sh` runs
   `cliproxy/dns-record.sh apply` after every start and update; the script
-  changes only that one record. `dns-record.sh plan` prints what it would do.
+  changes only that one record. To see what it would do, run
+  `"$(dirname "$(systemctl --user show -p ExecStart --value cliproxy.service | grep -o '/nix/store/[^ ;]*cliproxy-up.sh')")"/dns-record.sh plan`
+  on the box.
 - `cliproxy-update.timer` reloads the unit daily at 04:30 Istanbul time. The
   reload pulls the CLIProxyAPI and Tailscale images, rebuilds `tls-proxy`, and
   recreates the containers whose image changed.
@@ -552,11 +556,13 @@ the disk runs under both. `box-browser status` passes, and the Chromium of
 nixpkgs' Playwright, found through oruc's session variables, loads a local page
 headless.
 
-The test shows that the layout installs, that Limine boots from it under both
-firmware types, that the units start, and that the template and the user
+The test shows that the layout installs, that Limine boots from it under BIOS,
+that the units start, and that the template and the user
 settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets files, that the netcup network works, that
-Tailscale logs in, that a tailnet peer reaches sshd, that Let's Encrypt issues the three certificates with the real
+Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI and
+stay-green start (they need a registry and a Teams sign-in, so the test turns
+them off; it checks their secrets and unit settings only), that Let's Encrypt issues the three certificates with the real
 Cloudflare token, or that the BIOS stage installs from the kexec installer. The
 cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no

@@ -4,6 +4,7 @@
 # and the probe image come from modules/services.nix.
 
 
+import json as svc_json
 import re as svc_re
 import shlex as svc_shlex
 import socket as svc_socket
@@ -249,4 +250,24 @@ svc_oruc(
     f'. {svc_hm_vars} && test -n "$PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS" && '
     "$PLAYWRIGHT_BROWSERS_PATH/chromium-*/chrome-linux64/chrome --headless --disable-gpu --no-sandbox "
     "--dump-dom 'data:text/html,<p>playwright-ok</p>' 2>/dev/null | grep -F '<p>playwright-ok</p>'"
+)
+
+# CLIProxyAPI and stay-green are off here (they need a registry and a Teams
+# sign-in), so only their secrets and unit settings are checked. sops-nix
+# renders cliproxy's config as JSON with both API keys and the management key,
+# readable by oruc only.
+for svc_file in ["cliproxy-config.yaml", "cliproxy.env"]:
+    machine.succeed(f"test \"$(stat -c '%U %a' /run/secrets/rendered/{svc_file})\" = 'oruc 400'")
+svc_cliproxy = svc_json.loads(svc_oruc("cat /run/secrets/rendered/cliproxy-config.yaml"))
+assert svc_cliproxy["api-keys"] == ["test-api-key-omer", "test-api-key-friend"], svc_cliproxy["api-keys"]
+assert svc_cliproxy["remote-management"]["secret-key"] == "test-management-key"
+svc_oruc("grep -Fx CLIPROXY_SHARE_HOST=cliproxy.example.ts.net /run/secrets/rendered/cliproxy.env")
+# systemd splits an Environment= value at a space unless it is quoted.
+svc_oruc(
+    "systemctl --user show -p Environment --value stay-green.service "
+    "| grep -F '\"STAY_GREEN_SCHEDULE=Mon-Fri 09:00-18:00\"'"
+)
+svc_oruc(
+    "systemctl --user show -p Environment --value cliproxy.service "
+    "| grep -F CLIPROXY_RENDERED_CONFIG=/run/secrets/rendered/cliproxy-config.yaml"
 )

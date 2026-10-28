@@ -8,7 +8,7 @@
 }:
 stdenvNoCC.mkDerivation {
   pname = "stay-green";
-  version = "0-unstable-${src.lastModifiedDate or "0"}";
+  version = "0-unstable-${builtins.substring 0 8 (src.lastModifiedDate or "0")}";
   inherit src;
   buildInputs = [ python314 ];
   dontBuild = true;
@@ -16,10 +16,12 @@ stdenvNoCC.mkDerivation {
     install -Dm755 stay-green $out/bin/stay-green
   '';
   # A run outside the schedule reads the schedule and its time zone and ends
-  # before any sign-in, so it proves the interpreter and its zoneinfo.
+  # before any sign-in, so it proves the interpreter and its zoneinfo. The day
+  # two days from now in UTC is never today in Istanbul.
   doInstallCheck = true;
   installCheckPhase = ''
-    HOME=$TMPDIR STAY_GREEN_SCHEDULE="Mon 00:00-00:01" STAY_GREEN_TIME_ZONE=Europe/Istanbul \
+    day=$(date -u -d "+2 days" +%a)
+    HOME=$TMPDIR STAY_GREEN_SCHEDULE="$day 00:00-23:59" STAY_GREEN_TIME_ZONE=Europe/Istanbul \
       $out/bin/stay-green run
   '';
   meta.mainProgram = "stay-green";

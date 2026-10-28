@@ -33,8 +33,17 @@ if [ ! -f "$ENV_PUBLIC" ] || [ ! -f "$COMPOSE" ]; then
   echo "cliproxy-up: cliproxy config files are missing under $SERVICE_DIR" >&2
   exit 78
 fi
-if [ ! -s "${CLIPROXY_RENDERED_CONFIG:-}" ] || [ -z "${CLIPROXY_SHARE_HOST:-}" ]; then
+if [ "${1:-}" = stop ]; then
+  # Compose interpolates every variable of the file, also to stop the stack.
+  : "${CLIPROXY_SHARE_HOST:=stop}"
+elif [ ! -s "${CLIPROXY_RENDERED_CONFIG:-}" ] || [ -z "${CLIPROXY_SHARE_HOST:-}" ]; then
   echo "cliproxy-up: the sops config or CLIPROXY_SHARE_HOST is missing; start it through cliproxy.service" >&2
+  exit 78
+fi
+# An empty key would start an unauthenticated proxy.
+if [ "${1:-}" != stop ] && ! jq -e '(."api-keys" | length > 0 and all(length > 0))
+    and (."remote-management"."secret-key" | length > 0)' "$CLIPROXY_RENDERED_CONFIG" >/dev/null; then
+  echo "cliproxy-up: the config has an empty API key or management key" >&2
   exit 78
 fi
 
@@ -113,13 +122,15 @@ fi
 
 (
   umask 077
-  cp "$CLIPROXY_RENDERED_CONFIG" "$CLIPROXY_CONFIG_PATH.new"
-  mv "$CLIPROXY_CONFIG_PATH.new" "$CLIPROXY_CONFIG_PATH"
+  cat "$CLIPROXY_RENDERED_CONFIG" >"$CLIPROXY_CONFIG_PATH.new"
+  mv -f "$CLIPROXY_CONFIG_PATH.new" "$CLIPROXY_CONFIG_PATH"
+  # sops-nix's files are 0400, and cp keeps that mode, so each copy replaces the file.
   if [ -s "${CLIPROXY_DNS_TOKEN_FILE:-}" ]; then
-    cp "$CLIPROXY_DNS_TOKEN_FILE" "$CLIPROXY_CLOUDFLARE_TOKEN_PATH"
+    cat "$CLIPROXY_DNS_TOKEN_FILE" >"$CLIPROXY_CLOUDFLARE_TOKEN_PATH.new"
   else
-    : >"$CLIPROXY_CLOUDFLARE_TOKEN_PATH"
+    : >"$CLIPROXY_CLOUDFLARE_TOKEN_PATH.new"
   fi
+  mv -f "$CLIPROXY_CLOUDFLARE_TOKEN_PATH.new" "$CLIPROXY_CLOUDFLARE_TOKEN_PATH"
 )
 chmod 600 "$CLIPROXY_CONFIG_PATH"
 
