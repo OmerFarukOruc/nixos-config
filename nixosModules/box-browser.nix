@@ -103,7 +103,13 @@ in
     systemd.user.services.box-display = {
       description = "Box browser display: Xvnc ${display}, localhost only, no password";
       wantedBy = [ "default.target" ];
-      unitConfig.StartLimitIntervalSec = 0;
+      # Every user manager loads these units, and root's starts when a deploy
+      # logs in as root. Its Xvnc found oruc's on the same display and failed
+      # in a loop, which the deploy's session check took for a broken switch.
+      unitConfig = {
+        ConditionUser = "oruc";
+        StartLimitIntervalSec = 0;
+      };
       serviceConfig = {
         ExecStart = lib.concatStringsSep " " [
           (lib.getExe' pkgs.tigervnc "Xvnc")
@@ -132,7 +138,10 @@ in
       partOf = [ "box-display.service" ];
       wantedBy = [ "default.target" ];
       environment.DISPLAY = display;
-      unitConfig.StartLimitIntervalSec = 0;
+      unitConfig = {
+        ConditionUser = "oruc";
+        StartLimitIntervalSec = 0;
+      };
       serviceConfig = {
         ExecStartPre = lib.getExe browserPrepare;
         ExecStart = lib.concatStringsSep " " [
