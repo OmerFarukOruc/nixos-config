@@ -8,12 +8,10 @@
      });
  }
  
-@@ -40,6 +41,12 @@
+@@ -40,6 +41,10 @@
      KSysGuard::SensorDataList entries;
  
      for (const QString &sensorPath : sensorPaths) {
-+        // A sensor this client already holds gets only a count. Subscribing it
-+        // again would add a reference that unsubscribe and disconnect never drop.
 +        if (m_subscribedSensors.contains(sensorPath)) {
 +            m_subscriptionCounts[sensorPath]++;
 +            continue;
@@ -21,7 +19,7 @@
          if (auto sensor = m_daemon->findSensor(sensorPath)) {
              Connections connections;
              connections.valueChanged = connect(sensor, &KSysGuard::SensorProperty::valueChanged, this, [this, sensor]() {
-@@ -53,7 +60,9 @@
+@@ -53,7 +58,9 @@
                  m_pendingMetaDataChanges[sensor->path()] = sensor->info();
              });
              connections.destroyed = connect(sensor, &KSysGuard::SensorProperty::destroyed, this, [this, sensor]() {
@@ -32,7 +30,7 @@
                  m_connections.remove(sensor);
              });
  
-@@ -62,6 +71,7 @@
+@@ -62,6 +69,7 @@
              sensor->subscribe();
  
              m_subscribedSensors.insert(sensorPath, sensor);
@@ -40,7 +38,7 @@
          }
      }
  }
-@@ -69,6 +79,10 @@
+@@ -69,6 +77,10 @@
  void Client::unsubscribeSensors(const QStringList &sensorPaths)
  {
      for (const QString &sensorPath : sensorPaths) {
@@ -53,11 +51,10 @@
              disconnect(connections.valueChanged);
 --- a/src/client.h
 +++ b/src/client.h
-@@ -43,6 +43,8 @@
+@@ -43,6 +43,7 @@
      Daemon *m_daemon;
      QHash<QString, KSysGuard::SensorProperty *> m_subscribedSensors;
      QHash<KSysGuard::SensorProperty *, Connections> m_connections;
-+    // How many times this client subscribed to each sensor it holds.
 +    QHash<QString, int> m_subscriptionCounts;
      KSysGuard::SensorDataList m_pendingUpdates;
      KSysGuard::SensorInfoMap m_pendingMetaDataChanges;

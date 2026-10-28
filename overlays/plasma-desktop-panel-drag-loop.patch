@@ -11,11 +11,7 @@
      }
      /*
       * When adding a new panel, childAt will return lastSpacer, and that's where
-@@ -122,23 +124,31 @@
-      */
-     var child = layout.childAt(x, y);
-     while (!child) {
-+        // A spacing of 0 would never move the point, so step at least 1 px.
+@@ -125,20 +127,27 @@
          if (root.isHorizontal) {
              // Only yields incorrect results for widgets smaller than the
              // row/column spacing, which is luckily fairly unrealistic
