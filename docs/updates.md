@@ -8,9 +8,9 @@
 
 `update-kernel.sh` needs no Nix.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
-`update-app.sh` runs `nix hash convert` for the Claude Desktop, ChatGPT and Grok
-Bot packages, npm and `prefetch-npm-deps` through Nix for cf and
-openchamber-web, and a build for the herdr web UI. Run those scripts in a
+`update-app.sh` runs `nix hash convert` for the Grok Bot package, npm and
+`prefetch-npm-deps` through Nix for cf and openchamber-web, and a build for the
+apps with a GitHub release source. Run those scripts in a
 checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
 `update-app.sh antigravity-hub`, `update-app.sh openchamber` and
 `update-app.sh impeccable` need no Nix. The update workflow runs all four scripts through
@@ -163,8 +163,9 @@ source.
 
 Every app in `pkgs/` with an upstream release names its release source. The
 others are this repository's own code or follow a flake input: claude-tools,
-the Claude accounts widget, herdr, the Mac Tahoe plasmoids, the glass Plasma
-style and stay-green.
+the Claude accounts widget, the Mac Tahoe plasmoids, the glass Plasma style and
+stay-green. ChatGPT, Claude Desktop and herdr come from the llm-agents input
+and move with it.
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s
 `postinst` (`dpkg-deb -e <deb> <dir>`). Grok Bot's registers the APT
@@ -173,7 +174,7 @@ repository's package record names SpaceXAI as the vendor.
 
 | App | Release source |
 | --- | --- |
-| Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
+| Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 | airpods-tui, herdr web UI, KVitals, linctl, Smart Video Wallpaper | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the dependencies' hash: `cargoHash` for airpods-tui, `vendorHash` for linctl, and the `outputHash` of the Bun dependencies for the herdr web UI. `passthru.depsBun` holds the bun version that produced the herdr web UI's hash, so `update-app.sh` learns the hash again when nixpkgs' bun differs |
 | cf, impeccable, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |

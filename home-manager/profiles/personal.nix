@@ -68,11 +68,26 @@ in
     ]
     ++ [
       (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
-      (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
       (pkgs.callPackage ../../pkgs/linctl.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
       (pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; })
     ]
-    ++ [ agents.antigravity-cli ];
+    ++ [
+      agents.antigravity-cli
+      # Only its own codex:// links: the .deb also claims web links and office files.
+      (pkgs.symlinkJoin {
+        inherit (agents.chatgpt) name meta;
+        paths = [ agents.chatgpt ];
+        postBuild = ''
+          desktop=$out/share/applications/chatgpt.desktop
+          rm $out/share
+          cp -rs --no-preserve=mode "$(readlink -f ${agents.chatgpt}/share)" $out/share
+          rm "$desktop"
+          sed 's|^MimeType=.*|MimeType=x-scheme-handler/codex;|' \
+            ${agents.chatgpt}/share/applications/chatgpt.desktop >"$desktop"
+          grep -qx 'MimeType=x-scheme-handler/codex;' "$desktop"
+        '';
+      })
+    ];
 }

@@ -145,7 +145,7 @@ The other scripts that run Nix run it on the host you run them on, and the
 `*-on-rog.sh`, `*-nixos-rog.sh` and `thermal-test-rog.sh` scripts act on
 nixos-rog and need it online. `move-inputs.sh`
 and `update-release-tags.sh` run `nix flake update`, and `update-app.sh` runs
-`nix hash convert` for Claude Desktop, ChatGPT and Grok Bot, so run them in a
+`nix hash convert` for Grok Bot, so run them in a
 checkout with Nix. The update workflow runs them.
 
 | Command | What it does |

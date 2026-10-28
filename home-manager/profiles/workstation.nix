@@ -1,4 +1,5 @@
 {
+  agents,
   config,
   lib,
   pkgs,
@@ -68,5 +69,20 @@
       wl-clipboard
       # keep-sorted end
     ]
-    ++ [ (pkgs.callPackage ../../pkgs/claude-desktop.nix { }) ];
+    ++ [
+      # The .deb's desktop file also opens MCP bundles and skill files.
+      (pkgs.symlinkJoin {
+        inherit (agents.claude-desktop) name meta;
+        paths = [ agents.claude-desktop ];
+        postBuild = ''
+          desktop=$out/share/applications/com.anthropic.Claude.desktop
+          rm $out/share
+          cp -rs --no-preserve=mode "$(readlink -f ${agents.claude-desktop}/share)" $out/share
+          rm "$desktop"
+          sed 's|^MimeType=.*|MimeType=x-scheme-handler/claude;application/vnd.anthropic.mcpb;application/vnd.anthropic.skill;|' \
+            ${agents.claude-desktop}/share/applications/com.anthropic.Claude.desktop >"$desktop"
+          grep -qx 'MimeType=x-scheme-handler/claude;application/vnd.anthropic.mcpb;application/vnd.anthropic.skill;' "$desktop"
+        '';
+      })
+    ];
 }
