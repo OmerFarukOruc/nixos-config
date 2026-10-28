@@ -8,4 +8,12 @@
     ../../home-manager/modules/desktop-sync.nix
     ../../home-manager/modules/playwright.nix
   ];
+
+  # The units of the dotfiles checkout start `zsh -c`, and /etc/zshenv replaces
+  # their PATH, so every zsh, interactive or not, gets the CLIs that installers
+  # put in the home: amp in ~/.local/bin, OpenCode in ~/.opencode/bin.
+  home.sessionPath = [
+    "$HOME/.local/bin"
+    "$HOME/.opencode/bin"
+  ];
 }
