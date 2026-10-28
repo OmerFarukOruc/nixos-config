@@ -264,6 +264,8 @@ let
       # height. With spacing 0 and side margins instead, the
       # backgrounds of an island meet without a seam and leave 6 px inside
       # each end.
+      # A drag over a bar with this spacing freezes plasmashell without
+      # overlays/plasma-desktop.nix.
       spacing = 0;
       margin = {
         enabled = true;

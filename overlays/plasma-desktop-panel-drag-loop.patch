@@ -1,0 +1,49 @@
+--- a/containments/panel/LayoutManager.js
++++ b/containments/panel/LayoutManager.js
+@@ -113,8 +113,10 @@
+ function childAtCoordinates(x, y) {
+     if (root.isHorizontal) {
+         y = layout.height / 2;
++        x = Math.min(x, layout.childrenRect.x + layout.childrenRect.width);
+     } else {
+         x = layout.width / 2;
++        y = Math.min(y, layout.childrenRect.y + layout.childrenRect.height);
+     }
+     /*
+      * When adding a new panel, childAt will return lastSpacer, and that's where
+@@ -122,23 +124,31 @@
+      */
+     var child = layout.childAt(x, y);
+     while (!child) {
++        // A spacing of 0 would never move the point, so step at least 1 px.
+         if (root.isHorizontal) {
+             // Only yields incorrect results for widgets smaller than the
+             // row/column spacing, which is luckily fairly unrealistic
+-            x -= layout.rowSpacing
++            x -= searchStep(layout.rowSpacing)
+         } else {
+-            y -= layout.columnSpacing
++            y -= searchStep(layout.columnSpacing)
+         }
+-        if (x < 0 || y < 0) {
+-            return 0;
++        if (!(x >= 0 && y >= 0)) {
++            return null;
+         }
+         child = layout.childAt(x, y);
+     }
+     return child
+ }
+ 
++function searchStep(spacing) {
++    return Number.isFinite(spacing) ? Math.max(1, spacing) : 1;
++}
++
+ function indexAtCoordinates(x, y) {
+     let child = childAtCoordinates(x, y)
++    if (!child) {
++        return 0;
++    }
+     if ((root.plasmoid.formFactor === 3 && y < child.y + child.height/2) ||
+         (root.plasmoid.formFactor !== 3 && x < child.x + child.width/2)) {
+         return child.index;

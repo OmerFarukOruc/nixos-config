@@ -651,6 +651,14 @@ setup](#claude-code-and-codex-setup)).
   the running session. On the night of 2026-10-12 to 2026-10-13, after a live
   change of the dock's height and style, the blur covered only part of the dock,
   and toggling edit mode did not refresh it. Judge a panel change after a new login.
+- The floating top bar of the glass look has a widget spacing of 0, and Panel
+  Colorizer gives that spacing to the panel's layout outside edit mode. Plasma's
+  panel then loops forever when something is dragged between two widgets. On
+  2026-10-28 plasmashell's main thread used a whole core and answered no D-Bus
+  call for 25 s, so Spectacle could not take a screenshot; `systemctl --user
+  restart plasma-plasmashell` ended it. `overlays/plasma-desktop.nix` patches
+  the loop. Drop the overlay only when the bar's spacing is above 0, or once
+  Plasma's `containments/panel/LayoutManager.js` steps at least one pixel.
 - A logout can show a black screen with a cursor for about a minute. On
   2026-10-13 plasmashell did not quit, and systemd killed it at its stop
   timeout. The cause is not confirmed.
