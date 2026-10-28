@@ -25,8 +25,13 @@
   # The Cursor worker (computer use) drives an X session on Xvnc with XFCE, and
   # the Amp runner (desktop) drives a labwc Wayland session. Neither starts a
   # login manager. The XFCE module also turns on udisks2, accounts-daemon, gvfs,
-  # tumbler, colord, polkit and gnome-keyring.
-  services.xserver.desktopManager.xfce.enable = true;
+  # tumbler, colord, polkit and gnome-keyring. Its screensaver would lock the
+  # Cursor worker's session, where nobody types a password; the Debian box had
+  # no screensaver installed (dpkg-query, 2026-10-28).
+  services.xserver.desktopManager.xfce = {
+    enable = true;
+    enableScreensaver = false;
+  };
   programs.labwc.enable = true;
 
   environment.systemPackages = with pkgs; [

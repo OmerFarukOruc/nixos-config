@@ -38,8 +38,8 @@ rejects: `theme.schemes` or `features.remoteAccess` on a server, `biosDevice`
 with systemd-boot, and `features.streamedDesktop` on a workstation.
 
 A server has a desktop through `features.streamedDesktop`, not through a login
-session: `nixosModules/streamed-desktop.nix` runs XFCE on a virtual display for
-oruc and streams it over the tailnet ([Streamed desktop](risoluto-dev-1.md#streamed-desktop)).
+session: `nixosModules/streamed-desktop.nix` starts XFCE for each RDP login of
+oruc over the tailnet ([Streamed desktop](risoluto-dev-1.md#streamed-desktop)).
 `features.remoteDesktop` stays the workstation's switch for Sunshine on its own
 screen, and it still requires `remoteAccess`. The session list of such a server
 stays empty, so the modules that ask `sessions.hasAnyDesktop` (the login screen,

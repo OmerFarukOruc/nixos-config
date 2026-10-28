@@ -8,8 +8,9 @@
 # that the schema forbids must fail.
 #
 # `streamed` evaluates the same record with features.streamedDesktop: of the
-# workstation pieces only the display manager (LightDM), fonts, browser and
-# keyboard layout of a graphical user come in.
+# workstation pieces only the fonts, browser and keyboard layout of a
+# graphical user come in, and xrdp runs with no X server or display manager at
+# boot.
 #
 # Takes the root flake; returns { drvPath, workstation, access, boot, accepted,
 # rejected, streamed, limineHosts }. limineHosts holds the Limine settings of each host
@@ -168,11 +169,9 @@ in
     workstationAccepted = validates { kind = "workstation"; };
     workstation = pieces streamedSystem;
     desktop = {
-      lightdm = streamedSystem.config.services.xserver.displayManager.lightdm.enable;
-      dummyDriver = streamedSystem.config.services.xserver.videoDrivers == [ "dummy" ];
+      xserver = streamedSystem.config.services.xserver.enable;
       xrdp = streamedSystem.config.services.xrdp.enable;
-      sunshine = streamedSystem.config.services.sunshine.enable;
-      avahi = streamedSystem.config.services.avahi.enable;
+      screensaver = streamedSystem.config.services.xserver.desktopManager.xfce.enableScreensaver;
       keyboardLayout = streamedSystem.config.services.xserver.xkb.layout;
     };
   };

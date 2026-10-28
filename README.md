@@ -55,7 +55,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Secrets | sops-nix with age on nixos-desktop, nixos-rog and risoluto-dev-1 |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
-| Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on risoluto-dev-1 a streamed XFCE desktop through Sunshine or xrdp |
+| Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on risoluto-dev-1 an XFCE desktop through xrdp |
 | Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 
 ## Highlights

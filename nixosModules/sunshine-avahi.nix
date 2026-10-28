@@ -1,5 +1,5 @@
-# Whatever hosts Sunshine, a workstation (remote-desktop.nix) or a server
-# (streamed-desktop.nix).
+# For any host that runs Sunshine, which the workstations do through
+# remote-desktop.nix.
 { config, lib, ... }:
 lib.mkIf config.services.sunshine.enable {
   # nixpkgs' sunshine module still sets the obsolete services.avahi.publish

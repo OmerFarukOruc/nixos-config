@@ -190,7 +190,7 @@ let
         options = {
           remoteAccess = mkFeature "Enable remote shell access.";
           remoteDesktop = mkFeature "Host a remote desktop with Sunshine.";
-          streamedDesktop = mkFeature "Run a light XFCE desktop on a virtual display, reached over the tailnet through Sunshine and xrdp (nixosModules/streamed-desktop.nix). A server's counterpart of remoteDesktop.";
+          streamedDesktop = mkFeature "Run a light XFCE desktop for each RDP login over the tailnet, through xrdp (nixosModules/streamed-desktop.nix). A server's counterpart of remoteDesktop.";
           docker = mkFeature "Enable the Docker daemon and client tooling.";
           diskSelfTests = mkFeature "Schedule the smartd short and long disk self-tests.";
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";

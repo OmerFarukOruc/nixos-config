@@ -107,16 +107,11 @@ in
     journalUnits = [
       "caddy.service"
       "acme-*.service"
-      "display-manager.service"
       "xrdp.service"
       "xrdp-sesman.service"
     ];
-    # oruc's rootless Docker daemon (nixosModules/rootless-containers.nix) and
-    # Sunshine of the streamed desktop (nixosModules/streamed-desktop.nix).
-    journalUserUnits = [
-      "docker.service"
-      "sunshine.service"
-    ];
+    # oruc's rootless Docker daemon (nixosModules/rootless-containers.nix).
+    journalUserUnits = [ "docker.service" ];
   };
 
   networking = {

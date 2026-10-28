@@ -126,8 +126,8 @@ server_record() {
   }
   jq -e '.streamed | .accepted and .workstationAccepted
     and ([.workstation | to_entries[] | select(.value) | .key] | sort)
-      == ["browserCertificates", "browserVariable", "desktopPackages", "displayManager", "fontconfig", "mimeApps", "pipewire", "xkbLayout"]
-    and (.desktop | .lightdm and .dummyDriver and .xrdp and .sunshine and (.avahi | not) and .keyboardLayout == "tr")' \
+      == ["browserCertificates", "browserVariable", "desktopPackages", "fontconfig", "mimeApps", "xkbLayout"]
+    and (.desktop | .xrdp and (.xserver | not) and (.screensaver | not) and .keyboardLayout == "tr")' \
     <<<"$out" >/dev/null || {
     echo "The server record with a streamed desktop changed: $(jq -c .streamed <<<"$out")" >&2
     return 1

@@ -1,10 +1,10 @@
 # A NixOS test of the streamed desktop of risoluto-dev-1
 # (nixosModules/streamed-desktop.nix): the host's own modules on `machine`, an
-# RDP client and a Moonlight client on `client`, and the test CA of the units
-# test. `machine` has a second network card that the test renames to
-# tailscale0, so a connection through eth1 stands for the public interface and
-# one through tailscale0 for the tailnet. Needs KVM. Takes the inputs and the
-# host (a nixosSystem); returns the flake checks.
+# RDP client on `client`, and the test CA of the units test. `machine` has a
+# second network card that the test renames to tailscale0, so a connection
+# through eth1 stands for the public interface and one through tailscale0 for
+# the tailnet. Needs KVM. Takes the inputs and the host (a nixosSystem);
+# returns the flake checks.
 { inputs, host }:
 let
   inherit (inputs.nixpkgs) lib;
@@ -40,7 +40,6 @@ in
       ''
         SD_PUBLIC_ADDRESS = "${nodes.machine.networking.primaryIPAddress}"
         SD_TAILNET_ADDRESS = "${(lib.head nodes.machine.networking.interfaces.eth2.ipv4.addresses).address}"
-        SD_CLIENT_TAILNET_ADDRESS = "${(lib.head nodes.client.networking.interfaces.eth2.ipv4.addresses).address}"
       ''
       + builtins.readFile ./server-desktop/test.py;
   };

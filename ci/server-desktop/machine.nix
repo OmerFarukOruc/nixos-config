@@ -1,7 +1,6 @@
 # What the desktop test changes on the host's own node, and no more: more
-# memory and cores, a second network card that stands for tailscale0, the
-# dummy video driver that qemu-vm replaces, and the workload of the CPU
-# measurements.
+# memory and cores, a second network card that stands for tailscale0, and the
+# workload of the CPU measurements.
 {
   config,
   lib,
@@ -55,11 +54,6 @@ in
       1
       2
     ];
-    # qemu-vm sets the X resolution from this one.
-    resolution = {
-      x = 1920;
-      y = 1080;
-    };
   };
 
   # eth1 is the public interface. eth2 becomes tailscale0, which the firewall
@@ -75,10 +69,6 @@ in
     address = [ "${tailnetAddress}/24" ];
   };
 
-  # qemu-vm replaces the video driver with modesetting, but the box runs the
-  # dummy driver.
-  services.xserver.videoDrivers = lib.mkOverride 5 [ "dummy" ];
-
   environment.etc = {
     "streamed-desktop/workload".source = workload;
     "streamed-desktop/cpu.py".source = ./cpu.py;
@@ -86,7 +76,7 @@ in
     "streamed-desktop/browse".source = browse;
   };
   environment.systemPackages = with pkgs; [
-    xinput
+    xev
     xterm
   ];
 }
