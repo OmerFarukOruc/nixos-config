@@ -24,6 +24,7 @@ in
         deadnix
         keep-sorted
         lychee
+        ruff
         shellcheck
         shfmt
       ];
@@ -62,8 +63,33 @@ in
         };
         shellcheck = {
           command = "shellcheck";
-          includes = [ "*.sh" ];
+          includes = [
+            "*.sh"
+            # The bash tools of pkgs/claude-tools have no extension.
+            "pkgs/claude-tools/bin/claude-accounts"
+            "pkgs/claude-tools/bin/claude-login-browser"
+          ];
           priority = 2;
+        };
+        # The Python tools of pkgs/claude-tools have no extension either.
+        ruff = {
+          command = "ruff";
+          options = [
+            "check"
+            "--no-cache"
+            "--config"
+            "pkgs/claude-tools/ruff.toml"
+          ];
+          includes = [
+            "pkgs/claude-tools/bin/agent-peek"
+            "pkgs/claude-tools/bin/agent-start"
+            "pkgs/claude-tools/bin/agent-stop"
+            "pkgs/claude-tools/bin/claude-limit-switch"
+            "pkgs/claude-tools/bin/claude-rotate"
+            "pkgs/claude-tools/bin/claude-usage"
+            "pkgs/claude-tools/bin/orch-notify"
+            "pkgs/claude-tools/bin/orch-watch"
+          ];
         };
         # Relative links and their heading anchors. --offline skips web links.
         lychee = {

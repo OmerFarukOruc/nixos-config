@@ -10,15 +10,19 @@
 }:
 let
   claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
+  # The account list stays in the private dotfiles checkout.
+  accounts = "${config.home.homeDirectory}/Desktop/workspace/dotfiles/desktop/claude-code/accounts.json";
 in
 {
   # The tools run jq, gum (the account table), tmux and ssh (logins and usage
-  # on another host); the Python ones run under the package's own python3.
+  # on another host), and claude-accounts prefs runs the checkout's
+  # json-config.py under python3.
   home.packages = [
     claudeTools
     pkgs.gum
     pkgs.jq
     pkgs.openssh
+    pkgs.python3
     pkgs.tmux
   ];
 
@@ -33,7 +37,12 @@ in
   # hosts that remote_hosts in accounts.json names over SSH, through the gcr
   # agent in the user manager's environment.
   systemd.user.services.claude-usage = {
-    Unit.Description = "Read the usage limits and login state of every Claude Code account";
+    Unit = {
+      Description = "Read the usage limits and login state of every Claude Code account";
+      # Without the list, claude-usage would publish a cache of one account,
+      # which the other hosts read over SSH.
+      ConditionPathExists = accounts;
+    };
     Service = {
       Type = "oneshot";
       ExecStart = "${claudeTools}/bin/claude-usage --quiet";

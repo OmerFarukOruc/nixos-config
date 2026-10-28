@@ -17,7 +17,7 @@ An extra account's name is the content of its `.claude-profile` file, or `<folde
 - `history.jsonl` (the prompt history behind the up arrow) stays per account. Claude Code 2.1.292 never reads or writes it through a symlink, and its retention prune rewrites the file, which would break a hard link.
 - `.credentials.json` and `.claude.json` stay per folder. Claude Code rotates the OAuth refresh token on use, so two accounts sharing one credentials file log each other out. `.claude.json` holds the account identity next to the MCP servers.
 - `.claude.json` also holds preferences that some commands save per account, such as the `/focus` view (`briefTranscript`), so a new profile starts without them. Put a preference every account shares in `settings.json` when it has a key there and /config still shows its row, as `"viewMode": "focus"` does for focus view. `cc-setting KEY` shows whether a key has a `settings.json` key. Otherwise add the key and its value to `account-prefs.json`. That includes `workflowSizeGuideline`: it has a `settings.json` key, but /config hides "Dynamic workflow size" while a settings file sets it. `claude-accounts prefs` merges the file with `~/.claude.json` and every profile's `.claude.json`. A value changed in /config in any account goes into the file and every other account, and a value changed in the file goes into every account. When two sides changed one key to different values, it changes nothing for that key and prints the values on each run until they are equal. `desktop-sync.sh` runs it, and the hourly `desktop-sync-config.timer` on both hosts commits the file, so a change reaches the other host within about two hours.
-- `claude-accounts.sh` makes `claude` a shell function and completes `claude-accounts`. It works in zsh and bash; Home Manager's zsh sources it (`home-manager/modules/claude-accounts.nix`).
+- `claude-accounts.sh` makes `claude` a shell function and completes `claude-accounts`. It works in zsh and bash, and Home Manager's zsh sources it (`home-manager/modules/claude-accounts.nix`).
 
 ## Logins and usage
 
@@ -46,24 +46,35 @@ Keep these true in every change:
 ## Changing the script
 
 1. Edit `bin/claude-accounts`. When the `claude` function needs new behaviour, add a subcommand to the script and call it from `claude-accounts.sh`; keep paths and names out of the shell config.
-2. `nix fmt` runs shellcheck on both; it must pass.
+2. Run `shellcheck -S warning bin/claude-accounts bin/claude-login-browser claude-accounts.sh` and `ruff check bin`; `nix fmt` checks only `*.sh` files. Both must print nothing.
 3. Deploy, then run the script against the real accounts. The change is done when every one of these holds:
    - `claude-accounts list` shows every account with its email and `ok` links.
    - `claude-accounts update` prints `config: synced` for each profile with no running session and exits 0.
    - `add tmp-x </dev/null`, then removing one link in `~/.claude-tmp-x`, makes `list` show `broken` for it; `delete tmp-x --yes` then removes the folder.
    - Replacing the `file-history` link in `~/.claude-tmp-x` with a real folder that holds one new file and one file `~/.claude/file-history` already has, then `update`, moves the new file, keeps the other in `file-history.unmerged`, and restores the link. `delete tmp-x --yes` refuses while a process named `claude` runs with `CLAUDE_CONFIG_DIR=$HOME/.claude-tmp-x`.
    - While that process runs, `rename tmp-x tmp-y` writes `tmp-y` into the marker, `names` and `dir tmp-y` use `tmp-y`, and `add tmp-x </dev/null` creates `~/.claude-tmp-x-2` for a new `tmp-x`. With the process stopped, `rename tmp-y tmp-z` moves the folder to `~/.claude-tmp-z`.
-   - In a terminal, `claude --account <profile> auth status` prints that account's email, and `claude --account <main name> auth status` the main account's; `bash -ic` does the same on risoluto-dev-1. `claude --account nope` fails with `no account 'nope'`.
+   - In a terminal, `claude --account <profile> auth status` prints that account's email, and `claude --account <main name> auth status` the main account's, and `claude --account nope` fails with `no account 'nope'`.
    - `login-all --list` prints exactly the accounts that the cards show as missing, logged out or ending within 5 days. After a change to `login`, log in to one account with it and check that the Brave profile from accounts.json opened and that `list` shows the expected organization.
    - The cards render in a terminal: `tmux new-session -d -s cpt -x 110 -y 40 claude-accounts --watch`, then `tmux capture-pane -p -t cpt` shows one card per account and a login line per host.
 4. Land the change on nixos-config `main` (`AGENTS.md`).
 
 ## Tests
 
-The end-to-end tests in `tests/` run on risoluto-dev-1 against real Claude accounts and a real herdr server, each in its own herdr session or tmux server. Run them against the installed tools, for example `pkgs/claude-tools/tests/orch-e2e.sh "$(dirname "$(readlink -f "$(command -v orch-watch)")")"`; each prints `PASS` and exits 0.
+The end-to-end tests in `tests/` run on risoluto-dev-1 against real Claude accounts and a real herdr server, each in its own herdr session or tmux server. Run them from a nixos-config checkout against the installed tools, for example `pkgs/claude-tools/tests/orch-e2e.sh "$(dirname "$(readlink -f "$(command -v orch-watch)")")"`; each prints `PASS` and exits 0.
 
 - `claude-limit-switch-e2e.sh`: a switch, a scan that leaves an agent without a limit alone, the restore after a server stop, and `resume`.
 - `claude-rotate-e2e.sh`: the account picker and the exit codes of claude-rotate.
 - `orch-e2e.sh`: agent-start, agent-stop, agent-peek, orch-notify and orch-watch.
 
-No test covers these, because a run cannot reach them for real: a move after a real usage limit (claude-rotate and claude-limit-switch), a session that waits while no account is free, and agent-start's cleanup when herdr refuses the brief.
+The picker step reads a usage cache and a `limits.json` that the test writes from the real cache with changed numbers, so it proves how the picker shows and orders those records, not how `claude-usage` and `claude-rotate` write them.
+
+The dotfiles checkout's `desktop/bin/tests/desktop-sync-e2e.sh` runs the installed `claude-accounts prefs` and `claude-config-lock.sh` against scratch homes, so a change to either needs that test too: `~/Desktop/workspace/dotfiles/desktop/bin/tests/desktop-sync-e2e.sh` after the deploy.
+
+No test covers these, because a run cannot reach them for real:
+
+- a move after a real usage limit, in claude-rotate and claude-limit-switch, with the session's memory kept across the move;
+- the limit parser: the reset time and reason that `scan` writes to `limits.json`;
+- the StopFailure hook handshake of claude-rotate (`$XDG_RUNTIME_DIR/claude-rotate/ID-PID.json`), including a nested `claude -p` whose limit must leave the session alone;
+- a session that waits while no account is free;
+- agent-start's cleanup when herdr refuses the brief;
+- the lock release of `prefs` and `update` when TERM ends them.

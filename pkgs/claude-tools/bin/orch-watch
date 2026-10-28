@@ -13,7 +13,8 @@
 #   ALERT watcher STEP failing (...)     a poll step (inbox, host meters, agents) raised; the loop goes on, and the
 #                                        line repeats only when the error changes
 # One watcher runs for each inbox, so each notice wakes the orchestrator once: a new watcher stops the older one
-# (its pid is in $ORCH_INBOX.watcher) and prints "watcher replaced pid N". Re-arming a Monitor is therefore safe.
+# (its pid is in $ORCH_INBOX.watcher) and prints "watcher replaced pid N", and the older one prints "watcher stopped
+# by SIGTERM" as its last line. Re-arming a Monitor is therefore safe.
 # CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one.
 import fcntl
 import os
@@ -133,13 +134,17 @@ def take_over(lock_path: Path, wait: float = 10.0):
         if text.isdigit() and replaced != int(text):
             pid = int(text)
             try:
-                cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+                argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
             except OSError:
-                cmdline = b""
-            if b"orch-watch" not in cmdline:
-                raise SystemExit(f"orch-watch: {lock_path} is held by pid {pid}, which is not orch-watch; not starting")
-            os.kill(pid, signal.SIGTERM)
-            replaced = pid
+                argv = []  # the holder is exiting, or wrote its pid only now: wait for the lock
+            if argv and argv[0]:
+                if not any(Path(a.decode(errors="replace")).name == "orch-watch" for a in argv[:2]):
+                    raise SystemExit(f"orch-watch: {lock_path} is held by pid {pid}, which is not orch-watch; not starting")
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                replaced = pid
         if time.monotonic() > deadline:
             raise SystemExit(f"orch-watch: the watcher holding {lock_path} did not stop within {wait:.0f} s")
         time.sleep(0.2)
@@ -267,6 +272,13 @@ def main(argv: list[str]) -> int:
     names = re.compile(argv[0] if argv else DEFAULT_NAMES)
     inbox = Inbox(notify.inbox_path())
     _lock, replaced = take_over(inbox.path.with_name(inbox.path.name + ".watcher"))
+
+    def stopped(*_):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        say("watcher stopped by SIGTERM, perhaps replaced by a newer one")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, stopped)
     if replaced:
         say(f"watcher replaced pid {replaced}")
     prev: dict[str, str] = {}

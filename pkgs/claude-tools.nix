@@ -20,9 +20,10 @@ stdenvNoCC.mkDerivation {
   dontBuild = true;
   installPhase = ''
     mkdir -p $out/bin $out/share/claude-tools
-    cp bin/* $out/bin/
+    # Files only: a run from the source tree leaves bin/__pycache__.
+    find bin -maxdepth 1 -type f -exec cp -t $out/bin {} +
     substitute claude-accounts.sh $out/share/claude-tools/claude-accounts.sh --subst-var-by bin $out/bin
-    cp -r README.md tests $out/share/claude-tools/
+    cp README.md $out/share/claude-tools/
   '';
   # orch-watch loads agent-peek, and agent-peek loads claude-limit-switch, from
   # their own folder, so its help proves that the Python tools find each other.

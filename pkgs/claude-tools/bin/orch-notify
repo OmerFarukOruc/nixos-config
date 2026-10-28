@@ -32,7 +32,7 @@ def inbox_path() -> Path:
 def keep_full(text: str, kind: str, agent: str, now: datetime) -> Path:
     notes = inbox_path().parent / "notes"
     notes.mkdir(parents=True, exist_ok=True)
-    stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{agent}-{kind}"
+    stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{re.sub(r'[^A-Za-z0-9_.-]', '_', agent)[:64]}-{kind}"
     for n in range(100):
         path = notes / f"{stem}{f'-{n}' if n else ''}.txt"
         try:
@@ -47,7 +47,10 @@ def keep_full(text: str, kind: str, agent: str, now: datetime) -> Path:
 def record(kind: str, text: str, agent: str, now: datetime) -> str:
     folded = re.sub(r"\s+", " ", text).strip()
     if len(folded) > HEAD_MAX:
-        folded = f"full text: {keep_full(text, kind, agent, now)} | {folded}"
+        try:
+            folded = f"full text: {keep_full(text, kind, agent, now)} | {folded}"
+        except OSError as e:
+            folded = f"(full text not saved: {type(e).__name__}: {e}) {folded}"
     return "\t".join([now.strftime("%Y-%m-%dT%H:%M:%SZ"), agent, kind, folded[:TEXT_MAX]])
 
 

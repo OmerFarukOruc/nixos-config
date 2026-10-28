@@ -289,19 +289,20 @@ server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.
 
-`claude-usage.timer`, defined in `home-manager/modules/desktop-sync.nix`, runs the
-checkout's `desktop/bin/claude-usage` every 10 minutes. It writes each Claude
-Code account's usage limits and login state to
-`~/.cache/claude-usage/usage.json`, and reads the files of risoluto-dev-1 and
-nixos-desktop over SSH. nixos-desktop reads this host's file with a key that
-`machines/nixos-rog/claude-usage-read.nix` allows only to print it.
+`home-manager/modules/claude-accounts.nix`, which `desktop-sync.nix` imports,
+installs the Claude account tools of `pkgs/claude-tools` (its README describes
+them) and the `claude` shell function. Its `claude-usage.timer` runs
+`claude-usage` every 10 minutes while the checkout's
+`desktop/claude-code/accounts.json` exists. It writes each Claude Code
+account's usage limits and login state to `~/.cache/claude-usage/usage.json`,
+and reads the files of risoluto-dev-1 and nixos-desktop over SSH. nixos-desktop
+reads this host's file with a key that `machines/nixos-rog/claude-usage-read.nix`
+allows only to print it. The account list and the shared preferences stay in
+the private checkout, because this repository is public.
 The Claude accounts widget in the top bar shows that file.
 `oruc.plasma.claudeAccountsWidget` installs it from
 `pkgs/claude-accounts-widget.nix` and puts it on the panel. Its Log in button
-opens a Ghostty window that runs `claude-accounts login`. The same module links
-`~/.local/bin/claude-accounts` to the checkout's script, so a `git pull` changes
-it without a switch, and installs the tools the script runs (jq, gum, tmux,
-ssh).
+opens a Ghostty window that runs `claude-accounts login`.
 
 ## Heavy commands
 

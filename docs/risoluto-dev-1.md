@@ -386,7 +386,10 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
 - `features.boxBrowser` is on in the host record, so `box-browser` and its two
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives oruc the common layer and `home.nix`, which adds the
-  hourly `desktop-sync.sh --config` and the usage timer of the dotfiles checkout.
+  hourly `desktop-sync.sh --config`, the Claude account tools of
+  `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`,
+  which every minute moves a named Claude agent in herdr off an account that
+  hit its usage limit and starts the agents again after a herdr restart.
   `desktop-sync.sh` there treats the box as a Home Manager host once
   `/etc/NIXOS` exists.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
