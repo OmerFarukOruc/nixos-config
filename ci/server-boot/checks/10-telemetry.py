@@ -1,7 +1,3 @@
-# The telemetry module: the collector, auditd, and the records that a login over
-# SSH, sudo, a read of a secret by another user and a restart of the collector
-# leave in the sink of modules/telemetry.nix. The collector exports to that sink
-# and not to the central endpoint, so TLS and the real endpoint are not covered.
 
 import json as tel_json
 import re
@@ -13,8 +9,6 @@ tel_dir = "/var/lib/telemetry-sink"
 for unit in ["opentelemetry-collector", "telemetry-sink", "auditd", "audit-rules-nixos"]:
     machine.wait_for_unit(f"{unit}.service")
 
-# Audit records reach the journal through auditd's syslog plugin, so journald
-# must not read the audit socket.
 machine.fail("systemctl is-active --quiet systemd-journald-audit.socket")
 tel_status = machine.succeed("auditctl -s")
 assert re.search(r"^enabled 1$", tel_status, re.M), "the kernel does not audit"
@@ -37,7 +31,6 @@ assert tel_rules.count("always,exclude") == 3, "auditctl does not list 3 exclude
 
 machine.succeed("sshd -T -C user=oruc,host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
 
-# The unit is active before the collector answers its health check.
 machine.wait_until_succeeds("curl -sf http://127.0.0.1:13133", timeout=60)
 tel_log = "journalctl -u opentelemetry-collector.service -b --no-pager -o cat"
 machine.succeed(f"{tel_log} | grep -F 'Everything is ready'")
@@ -57,20 +50,13 @@ def tel_wait(file, text):
 
 
 def tel_count(file, pattern):
-    # grep exits 1 for no match, which would end the check before its message.
     return int(machine.succeed(f"{{ grep -o -- {tel_shlex.quote(pattern)} {tel_dir}/{file} || true; }} | wc -l"))
 
 
-# The count of an OTLP attribute with its value. The string risoluto-dev-1 alone
-# would also match _HOSTNAME and the hostname that resourcedetection adds.
 def tel_attr(file, key, value):
     return tel_count(file, f'"key":"{key}","value":{{"stringValue":"{value}"}}')
 
 
-# The records of the sink as (resource attributes, body fields) pairs. The
-# journald receiver puts each journal field into the body. The sink writes a
-# line in parts, so a read can end inside one; the read is repeated until it
-# ends with a whole line.
 def tel_records(file):
     records = []
     for _ in range(30):
@@ -90,8 +76,6 @@ def tel_records(file):
     return records
 
 
-# A login of oruc over SSH, then sudo as oruc changes a file under /etc. The
-# session has a login id, which the etc-change rule needs.
 machine.succeed("install -d -m 0755 -o oruc -g oruc /home/oruc")
 machine.succeed("install -d -m 0700 -o oruc -g oruc /home/oruc/.ssh")
 machine.succeed("ssh-keygen -q -t ed25519 -N '' -f /tmp/probe_key")
@@ -110,15 +94,9 @@ def tel_probe(name):
 tel_probe("telemetry-probe-1")
 tel_wait("logs.json", "telemetry-probe-1")
 
-# A user other than root reads a secret, which the credstore rule logs although
-# the read fails.
 machine.execute("runuser -u nobody -- cat /run/secrets/network-dns-1")
-# Wait for the record before the collector stops, so a record that it read at
-# the moment of the stop cannot be lost.
 tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
 
-# The collector is down while a second login and sudo happen. Its cursor in the
-# file store must give it the records afterwards.
 machine.succeed("systemctl stop opentelemetry-collector.service")
 tel_probe("telemetry-probe-2")
 machine.sleep(3)
@@ -129,15 +107,9 @@ machine.succeed("systemctl start telemetry-unit-probe.service")
 tel_wait("logs.json", "telemetry-unit-probe-line")
 tel_wait("metrics.json", "system.memory.usage")
 
-# A unit of oruc's user manager. Its own info line and the line that the
-# manager writes about the unit's start ship, and its debug line does not. The
-# Finished line comes after both unit lines, so the debug line has had its
-# chance to ship when that line is in the sink.
 tel_uid = machine.succeed("id -u oruc").strip()
 machine.succeed(f"systemctl start user@{tel_uid}.service")
 machine.succeed("systemctl --user -M oruc@ start telemetry-user-probe.service")
-# The debug line is in the journal at priority 7, so its absence in the sink
-# below comes from the receiver's priority filter.
 machine.wait_until_succeeds(
     "journalctl -b _SYSTEMD_USER_UNIT=telemetry-user-probe.service PRIORITY=7 -o cat | grep -Fx telemetry-user-probe-debug"
 )
@@ -162,13 +134,8 @@ tel_manager = [
 assert len(tel_manager) == 1, f"the sink did not get exactly the Finished line of the user manager: {tel_user_records}"
 assert not any(b["MESSAGE"] == "telemetry-user-probe-debug" for _, b in tel_user_records), "the debug line of the user unit shipped"
 
-# Two logins, so two lines. A third would mean the restart sent the journal
-# again.
 assert tel_count("logs.json", "Accepted publickey for oruc") == 2, "the sink did not get exactly the 2 sshd login lines"
 
-# A SYSCALL record exists only for a call that matched a rule. The CONFIG_CHANGE
-# records that load the rules carry the keys too. The audit records reach the
-# sink after the journal lines above, so each one is waited for.
 for tel_key in ["sudo-exec", "etc-change"]:
     tel_wait("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}")
 tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
@@ -180,9 +147,6 @@ for tel_file in ["logs.json", "metrics.json"]:
         assert tel_attr(tel_file, tel_attribute, "risoluto-dev-1") > 0, f"the sink lacks {tel_attribute} in {tel_file}"
 assert tel_attr("metrics.json", "deployment.environment.name", "development") > 0, "the sink lacks the environment on metrics"
 
-# Stopping the collector makes its journald receivers log an error when
-# journalctl dies first, so only the run after the restart counts. The first
-# run's start is checked above.
 tel_run = "journalctl _SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value opentelemetry-collector.service) --no-pager -o cat"
 machine.succeed(f"{tel_run} | grep -F 'Everything is ready'")
 machine.fail(f"{tel_run} | grep -E '[[:space:]]error[[:space:]]'")

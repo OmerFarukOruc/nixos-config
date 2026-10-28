@@ -1,10 +1,3 @@
-# A NixOS test of the streamed desktop of risoluto-dev-1
-# (nixosModules/streamed-desktop.nix): the host's own modules on `machine`, an
-# RDP client on `client`, and the test CA of the units test. `machine` has a
-# second network card that the test renames to tailscale0, so a connection
-# through eth1 stands for the public interface and one through tailscale0 for
-# the tailnet. Needs KVM. Takes the inputs and the host (a nixosSystem);
-# returns the flake checks.
 { inputs, host }:
 let
   inherit (inputs.nixpkgs) lib;
@@ -15,7 +8,6 @@ in
 {
   risoluto-dev-1-desktop = pkgs.testers.runNixOSTest {
     name = "risoluto-dev-1-desktop";
-    # The host sets nixpkgs.config and overlays itself.
     node = {
       pkgsReadOnly = false;
       specialArgs = { inherit inputs; };

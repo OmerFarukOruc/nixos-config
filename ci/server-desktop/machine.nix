@@ -1,6 +1,3 @@
-# What the desktop test changes on the host's own node, and no more: more
-# memory and cores, a second network card that stands for tailscale0, and the
-# workload of the CPU measurements.
 {
   config,
   lib,
@@ -8,9 +5,6 @@
   ...
 }:
 let
-  # Content for the measurements. The page is 20000 lines of text that a
-  # scroll moves over; the video is 20 s of a synthetic 1080p test pattern in
-  # VP9, which Chromium decodes in software on a host with no GPU.
   workload =
     pkgs.runCommand "streamed-desktop-workload"
       {
@@ -27,8 +21,6 @@ let
           -c:v libvpx-vp9 -deadline realtime -cpu-used 8 -b:v 4M $out/video.webm
         echo '<html><head><title>SDVIDEO</title></head><body style="margin:0"><video src="video.webm" autoplay loop muted style="width:100vw;height:100vh"></video></body></html>' > $out/video.html
       '';
-  # The scroll loop and the browser of the CPU measurements. They run as oruc
-  # in the X display that the caller names in DISPLAY.
   scroll = pkgs.writeShellScript "scroll" ''
     ${pkgs.xdotool}/bin/xdotool mousemove 960 600
     while true; do

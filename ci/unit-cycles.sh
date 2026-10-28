@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# usage: ci/unit-cycles.sh
-# For every host, builds its /etc/systemd/system through ci/unit-cycles.nix and
-# fails when systemd-analyze finds an ordering cycle in what default.target
-# pulls in. deploy.sh runs the same check on the built system (exit 80).
-# Separate evaluators release the heap between hosts.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# check_host HOST: prints the host's result and fails when its units do not
-# build, hold an ordering cycle or could not be checked.
 check_host() {
   local host=$1 paths units systemd rc=0 analysis
-  # One evaluation of the host builds both attributes.
   paths=$(nix build --no-link --print-out-paths --impure \
     --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd) ||
     {

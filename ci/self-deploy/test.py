@@ -6,7 +6,6 @@ dp_systems = ["good", "broken", "initrd"]
 machine.start()
 machine.wait_for_unit("multi-user.target")
 
-# The self-deploy timers must not fire during the test.
 for dp_timer in ["self-deploy", "self-deploy-reboot"]:
     machine.succeed(f"systemctl is-active --quiet {dp_timer}.timer")
 dp_calendar = lambda timer: machine.succeed(f"systemctl show -p TimersCalendar {timer}.timer")
@@ -18,14 +17,10 @@ assert machine.succeed("systemctl show self-deploy.service -p User --value").str
 assert "DEPLOY_REPOSITORY=https://github.com/OmerFarukOruc/nixos-config.git" in machine.succeed(
     "systemctl show self-deploy.service -p Environment --value"
 )
-# deploy.sh connects as root, so oruc keeps a sudo password.
 assert "password is required" in machine.execute("runuser -u oruc -- sudo -n true 2>&1")[1], "oruc's sudo asks for no password"
 machine.succeed("sudo -n true")
-# oruc.upgrade starts the deploy unit only on a host without a battery.
 machine.succeed("systemd-ac-power")
 
-# The session check of deploy.sh, as oruc, with the function from the deploy.sh
-# that the main below holds.
 machine.copy_from_host(deploy_sh, "/tmp/deploy.sh")
 machine.wait_until_succeeds(
     "runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet other-test.service"
@@ -39,16 +34,11 @@ print(f"session services: {dp_listed}")
 assert "other-test.service" in dp_listed, "the session check lists no service of oruc"
 assert "herdr-test.service" not in dp_listed, "the session check does not ignore herdr-*.service"
 
-# The system profile that an installation makes.
 machine.succeed("nix-env --profile /nix/var/nix/profiles/system --set /run/current-system")
 
-# A flake whose output for the host is the store path of one specialisation.
 dp_out = {name: machine.succeed(f"readlink -f /run/current-system/specialisation/{name}").strip() for name in dp_systems}
 machine.succeed("mkdir -p /var/lib/server-test/flakes")
 
-# The unit loads the GitHub token as a credential, and github_config turns it
-# into a private nix.conf. Every deploy run below then evaluates and builds with
-# that file included. This run reads the files back without the token value.
 machine.succeed("install -m 0600 /dev/null /var/lib/server-test/github-token")
 machine.succeed("printf ghp_TestToken0123456789 > /var/lib/server-test/github-token")
 dp_unit = machine.succeed("systemctl cat self-deploy.service")
@@ -75,15 +65,12 @@ for dp_name, dp_path in dp_out.items():
     )
     machine.succeed(f"cat > /var/lib/server-test/flakes/{dp_name}.nix <<'EOF'\n{dp_flake}EOF")
 
-# A main whose evaluation cannot download an input, as when GitHub refuses the
-# request. The address answers no connection, so nix fails with its download error.
 machine.succeed(
     "cat > /var/lib/server-test/flakes/download.nix <<'EOF'\n"
     '{ inputs.dep.url = "https://127.0.0.1:9/dep.tar.gz"; outputs = _: { }; }\n'
     "EOF"
 )
 
-# A main whose own evaluation fails, which no download explains.
 machine.succeed(
     "cat > /var/lib/server-test/flakes/throw.nix <<'EOF'\n"
     '{ outputs = _: { nixosConfigurations.risoluto-dev-1.config.system.build.toplevel = throw "main is broken"; }; }\n'
@@ -103,7 +90,6 @@ machine.succeed(
         unit_log() {
           journalctl "_SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value self-deploy.service)" -o cat --no-pager "$@"
         }
-        # publish NAME: makes the flake of that system the newest main.
         publish() {
           install -m 0644 /var/lib/server-test/flakes/$1.nix "$work/flake.nix"
           git -C "$work" add -A
@@ -162,7 +148,6 @@ print(f"release record of the running system: {dp_record}")
 assert dp_record == f"{dp_sha} false switch", "the release record of the running system does not name main"
 assert machine.succeed(f"stat -c %U {dp_state}/releases").strip() == "root", "the release records do not belong to root"
 machine.fail("systemctl is-active --quiet deploy-rollback.timer")
-# switch-to-configuration boot wrote Limine's entries to the ESP on /boot.
 machine.succeed("findmnt -no FSTYPE /boot | grep -Fx vfat")
 print(machine.succeed("ls -R /boot | head -n 30"))
 machine.succeed("test -e /boot/EFI/BOOT/BOOTX64.EFI && test -s /boot/limine/limine.conf")
@@ -199,7 +184,6 @@ assert dp_deploy() == 0, "the deploy of the next main failed"
 assert dp_system("/run/current-system") == dp_out["initrd"], "the initrd system does not run"
 machine.succeed("test ! -e /var/lib/self-deploy/failed-main")
 assert dp_system("/run/booted-system/initrd") != dp_system("/run/current-system/initrd"), "the booted initrd is the running one"
-# A deploy that holds the lock of deploy.sh, as a remote deploy does.
 machine.succeed(f"( flock -n 9 && systemctl start self-deploy-reboot.service ) 9>>{dp_state}/deploy.lock")
 assert "waits for the next night" in machine.succeed("journalctl -u self-deploy-reboot.service -o cat --no-pager -n 6")
 machine.fail("test -e /run/systemd/shutdown/scheduled")
@@ -226,7 +210,6 @@ assert dp_deploy() != 0, "the run succeeded on a main that throws"
 assert "could not download" not in dp_sh("unit_log"), "an evaluation error was taken for a download error"
 machine.succeed(f"grep -q '^{dp_sha} ' /var/lib/self-deploy/failed-main")
 
-# Main moves on to a system that downloads nothing, and the next run goes through.
 dp_sh("publish initrd")
 assert dp_deploy() == 0, "the run after the download error failed"
 assert "already runs" in dp_sh("unit_log"), "the next run does not find the host on main"

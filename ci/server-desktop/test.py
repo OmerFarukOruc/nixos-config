@@ -32,7 +32,6 @@ def sd_session_pids(program):
     out = machine.succeed(
         f"for p in $(pgrep -u oruc -f {program}); do echo $p $(tr '\\0' '\\n' < /proc/$p/environ | grep '^DISPLAY='); done"
     )
-    # xrdp sets DISPLAY to :10.0.
     return dict((line.split("=", 1)[1].split(".")[0], line.split()[0]) for line in out.splitlines() if "DISPLAY=" in line)
 
 
@@ -43,14 +42,11 @@ def sd_diagnose():
     print(machine.execute("journalctl -u xrdp -u xrdp-sesman -b -o cat --no-pager | tail -n 60")[1])
 
 
-# The units are healthy with the desktop running, as in the units test.
 machine.execute("systemctl is-system-running --wait")
 sd_failed = machine.succeed("systemctl --failed --no-legend --plain | cut -d' ' -f1").split()
 for sd_unit in sd_failed:
     print(f"journal of {sd_unit}:\n" + machine.succeed(f"journalctl -u {sd_unit} -b -o cat --no-pager | tail -n 40"))
 assert sd_failed == [], f"units failed after boot: {sd_failed}"
-# The test renames eth2 to tailscale0, so the device units that the test
-# framework made for eth2 never come up.
 sd_activating = [
     unit
     for unit in machine.succeed("systemctl list-units --state=activating --no-legend --plain | cut -d' ' -f1").split()
@@ -58,16 +54,10 @@ sd_activating = [
 ]
 assert sd_activating == [], f"units still starting after boot: {sd_activating}"
 
-# Nothing runs a desktop before the first RDP login.
 assert sd_session_pids("xfce4-session") == {}, sd_session_pids("xfce4-session")
 
-# The listening socket of xrdp, for the record.
 print(machine.succeed(f"ss -Hltnup | grep -E ':{SD_PORT} ' || true"))
 
-# Public interface and tailnet. A connection through eth1 stands for the
-# public interface, where the firewall drops xrdp's port. A connection through
-# tailscale0 reaches it. The control rule shows that the drop comes from the
-# firewall alone.
 machine.wait_until_succeeds(f"ss -Hltn 'sport = :{SD_PORT}' | grep -q LISTEN")
 client.fail(f"nc -z -w 3 {SD_PUBLIC_ADDRESS} {SD_PORT}")
 client.succeed(f"nc -z -w 5 {SD_TAILNET_ADDRESS} {SD_PORT}")
@@ -75,9 +65,6 @@ machine.succeed(f"iptables -I nixos-fw -p tcp --dport {SD_PORT} -j nixos-fw-acce
 client.succeed(f"nc -z -w 5 {SD_PUBLIC_ADDRESS} {SD_PORT}")
 machine.succeed(f"iptables -D nixos-fw -p tcp --dport {SD_PORT} -j nixos-fw-accept")
 client.fail(f"nc -z -w 3 {SD_PUBLIC_ADDRESS} {SD_PORT}")
-# UDP ports cannot be probed without a stream, so the rules say what the
-# firewall accepts: everything on tailscale0 and lo, replies, and Tailscale's
-# own UDP port. A port opened on one interface adds a line to this list.
 sd_rules = machine.succeed("iptables -S nixos-fw")
 print(sd_rules)
 assert [line for line in sd_rules.splitlines() if line.endswith("-j nixos-fw-accept")] == [
@@ -88,7 +75,6 @@ assert [line for line in sd_rules.splitlines() if line.endswith("-j nixos-fw-acc
 ], "the firewall accepts more than tailscale0, lo, replies and Tailscale's UDP port"
 sd_rules6 = machine.succeed("ip6tables -S nixos-fw")
 print(sd_rules6)
-# NixOS adds ICMPv6 and the DHCPv6 client port on link-local addresses.
 assert [line for line in sd_rules6.splitlines() if line.endswith("-j nixos-fw-accept")] == [
     "-A nixos-fw -i tailscale0 -j nixos-fw-accept",
     "-A nixos-fw -i lo -j nixos-fw-accept",
@@ -113,9 +99,6 @@ def sd_xrdp_log():
     return machine.succeed("journalctl -u xrdp -u xrdp-sesman -b -o cat --no-pager")
 
 
-# CPU use of the machine while an idle desktop, a scrolling page and a 1080p
-# video are on screen in the RDP session. The workload runs on the machine
-# itself, started as oruc in the session's display.
 SD_RESULTS = {}
 
 
@@ -145,11 +128,7 @@ def sd_workload(display, page, scrolling):
 
 
 def sd_workload_stop():
-    # The box browser's own Chromium keeps running. A measurement without
-    # scrolling has no sd-scroll unit, and systemctl stops nothing when a
-    # named unit is not loaded, so the units are stopped through their slice.
     print(machine.execute(f"runuser -u oruc -- env {SD_ENV} systemctl --user stop sd-workload.slice 2>&1")[1])
-    # A leftover browser would count against the next measurement.
     try:
         machine.wait_until_fails("pgrep -u oruc -f 'sd-chromium|streamed-desktop/scroll'", timeout=timedelta(seconds=30))
     except Exception:
@@ -196,8 +175,6 @@ def sd_conditions(route, display):
     sd_measure(route, "video 1080p", display, "video.html")
 
 
-# RDP: log in as oruc through xrdp, get XFCE, disconnect, reconnect to the
-# same session. The client asks for H.264 and xrdp's log says what it used.
 SD_RDP = f"xfreerdp /v:{SD_TAILNET_ADDRESS} /u:oruc /p:test /cert:ignore /size:1920x1080 /gfx:AVC420 /wm-class:sdrdp /log-level:INFO"
 client.execute(f"setsid {SD_RDP} > /tmp/rdp-1.log 2>&1 &")
 sd_wait_session(":10")
@@ -206,8 +183,6 @@ client.screenshot("rdp-xfce-first")
 sd_first = sd_session_pids("xfce4-session")
 print("xfce4-session by display after the first login:", sd_first)
 assert set(sd_first) == {":10"}, sd_first
-# The session has the size that the client asked for, which the measurements
-# below need.
 sd_xrandr = sd_oruc("xrandr --current")
 print(sd_xrandr)
 assert "current 1920 x 1080" in sd_xrandr, "the RDP session is not 1920x1080"
@@ -228,16 +203,9 @@ machine.succeed(f"runuser -u oruc -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tr
 print(machine.succeed("ps -eo pid,lstart,args | grep -E 'Xorg :10' | grep -v grep | cut -c1-120"))
 print(sd_xrdp_log()[-3000:])
 
-# Input. The client has the Turkish layout, as the workstations have
-# (nixosModules/common.nix), FreeRDP sends it with the login, and xrdp gives
-# the session the same layout. A click on the client lands on the same spot of
-# the desktop, and keys typed on the client reach a program on the desktop as
-# the Turkish layout's letters.
 sd_layout = [line for line in sd_xrdp_log().splitlines() if "xrdp_load_keyboard_layout" in line]
 print("\n".join(sd_layout))
 assert "keylayout:[0x0000041F]" in sd_layout[-2] and "layout [tr]" in sd_layout[-1], "the session did not get the client's Turkish layout"
-# The FreeRDP window has decorations, so the desktop starts at the window's
-# own position on the client's screen.
 sd_window = dict(
     line.split("=", 1) for line in client.succeed("DISPLAY=:0 xdotool search --onlyvisible --class sdrdp getwindowgeometry --shell").splitlines()
 )

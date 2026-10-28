@@ -1,9 +1,3 @@
-# The sops file of the test machine holds test values under the real key names.
-# They are encrypted for the age key of an SSH key that this build makes,
-# because the box's own host key is not in the build. sops-nix reads that key as
-# it reads the host key, so the real activation runs (password hashes, the
-# network template). The network values are those of QEMU's user networking.
-# Put the values of a new key in ../secrets.yaml.
 { lib, pkgs, ... }:
 let
   secrets =
@@ -34,9 +28,6 @@ in
     validateSopsFiles = false;
     defaultSopsFile = lib.mkForce "${secrets}/secrets.yaml";
     age.sshKeyPaths = [ "${secrets}/ssh_host_ed25519_key" ];
-    # The host sets these options at normal priority for files of their own,
-    # which the key of this build cannot decrypt, so the test's values come from
-    # the same file.
     secrets = {
       cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       github-update-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";

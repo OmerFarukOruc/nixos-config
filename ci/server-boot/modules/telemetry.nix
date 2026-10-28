@@ -1,7 +1,3 @@
-# The telemetry of the test machine exports to a sink on loopback instead of the
-# central endpoint. The sink is a
-# second collector that writes the logs and metrics it receives to files, one
-# JSON document per line. ../checks/10-telemetry.py reads them.
 { lib, pkgs, ... }:
 let
   sinkConfig = (pkgs.formats.yaml { }).generate "telemetry-sink.yaml" {
@@ -43,7 +39,6 @@ in
     };
   };
 
-  # A unit whose lines the journalUnits receiver ships, started by the check.
   systemd.services.telemetry-unit-probe.serviceConfig = {
     Type = "oneshot";
     ExecStart = "${pkgs.coreutils}/bin/echo telemetry-unit-probe-line";

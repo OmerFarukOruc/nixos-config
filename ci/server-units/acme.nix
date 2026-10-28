@@ -1,13 +1,3 @@
-# Test nodes that let the host's real certificate orders succeed in the units
-# test: nixpkgs' test ACME server (pebble) and a DNS server for the DNS-01
-# challenge (pebble-challtestsrv), set up as nixos/tests/acme/dns01.nix does.
-# The host's certificates use Cloudflare for the challenge, which no VM can
-# reach, so the client module swaps lego's DNS provider for its exec provider,
-# a script that puts the challenge record into the test DNS server. The
-# Cloudflare wiring itself is not covered; a real order at the cutover is.
-#
-# Takes the flake inputs; returns { acme, dnsserver, client } NixOS modules for
-# the test's nodes. `client` goes into the host's node.
 { inputs }:
 let
   inherit (inputs.nixpkgs) lib;
@@ -57,23 +47,11 @@ in
     in
     {
       imports = [ "${commonAcme}/client" ];
-      # The host's public network file (10-public.network) matches every
-      # ethernet interface, eth1 of the test network too, and gives it the
-      # address of the public interface. A file that sorts before it takes eth1.
       systemd.network.networks."05-test-network" = {
         matchConfig.Name = "eth1";
         address = [ "${config.networking.primaryIPAddress}/24" ];
       };
-      # For the checks of the test script.
       environment.systemPackages = [ pkgs.openssl ];
-      # Each order copies its files into out/, then chmods and chowns them for
-      # the web server's group. Until that chmod, the files are 0600 and Caddy
-      # cannot read them. Orders that share an account run at the same time,
-      # except the first, which runs alone. An order that is done restarts
-      # Caddy while the others are in that window. A chmod of out/ that waits,
-      # with a longer wait for each order, makes the overlap certain instead of
-      # rare. The line it logs after the wait lets the test check that the wait
-      # still happens after a nixpkgs move.
       systemd.services = lib.listToAttrs (
         lib.imap1 (
           i: name:

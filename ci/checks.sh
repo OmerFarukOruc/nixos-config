@@ -1,21 +1,11 @@
 #!/usr/bin/env bash
-# usage: ci/checks.sh
-# The checks a change passes before it reaches main, in one place for each
-# caller: the pre-push hook and devenv test (devenv.nix),
-# scripts/check.sh and .github/workflows/update.yml. It stops at the
-# first failure and names it.
-# Evaluation warnings do not fail it; the summary at the end lists them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# This repository forbids import from derivation (AGENTS.md, Nixpkgs), so every
-# evaluation here does too.
 nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
 trap 'rm -f -- "$log"' EXIT
 
-# check NAME COMMAND...: runs one check under a heading. COMMAND runs with
-# errexit off, so a function passed here returns its own failure.
 check() {
   local name=$1
   shift
@@ -36,10 +26,6 @@ lock_files() {
   done
 }
 
-# nix fmt checks the formatter, host_systems checks the host derivations, and
-# server_boot evaluates the boot tests. Refuse outputs they do not cover. nix
-# fmt accepts a formatter name with string context, but nix flake check does
-# not.
 flake_outputs() {
   nix eval "${nix_opts[@]}" --json --no-write-lock-file '.#.' --apply '
     outputs:
@@ -53,9 +39,6 @@ flake_outputs() {
   }
 }
 
-# Force each drvPath as well as the derivation type: a package that throws can
-# hide inside a toplevel that passes the type check. Separate evaluators release
-# the heap between hosts.
 host_systems() {
   local hosts host
   hosts=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
@@ -76,9 +59,6 @@ host_systems() {
   done
 }
 
-# risoluto-dev-1 turns features.boxBrowser on. This also evaluates the module on
-# nixos-desktop with the feature forced on, to check the display's command line
-# (ci/box-browser.nix).
 box_browser() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --impure \
@@ -87,7 +67,6 @@ box_browser() {
     echo "The forced-on host lacks a box browser unit." >&2
     return 1
   }
-  # Xvnc has no password, so its command line must keep it on localhost.
   jq -e '.displayCommand | contains(" -localhost ") and contains(" -SecurityTypes None")' \
     <<<"$out" >/dev/null || {
     echo "The box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
@@ -95,8 +74,6 @@ box_browser() {
   }
 }
 
-# Evaluates a server record with Limine's BIOS stage and no login sessions
-# (ci/server.nix), whatever the hosts are, and the schema's rejections.
 server_record() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --impure \
@@ -142,8 +119,6 @@ server_record() {
   }
 }
 
-# The boot tests of the flake's checks have to evaluate. They run by hand
-# (docs/risoluto-dev-1.md, Boot test), because they need KVM and minutes.
 server_boot() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \

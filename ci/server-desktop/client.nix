@@ -1,6 +1,3 @@
-# The node that connects to the desktop: Alice's X session with the Turkish
-# layout of the workstations (nixosModules/common.nix) and an RDP client, and a
-# second network card for the tailnet side.
 { pkgs, ... }:
 {
   test-support.displayManager.auto.user = "alice";

@@ -1,14 +1,9 @@
-# What the services checks (../checks/20-services.py) need around the host:
-# local backends for the web names and the image that the container checks
-# start. No certificate authority answers here, so the web names serve the
-# self-signed certificates that security.acme makes before it asks.
 {
   lib,
   pkgs,
   ...
 }:
 let
-  # A one-layer image of busybox, so the container checks need no registry.
   probeImage = pkgs.dockerTools.buildImage {
     name = "probe";
     tag = "1";
@@ -19,8 +14,6 @@ let
     };
   };
 
-  # A web server that answers with the headers it received, for the local
-  # ports that Caddy proxies to.
   echoServer = pkgs.writeText "echo-server.py" ''
     import sys
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -48,7 +41,6 @@ in
 
   environment.etc."server-boot/probe-image.tar".source = probeImage;
 
-  # The checks call these from a root shell.
   environment.systemPackages = [
     pkgs.curl
     pkgs.openssl
@@ -72,10 +64,6 @@ in
       ]
   );
 
-  # The echo backends above own ports 3000 and 7317, so oruc's OpenChamber and
-  # herdr web UI stay off. The Amp runner, the Cursor worker and stay-green
-  # need Omer's logins, cliproxy needs a registry and claude-limit-switch starts
-  # herdr's session; the test has none of them.
   home-manager.users.oruc.systemd.user = {
     services =
       lib.genAttrs

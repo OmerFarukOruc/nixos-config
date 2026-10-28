@@ -1,7 +1,3 @@
-# Measures the CPU use of the whole machine for a number of seconds, and the
-# processes that used it. Prints one JSON object: busy cores of the machine,
-# the cores that the host took from it (steal) and the busiest process names,
-# in cores. Run as `python3 cpu.py SECONDS`.
 import json
 import os
 import sys

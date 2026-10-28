@@ -1,28 +1,19 @@
-# The host itself: units, firmware, network from the sops template, sshd,
-# firewall, users and disk. Each module's own checks go in a file of their own.
 
 import socket
 
 for unit in ["sshd", "tailscaled", "systemd-networkd"]:
     machine.wait_for_unit(f"{unit}.service")
 
-# The disk boots through Limine's BIOS stage, as on the netcup box. The image
-# also holds the EFI fallback loader; that only the file exists is checked, not
-# a UEFI boot.
 machine.fail("test -d /sys/firmware/efi")
 machine.succeed("test -e /boot/limine/limine-bios.sys")
 machine.succeed("test -e /boot/EFI/BOOT/BOOTX64.EFI")
 
-# The netcup console logs in on tty1.
 machine.wait_for_unit("getty@tty1.service")
 
-# The address and routes come from the sops template.
 machine.wait_until_succeeds("ip -4 -o addr show scope global | grep -F 10.0.2.15/24")
 machine.succeed("ip -4 route show default | grep -F 'via 10.0.2.2'")
 machine.succeed("ip -6 route show default | grep -F 'via fe80::1'")
 
-# sshd listens on every address, port 2222 only; port 22 on the tailnet address
-# belongs to Tailscale SSH.
 machine.succeed(r"ss -Htln | grep -E '(0\.0\.0\.0|\*):2222 '")
 machine.succeed(r"ss -Htln | grep -E '\[::\]:2222 '")
 machine.fail(r"ss -Htln | grep -E ':22 '")
@@ -47,7 +38,6 @@ assert (
 ), "root reads more than the declared keys"
 machine.succeed("test $(grep -c ssh-ed25519 /etc/ssh/authorized_keys.d/root) = 3")
 
-# Users, with the password hashes that sops-nix decrypted before the users exist.
 machine.succeed("passwd -S oruc | grep -E '^oruc P '")
 machine.succeed("passwd -S root | grep -E '^root P '")
 machine.succeed("id oruc | grep -Fx 'uid=1003(oruc) gid=1003(oruc) groups=1003(oruc),1(wheel)'")
@@ -55,8 +45,6 @@ machine.succeed("grep -Fx oruc:100000:65536 /etc/subuid")
 machine.succeed("grep -Fx oruc:100000:65536 /etc/subgid")
 machine.succeed("test -e /var/lib/systemd/linger/oruc")
 
-# Exit node forwarding, the box's swappiness, and a firewall that opens only
-# Tailscale's UDP port.
 machine.succeed("test $(sysctl -n net.ipv4.ip_forward) = 1")
 machine.succeed("test $(sysctl -n net.ipv6.conf.all.forwarding) = 1")
 machine.succeed("test $(sysctl -n vm.swappiness) = 100")
@@ -67,9 +55,6 @@ machine.fail("ip6tables -S nixos-fw | grep -E -e '^-A nixos-fw .*-p tcp'")
 machine.succeed("ip6tables -S nixos-fw | grep -Fx -e '-A nixos-fw -i tailscale0 -j nixos-fw-accept'")
 
 
-# A client outside the VM reaches sshd through eth0, where the firewall drops
-# port 2222. The control rule shows the forwarded connection works, so the drop
-# comes from the firewall alone.
 def ssh_banner():
     try:
         with socket.create_connection(("127.0.0.1", 12222), timeout=5) as conn:
@@ -84,14 +69,12 @@ machine.succeed("iptables -I nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
 assert ssh_banner().startswith(b"SSH-"), "the forwarded connection does not reach sshd"
 machine.succeed("iptables -D nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
 
-# The disk layout of disk.nix.
 lsblk = machine.succeed("lsblk -no SIZE,PARTTYPENAME /dev/vda")
 assert "1M BIOS boot" in lsblk, "the BIOS boot partition is missing"
 assert "4G EFI System" in lsblk, "the ESP is not 4 GiB"
 machine.succeed("findmnt -no FSTYPE,OPTIONS /boot | grep -E '^vfat .*dmask=0077'")
 machine.succeed("findmnt -no FSTYPE / | grep -Fx ext4")
 
-# Journal, /tmp and swap settings of the box.
 machine.succeed("systemd-analyze cat-config systemd/journald.conf | grep -Fx SystemMaxUse=2G")
 machine.succeed("systemd-tmpfiles --cat-config | grep -E \"^'?q'? '?/tmp'? \" | head -n 1 | grep -F 7d")
 machine.succeed("swapon --show=NAME --noheadings | grep -E '^/dev/zram0'")
