@@ -420,9 +420,14 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   `nixosModules/tailscale.nix` fails the evaluation when a port gets opened.
   xrdp listens on every address, as sshd does, so the firewall is the only
   guard.
-- **First use.** RDP logs in as oruc with oruc's password (the hash is in
-  `secrets/risoluto-dev-1.yaml`). sesman refuses root logins, which it allows
-  by default. The XFCE screensaver is off, because the login and every
+- **First use.** The workstations have Remmina
+  (`home-manager/profiles/workstation.nix`): connect to `risoluto-dev-1` as
+  oruc with oruc's password (the hash is in `secrets/risoluto-dev-1.yaml`). A
+  Home Manager step sets Remmina's RDP keyboard layout to Turkish Q, and its
+  default colour depth ("Automatic") gets H.264 from xrdp. A one-off run of the
+  desktop test on 2026-10-28 with Remmina 1.4.43 as the client showed the `tr`
+  layout, H.264, ı, ş and ğ, and pointer moves that reach the desktop at once.
+  sesman refuses root logins, which it allows by default. The XFCE screensaver is off, because the login and every
   reconnect ask for the password already.
 - **Logs.** xrdp's logs go to the journal, where the NixOS module sends them to
   `/dev/null`, and `journalUnits` lists `xrdp.service` and

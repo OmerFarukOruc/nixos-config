@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 {
   imports = [
     ../modules/airpods.nix
@@ -29,6 +34,26 @@
   # already grants what its setup script would, and the script cannot write
   # NixOS's udev rules, so the dialog never opens.
   dconf.settings."io/missioncenter/MissionCenter".first-time-running = false;
+
+  # The RDP client for the desktop of risoluto-dev-1
+  # (nixosModules/streamed-desktop.nix). It starts when Omer opens it, not in
+  # the tray at login.
+  services.remmina = {
+    enable = true;
+    systemdService.enable = false;
+  };
+  # xrdp gives the session the keyboard layout that the client sends, and
+  # Remmina sends the one of this preference. At its default (0) FreeRDP
+  # guesses: from the layout names on the X root window, which a Wayland
+  # session may not set, and then from the locale, en_US here
+  # (nixosModules/common.nix), so the session may get us instead of the
+  # Turkish Q layout (0x041F) of these machines.
+  home.activation.remminaKeyboardLayout = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run mkdir -p "${config.xdg.configHome}/remmina"
+    run ${lib.getExe pkgs.crudini} --ini-options=nospace --set \
+      "${config.xdg.configHome}/remmina/remmina.pref" \
+      remmina_pref rdp_keyboard_layout 41F
+  '';
 
   home.packages =
     with pkgs;
