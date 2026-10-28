@@ -1,9 +1,11 @@
 # The Claude accounts widget (org.oruc.claudeaccounts) for the Plasma top bar.
-# It shows ~/.cache/claude-usage/usage.json, which the dotfiles checkout's
-# desktop/bin/claude-usage writes, and its buttons run that checkout's
-# claude-usage and claude-accounts. Installed with the panels, it loads before
-# the checkout exists; Plasma drops a widget it cannot load from the panel.
-{ lib, runCommandLocal }:
+# It shows ~/.cache/claude-usage/usage.json, which claude-usage writes, and its
+# buttons run claude-usage and claude-accounts of pkgs/claude-tools.nix.
+{
+  claudeTools,
+  lib,
+  runCommandLocal,
+}:
 runCommandLocal "claude-accounts-widget"
   {
     meta = {
@@ -14,5 +16,8 @@ runCommandLocal "claude-accounts-widget"
   }
   ''
     mkdir -p $out/share/plasma/plasmoids
-    cp -r ${./claude-accounts-widget} $out/share/plasma/plasmoids/org.oruc.claudeaccounts
+    dir=$out/share/plasma/plasmoids/org.oruc.claudeaccounts
+    cp -r ${./claude-accounts-widget} $dir
+    chmod -R u+w $dir
+    substituteInPlace $dir/contents/ui/Logic.js --replace-fail @claudeTools@ ${claudeTools}
   ''

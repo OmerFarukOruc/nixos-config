@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+# An agent tells the orchestrator something, in any state: `orch-notify NEED|DONE|INFO TEXT [--from NAME]`.
+# It appends one line, UTC time, agent, kind and text separated by tabs, to $ORCH_INBOX (default
+# ~/.local/state/orch/inbox.log), which orch-watch reads and prints. NEED means the agent waits for a reply.
+# The agent name is --from (whitespace in it becomes "_", so the record keeps its four fields), else the
+# `herdr agent list` entry whose pane is $HERDR_PANE_ID; when neither gives a name the notice is still delivered
+# as "unknown", because a lost NEED costs more than a missing name.
+# A text longer than HEAD_MAX goes whole to a file in notes/ beside the inbox, and the record starts with
+# "full text: <path> |", because the Monitor tool that wakes the orchestrator cuts each event at 500 characters.
+import argparse
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+KINDS = ("NEED", "DONE", "INFO")
+# Chosen, not measured: a notice is a pointer to the report, not the report.
+TEXT_MAX = 500
+# The Monitor event cut (500 characters, seen in Claude Code 2.1.311) minus the orch-watch prefix of time, a
+# 32-character agent name, the kind and " (reply required) | ".
+HEAD_MAX = 430
+
+
+def inbox_path() -> Path:
+    return Path(os.environ.get("ORCH_INBOX") or Path.home() / ".local/state/orch/inbox.log")
+
+
+def keep_full(text: str, kind: str, agent: str, now: datetime) -> Path:
+    notes = inbox_path().parent / "notes"
+    notes.mkdir(parents=True, exist_ok=True)
+    stem = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{agent}-{kind}"
+    for n in range(100):
+        path = notes / f"{stem}{f'-{n}' if n else ''}.txt"
+        try:
+            with path.open("x") as f:
+                f.write(text.rstrip("\n") + "\n")
+            return path
+        except FileExistsError:
+            continue
+    raise FileExistsError(f"{notes / stem}.txt and 99 numbered copies exist")
+
+
+def record(kind: str, text: str, agent: str, now: datetime) -> str:
+    folded = re.sub(r"\s+", " ", text).strip()
+    if len(folded) > HEAD_MAX:
+        folded = f"full text: {keep_full(text, kind, agent, now)} | {folded}"
+    return "\t".join([now.strftime("%Y-%m-%dT%H:%M:%SZ"), agent, kind, folded[:TEXT_MAX]])
+
+
+def agent_of(pane: str | None) -> str | None:
+    if not pane:
+        return None
+    try:
+        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, timeout=30, check=False)
+        agents = json.loads(p.stdout)["result"]["agents"]
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError):
+        return None
+    return next((a["name"] for a in agents if a.get("pane_id") == pane), None)
+
+
+def append(path: Path, line: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.write(line + "\n")
+        f.flush()
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="orch-notify", description="Tell the orchestrator that an agent needs a reply, "
+                                 "finished, or has news.")
+    ap.add_argument("kind", choices=KINDS)
+    ap.add_argument("text", nargs="+")
+    ap.add_argument("--from", dest="agent", metavar="NAME")
+    args = ap.parse_args(argv)
+    if not " ".join(args.text).strip():
+        ap.error("TEXT is empty")
+    agent = re.sub(r"\s+", "_", (args.agent or "").strip()) or agent_of(os.environ.get("HERDR_PANE_ID"))
+    if not agent:
+        print("orch-notify: no agent name found for this pane, sent as unknown; pass --from NAME", file=sys.stderr)
+    append(inbox_path(), record(args.kind, " ".join(args.text), agent or "unknown", datetime.now(UTC)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

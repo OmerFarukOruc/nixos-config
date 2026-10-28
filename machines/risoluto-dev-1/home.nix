@@ -230,6 +230,31 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
+  # Every minute, claude-limit-switch (pkgs/claude-tools) starts herdr's
+  # default session through herdr-default.service when no server runs, starts
+  # the recorded Claude agents again after a server restart, and moves each
+  # named agent whose screen ends in a usage limit message to another account.
+  # A failed run means one agent could not move; the log names it and the
+  # reason: journalctl --user -u claude-limit-switch.service and
+  # ~/.local/state/claude-limit-switch/events.log.
+  systemd.user.services.claude-limit-switch = {
+    Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.callPackage ../../pkgs/claude-tools.nix { }}/bin/claude-limit-switch scan";
+    };
+  };
+  systemd.user.timers.claude-limit-switch = {
+    Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit, every minute";
+    Timer = {
+      OnCalendar = "*:*:00";
+      AccuracySec = "10s";
+      # A run missed while the box was down is of no use later.
+      Persistent = false;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   # Keeps Omer's Teams status Available in working hours, with the sign-in in
   # ~/.local/state/stay-green. A failed run means the sign-in expired or was
   # revoked; sign in again from a workstation with

@@ -1,0 +1,524 @@
+#!/usr/bin/env bash
+# Several Claude Code accounts on one machine, one config folder each, selected with CLAUDE_CONFIG_DIR: their usage,
+# logins and folders. How it works and its invariants: nixos-config pkgs/claude-tools/README.md.
+# The account list and the shared preferences stay private, in the dotfiles checkout's desktop/claude-code
+# (CLAUDE_ACCOUNTS_DATA), because this repository is public.
+set -euo pipefail
+
+main="$HOME/.claude"
+marker=.claude-profile
+main_label="$main/.claude-profile-name"
+shared=(settings.json CLAUDE.md agents hooks rules shared infisical.md reference skills plugins projects plans file-history themes)
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+# shellcheck source=claude-config-lock.sh
+source "$(dirname "$self")/claude-config-lock.sh"
+data="${CLAUDE_ACCOUNTS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}"
+accounts_file="$data/accounts.json"
+accent=212
+
+usage() {
+  cat >&2 <<EOF
+usage: $(basename "$0") [command]
+  (none) [OPTIONS]  one card per account: usage limits, pace, resets and the login on each host (claude-usage;
+                    --watch redraws every 30 s, --json prints the data, --help lists the card options)
+  list              show every account on this device: login, email, organization, plan and tier, link health, MCP
+                    servers
+  add NAME          create ~/.claude-NAME, link the shared config, log in, sync config
+  rename OLD NEW    rename an account; while a session runs with it, or for ~/.claude, only its name changes
+  update            repair links (moving a profile's own copy of a shared folder into ~/.claude) and sync config
+                    (MCP servers, onboarding, trusted folders, preferences) into every profile
+  prefs             apply claude-code/account-prefs.json to every account, also while a session runs
+  delete NAME       log out and remove the account's folder (asks first; --yes skips the question)
+  login NAME [--on HOST]
+                    log in to NAME in its Brave profile (claude-code/accounts.json), creating its folder when this
+                    device has none; --on logs in on HOST, such as risoluto-dev-1, through this device's browser
+  login-window NAME [--on HOST]
+                    run login in a new terminal window (the Claude accounts widget's Log in button)
+  login-all [--list] [--on HOST]
+                    log in to every account in accounts.json that is missing, logged out, or ends within 5 days;
+                    --list only prints them
+  names             print every account name, sorted
+  dir NAME          print the CLAUDE_CONFIG_DIR value for NAME; empty means unset it
+NAME is lowercase letters, digits, and dashes. The ~/.claude account is called "main" until renamed.
+\`claude\` itself rotates between the accounts, and \`claude --account NAME\` runs one session on NAME
+(claude-accounts.sh of nixos-config pkgs/claude-tools).
+EOF
+  exit 2
+}
+
+# The ~/.claude account's name is in its name file, which rename writes. A device without one takes the accounts.json
+# name whose email and organization match the ~/.claude login and writes it, so a new device does not show that
+# account as a second one called "main"; with no single match the name is "main".
+main_name() {
+  local n
+  if n="$(cat "$main_label" 2>/dev/null)" && [[ -n "$n" ]]; then echo "$n"; return; fi
+  n="$(jq -r --slurpfile a "$accounts_file" '(.oauthAccount // {}) as $o
+      | (if $o.organizationName == (($o.emailAddress // "") + "\u0027s Organization") then "personal"
+         else $o.organizationName end) as $org
+      | [$a[0].accounts | to_entries[] | select(.value.email == $o.emailAddress and .value.org == $org) | .key]
+      | if length == 1 then .[0] else empty end' "$HOME/.claude.json" 2>/dev/null)" || n=""
+  if [[ -n "$n" ]] && ! profile_folder "$n" >/dev/null 2>&1; then
+    echo "$n" > "$main_label"
+    echo "$n"
+  else
+    echo main
+  fi
+}
+is_main() { [[ "$1" == main || "$1" == "$(main_name)" ]]; }
+valid_name() { [[ "${1:-}" =~ ^[a-z0-9][a-z0-9-]*$ ]] && ! is_main "$1"; }
+
+profile_dir() {
+  valid_name "${1:-}" || { echo "bad account name: '${1:-}'" >&2; usage; }
+  echo "$HOME/.claude-$1"
+}
+
+profile_folders() {
+  local d
+  shopt -s nullglob
+  for d in "$HOME"/.claude-*/; do [[ -f "$d$marker" ]] && echo "${d%/}"; done
+}
+
+# An account's name is its marker's content; add and rename write it. Older accounts have an empty marker,
+# and their name is the folder suffix.
+folder_name() { local n; n="$(<"$1/$marker")"; echo "${n:-${1#"$HOME"/.claude-}}"; }
+
+profile_names() { local d; while read -r d; do folder_name "$d"; done < <(profile_folders); }
+
+profile_folder() {
+  local d
+  while read -r d; do [[ "$(folder_name "$d")" == "$1" ]] && { echo "$d"; return; }; done < <(profile_folders)
+  echo "no account '$1'" >&2
+  return 1
+}
+
+all_names() { { main_name; profile_names; } | sort; }
+
+taken() { is_main "$1" || profile_folder "$1" >/dev/null 2>&1; }
+
+# The folder for a new account NAME: ~/.claude-NAME, or ~/.claude-NAME-2, -3, and so on while that path
+# exists, as it does for an account renamed during a session.
+new_folder() {
+  local d i=2
+  d="$(profile_dir "$1")"
+  while [[ -e "$d" ]]; do d="$HOME/.claude-$1-$i"; i=$((i + 1)); done
+  echo "$d"
+}
+
+# CLAUDE_CONFIG_DIR for an account: empty for the ~/.claude account, which Claude Code finds only unset.
+config_dir() { if is_main "$1"; then echo; else profile_folder "$1"; fi; }
+
+with_account() {
+  local d
+  d="$(config_dir "$1")"
+  shift
+  if [[ -z "$d" ]]; then env -u CLAUDE_CONFIG_DIR "$@"; else env CLAUDE_CONFIG_DIR="$d" "$@"; fi
+}
+
+link_shared() {
+  local dir="$1" name bad=0
+  for name in "${shared[@]}"; do
+    if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
+      ln -sfn "$main/$name" "$dir/$name"
+    else
+      echo "  not replacing real file $dir/$name" >&2
+      bad=1
+    fi
+  done
+  return "$bad"
+}
+
+# Moves the files of a profile's own copy of a shared folder into ~/.claude, so link_shared can link it.
+# A file ~/.claude already has keeps its copy; the profile's copy goes to $dir/$name.unmerged. A file both
+# already have stays put, so link_shared refuses the folder and update reports it.
+fold_dir() {
+  local src="$1/$2" dst="$main/$2" rel to kept=0
+  [[ -d "$src" && ! -L "$src" ]] || return 0
+  while IFS= read -r -d '' rel; do
+    to="$dst"
+    [[ -e "$dst/$rel" ]] && to="$src.unmerged"
+    [[ -e "$to/$rel" ]] && continue
+    [[ "$to" == "$dst" ]] || kept=$((kept + 1))
+    mkdir -p "$to/${rel%/*}"
+    mv -- "$src/$rel" "$to/$rel"
+  done < <(cd "$src" && find . -type f -print0)
+  find "$src" -depth -type d -empty -delete
+  echo "  $2: moved into $dst$( ((kept)) && echo "; $kept files ~/.claude already has went to $src.unmerged")"
+}
+
+# Preferences that Claude Code saves per account in .claude.json and settings.json has no key for. The repo file
+# holds one value for every account on both hosts; `prefs` merges it with each account, so a /config change in any
+# account goes to the repo and to the other accounts (json-config.py sync_prefs). A running session keeps a key
+# written to its file from outside (checked on 10-10-2026 with Claude Code 2.1.296), so this does not wait for idle.
+prefs="$data/account-prefs.json"
+# json-config.py reads and rewrites every account's file, so all of them are locked first, all or none, and released in
+# the same call, also when the call ends early or gets INT or TERM (bash runs the EXIT trap then); when one stays
+# held, none of the files changes.
+cmd_prefs() {
+  local d f rc=0 configs=("$HOME/.claude.json") locked=()
+  trap claude_config_unlock_all EXIT
+  while read -r d; do configs+=("$d/.claude.json"); done < <(profile_folders)
+  for f in "${configs[@]}"; do
+    if [[ -f "$f" ]]; then locked+=("$f"); fi
+  done
+  claude_config_lock_all "${locked[@]}" || rc=1
+  if (( ! rc )); then
+    python3 "$data/../bin/json-config.py" prefs "$prefs" "$main/backups/desktop-sync/account-prefs.json.last-sync" "${configs[@]}" || rc=$?
+  fi
+  claude_config_unlock_all
+  trap - EXIT
+  return "$rc"
+}
+
+# Copies from ~/.claude.json what a profile's own .claude.json needs: MCP servers; the onboarding keys,
+# because `claude auth login` leaves them unset and the first start then reruns the first-run wizard;
+# the trusted folders, so the trust question is not asked again; and the values in the preferences file.
+# It holds the file's lock (claude-config-lock.sh) from the read to the move, and releases it on INT or TERM too.
+sync_config() {
+  local f="$1/.claude.json" tmp ok=0
+  if [[ ! -f "$f" ]]; then
+    echo "  config: skipped, $f does not exist yet"
+    return
+  fi
+  trap claude_config_unlock_all EXIT
+  claude_config_lock "$f" || { trap - EXIT; return 1; }
+  if tmp="$(mktemp "$f.XXXXXX")" && jq --slurpfile m "$HOME/.claude.json" --slurpfile prefs "$prefs" \
+    '.mcpServers = ($m[0].mcpServers // {}) | .hasCompletedOnboarding = true
+     | if $m[0].lastOnboardingVersion then .lastOnboardingVersion = $m[0].lastOnboardingVersion else . end
+     | reduce ($m[0].projects // {} | to_entries[] | select(.value.hasTrustDialogAccepted == true) | .key) as $p
+         (.; .projects[$p].hasTrustDialogAccepted = true)
+     | . + $prefs[0]' \
+    "$f" > "$tmp" && chmod --reference="$f" "$tmp" && mv "$tmp" "$f"; then
+    ok=1
+  else
+    [[ -z "${tmp:-}" ]] || rm -f -- "$tmp"
+  fi
+  claude_config_unlock "$f"
+  trap - EXIT
+  (( ok )) || return 1
+  echo "  config: synced; MCP $(jq -r '.mcpServers | keys | join(", ")' "$f")"
+}
+
+in_use() {
+  local p
+  for p in $(pgrep -x 'claude|\.claude-wrapped' || true); do
+    grep -qxzF "CLAUDE_CONFIG_DIR=$1" "/proc/$p/environ" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+require_idle() { ! in_use "$1" || { echo "a claude session still runs with $1; close it first" >&2; exit 1; }; }
+
+# One tab-separated line per account: name, email, organization, plan, links, MCP servers.
+row() {
+  local name="$1" dir cfg status login org plan mcp links=- f
+  dir="$(config_dir "$name")"
+  cfg="${dir:-$HOME}/.claude.json"
+  status="$(with_account "$name" claude auth status 2>/dev/null || true)"
+  if [[ -n "$dir" ]]; then
+    links=ok
+    for f in "${shared[@]}"; do
+      [[ "$(readlink "$dir/$f")" == "$main/$f" ]] || links=broken
+    done
+  elif [[ -f "$main/.claude.json" ]]; then
+    # A run with CLAUDE_CONFIG_DIR=~/.claude writes this second config, and a login there leaves
+    # ~/.claude.json, which this row and the main account read, naming the old account.
+    links="split"
+  fi
+  login="$(jq -r 'if .loggedIn then .email // "?" else "not logged in" end' <<<"$status" 2>/dev/null || echo unknown)"
+  # One email can belong to several organizations (a personal Max plan and a Team seat), one account each.
+  org="$(jq -r 'if .loggedIn then (.orgName // "?") as $o | if $o == (.email + "\u0027s Organization") then "personal" else $o end else "-" end' <<<"$status" 2>/dev/null || echo -)"
+  plan="$(jq -r 'if .loggedIn then .subscriptionType // "?" else "-" end' <<<"$status" 2>/dev/null || echo -)"
+  # The usage tier (5x, 20x) is only in the credentials file, as rateLimitTier "default_claude_max_20x".
+  [[ "$plan" != - ]] && plan+="$(jq -r '.claudeAiOauth.rateLimitTier // "" | capture("_(?<t>[0-9]+x)$").t | " " + .' \
+    "${dir:-$main}/.credentials.json" 2>/dev/null || true)"
+  mcp="$( [[ -f "$cfg" ]] && jq -r '.mcpServers // {} | keys | join(" ")' "$cfg" || true)"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$login" "$org" "$plan" "$links" "${mcp:--}"
+}
+
+rows() {
+  local n
+  while read -r n; do row "$n"; done < <(all_names)
+}
+
+cmd_list() {
+  if [[ -t 1 ]] && command -v gum >/dev/null; then
+    rows | gum table --print --separator=$'\t' --columns=Account,Login,Org,Plan,Links,MCP --border=rounded \
+      --border.foreground="$accent"
+  else
+    rows | column -t -s $'\t'
+  fi
+}
+
+# Prints the folder of extra account NAME, creating and linking it when it does not exist yet.
+ensure_folder() {
+  local name="$1" dir
+  if dir="$(profile_folder "$name" 2>/dev/null)"; then
+    echo "$dir already exists; linking again" >&2
+  else
+    dir="$(new_folder "$name")"
+    mkdir -p "$dir"
+    chmod 700 "$dir"
+    echo "$name" > "$dir/$marker"
+  fi
+  link_shared "$dir" || true
+  echo "$dir"
+}
+
+cmd_add() {
+  local name="${1:-}" dir
+  dir="$(ensure_folder "$name")"
+  if [[ -t 0 ]] && ! CLAUDE_CONFIG_DIR="$dir" claude auth status 2>/dev/null | jq -e .loggedIn >/dev/null; then
+    echo "log in with the $name account in the browser window that opens"
+    CLAUDE_CONFIG_DIR="$dir" claude auth login
+  fi
+  sync_config "$dir"
+  echo "done; use it with: claude --account $name"
+}
+
+cmd_rename() {
+  local old="" new
+  new="$(profile_dir "${2:-}")"
+  is_main "${1:-}" || old="$(profile_folder "${1:-}")" || exit 1
+  [[ "$1" != "$2" ]] && taken "$2" && { echo "\"$2\" is taken" >&2; exit 1; }
+  if [[ -z "$old" ]]; then
+    echo "$2" > "$main_label"
+    echo "renamed; ~/.claude is now called $2 (claude --account $2)"
+    return
+  fi
+  if in_use "$old"; then
+    echo "a claude session runs with $old, so the folder keeps its path"
+    new="$old"
+  elif [[ "$old" != "$new" ]]; then
+    new="$(new_folder "$2")"
+    mv -- "$old" "$new"
+  fi
+  echo "$2" > "$new/$marker"
+  echo "renamed; use it with: claude --account $2"
+}
+
+cmd_update() {
+  local d f bad=0
+  while read -r d; do
+    echo "$d"
+    if in_use "$d"; then
+      link_shared "$d" || bad=1
+      echo "  config: skipped, a claude session runs with this account; close it and run update again"
+      bad=1
+    else
+      for f in "${shared[@]}"; do fold_dir "$d" "$f"; done
+      link_shared "$d" || bad=1
+      sync_config "$d" || bad=1
+    fi
+  done < <(profile_folders)
+  return "$bad"
+}
+
+cmd_delete() {
+  local name="${1:-}" yes="${2:-}" dir answer
+  dir="$(profile_folder "$name")" || exit 1
+  require_idle "$dir"
+  if [[ "$yes" != --yes ]]; then
+    read -r -p "log out and delete $dir? [y/N] " answer
+    [[ "$answer" == [yY] ]] || { echo "kept $dir"; return; }
+  fi
+  CLAUDE_CONFIG_DIR="$dir" claude auth logout >/dev/null 2>&1 || echo "logout failed; deleting anyway"
+  # rm does not follow the symlinks, so the shared config in ~/.claude is untouched
+  rm -rf -- "$dir"
+  echo "deleted $dir"
+}
+
+# ---- logins ----
+
+# Every device keeps its own browser login for every account in claude-code/accounts.json; never copy a
+# .credentials.json between devices, because Claude Code rotates the refresh token on use.
+bin_dir="$(dirname "$self")"
+login_soon=$((5 * 86400)) # claude-usage EXPIRING: renew a login that ends within 5 days
+# An unreachable host fails within seconds instead of waiting for the TCP timeout, and no prompt hangs the widget.
+ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
+login_wait=900 # chosen: how long a remote login waits for the browser
+
+account_field() { jq -r --arg n "$1" --arg f "$2" '.accounts[$n][$f] // empty' "$accounts_file"; }
+
+# The org label claude-accounts list shows: "personal" for the email's own organization.
+status_label() {
+  jq -r 'if .loggedIn then .email + " " + ((.orgName // "?") as $o
+    | if $o == (.email + "\u0027s Organization") then "personal" else $o end) else "not logged in" end'
+}
+
+cmd_login() {
+  local name="${1:-}" host="" email org brave dir got want
+  if [[ "${2:-}" == --on ]]; then host="${3:?--on needs a host}"; (( $# == 3 )) || usage
+  else (( $# <= 1 )) || usage
+  fi
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "bad account name: '$name'" >&2; usage; }
+  [[ -z "$host" || "$host" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo "bad host name: '$host'" >&2; usage; }
+  if [[ -n "$host" ]]; then login_remote "$name" "$host"; return; fi
+  email="$(account_field "$name" email)" org="$(account_field "$name" org)" brave="$(account_field "$name" brave_profile)"
+  [[ -n "$email" ]] || echo "$name is not in $accounts_file; the login cannot check which account it got" >&2
+  if ! taken "$name"; then
+    [[ -n "$email" ]] || { echo "no account '$name' here, and accounts.json does not list it" >&2; exit 1; }
+    ensure_folder "$name" >/dev/null
+  fi
+  dir="$(config_dir "$name")"
+  echo "logging in to $name${email:+ ($email, $org)}${brave:+ in the Brave profile \"$brave\"}"
+  [[ "$org" != personal && -n "$org" ]] && echo "pick the organization $org on the authorize page"
+  CLAUDE_LOGIN_BRAVE_PROFILE="$brave" BROWSER="$bin_dir/claude-login-browser" \
+    with_account "$name" claude auth login --claudeai ${email:+--email "$email"}
+  got="$(with_account "$name" claude auth status --json 2>/dev/null | status_label)"
+  want="$email $org"
+  if [[ -n "$email" && "$got" != "$want" ]]; then
+    # A login to the wrong organization would let this account stand in for another one in rotation and the cards.
+    with_account "$name" claude auth logout >/dev/null 2>&1 || true
+    "$bin_dir/claude-usage" --account "$name" --quiet || true
+    echo "✗ $name got \"$got\", but accounts.json expects \"$want\", so it is logged out again; run login $name" \
+      "and pick ${org:-the right organization} on the authorize page" >&2
+    return 1
+  fi
+  echo "✓ $name: $got"
+  [[ -z "$dir" ]] || sync_config "$dir"
+  "$bin_dir/claude-usage" --account "$name" --quiet || true
+}
+
+# Runs `login NAME` on HOST in a tmux session there. The remote claude writes its authorize URL to a file (through
+# claude-login-browser), this device opens it in the account's Brave profile, and an ssh tunnel carries the browser's
+# redirect to localhost:PORT back to the remote claude. When the authorize page shows a code instead, paste it here.
+login_remote() {
+  local rc=0
+  login_host="$2" login_session="claude-login-$1" tunnel=""
+  # The remote tmux session and the tunnel end with this login, also on ctrl+c or a closed window, which exit through
+  # the EXIT trap.
+  trap cleanup_remote EXIT
+  trap 'exit 130' INT TERM HUP
+  login_remote_run "$@" || rc=$?
+  cleanup_remote
+  trap - EXIT INT TERM HUP
+  return "$rc"
+}
+
+# shellcheck disable=SC2029 # each remote command is built here, with values this script checked
+cleanup_remote() {
+  [[ -z "$tunnel" ]] || kill "$tunnel" 2>/dev/null || true
+  ssh "${ssh_opts[@]}" "$login_host" "tmux kill-session -t $login_session 2>/dev/null; rm -f /tmp/$login_session.url /tmp/$login_session.rc" || true
+}
+
+# shellcheck disable=SC2029 # each remote command is built here, with values this script checked
+login_remote_run() {
+  local name="$1" host="$2" brave s url port code rc="" remote_cmd deadline
+  brave="$(account_field "$name" brave_profile)"
+  s="claude-login-$name"
+  # --foreground keeps claude in the terminal's foreground process group; without it claude stops on its first
+  # terminal read (state T), before it prints the URL.
+  remote_cmd="rm -f /tmp/$s.url /tmp/$s.rc; tmux kill-session -t $s 2>/dev/null; tmux new-session -d -s $s -x 200 -y 50 \
+'CLAUDE_LOGIN_URL_FILE=/tmp/$s.url timeout --foreground $((login_wait + 60)) claude-accounts login $name; echo \$? > /tmp/$s.rc; sleep 600'"
+  ssh "${ssh_opts[@]}" "$host" "$remote_cmd" || { echo "✗ could not start the login on $host" >&2; return 1; }
+  for _ in $(seq 60); do
+    url="$(ssh "${ssh_opts[@]}" "$host" "cat /tmp/$s.url 2>/dev/null" || true)"
+    [[ -n "$url" ]] && break
+    rc="$(ssh "${ssh_opts[@]}" "$host" "cat /tmp/$s.rc 2>/dev/null" || true)"
+    [[ -z "$rc" ]] || break
+    sleep 1
+  done
+  if [[ -z "$url" ]]; then
+    ssh "${ssh_opts[@]}" "$host" "tmux capture-pane -p -t $s | grep -v '^\s*$' | tail -5" >&2 || true
+    echo "✗ the login on $host printed no authorize URL" >&2
+    return 1
+  fi
+  port="$(sed -n 's/.*redirect_uri=http%3A%2F%2Flocalhost%3A\([0-9]*\).*/\1/p; s/.*redirect_uri=http:\/\/localhost:\([0-9]*\).*/\1/p' <<<"$url" | head -1)"
+  if [[ -n "$port" ]]; then
+    ssh "${ssh_opts[@]}" -N -o ExitOnForwardFailure=yes -L "$port:localhost:$port" "$host" &
+    tunnel=$!
+  fi
+  echo "opening the $name login for $host${brave:+ in the Brave profile \"$brave\"}"
+  CLAUDE_LOGIN_BRAVE_PROFILE="$brave" "$bin_dir/claude-login-browser" "$url" ||
+    echo "open this URL in the browser: $url"
+  echo "finish the login in the browser; if the page shows a code, paste it here and press Enter"
+  rc="" deadline=$((SECONDS + login_wait))
+  while [[ -z "$rc" ]]; do
+    if (( SECONDS > deadline )); then
+      echo "✗ the login on $host did not finish in $((login_wait / 60)) min" >&2
+      return 1
+    fi
+    if [[ -t 0 ]] && read -r -t 2 code && [[ -n "$code" ]]; then
+      ssh "${ssh_opts[@]}" "$host" "tmux send-keys -t $s -l -- $(printf %q "$code") && tmux send-keys -t $s Enter"
+    elif [[ ! -t 0 ]]; then
+      sleep 2
+    fi
+    rc="$(ssh "${ssh_opts[@]}" "$host" "cat /tmp/$s.rc 2>/dev/null" || true)"
+  done
+  ssh "${ssh_opts[@]}" "$host" "tmux capture-pane -p -t $s | grep -v '^\s*$' | grep -v 'Paste code\|authorize?' | tail -4" || true
+  return "$rc"
+}
+
+# Opens a terminal window that runs login and waits for a key, for the widget, which has no terminal of its own.
+cmd_login_window() {
+  local run term a
+  # plasmashell, which starts this for the widget, has no ~/.local/bin on PATH, where claude lives on two hosts.
+  run="export PATH=$(printf %q "$HOME/.local/bin"):\$PATH; $(printf %q "$self") login"
+  for a in "$@"; do run+=" $(printf %q "$a")"; done
+  run+="; echo; read -rsn1 -p 'Press any key to close this window'"
+  for term in ghostty konsole; do
+    if command -v "$term" >/dev/null; then
+      setsid -f "$term" -e bash -c "$run" >/dev/null 2>&1 </dev/null
+      return
+    fi
+  done
+  echo "no terminal (ghostty, konsole) on this device" >&2
+  return 1
+}
+
+# The accounts in accounts.json that need a login on this device, or on HOST: missing, logged out, or ending soon.
+due_accounts() {
+  local host="${1:-}" usage
+  if [[ -n "$host" ]]; then
+    usage="$(ssh "${ssh_opts[@]}" "$host" 'claude-usage --json --max-age 600')" ||
+      { echo "✗ could not read the accounts on $host" >&2; return 1; }
+  else
+    usage="$("$bin_dir/claude-usage" --json --max-age 600)" || return 1
+  fi
+  jq -r --slurpfile a "$accounts_file" --argjson soon "$login_soon" '
+    (.accounts | map({(.name): .}) | add // {}) as $have
+    | $a[0].accounts | keys[]
+    | select(($have[.] == null) or ($have[.].state == "logged-out")
+             or ($have[.].login_expires_at != null and $have[.].login_expires_at - now < $soon))' <<<"$usage"
+}
+
+cmd_login_all() {
+  local host="" list=0 n failed=() due text
+  while (( $# )); do
+    case "$1" in
+      --list) list=1; shift ;;
+      --on) host="${2:?--on needs a host}"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  # An assignment keeps errexit, so an unreachable host fails here instead of reading as "nothing due".
+  text="$(due_accounts "$host")"
+  mapfile -t due < <([[ -z "$text" ]] || printf '%s\n' "$text")
+  if (( list )); then (( ${#due[@]} == 0 )) || printf '%s\n' "${due[@]}"; return; fi
+  if (( ${#due[@]} == 0 )); then
+    echo "every account in accounts.json is logged in${host:+ on $host} for more than 5 days"
+    return
+  fi
+  echo "accounts to log in${host:+ on $host}: ${due[*]}"
+  for n in "${due[@]}"; do
+    echo
+    if [[ -n "$host" ]]; then cmd_login "$n" --on "$host" || failed+=("$n"); else cmd_login "$n" || failed+=("$n"); fi
+  done
+  (( ${#failed[@]} == 0 )) || { echo "✗ not logged in: ${failed[*]}" >&2; return 1; }
+}
+
+case "${1:-}" in
+  "" | -*) exec "$bin_dir/claude-usage" "$@" ;;
+  list | ls) cmd_list ;;
+  add) cmd_add "${2:-}" ;;
+  rename | mv) cmd_rename "${2:-}" "${3:-}" ;;
+  update) cmd_update ;;
+  prefs) cmd_prefs ;;
+  delete | rm) cmd_delete "${2:-}" "${3:-}" ;;
+  login) cmd_login "${@:2}" ;;
+  login-window) cmd_login_window "${@:2}" ;;
+  login-all) cmd_login_all "${@:2}" ;;
+  names) all_names ;;
+  dir) config_dir "${2:-}" ;;
+  *) usage ;;
+esac

@@ -1,0 +1,715 @@
+#!/usr/bin/env python3
+# Usage limits and login state of every claude-accounts account, written to ~/.cache/claude-usage/usage.json for the
+# Claude accounts widget (nixos-config pkgs/claude-accounts-widget), claude-rotate and claude-limit-switch. People run
+# it as `claude-accounts [OPTIONS]`; the widget and claude-usage.timer run it by path.
+#   claude-accounts                    check every account, write the cache, print one card per account
+#   claude-accounts --json             the same, and print the cache as JSON instead, plus "combined": one entry per
+#                                      account across hosts (see combined())
+#   claude-accounts --cached           print the cache only; no account is checked
+#   claude-accounts --max-age SECONDS  check only when the cache is older than SECONDS
+#   claude-accounts --account NAME     check NAME only (repeatable); the others keep their cached entry
+#   claude-accounts --quiet            print nothing (claude-usage.timer)
+#   claude-accounts --watch            redraw every 30 s; check the accounts when the cache is older than 5 min
+# It never refreshes a token, because Claude Code rotates the refresh token on use and a second refresher logs the CLI
+# out. An access token valid for more than FRESH seconds reads GET /api/oauth/usage. Any other account runs a one-turn
+# `claude -p` in safe mode (no hooks, MCP servers or CLAUDE.md) under its own CLAUDE_CONFIG_DIR, so Claude Code
+# refreshes the token under its own lock, and the run's rate_limit_event carries the same two windows.
+# remote_hosts in accounts.json (claude-accounts' CLAUDE_ACCOUNTS_DATA) names, per host, the hosts whose cache it reads over ssh, so the
+# views show each host's logins. READ_KEY, when it exists, is offered first: nixos-rog accepts it only for reading its
+# cache (nixos-config machines/nixos-rog), because the everyday key has a passphrase no timer can type. Usage limits belong to the account, not the host, so the views show each account once with the
+# newest reading from any host, and one login per host. CLAUDE_USAGE_CACHE points the cache elsewhere.
+from __future__ import annotations
+
+import argparse
+import fcntl
+import http.client
+import json
+import os
+import re
+import select
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+HOME = Path.home()
+BIN = Path(__file__).resolve().parent
+PROFILES = BIN / "claude-accounts"
+ACCOUNTS = Path(os.environ.get("CLAUDE_ACCOUNTS_DATA") or HOME / "Desktop/workspace/dotfiles/desktop/claude-code") / "accounts.json"
+CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage/usage.json")
+PROBE_DIR = HOME / ".cache/claude-usage/probe"
+USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+# Chosen, not measured: a token that ends sooner than this goes through the probe, so a request never races its expiry.
+FRESH = 300
+# Claude Code warns 3 days before a login ends (authentication docs, "Renew an expiring login"); the widget and
+# `claude-accounts login-all` warn earlier, so a login can be renewed on a day Omer is at that device. Chosen.
+EXPIRING = 5 * 86400
+PROBE_TIMEOUT = 90
+SSH_TIMEOUT = 20
+READ_KEY = HOME / ".ssh/id_ed25519_claude_usage"
+
+
+def now() -> int:
+    return int(time.time())
+
+
+def accounts() -> dict[str, str]:
+    """Account name to its CLAUDE_CONFIG_DIR; empty for the ~/.claude account."""
+    def run(*a: str) -> str:
+        return subprocess.run([str(PROFILES), *a], capture_output=True, text=True, check=True).stdout.strip()
+
+    return {n: run("dir", n) for n in run("names").split()}
+
+
+def folder(config_dir: str) -> Path:
+    return Path(config_dir) if config_dir else HOME / ".claude"
+
+
+def read_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def oauth(config_dir: str) -> dict:
+    return (read_json(folder(config_dir) / ".credentials.json") or {}).get("claudeAiOauth") or {}
+
+
+def identity(config_dir: str, creds: dict) -> dict:
+    cfg = read_json(Path(config_dir) / ".claude.json" if config_dir else HOME / ".claude.json") or {}
+    acct = cfg.get("oauthAccount") or {}
+    email, org = acct.get("emailAddress"), acct.get("organizationName")
+    # One email can hold a personal plan and a Team seat; claude-accounts list calls the first "personal" too.
+    if org and email and org == f"{email}'s Organization":
+        org = "personal"
+    plan = creds.get("subscriptionType")
+    tier = (creds.get("rateLimitTier") or "").rsplit("_", 1)[-1]
+    if plan and tier.endswith("x") and tier[:-1].isdigit():
+        plan = f"{plan} {tier}"
+    return {"email": email, "org": org, "plan": plan}
+
+
+def epoch(iso: str | None) -> int | None:
+    if not iso:
+        return None
+    return int(datetime.fromisoformat(iso).timestamp())
+
+
+def claude_version() -> str:
+    try:
+        out = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=30, check=False).stdout
+        return out.split()[0]
+    except (OSError, IndexError, subprocess.TimeoutExpired):
+        return "2"
+
+
+class ApiError(Exception):
+    def __init__(self, status: int, text: str):
+        super().__init__(text)
+        self.status = status
+
+
+def api_usage(token: str, version: str) -> dict:
+    req = urllib.request.Request(USAGE_URL, headers={
+        "Authorization": f"Bearer {token}",
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": f"claude-code/{version}",
+        "Accept": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            data = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise ApiError(e.code, f"usage endpoint answered HTTP {e.code}") from None
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise ApiError(0, f"usage endpoint unreachable: {e}") from None
+
+    def window(key: str) -> dict | None:
+        w = data.get(key)
+        return {"used": float(w["utilization"]), "resets_at": epoch(w.get("resets_at"))} if w else None
+
+    try:
+        # Weekly limits of one model, such as Fable, are only in the limits list.
+        scoped = [{"label": ((x.get("scope") or {}).get("model") or {}).get("display_name") or "model",
+                   "used": float(x["percent"]), "resets_at": epoch(x.get("resets_at"))}
+                  for x in data.get("limits") or [] if x.get("kind") == "weekly_scoped"]
+        return {"five_hour": window("five_hour"), "seven_day": window("seven_day"), "scoped": scoped}
+    except (AttributeError, KeyError, TypeError, ValueError) as e:
+        raise ApiError(0, f"usage endpoint answered an unknown shape: {e!r}") from None
+
+
+class ProbeError(Exception):
+    def __init__(self, text: str, logged_out: bool):
+        super().__init__(text)
+        self.logged_out = logged_out
+
+
+def probe(config_dir: str) -> dict:
+    PROBE_DIR.mkdir(parents=True, exist_ok=True)
+    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "CLAUDE_ROTATE_ID")}
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    cmd = ["claude", "-p", "--safe-mode", "--no-session-persistence", "--model", "haiku", "--max-turns", "1",
+           "--output-format", "stream-json", "--verbose", "Reply with ok."]
+    try:
+        p = subprocess.run(cmd, cwd=PROBE_DIR, env=env, capture_output=True, text=True, timeout=PROBE_TIMEOUT,
+                           stdin=subprocess.DEVNULL, check=False)
+    except subprocess.TimeoutExpired:
+        raise ProbeError(f"claude -p did not finish in {PROBE_TIMEOUT} s", False) from None
+    windows, result = None, ""
+    for line in p.stdout.splitlines():
+        # Only the result event and stderr name a failure; the init event lists commands such as /login.
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") == "rate_limit_event":
+            uw = (ev.get("rate_limit_info") or {}).get("unifiedWindows") or {}
+            windows = {k: {"used": round(float(w["utilization"]) * 100, 1), "resets_at": w.get("resetsAt")}
+                       if (w := uw.get(k)) else None for k in ("five_hour", "seven_day")}
+        elif ev.get("type") == "result" and ev.get("is_error"):
+            result = str(ev.get("result") or ev.get("subtype") or "")
+    if windows and (windows["five_hour"] or windows["seven_day"]):
+        return windows
+    text = (result or p.stderr).strip().replace("\n", " ")[:200]
+    if not text:
+        raise ProbeError(f"claude -p exited {p.returncode} without a usage reading", False)
+    low = text.lower()
+    raise ProbeError(text, any(w in low for w in ("login", "log in", "authenticat", "oauth", "401")))
+
+
+def check(config_dir: str, old: dict | None, version: str) -> dict:
+    creds = oauth(config_dir)
+    entry = {**identity(config_dir, creds), "state": "ok", "error": None, "five_hour": None, "seven_day": None,
+             "scoped": [],
+             "login_expires_at": None, "checked": now(), "source": None}
+    if expires := creds.get("refreshTokenExpiresAt"):
+        entry["login_expires_at"] = int(expires) // 1000
+    if not creds.get("refreshToken") or (entry["login_expires_at"] or now() + 1) <= now():
+        entry["state"] = "logged-out"
+        return entry
+
+    def stale(err: str) -> dict:
+        entry["state"], entry["error"] = "error", err
+        if old and old.get("five_hour"):
+            # checked stays the time of the reading, so a reader can tell its age.
+            entry.update(five_hour=old["five_hour"], seven_day=old["seven_day"], scoped=old.get("scoped", []),
+                         source="stale",
+                         checked=old.get("checked"))
+        return entry
+
+    windows = None
+    if (creds.get("expiresAt") or 0) // 1000 > now() + FRESH:
+        try:
+            windows, entry["source"] = api_usage(creds["accessToken"], version), "api"
+        except ApiError as e:
+            if e.status != 401:
+                return stale(str(e))
+    if windows is None:
+        try:
+            windows, entry["source"] = probe(config_dir), "probe"
+        except ProbeError as e:
+            if e.logged_out:
+                entry["state"], entry["error"] = "logged-out", str(e)
+                return entry
+            return stale(str(e))
+        # The probe refreshed the token when it had expired; read the identity and login end it may have changed.
+        creds = oauth(config_dir)
+        entry.update(identity(config_dir, creds))
+        if expires := creds.get("refreshTokenExpiresAt"):
+            entry["login_expires_at"] = int(expires) // 1000
+    if not (windows["five_hour"] or windows["seven_day"]):
+        return stale("the usage reading named no window")
+    entry.update(windows)
+    if entry["login_expires_at"] and entry["login_expires_at"] - now() < EXPIRING:
+        entry["state"] = "expiring"
+    return entry
+
+
+def remote(host: str, old: dict | None) -> dict:
+    try:
+        key = ["-i", str(READ_KEY)] if READ_KEY.exists() else []
+        p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", *key, host,
+                            "cat .cache/claude-usage/usage.json"], capture_output=True, text=True,
+                           timeout=SSH_TIMEOUT, stdin=subprocess.DEVNULL, check=False)
+        if p.returncode != 0:
+            raise OSError(p.stderr.strip().splitlines()[-1][:200] if p.stderr.strip() else f"ssh exited {p.returncode}")
+        data = json.loads(p.stdout)
+        return {"host": host, "updated": data.get("updated"), "error": None, "accounts": data.get("accounts", [])}
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
+        kept = old or {"updated": None, "accounts": []}
+        return {"host": host, "updated": kept["updated"], "error": f"could not read its cache: {e}",
+                "accounts": kept["accounts"]}
+
+
+def load_cache() -> dict:
+    return read_json(CACHE) or {"version": 1, "host": socket.gethostname(), "updated": 0, "accounts": [], "hosts": []}
+
+
+def write_cache(data: dict) -> None:
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=CACHE.parent, prefix=CACHE.name + ".")
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=1)
+        f.write("\n")
+    os.replace(tmp, CACHE)
+
+
+def refresh(only: list[str]) -> dict:
+    data = load_cache()
+    dirs = accounts()
+    unknown = [n for n in only if n not in dirs]
+    if unknown:
+        sys.exit(f"claude-usage: no account {', '.join(unknown)}; accounts: {', '.join(dirs)}")
+    old = {a["name"]: a for a in data.get("accounts", [])}
+    version = claude_version() if shutil.which("claude") else "2"
+    result = []
+    for n, d in dirs.items():
+        if only and n not in only and n in old:
+            result.append(old[n])
+            continue
+        try:
+            result.append({"name": n, **check(d, old.get(n), version)})
+        except Exception as e:  # noqa: BLE001 - one account's failure must not cost the others their reading
+            # The last good entry stays, marked like a stale() carry-over.
+            kept = old.get(n) or {"email": None, "org": None, "plan": None, "five_hour": None, "seven_day": None,
+                                  "login_expires_at": None, "checked": now()}
+            result.append({**kept, "name": n, "state": "error", "error": f"claude-usage failed: {e!r}"[:200],
+                           "source": "stale" if kept.get("five_hour") else None})
+    me = socket.gethostname()
+    hosts = (read_json(ACCOUNTS) or {}).get("remote_hosts", {}).get(me, [])
+    old_hosts = {h["host"]: h for h in data.get("hosts", [])}
+    data = {"version": 1, "host": me, "updated": now(), "accounts": result,
+            "hosts": [remote(h, old_hosts.get(h)) for h in hosts if h != me] if not only else data.get("hosts", [])}
+    write_cache(data)
+    return data
+
+
+def combined(data: dict) -> list[dict]:
+    """One entry per account in accounts.json order, then any other name a host reported. The usage fields come from
+    the newest reading on any host, a fresh one before a stale one; "read_on" names that host. "logins" holds one
+    item per host: its state, login end and error, or state "missing" when a host that answered has no such account.
+    A host whose cache could not be read and has no copy of it is left out."""
+    me = data.get("host") or socket.gethostname()
+    hosts = [{"host": me, "local": True, "updated": data.get("updated"), "error": None,
+              "accounts": data.get("accounts", [])}]
+    hosts += [{**h, "local": False} for h in data.get("hosts", [])]
+    names = list((read_json(ACCOUNTS) or {}).get("accounts", {}))
+    names += [a["name"] for h in hosts for a in h["accounts"] if a["name"] not in names]
+    result = []
+    for n in names:
+        logins, readings = [], []
+        for h in hosts:
+            a = next((x for x in h["accounts"] if x["name"] == n), None)
+            if a is None:
+                if h["accounts"] or not h["error"]:
+                    logins.append({"host": h["host"], "local": h["local"], "state": "missing",
+                                   "login_expires_at": None, "error": None})
+                continue
+            logins.append({"host": h["host"], "local": h["local"], "state": a["state"],
+                           "login_expires_at": a.get("login_expires_at"), "error": a.get("error")})
+            if a.get("five_hour") or a.get("seven_day"):
+                readings.append((a.get("source") != "stale", a.get("checked") or 0, h["host"], a))
+        known = next((a for h in hosts for a in h["accounts"] if a["name"] == n and a.get("email")), {})
+        entry = {"name": n, "email": known.get("email"), "org": known.get("org"), "plan": known.get("plan"),
+                 "five_hour": None, "seven_day": None, "scoped": [], "checked": None, "source": None,
+                 "read_on": None, "logins": logins}
+        if readings:
+            *_, host, a = max(readings, key=lambda r: r[:2])
+            entry.update(five_hour=a.get("five_hour"), seven_day=a.get("seven_day"), scoped=a.get("scoped", []),
+                         checked=a.get("checked"), source=a.get("source"), read_on=host,
+                         **{k: a.get(k) or entry[k] for k in ("email", "org", "plan")})
+        result.append(entry)
+    return result
+
+
+WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
+# Severity follows the widget: under 70% green, under 90% amber, else red, where claude-rotate stops picking an
+# account. The RGB values are the status line's (claude-code/statusline.sh).
+GREEN, AMBER, RED = "38;2;106;211;158", "38;2;255;197;88", "38;2;255;100;100"
+ACCENT, TRACK, DIM, BOLD = "38;2;217;119;87", "38;2;70;70;70", "2", "1"
+
+
+def span(seconds: float) -> str:
+    seconds = int(seconds)
+    d, h, m = seconds // 86400, seconds % 86400 // 3600, seconds % 3600 // 60
+    return f"{d}d {h}h" if d else f"{h}h {m}m" if h else f"{m}m"
+
+
+def pace(used: float, resets_at: int | None, window: int, at: int) -> float | None:
+    """Used percent minus the elapsed percent of the window, as the status line computes it: above 0 the account
+    burns faster than an even spread over the window, below 0 slower."""
+    if not resets_at or not 0 < resets_at - at <= window:
+        return None
+    return used - (1 - (resets_at - at) / window) * 100
+
+
+def sessions() -> dict[str, int]:
+    """Interactive Claude sessions on this host per CLAUDE_CONFIG_DIR ("" for ~/.claude): a process named claude
+    whose stdin is a terminal."""
+    count: dict[str, int] = {}
+    for p in Path("/proc").iterdir():
+        try:
+            if not p.name.isdigit() or (p / "comm").read_text().strip() not in ("claude", ".claude-wrapped"):
+                continue
+            if not os.readlink(p / "fd/0").startswith("/dev/pts/"):
+                continue
+            env = dict(x.split("=", 1) for x in (p / "environ").read_bytes().decode().split("\0") if "=" in x)
+        except OSError:
+            continue
+        d = env.get("CLAUDE_CONFIG_DIR", "").rstrip("/")
+        d = "" if d == str(HOME / ".claude") else d
+        count[d] = count.get(d, 0) + 1
+    return count
+
+
+class Cards:
+    """The terminal view: one section per host, one card per account with a bar per usage window. Colors only on a
+    terminal without NO_COLOR."""
+
+    def __init__(self, color: bool, width: int):
+        self.color = color
+        # The rest of a window row takes about 56 columns.
+        self.bar = max(12, min(40, width - 56))
+
+    def c(self, text: str, *codes: str) -> str:
+        return f"\033[{';'.join(codes)}m{text}\033[0m" if self.color and codes else text
+
+    @staticmethod
+    def tone(used: float) -> str:
+        return GREEN if used < 70 else AMBER if used < 90 else RED
+
+    def bar_cells(self, used: float, stale: bool) -> str:
+        cells = min(max(used, 0), 100) / 100 * self.bar
+        full = int(cells)
+        half = cells - full >= 0.5 and full < self.bar
+        tone = (self.tone(used), DIM) if stale else (self.tone(used),)
+        track = self.bar - full - (1 if half else 0)
+        return self.c("━" * full + ("╸" if half else ""), *tone) + self.c("─" * track, TRACK)
+
+    def window_row(self, label: str, w: dict | None, length: int | None, at: int, stale: bool) -> str:
+        head = "    " + self.c(f"{label:<7}", DIM)
+        if not w:
+            return head + self.c("─" * self.bar, TRACK) + "  " + self.c("no weekly limit", DIM)
+        used, t = w["used"], w.get("resets_at")
+        pct = self.c(f"{used:4.0f}%", self.tone(used), *((DIM,) if stale else ()))
+        d = pace(used, t, length, at) if length else None
+        if d is None:
+            mark = " " * 6
+        elif d > 5:
+            mark = self.c(f"▲{d:+4.0f}%", AMBER if d < 20 else RED)
+        elif d < -5:
+            mark = self.c(f"▽{d:+4.0f}%", GREEN)
+        else:
+            mark = self.c("≈     ", DIM)
+        if not t:
+            reset = "not started"
+        else:
+            # The API's reset times sit a fraction of a second either side of the full minute.
+            left = max(0, t + 30 - now())
+            clock = datetime.fromtimestamp(t + 30).astimezone().strftime("%H:%M" if left < 86400 else "%a %H:%M")
+            reset = f"resets {span(left)} · {clock}"
+        return f"{head}{self.bar_cells(used, stale)} {pct}  {mark}  {self.c(reset, DIM)}"
+
+    def login(self, x: dict, live: int | None) -> str:
+        state, t = x["state"], x.get("login_expires_at")
+        if state == "missing":
+            text = self.c("no login", AMBER)
+        elif state == "logged-out":
+            text = self.c("logged out", RED)
+        elif t:
+            left = t - now()
+            text = self.c(span(max(0, left)) if left < 86400 else f"{left // 86400} d",
+                          AMBER if state == "expiring" else DIM)
+        else:
+            text = self.c(state, RED if state == "error" else DIM)
+        if state == "error" and t:
+            text += " " + self.c("error", RED)
+        if live:
+            text += " " + self.c(f"● {live} session{'s' if live > 1 else ''}", ACCENT, BOLD)
+        return f"{x['host']} {text}"
+
+    def card(self, a: dict, live: int | None) -> list[str]:
+        org = " · ".join(x for x in (a.get("org"), a.get("plan")) if x)
+        head = f"  {self.c(a['name'], BOLD)}  {self.c(a.get('email') or '', DIM)}"
+        if org:
+            head += "  " + self.c(f"[{org}]", DIM)
+        logins = self.c(" · ", DIM).join(self.login(x, live if x["local"] else None) for x in a["logins"])
+        lines = [head, "    " + self.c(f"{'login':<7}", DIM) + logins]
+        stale = a.get("source") == "stale"
+        at = a.get("checked") or now()
+        if a.get("five_hour") or a.get("seven_day"):
+            lines.append(self.window_row("5h", a["five_hour"], WINDOWS["five_hour"], at, stale))
+            lines.append(self.window_row("7d", a["seven_day"], WINDOWS["seven_day"], at, stale))
+            lines += [self.window_row(x["label"], x, WINDOWS["seven_day"], at, stale) for x in a.get("scoped", [])]
+        for x in a["logins"]:
+            if x.get("error"):
+                age = f"numbers from {span(max(0, now() - at))} ago; " if stale and x["host"] == a["read_on"] else ""
+                lines.append("    " + self.c(f"{x['host']}: {age}{x['error']}", RED))
+        return lines
+
+    def render(self, data: dict, live: dict[str, int]) -> str:
+        legend = (self.c("pace  ", DIM) + self.c("▲ ahead", AMBER) + self.c(": faster than an even spread to the reset   ", DIM)
+                  + self.c("▽ behind", GREEN) + self.c(": room to spare   ", DIM) + self.c("≈ on pace", DIM))
+        checked = []
+        for host, updated, error in [(data.get("host") or socket.gethostname(), data.get("updated"), None),
+                                     *((h["host"], h["updated"], h["error"]) for h in data.get("hosts", []))]:
+            age = now() - updated if updated else None
+            when = "never" if age is None else "just now" if age < 60 else f"{span(age)} ago"
+            checked.append(f"{host} {when}" + (" " + self.c(error, RED) if error else ""))
+        lines = [legend, self.c("checked  ", DIM) + self.c(" · ", DIM).join(checked)]
+        accounts = combined(data)
+        for a in accounts:
+            lines += ["", *self.card(a, live.get(a["name"]))]
+        if any(x["state"] in ("missing", "logged-out", "expiring") for a in accounts for x in a["logins"]):
+            lines += ["", self.c("log in where it says no login, logged out or amber:  "
+                                 "claude-accounts login-all [--on HOST]", DIM)]
+        return "\n".join(lines)
+
+
+def show(data: dict) -> str:
+    try:
+        dirs = accounts()
+        by_dir = sessions()
+        live = {n: by_dir[d] for n, d in dirs.items() if by_dir.get(d)}
+    except (OSError, subprocess.SubprocessError):
+        live = {}
+    color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    return Cards(color, shutil.get_terminal_size().columns).render(data, live)
+
+
+def watch(every: int, max_age: int) -> int:
+    """Redraws the view every EVERY seconds from the cache and checks the accounts when the cache is older than
+    MAX_AGE, until ctrl+c."""
+    out = sys.stdout
+    out.write("\033[?1049h\033[?25l")  # the terminal's second screen, without a cursor
+    try:
+        while True:
+            data = locked_refresh([], max_age)
+            stamp = datetime.now().astimezone().strftime("%H:%M:%S")
+            head = f"watching all accounts  ·  {stamp}  ·  ctrl+c quits"
+            out.write("\033[H\033[2J" + (f"\033[2m{head}\033[0m" if out.isatty() else head) + "\n\n" + show(data) + "\n")
+            out.flush()
+            time.sleep(every)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        out.write("\033[?25h\033[?1049l")
+        out.flush()
+
+
+ANSI = re.compile(r"\033\[[0-9;]*m")
+# The selected row's background, and the picker's exit codes for claude-rotate.
+ROW_BG = "48;2;48;44;42"
+PICKED, CANCELLED, REFRESH = 0, 1, 3
+
+
+def visible(text: str) -> int:
+    return len(ANSI.sub("", text))
+
+
+class Picker:
+    """The account list `claude` opens before a session (claude-rotate runs `claude-usage --pick`). It draws on
+    /dev/tty from the cache, without a network call, and prints the chosen account on stdout. Exit codes: PICKED,
+    CANCELLED (q, esc, ctrl+c), REFRESH (r; stdout names the row under the cursor, and claude-rotate checks every
+    account and opens the picker again). Accounts logged out on this host are listed but cannot be picked."""
+
+    KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
+
+    def __init__(self, recommend: str | None, held: list[str], cursor: str | None):
+        self.dirs = accounts()
+        self.data = load_cache()
+        self.entries = {a["name"]: a for a in self.data.get("accounts", [])}
+        by_dir = sessions()
+        self.live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
+        self.recommend, self.held = recommend, set(held)
+        self.choices = [n for n in self.dirs if (self.entries.get(n) or {}).get("state") != "logged-out"]
+        first = next((x for x in (cursor, recommend) if x in self.choices), self.choices[0] if self.choices else None)
+        self.i = self.choices.index(first) if first else 0
+        self.color = not os.environ.get("NO_COLOR")
+
+    def mark(self, cards: Cards, w: dict | None, length: int, at: int) -> str:
+        d = pace(w["used"], w.get("resets_at"), length, at) if w else None
+        if d is None:
+            return " "
+        return cards.c("▲", AMBER if d < 20 else RED) if d > 5 else cards.c("▽", GREEN) if d < -5 else cards.c("≈", DIM)
+
+    def mini(self, cards: Cards, label: str, w: dict | None, length: int, at: int, stale: bool) -> str:
+        if not w:
+            return cards.c(f"{label} {'no limit':<{cards.bar + 7}}", DIM)
+        pct = cards.c(f"{w['used']:3.0f}%", cards.tone(w["used"]))
+        return f"{cards.c(label, DIM)} {cards.bar_cells(w['used'], stale)} {pct} {self.mark(cards, w, length, at)}"
+
+    def row(self, n: int, name: str, width: int, wname: int) -> str:
+        e = self.entries.get(name) or {}
+        sel = self.choices and name == self.choices[self.i]
+        cards = Cards(self.color, width)
+        cards.bar = max(6, min(14, (width - wname - 58) // 2))
+        pick = name in self.choices
+        num = str(self.choices.index(name) + 1) if pick and self.choices.index(name) < 9 else " "
+        head = (cards.c("❯", ACCENT, BOLD) if sel else " ") + " " + cards.c(num, DIM) + "  "
+        head += cards.c(f"{name:<{wname}}", BOLD) if sel else (cards.c(f"{name:<{wname}}", DIM) if not pick else
+                                                              f"{name:<{wname}}")
+        head += "  " + cards.c(f"{e.get('plan') or '':<8}", DIM)
+        tags = []
+        if e.get("state") == "logged-out":
+            tags.append(cards.c(f"logged out · claude-accounts login {name}", RED))
+        elif not e:
+            tags.append(cards.c("no reading yet", DIM))
+        else:
+            at, stale = e.get("checked") or now(), e.get("source") == "stale"
+            head += "  " + self.mini(cards, "5h", e.get("five_hour"), WINDOWS["five_hour"], at, stale)
+            head += "   " + self.mini(cards, "7d", e.get("seven_day"), WINDOWS["seven_day"], at, stale)
+        if name == self.recommend:
+            tags.append(cards.c("★ most room", ACCENT))
+        if name in self.held:
+            tags.append(cards.c("held back after a limit", AMBER))
+        if e.get("state") == "expiring":
+            tags.append(cards.c("login ends soon", AMBER))
+        if self.live.get(name):
+            tags.append(cards.c(f"● {self.live[name]} open", ACCENT))
+        line = " " + head + ("   " + "  ".join(tags) if tags else "")
+        line += " " * max(0, width - visible(line))
+        if sel and self.color:
+            line = f"\033[{ROW_BG}m" + line.replace("\033[0m", f"\033[0m\033[{ROW_BG}m") + "\033[0m"
+        return line
+
+    def detail(self, name: str, width: int) -> list[str]:
+        e = self.entries.get(name) or {}
+        cards = Cards(self.color, width)
+        org = " · ".join(x for x in (e.get("org"), e.get("plan")) if x)
+        lines = ["  " + cards.c(name, BOLD) + "  " + cards.c(e.get("email") or "", DIM)
+                 + (f"  {cards.c(f'[{org}]', DIM)}" if org else "")]
+        if not e.get("five_hour") and not e.get("seven_day"):
+            return [*lines, "    " + cards.c("no usage reading for this account yet; r checks it now", DIM)]
+        at, stale = e.get("checked") or now(), e.get("source") == "stale"
+        lines.append(cards.window_row("5h", e.get("five_hour"), WINDOWS["five_hour"], at, stale))
+        lines.append(cards.window_row("7d", e.get("seven_day"), WINDOWS["seven_day"], at, stale))
+        lines += [cards.window_row(x["label"], x, WINDOWS["seven_day"], at, stale) for x in e.get("scoped", [])]
+        notes = []
+        if t := e.get("login_expires_at"):
+            left = t - now()
+            notes.append(f"login here ends in {span(max(0, left)) if left < 86400 else f'{left // 86400} d'}")
+        if stale:
+            notes.append(f"numbers from {span(max(0, now() - at))} ago")
+        if e.get("error"):
+            notes.append(e["error"])
+        if notes:
+            lines.append("    " + cards.c(" · ".join(notes), AMBER if stale or e.get("error") else DIM))
+        return lines
+
+    def frame(self, width: int) -> str:
+        cards = Cards(self.color, width)
+        age = now() - self.data.get("updated", 0)
+        checked = "checked just now" if age < 60 else f"checked {span(age)} ago"
+        title = " " + cards.c("✻ Claude Code", ACCENT, BOLD) + cards.c("   choose the account for this session", DIM)
+        lines = [title + " " * max(1, width - visible(title) - len(checked) - 1) + cards.c(checked, DIM), ""]
+        wname = max((len(n) for n in self.dirs), default=8)
+        lines += [self.row(k, n, width, wname) for k, n in enumerate(self.dirs)]
+        if self.choices:
+            lines += ["", " " + cards.c("─" * max(10, width - 2), TRACK), *self.detail(self.choices[self.i], width)]
+        else:
+            lines += ["", "  " + cards.c("No account here has a login; run claude-accounts login-all.", RED)]
+        foot = [cards.c(" " + self.KEYS, DIM),
+                cards.c(" The session moves to the next account by itself when this one hits a usage limit.", DIM)]
+        return "\033[H\033[2J" + "\n".join([*lines, "", "", *foot])
+
+    def run(self) -> int:
+        fd = os.open("/dev/tty", os.O_RDWR)
+        old = termios.tcgetattr(fd)
+        mode = termios.tcgetattr(fd)
+        # No echo, no line buffering, and ctrl+c as a key, so the claude-rotate waiting on this process sees nothing.
+        mode[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG)
+        mode[6][termios.VMIN], mode[6][termios.VTIME] = 1, 0
+
+        def out(s: str) -> None:
+            os.write(fd, s.encode())
+
+        try:
+            termios.tcsetattr(fd, termios.TCSAFLUSH, mode)
+            out("\033[?1049h\033[?25l")
+            size = None
+            while True:
+                cur = os.get_terminal_size(fd)
+                if cur != size:
+                    size = cur
+                    out(self.frame(cur.columns))
+                if not select.select([fd], [], [], 0.3)[0]:
+                    continue
+                key = os.read(fd, 32)
+                if key in (b"q", b"\x1b", b"\x03", b"\x04"):
+                    return CANCELLED
+                if key in (b"r", b"R"):
+                    if self.choices:
+                        print(self.choices[self.i])
+                    return REFRESH
+                if key in (b"\r", b"\n") and self.choices:
+                    print(self.choices[self.i])
+                    return PICKED
+                if key.isdigit() and 0 < int(key) <= min(9, len(self.choices)):
+                    print(self.choices[int(key) - 1])
+                    return PICKED
+                moves = {b"\x1b[A": -1, b"\x1bOA": -1, b"k": -1, b"\x1b[B": 1, b"\x1bOB": 1, b"j": 1, b"\t": 1}
+                if key in moves and self.choices:
+                    self.i = (self.i + moves[key]) % len(self.choices)
+                    size = None
+        finally:
+            out("\033[?25h\033[?1049l")
+            termios.tcsetattr(fd, termios.TCSAFLUSH, old)
+            os.close(fd)
+
+
+def locked_refresh(only: list[str], max_age: int | None) -> dict:
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    with (CACHE.parent / "lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        # A run that waited for the lock finds the cache the other run just wrote.
+        data = load_cache()
+        # An account added, renamed or deleted since the last run makes the cache wrong at any age.
+        if (max_age is None or only or now() - data.get("updated", 0) > max_age
+                or sorted(x["name"] for x in data.get("accounts", [])) != sorted(accounts())):
+            data = refresh(only)
+    return data
+
+
+def main() -> int:
+    # plasmashell, which runs the widget's commands, has no ~/.local/bin on PATH, where claude lives on two hosts.
+    local_bin = str(HOME / ".local/bin")
+    if local_bin not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
+    ap = argparse.ArgumentParser(prog="claude-accounts", description="Usage limits and login state of every Claude Code account.")
+    ap.add_argument("--json", action="store_true", help="print the cache as JSON")
+    ap.add_argument("--cached", action="store_true", help="print the cache; check nothing")
+    ap.add_argument("--max-age", type=int, metavar="SECONDS", help="check only when the cache is older than this")
+    ap.add_argument("--account", action="append", default=[], metavar="NAME", help="check only this account")
+    ap.add_argument("--quiet", action="store_true", help="print nothing")
+    ap.add_argument("--watch", action="store_true",
+                    help="redraw every 30 s and check the accounts when the cache is older than --max-age (300)")
+    # claude-rotate's account picker; see Picker.
+    ap.add_argument("--pick", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--recommend", metavar="NAME", help=argparse.SUPPRESS)
+    ap.add_argument("--held", action="append", default=[], metavar="NAME", help=argparse.SUPPRESS)
+    ap.add_argument("--cursor", metavar="NAME", help=argparse.SUPPRESS)
+    a = ap.parse_args()
+    if a.pick:
+        return Picker(a.recommend, a.held, a.cursor).run()
+    if a.watch:
+        return watch(30, 300 if a.max_age is None else a.max_age)
+    data = load_cache() if a.cached else locked_refresh(a.account, a.max_age)
+    if a.json:
+        print(json.dumps({**data, "combined": combined(data)}, indent=1))
+    elif not a.quiet:
+        print(show(data))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

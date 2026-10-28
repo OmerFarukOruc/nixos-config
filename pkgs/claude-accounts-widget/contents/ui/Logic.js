@@ -1,8 +1,8 @@
 .pragma library
 
 var namePattern = /^[a-z0-9][a-z0-9.-]*$/
-var usageBin = '"$HOME/Desktop/workspace/dotfiles/desktop/bin/claude-usage"'
-var accountsBin = '"$HOME/Desktop/workspace/dotfiles/desktop/bin/claude-accounts"'
+var usageBin = "@claudeTools@/bin/claude-usage"
+var accountsBin = "@claudeTools@/bin/claude-accounts"
 
 var pollCommand = "sh -c '" + usageBin + " --json --cached'"
 var refreshCommand = "sh -c '" + usageBin + " --json --max-age 60'"

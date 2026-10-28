@@ -74,7 +74,8 @@ in
 
   # The echo backends above own ports 3000 and 7317, so oruc's OpenChamber and
   # herdr web UI stay off. The Amp runner, the Cursor worker and stay-green
-  # need Omer's logins, and cliproxy needs a registry; the test has neither.
+  # need Omer's logins, cliproxy needs a registry and claude-limit-switch starts
+  # herdr's session; the test has none of them.
   home-manager.users.oruc.systemd.user = {
     services =
       lib.genAttrs
@@ -91,6 +92,7 @@ in
     timers =
       lib.genAttrs
         [
+          "claude-limit-switch"
           "cliproxy-update"
           "stay-green"
         ]

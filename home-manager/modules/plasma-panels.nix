@@ -329,7 +329,9 @@ in
       tahoePlasmoids
     ]
     ++ lib.optional config.oruc.plasma.claudeAccountsWidget (
-      pkgs.callPackage ../../pkgs/claude-accounts-widget.nix { }
+      pkgs.callPackage ../../pkgs/claude-accounts-widget.nix {
+        claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
+      }
     );
 
     # plasmashell caches compiled QML in qmlcache. A cache file is named after
