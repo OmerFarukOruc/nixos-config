@@ -62,7 +62,6 @@ for f in "${files[@]}"; do
 
   pat="$hex|$fn"
   [[ $f == *.css ]] && pat="$pat|$short"
-  # grep exits 1 when nothing matches and 2 when it cannot read the file.
   rc=0
   matches=$(grep -nIP -- "$pat" "$f") || rc=$?
   if ((rc > 1)); then

@@ -10,7 +10,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# A signal between the edit and the lock leaves flake.nix as it was.
 work=$(mktemp -d)
 trap '[[ ! -e $work/flake.nix ]] || cp -- "$work/flake.nix" flake.nix; rm -rf -- "$work"' EXIT
 

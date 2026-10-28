@@ -16,7 +16,6 @@ repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 
-# Both files come from one commit, so the paths belong to the locked revision.
 commit=$(gh api "repos/$builder/commits/main" --jq .sha)
 fetch() {
   if ! gh api "repos/$builder/contents/kernel-cache/$1?ref=$commit" --jq .content | base64 -d >"$work/$1"; then
@@ -26,8 +25,6 @@ fetch() {
 }
 fetch flake.lock
 
-# Compare the complete input graph before fetching paths or probing the cache.
-# Prepare a candidate only; cache failures must leave the target bytes intact.
 change=$(
   python3 - "$work/flake.lock" "$repo_dir/flake.lock" "$work/candidate.lock" <<'PY'
 import json, sys
@@ -48,12 +45,9 @@ try:
         refuse("Invalid lock nodes")
     source_kernel = source[source_root]["inputs"]["nix-cachyos-kernel"]
     target_kernel = nodes[target_root]["inputs"]["nix-cachyos-kernel"]
-    # The cache record uses the builder's fixed node name.
     if source_kernel != "nix-cachyos-kernel":
         refuse("Unexpected builder kernel node")
 
-    # Map by input paths, with a bijection so repeated references agree in both
-    # directions, even when the locks use different node names.
     pairs = {}
     reverse = {}
     follows = []
@@ -111,7 +105,6 @@ try:
         if src not in pairs or pairs[src] != dst:
             refuse("Kernel follows path leaves the mapped kernel graph")
 
-    # No copied node may also belong to an input outside the kernel graph.
     inside = set(pairs.values())
     for name, node in nodes.items():
         if name in inside:
@@ -163,7 +156,6 @@ missing=0
 for path in "${paths[@]}"; do
   hash=${path#/nix/store/}
   hash=${hash%%-*}
-  # curl fails on a 404 and on a network error alike; both leave the lock alone.
   if ! curl -fsS --max-time 20 --retry 2 -o /dev/null "$cache/$hash.narinfo"; then
     printf 'Not in the cache, or the cache did not answer: %s\n' "$path" >&2
     missing=1
@@ -178,7 +170,6 @@ cp -- "$work/candidate.lock" "$repo_dir/flake.lock"
 printf '%s\n' "$change"
 
 printf 'Kernel %s, every built path is in %s.\n' "$(jq -r .version "$work/cached-paths.json")" "$cache"
-# The update workflow commits the lock itself; a person at a terminal still has to.
 if [[ -t 1 ]]; then
   printf '%s\n' 'Review and commit flake.lock, then deploy.'
 fi

@@ -1,4 +1,3 @@
-# Part of the remote script in scripts/verify-nixos-rog.sh.
 # shellcheck shell=bash
 # shellcheck disable=SC2016,SC2034,SC2086,SC2154,SC2155
 check captive-dns-off "$(captive-dns status)" test "$(captive-dns status)" = off

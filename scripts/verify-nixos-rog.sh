@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Checks a running nixos-rog from nixos-desktop and writes a JSON report.
-# Rerun it after any deploy to the laptop and compare the reports.
 set -euo pipefail
-# The work acts on the laptop, so a run stops at once while it is offline
-# (rog_pick_host, called after the arguments are checked).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
@@ -105,10 +101,8 @@ results=$(mktemp)
 work=$(mktemp -d)
 trap 'rm -rf -- "$results" "$work"' EXIT
 
-# One line per check: name<TAB>pass|fail|manual<TAB>detail
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
 
-# Facts the remote checks expect, from the configuration the host runs.
 remote_prelude=$(
   cat <<'PRELUDE'
 facts=/etc/oruc/verify-facts
@@ -124,8 +118,6 @@ for fact in low_battery_percent nvidia_version wifi \
     exit 66
   fi
 done
-# The widgets and KWin effects of the look that plasma-look stored, or of the
-# default look.
 plasma_look_file=$HOME/.local/state/oruc/plasma-look
 plasma_look=$(cat "$plasma_look_file" 2>/dev/null || echo "${plasma_look_default:-}")
 if [[ $plasma_look =~ ^[a-z0-9]+$ ]]; then
@@ -134,14 +126,11 @@ if [[ $plasma_look =~ ^[a-z0-9]+$ ]]; then
   plasma_widgets=${!widgets_fact:-}
   kwin_effects=${!effects_fact:-}
 fi
-# The CPU temperature limit in the SMU and the top clock of policy0, a full
-# Zen 5 core, as TEMP/KHZ.
 cpu_limits() {
   local temp
   temp=$(sudo ryzenadj -i | awk -F'|' '/THM LIMIT CORE/ {printf "%d", $3}')
   printf '%s/%s\n' "$temp" "$(</sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq)"
 }
-# The TEMP/KHZ that machines/nixos-rog/cpu-limits.nix sets for PROFILE.
 expected_cpu_limits() {
   local temp=cpu_temp_limit_${1//-/_} max=cpu_max_khz_${1//-/_}
   max=${!max}
@@ -150,7 +139,6 @@ expected_cpu_limits() {
   fi
   printf '%s/%s\n' "${!temp}" "$max"
 }
-# The NVIDIA display controller, found through sysfs because pciutils is not installed.
 find_nvidia() {
   local dev
   for dev in /sys/bus/pci/devices/*; do
@@ -163,7 +151,6 @@ find_nvidia() {
 PRELUDE
 )
 
-# Runs a remote script after the shared facts and helpers.
 remote() {
   {
     printf '%s\n' "$remote_prelude"
@@ -180,8 +167,6 @@ remote_checks() {
     "$repo_dir/scripts/verify-rog/gpu.sh" | remote
 }
 
-# Icon defaults come from the plasmoid main.xml files, parsed with
-# read_defaults. The remote check only walks the installed icon theme.
 widget_icon_tsv=
 widget_icon_ok=0
 icon_plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
@@ -237,8 +222,6 @@ case $status in
   *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
 esac
 
-# The panel settings of the look that plasma-look stored and the scheme that
-# theme stored, or of the defaults.
 plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
@@ -247,9 +230,6 @@ scheme=$(ssh "${ssh_opts[@]}" "$host" \
 [[ $scheme =~ ^[a-z0-9-]+$ ]] || scheme=none
 panels_json=/etc/oruc/verify-plasma-panels/${plasma_look}_$scheme.json
 
-# The panel file holds the settings of the last panel build, so it is compared
-# only after a build from this system's panel script, at a login or by
-# scripts/panels-rebuild-on-rog.sh.
 build=$(
   # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
   ssh "${ssh_opts[@]}" "$host" "bash -s -- $panels_json" <<'REMOTE' || true
@@ -273,8 +253,6 @@ case $build in
     if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" &&
       ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc" &&
       ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
-# Each widget's main.xml as WIDGET/main.xml, from the roots that the
-# plasma-widgets-installed check reads; the per-user one wins.
 set -euo pipefail
 out=$(mktemp -d)
 trap 'rm -rf -- "$out"' EXIT
@@ -296,8 +274,6 @@ REMOTE
     fi
     case $compared in
       0) record plasma-panel-settings pass "the panel file holds every setting of the $plasma_look look's panels" ;;
-      # A difference is usually a change made in Plasma's settings, which the
-      # next panel build drops, so the detail asks before a rebuild.
       1) record plasma-panel-settings fail "${differences//$'\n'/; }. A change made in Plasma lasts only until the next panel build; ask Omer whether to write it into plasma-panels.nix before you rebuild the panels" ;;
       *) record plasma-panel-settings fail "could not compare the panel file (exit $compared): ${differences:-copy from $host failed}" ;;
     esac
@@ -305,9 +281,6 @@ REMOTE
   *) record plasma-panel-settings fail "could not read the panel build state on $host" ;;
 esac
 
-# A dock launcher whose desktop file is missing shows no icon. Plasma looks
-# for the file in the session's XDG data directories, which hold the Home
-# Manager profile and the web apps that Brave writes to ~/.local/share.
 launchers=()
 # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
 if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/launchers.json" 2>/dev/null; then
@@ -332,7 +305,6 @@ dirs=$(sed -n 's/^XDG_DATA_DIRS=//p' <<<"$environment")
 [[ -n $dirs ]] || exit 3
 data_home=$(sed -n 's/^XDG_DATA_HOME=//p' <<<"$environment")
 IFS=: read -ra search <<<"${data_home:-$HOME/.local/share}:$dirs"
-# A desktop file's id is its path under applications/ with each / as a -.
 declare -A ids=()
 for dir in "${search[@]}"; do
   [[ -d $dir/applications ]] || continue
@@ -358,8 +330,6 @@ REMOTE
 fi
 
 if [[ -n $lan_ip ]]; then
-  # Only a refusal or a timeout shows that nothing answers; any other error
-  # says nothing about the port.
   probe=0
   # shellcheck disable=SC2016 # the inner shell expands $1
   probe_error=$(LC_ALL=C timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/22"' _ "$lan_ip" 2>&1) || probe=$?
@@ -375,16 +345,11 @@ if [[ -n $lan_ip ]]; then
   fi
 fi
 
-# A suspend darkens the screen of whoever uses the laptop. In use means the
-# seat's active session is a local user session that is neither idle nor
-# locked. The host exits 0 only when it read the session and it is not in
-# use, so a failed read also stops the cycles.
 if [[ $suspend == true && $while_in_use == false ]]; then
   if ! ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
 set -euo pipefail
 id=$(loginctl show-seat seat0 -p ActiveSession --value)
 [[ -n $id ]] || exit 0
-# loginctl prints the properties in its own order, so sort them.
 session=$(loginctl show-session "$id" -p Class -p Remote -p IdleHint -p LockedHint | sort | paste -sd ' ')
 [[ $session != 'Class=user IdleHint=no LockedHint=no Remote=no' ]]
 REMOTE
@@ -396,9 +361,6 @@ REMOTE
 fi
 
 if [[ $suspend == true ]]; then
-  # The kernel counts a suspend as successful only when the system really
-  # slept and woke; the journal's "PM: suspend exit" also appears for a failed
-  # one. The loop stops at the first failed rtcwake.
   before=$(ssh "${ssh_opts[@]}" "$host" \
     'cat /sys/power/suspend_stats/success; sudo systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"')
   after_resume=$(
@@ -410,7 +372,6 @@ test -n "$(find_nvidia)"
 test "$(cpu_limits)" = "$(expected_cpu_limits "$(powerprofilesctl get)")"
 REMOTE
   )
-  # Three cycles take 120 s; poll until the success counter has grown by 3.
   resumed=false
   for _ in {1..30}; do
     sleep 10

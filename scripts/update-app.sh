@@ -58,23 +58,17 @@ elif [[ -n $github ]]; then
   latest=$(curl -fsSL --max-time 20 --retry 2 "${auth[@]}" "https://api.github.com/repos/$github/releases?per_page=30" |
     jq -r '.[] | select(.draft | not) | select(.prerelease | not) | .tag_name | select(test("^v[0-9][0-9.]*$"))' |
     sed 's/^v//' | sort -V | tail -n 1) || latest=
-  # The hash of the unpacked tag, which is what fetchFromGitHub checks.
   sha=$([[ -n $latest ]] && nix flake prefetch --json "github:$github/v$latest" | jq -r .hash) || sha=
 elif [[ -n $npm ]]; then
   meta=$(curl -fsSL --max-time 20 --retry 2 "https://registry.npmjs.org/$npm") || meta=
   latest=$(jq -r '."dist-tags".latest // empty' <<<"$meta" 2>/dev/null) || latest=
   sha=$(jq -r --arg v "$latest" '.versions[$v].dist.integrity // empty' <<<"$meta" 2>/dev/null) || sha=
 else
-  # The top-level sha512 is the base64 digest of the file at the top-level path,
-  # which must be the file the package's url names.
   yml=$(curl -fsSL --max-time 20 --retry 2 "$feed") || yml=
   latest=$(sed -n 's/^version: //p' <<<"$yml")
   sha=$(sed -n 's/^sha512: //p' <<<"$yml")
   path=$(sed -n 's/^path: //p' <<<"$yml")
   if [[ -n $build ]]; then
-    # The build ID comes from the -<digits> segment of the URL that the feed
-    # lists for the file at path; the comparison with the expanded url below
-    # ties that segment to the version.
     url=$(awk -v path="$path" '$1 == "-" && $2 == "url:" { n = split($3, part, "/"); if (part[n] == path) { print $3; exit } }' <<<"$yml")
     segment='/[^/]*-([0-9]+)/'
     [[ $url =~ $segment ]] && newbuild=${BASH_REMATCH[1]}
@@ -121,13 +115,9 @@ elif [[ -n $npm || -n $github ]]; then
 else
   sri=sha512-$sha
 fi
-# The edit lands only when every line changed, so a failed match leaves the
-# file as it was.
 edited=$(mktemp)
 trap 'rm -f -- "$edited"' EXIT
 if [[ -n $npm && -d $wrapper ]]; then
-  # npm writes the new lockfile in a scratch copy, so a failure leaves the
-  # folder as it was; prefetch-npm-deps gives the hash of what it locks.
   scratch=$(mktemp -d)
   trap 'rm -f -- "$edited"; rm -rf -- "$scratch"' EXIT
   jq --arg v "$latest" --arg p "$npm" '.version = $v | .dependencies[$p] = $v' "$wrapper/package.json" >"$scratch/package.json"
@@ -160,8 +150,6 @@ if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \
   exit 1
 fi
 if [[ -n $github ]]; then
-  # The dependencies' hash is known only after a build with the new source,
-  # which a placeholder hash makes Nix report.
   sed -i "s|^    outputHash = \".*\";|    outputHash = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\";|" "$edited"
   probe=$(dirname "$file")/.$name.probe.nix
   trap 'rm -f -- "$edited" "$probe"' EXIT

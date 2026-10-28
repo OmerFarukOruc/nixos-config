@@ -1,4 +1,3 @@
-# Part of the remote script in scripts/verify-nixos-rog.sh.
 # shellcheck shell=bash
 # shellcheck disable=SC1097,SC2034,SC2086,SC2154,SC2155
 check hostname "$(hostname)" test "$(hostname)" = nixos-rog
@@ -21,16 +20,11 @@ check rtx4070-on-pci "${nvidia_dev:-absent}" test -n "$nvidia_dev"
 loaded_version=$(cat /sys/module/nvidia/version 2>/dev/null)
 check nvidia-driver "${loaded_version:-not loaded}" test "$loaded_version" = "$nvidia_version"
 
-# The daemon saves each profile change in its state file and starts in the
-# saved profile, or in balanced without one, so the running profile is the
-# one a reboot brings back.
 profile=$(powerprofilesctl get)
 ppd_state=$(systemctl is-active power-profiles-daemon)
 saved=$(sed -n 's/^Profile=//p' /var/lib/power-profiles-daemon/state.ini 2>/dev/null)
 check ppd-profile-kept "power-profiles-daemon is $ppd_state; saved ${saved:-nothing}, running $profile" \
   test "$ppd_state/${saved:-balanced}" = "active/$profile"
-# The shell's power menu may pick any profile. Only low battery on battery
-# requires one.
 online=$(cat /sys/class/power_supply/ACAD/online)
 capacity=$(cat /sys/class/power_supply/BAT1/capacity)
 if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
@@ -38,33 +32,21 @@ if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
 else
   check ppd-profile "$profile as chosen (AC=$online, battery=$capacity%)" test -n "$profile"
 fi
-# On AC the low-battery service undoes its own drop as soon as udev sees the
-# charger, and removes its marker.
 if [[ $online == 1 ]]; then
   check low-battery-undone "/run/oruc-low-battery/active absent on AC" test ! -e /run/oruc-low-battery/active
 fi
-# power-profiles-daemon turns boost off only in power-saver. It writes each
-# CPU policy's boost file; the global cpufreq/boost stays 1.
 expected_boost=1
 [[ $profile == power-saver ]] && expected_boost=0
 boost=$(sort -u /sys/devices/system/cpu/cpufreq/policy*/boost | tr '\n' ' ')
 boost=${boost% }
 check boost-per-profile "boost=$boost in $profile" test "$boost" = "$expected_boost"
-# asusd writes the asus-armoury limits and the fan curves of the platform
-# profile on each profile change, and the firmware applies the ppt_* limits:
-# ryzenadj -i shows them as its STAPM and PPT limits. These checks switch to
-# each profile and compare what reaches sysfs with the deployed config.
-# The kernel keeps the curve it last sent to the firmware in the
-# asus_custom_fan_curve hwmon, where pwmN_enable reads 1 while it applies.
 curve_dir=
 for dir in /sys/class/hwmon/hwmon*; do
   [[ $(<"$dir/name") == asus_custom_fan_curve ]] && curve_dir=$dir
 done
 power_source=dc
 [[ $online == 1 ]] && power_source=ac
-# asus-wmi numbers the fans pwm1 to pwm3 in this order.
 fans=([1]=cpu [2]=gpu [3]=mid)
-# Prints each fan whose live curve differs from the facts of platform profile $1.
 fan_curve_diffs() {
   local n temps_fact pwms_fact temps pwms enable
   [[ -n $curve_dir ]] || {
@@ -80,8 +62,6 @@ fan_curve_diffs() {
       echo "$1 ${fans[n]} temps $temps pwms $pwms enable $enable, want ${!temps_fact} ${!pwms_fact} 1"
   done
 }
-# Prints each asus-armoury limit that differs from the facts of platform
-# profile $1 on the current power source.
 armoury_diffs() {
   local prefix=armoury_${power_source}_${1}_ fact attribute live
   for fact in ${!armoury_@}; do
@@ -104,7 +84,6 @@ for target in power-saver balanced performance; do
   sudo powerprofilesctl set "$target" && sleep 1
   pp=$(</sys/firmware/acpi/platform_profile)
   platform+=("$target=$pp")
-  # oruc-cpu-limits applies the limits after the profile change signal.
   want=$(expected_cpu_limits "$target")
   for _ in {1..5}; do
     got=$(cpu_limits)
@@ -131,9 +110,6 @@ check fan-curves-follow-profile "${fan_found[*]:-every fan of quiet, balanced an
   test "${#fan_found[@]}" -eq 0
 check armoury-limits-follow-profile "${armoury_found[*]:-quiet, balanced and performance match on $power_source}" \
   test "${#armoury_found[@]}" -eq 0
-# A long-running oruc-* service that crashed, for example on a command its
-# path lacks, shows as inactive or restarted; its restart count clears when
-# the unit restarts. Oneshots and units a timer starts are left out.
 running=()
 broken=()
 while read -r unit state _; do
@@ -153,7 +129,6 @@ check asusd-profile-switching-off "asusd.ron" \
   grep -q 'change_platform_profile_on_ac: false' /etc/asusd/asusd.ron
 check slash-off-on-battery "asusctl slash get" \
   bash -c 'asusctl slash get | grep -qx "Show on battery: false"'
-# Dynamic Boost: nvidia-powerd runs on AC only.
 powerd=$(systemctl is-active nvidia-powerd)
 expected_powerd=inactive
 [[ $online == 1 ]] && expected_powerd=active

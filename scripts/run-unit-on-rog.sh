@@ -48,7 +48,6 @@ fi
 
 # shellcheck source=/dev/null
 . scripts/lib/work-copy.sh
-# The unit acts on the laptop, so its copy is there.
 copy_open --on-rog
 if [[ $user == true ]]; then
   copy_run "$unit" "$seconds" <<'REMOTE'
@@ -77,8 +76,6 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p -- "$dir/$name.service.d"
-# The copy starts and stops no other unit and runs once. Home Manager writes
-# [Install] first, so only that section's lines go.
 awk '
   /^\[/ { install = ($0 == "[Install]") }
   install { next }
@@ -97,7 +94,6 @@ systemctl --user daemon-reload
 
 echo "running $unit in the user manager of $(id -un) for up to $seconds s; it acts on this laptop" >&2
 since=$(date +%s)
-# start waits for a oneshot unit's end, and for any other unit's start.
 start=0
 systemctl --user start "$name.service" </dev/null || start=$?
 show() { systemctl --user show -P "$1" "$name.service"; }
@@ -107,9 +103,6 @@ while [[ $(show ActiveState) =~ ^(activating|deactivating|reloading)$ ||
   sleep 1
 done
 state=$(show ActiveState)
-# A unit that exited cleanly stays active (exited) here. Stopping it runs its
-# ExecStop now, as the real unit would after ExecStart, so a failing ExecStop
-# shows in the verdict.
 stopped=false
 if [[ $state == active && $(show SubState) == exited ]]; then
   stopped=true
@@ -150,9 +143,6 @@ fi
 copy_run "$unit" "$seconds" <<'REMOTE'
 set -euo pipefail
 cd "$1"
-# One evaluation gives what the run needs: whether the unit runs as root, its
-# script, its environment, the unit file to build, and runtimeShell, which
-# NixOS runs a unit script with and which is not on the unit's PATH.
 expression='host: let
   service = host.config.systemd.services."UNIT";
   config = service.serviceConfig;
@@ -175,23 +165,15 @@ if ! jq -e '.script != ""' <<<"$spec" >/dev/null; then
   echo "refused: $2 has no script option" >&2
   exit 3
 fi
-# The evaluation builds nothing, so the packages of the unit's path may be
-# missing from the store until this build.
 nix build --no-link --no-write-lock-file "$(jq -r .unit <<<"$spec")^out" </dev/null
 script=$PWD/unit-script
 jq -r .script <<<"$spec" >"$script"
 mapfile -t setenv < <(jq -r '.environment[] | "-E", .' <<<"$spec")
 shell=$(jq -r .shell <<<"$spec")
 
-# A transient service, so stopping it also stops the processes the script
-# started, as with the real unit.
 name=run-unit-on-rog-$2-$$
 echo "running $2 as root for up to $3 s; it acts on this laptop" >&2
 status=0
-# The unit runs outside this script's processes, so a stopped
-# run-unit-on-rog.sh, which sends TERM to them again and again (copy_stop in
-# scripts/lib/work-copy.sh), stops it here, with TERM ignored so that
-# systemctl finishes.
 trap 'trap "" TERM; sudo -n systemctl stop "$name.service" 2>/dev/null || true; exit 143' TERM
 sudo -n systemd-run --quiet --pipe --wait --unit="$name" -p RuntimeMaxSec="$3" \
   "${setenv[@]}" "$shell" -e "$script" </dev/null || status=$?
@@ -204,7 +186,6 @@ code=$(systemctl show -P ExecMainStatus "$name.service")
 sudo -n systemctl reset-failed "$name.service" 2>/dev/null || true
 case $result in
   timeout) echo "still running after $3 s: a pass for a long-running unit" ;;
-  # A unit systemd never loaded shows as success.
   success)
     echo "systemd-run exited with $status before the unit ran" >&2
     exit 1

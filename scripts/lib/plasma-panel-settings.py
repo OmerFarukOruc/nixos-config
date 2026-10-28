@@ -27,7 +27,6 @@ import re
 import sys
 import xml.etree.ElementTree as ElementTree
 
-# Plasma's Types::Location values.
 LOCATIONS = {"floating": "0", "top": "3", "bottom": "4", "left": "5", "right": "6"}
 UNESCAPES = {"\\": "\\", "n": "\n", "t": "\t", "r": "\r", "s": " "}
 
@@ -162,7 +161,6 @@ def value_key(value):
 def list_differences(wants, items, path):
     want_keys = [value_key(value) for value in wants]
     got_keys = [value_key(value) for value in items]
-    # A list item is shown whole, because a cut name hides which item it is.
     for value, key in zip(wants, want_keys):
         if key not in got_keys:
             yield path, f"lacks {text(value)}"
@@ -300,7 +298,7 @@ def main():
         return 2
     try:
         problems = compare(panels, groups, defaults)
-    except Exception as error:  # A malformed file must not read as a difference.
+    except Exception as error:
         print(f"cannot compare: {error!r}", file=sys.stderr)
         return 2
     for problem in problems:

@@ -7,8 +7,6 @@
 # 2560x60+0+0 holds the top 60 rows of nixos-rog's 2560x1600 screen. The crop
 # runs on the calling host, so no Nix runs on the laptop.
 set -euo pipefail
-# The work acts on the laptop, so a run stops at once while it is offline
-# (rog_pick_host, called after the arguments are checked).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
@@ -44,7 +42,6 @@ if [[ -n $crop ]] && ! command -v nix >/dev/null; then
   exit 1
 fi
 rog_pick_host
-# stdout carries the PNG, so everything else on the host writes to stderr.
 status=0
 ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog "bash -s -- $(printf '%q ' "$window")" <<'EOF' >"$out" || status=$?
 set -euo pipefail
@@ -65,8 +62,6 @@ cleanup() {
 }
 trap cleanup EXIT
 if [[ $1 == true ]]; then
-  # Without --gtk-single-instance=false, the window joins a running Ghostty
-  # and has no process of its own to stop.
   ghostty --gtk-single-instance=false --window-width=90 --window-height=28 >/dev/null 2>&1 &
   pid=$!
   sleep 4
@@ -85,8 +80,6 @@ fi
 if [[ -n $crop ]]; then
   cropped=$(mktemp "$out.XXXXXX")
   trap 'rm -f -- "$cropped"' EXIT
-  # The flake registry pins nixpkgs to the running system's, so this needs no
-  # download of nixpkgs, only of ImageMagick on its first use.
   size=$(nix run nixpkgs#imagemagick -- "png:$out" -crop "$crop" +repage \
     -write "png:$cropped" -format '%wx%h' info: </dev/null) || status=$?
   # ImageMagick only warns about an area outside the screen and exits 0, so
@@ -99,6 +92,5 @@ if [[ -n $crop ]]; then
     rm -f -- "$out"
     exit "$status"
   fi
-  # cat keeps the mode the shell gave OUTPUT; mktemp's file has mode 600.
   cat -- "$cropped" >"$out"
 fi

@@ -72,10 +72,6 @@ repo=${BASH_REMATCH[1]%.git}
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 this_host=$(</proc/sys/kernel/hostname)
 
-# on_host HOST [ARG...] < SCRIPT: runs SCRIPT with bash in the home directory of
-# HOST's deploy user (deployLogin in its machine record, machines/schema.nix),
-# with the ARGs. $new holds the records once systems has run. This host
-# runs SCRIPT without SSH, as deploy.sh does.
 on_host() {
   local host=$1 target=$1 login=
   shift
@@ -93,14 +89,9 @@ on_host() {
   fi
 }
 
-# systems REV: prints {HOST: {drv, out, deployed, deployLogin}} for every host at REV.
-# deployed is the record's field; a REV from before the field counts as true.
 systems() {
   on_host "$this_host" "github:$repo/$1" <<'REMOTE'
 set -e
-# heavy (home-manager/modules/heavy.nix) caps the memory of each evaluation. One
-# evaluation per host stays under that cap; three systems in one evaluation
-# did not, and systemd-oomd killed it.
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
 hosts=$("${nix[@]}" eval --raw --no-write-lock-file "$1#nixosConfigurations" \
@@ -123,8 +114,6 @@ if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha
 fi
 new=$(systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
-# not_deployed HOST: succeeds when the record at REV says deploy.sh does not
-# reach HOST.
 not_deployed() {
   [[ $(jq -r --arg h "$1" '.[$h].deployed' <<<"$new") == false ]]
 }
@@ -153,8 +142,6 @@ for host in "${hosts[@]}"; do
     continue
   fi
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
-  # The first line is the running system. The second holds the commit and the
-  # dirty flag of the release record that names it.
   if ! state=$(
     {
       cat scripts/lib/running-revision.sh

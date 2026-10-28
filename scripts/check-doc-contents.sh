@@ -45,7 +45,6 @@ for file in "${files[@]}"; do
       elif [[ $in_contents == true ]]; then
         first_list=false
       elif [[ $line =~ ^([-*]|[0-9]+\.)\  ]]; then
-        # The first list is not a contents list.
         continue 2
       fi
     fi
@@ -61,7 +60,6 @@ for file in "${files[@]}"; do
   for i in "${!headings[@]}"; do
     heading=${headings[i]}
     want=$(anchor "$heading")
-    # The k prefix keeps an empty anchor a valid key.
     n=${seen[k$want]:-0}
     seen[k$want]=$((n + 1))
     ((n == 0)) || want=$want-$n

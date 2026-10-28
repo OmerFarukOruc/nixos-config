@@ -25,8 +25,6 @@
 # to a commit: git rev-parse REV:scripts/mic-ab-on-rog.sh.
 # shellcheck disable=SC2016,SC2029 # the remote bash expands the quoted scripts
 set -euo pipefail
-# The work acts on the laptop, so a run stops at once while it is offline
-# (rog_pick_host, called after the arguments are checked).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
@@ -63,14 +61,12 @@ rog_pick_host
 script_blob=$(git hash-object "$0")
 out=${TMPDIR:-/tmp}/mic-ab/$(date +%Y%m%dT%H%M%S)-${mode}${label:+-$label}
 mkdir -p "$out"
-# rog_run SCRIPT ARG...: runs SCRIPT in bash on rog with the user's PipeWire.
 rog_run() {
   local script=$1
   shift
   ssh "${ssh_opts[@]}" "$host" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
 }
 
-# Prepended to the remote scripts: node_id NAME prints a node's id, or nothing.
 lib='node_id() {
   pw-dump | jq -r --arg n "$1" \
     "first(.[] | select(.type == \"PipeWire:Interface:Node\" and .info.props.\"node.name\" == \$n) | .id) // empty"
@@ -80,7 +76,6 @@ set_volume() {
   rog_run "$lib"$'\n''wpctl set-volume "$(node_id "$1")" "$2"' "$mic" "$1"
 }
 
-# Each value stays empty until there is something on rog to undo.
 original_volume='' remote=''
 cleanup() {
   if [[ -n $original_volume ]]; then set_volume "$original_volume" || true; fi
@@ -98,9 +93,6 @@ volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$
 [[ $volume =~ ^[0-9]+\.[0-9]+$ ]] || die "$mic is missing on $host" 3
 original_volume=$volume
 
-# record_script DIR SECONDS then NAME TARGET NODE_NAME per recording: records
-# each TARGET to DIR/NAME.wav, mono at 48 kHz, all at once. NODE_NAME - keeps
-# pw-record's own name.
 record_script='
 dir=$1 seconds=$2
 shift 2
@@ -122,8 +114,6 @@ for f in "${files[@]}"; do
 done
 '
 
-# notify TEXT: prints TEXT here and shows it on rog's screen, where the person
-# being recorded looks. The notification plays no sound.
 notify() {
   printf '%s  %s\n' "$(date +%T)" "$1"
   rog_run 'DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus busctl --user call \
@@ -132,8 +122,6 @@ notify() {
     "$1" >/dev/null || true
 }
 
-# cue SECONDS TEXT...: shows each TEXT SECONDS after the one before, counted
-# from the first cue, so the time each notify takes does not add up.
 cue() {
   local step=$(($1 * 1000000)) start=${EPOCHREALTIME/./} i=0 wait_us
   shift
@@ -219,7 +207,6 @@ else:
     sources = {n: samples(os.path.join(out, n + ".wav")) for n in ("raw", "easyeffects", "hushmic")}
     report["parts"] = {}
     for i, part in enumerate(parts):
-        # 1 s margins hide each source's processing delay and the cue timing.
         a, b = (i * 10 + 1) * rate, (i * 10 + 9) * rate
         level = {n: dbfs(s[a:b]) for n, s in sources.items()}
         report["parts"][part] = {

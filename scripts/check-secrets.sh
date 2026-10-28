@@ -33,8 +33,6 @@ override=${1:-}
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
 
-# A declared sopsFile is a store path of the flake source; drop the store
-# prefix to get the path in this repository.
 declared=$(
   "${nix[@]}" eval --json --no-write-lock-file \
     ".#nixosConfigurations.$host.config.sops.secrets" \
@@ -60,8 +58,6 @@ while IFS= read -r entry; do
   fi
 
   err=$(mktemp)
-  # SOPS_AGE_SSH_PRIVATE_KEY_FILE fails with the host key, because the file's
-  # recipient is the age key derived from it.
   if ! have=$(
     sudo -n env SOPS_AGE_KEY_CMD="$s2a -private-key -i /etc/ssh/ssh_host_ed25519_key" \
       "$sops" decrypt --input-type yaml --output-type json "$path" 2>"$err" |

@@ -6,8 +6,6 @@
 # prints one JSON line per step. `off` closes the tunnel. docs/nixos-rog.md,
 # "Drive VS Code", lists the steps and when to use the script.
 set -euo pipefail
-# The work acts on the laptop, so on and the SSH part of off stop at once
-# while it is offline (rog_pick_host).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
@@ -26,15 +24,11 @@ on() {
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
-# Stopping VS Code here raises its quit dialogs, and a forced stop loses the
-# open window, so the user closes it.
 if pgrep -u "$(id -u)" -f '[/]lib/vscode/code' >/dev/null; then
   echo "Close VS Code on nixos-rog first; this script never stops it." >&2
   exit 1
 fi
 systemctl --user stop vscode-cdp.service 2>/dev/null || true
-# The code launcher starts VS Code and exits, so the unit keeps running after
-# its main process ends and stops only that process.
 systemd-run --user --quiet --unit=vscode-cdp -p KillMode=process \
   -p RemainAfterExit=yes -p Slice=app.slice "$(command -v code)" \
   --remote-debugging-port="$1" --remote-debugging-address=127.0.0.1

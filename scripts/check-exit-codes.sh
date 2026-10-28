@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Fails when the exit-code table in docs/deploy.md and the codes from 64 to 99
-# that deploy.sh and scripts/pull-main.sh set differ. treefmt passes file
-# names, which this check ignores, because it always compares the whole set.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

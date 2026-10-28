@@ -10,8 +10,6 @@
 # plasma-panel-settings check. Exits 1 when no Plasma session runs or the
 # rebuild fails.
 set -euo pipefail
-# The work acts on the laptop, so a run stops at once while it is offline
-# (rog_pick_host, called after the arguments are checked).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 if (($#)); then
@@ -43,15 +41,10 @@ cp ~/.config/plasma-org.kde.plasma.desktop-appletsrc ~/.config/plasmashellrc "$b
 echo "Backup: $backup"
 
 manager=$HOME/.local/share/plasma-manager
-# Without its last-run record, run_all.sh runs the panel script again.
 rm -f "$manager/last_run_desktop_script_panels"
-# At a login ksystemstats starts before plasmashell. Repeated ksystemstats
-# restarts under a running plasmashell left kVitals without updates on
-# 2026-10-13.
 systemctl --user stop plasma-plasmashell
 systemctl --user restart plasma-ksystemstats
 systemctl --user start plasma-plasmashell
-# The panel script needs plasmashell's scripting interface.
 for _ in {1..20}; do
   qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript 'print(1)' >/dev/null 2>&1 && break
   sleep 1

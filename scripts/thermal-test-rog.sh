@@ -33,8 +33,6 @@
 # first line names this script's git blob as script=, so a run cited as
 # evidence can be matched to a commit: git rev-parse REV:scripts/thermal-test-rog.sh.
 set -euo pipefail
-# The work acts on the laptop, so a run stops at once while it is offline
-# (rog_pick_host, called after the arguments are checked).
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
@@ -82,7 +80,6 @@ seconds=$((10#$seconds))
 [[ $label =~ ^[A-Za-z0-9._-]+$ ]] || die "--label takes letters, digits, dot, dash and underscore"
 
 rog_pick_host
-# The host takes each curve as N=POINTS, where N is the hwmon pwmN of the fan.
 curves=()
 read -ra groups <<<"$fans"
 for group in "${groups[@]}"; do
@@ -118,8 +115,6 @@ state=$HOME/.local/state/nixos-config-thermal
 mkdir -p "$state"
 out=$state/$(date -u +%Y%m%dT%H%M%SZ)-$label.tsv
 
-# The remote commands below are built here on purpose, each value through
-# printf %q, because the host's login shell is zsh.
 restore() {
   # shellcheck disable=SC2029
   ssh "${ssh_opts[@]}" "$host" \
@@ -146,16 +141,12 @@ if ! flock -n 9; then
   exit 75
 fi
 release=$(readlink -f ~/.local/state/nixos-config-deploy/current)
-# heavy (home-manager/modules/heavy.nix) caps the evaluation's memory.
 build() {
   (cd "$release" && heavy nix build --no-link --print-out-paths --no-write-lock-file \
     ".#nixosConfigurations.nixos-rog.pkgs.$1" </dev/null)
 }
 ! $cpu_load || stress=$(build stress-ng)/bin/stress-ng
-# gpu-burn builds only for a CUDA architecture; sm_89 is the RTX 4070's, as
-# for whisper-cpp in machines/nixos-rog/media.nix.
 ! $gpu_load || gpu_burn=$(build pkgsForCudaArch.sm_89.gpu-burn)/bin/gpu_burn
-# hwmon numbers change between boots, so each is found by its name.
 hwmon() {
   local dir
   for dir in /sys/class/hwmon/hwmon*; do
@@ -174,8 +165,6 @@ curve=$(hwmon asus_custom_fan_curve)
 write() { echo "$1" | sudo -n tee "$2" >/dev/null; }
 
 sudo -n powerprofilesctl set "$profile"
-# asusd finished its rewrite 75 ms after a profile set in its journal, so the
-# overrides below come last.
 sleep 4
 platform=$(</sys/firmware/acpi/platform_profile)
 if [[ $ppt != - ]]; then
@@ -205,22 +194,13 @@ if $cpu_load; then
   loads+=($!)
 fi
 if $gpu_load; then
-  # gpu_burn forks a worker per GPU, so it runs in its own process group,
-  # which the trap below stops whole.
   setsid "$gpu_burn" "$seconds" >/dev/null 2>&1 &
   loads+=(-$!)
 fi
-# A Ctrl-C in the SSH session that started it closes this script's output.
-# The next sample write then ends the script, and the EXIT trap stops the loads and waits for them, so the
-# lock stays held until they end. After a complete run the loads have already
-# ended, and a failed kill or wait would set the exit status.
 trap 'kill -- "${loads[@]}" 2>/dev/null || true; wait || true' EXIT
 trap 'exit 141' PIPE
 start=$SECONDS
 for ((t = 0; t <= seconds + 30; t = SECONDS - start)); do
-  # Another program can switch the profile mid-run, and asusd rewrites the
-  # limits and curves when the charger goes, so the samples after either
-  # would measure something else.
   if [[ $(</sys/firmware/acpi/platform_profile) != "$platform" ]]; then
     echo "the platform profile left $platform at $t s; the test stopped" >&2
     exit 3
@@ -229,8 +209,6 @@ for ((t = 0; t <= seconds + 30; t = SECONDS - start)); do
     echo "the charger was unplugged at $t s; the test stopped" >&2
     exit 3
   fi
-  # gpu_burn starts its clock after it sets up, so the GPU load runs a few
-  # seconds into the cooldown.
   phase=load
   ((t < seconds)) || phase=cool
   mhz=$(awk '{ s += $1 } END { printf "%d", s / NR / 1000 }' \

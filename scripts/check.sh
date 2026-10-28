@@ -26,8 +26,6 @@ if [[ $fix == true ]]; then
   copy_run <<'EOF'
 cd "$1"
 nix fmt || echo "nix fmt reported problems; the check below shows them." >&2
-# Locks each input that flake.lock lacks or whose URL changed, and drops a
-# removed one; it moves no other input.
 for flake in . ./kernel-cache; do
   nix flake lock "$flake" || echo "nix flake lock $flake failed; the check below shows why." >&2
 done
