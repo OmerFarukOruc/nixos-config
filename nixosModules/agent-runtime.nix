@@ -44,6 +44,12 @@
     python3
     sqlite
     tigervnc
+    # The Cursor worker looks for Debian's name of the TigerVNC X server and
+    # refuses computer use without it; nixpkgs names it Xvnc.
+    (runCommand "xtigervnc" { } ''
+      mkdir -p $out/bin
+      ln -s ${tigervnc}/bin/Xvnc $out/bin/Xtigervnc
+    '')
     tree
     unzip
     wlr-randr
