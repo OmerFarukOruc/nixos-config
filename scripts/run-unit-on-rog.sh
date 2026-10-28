@@ -114,15 +114,15 @@ fi
 journal=$(journalctl --user -u "$name.service" --since "@$since" -o cat --no-pager)
 printf '%s\n' "$journal"
 result=$(show Result)
+stopped_by_runtime_limit_after_start() {
+  [[ $state =~ ^(failed|deactivating)$ && $result == timeout && $limit == RuntimeMaxSec &&
+    $stopped == false && $(show ActiveEnterTimestampMonotonic) != 0 ]]
+}
 if [[ $state == exited ]]; then
   echo "exit status: $status"
 elif [[ $state == active ]]; then
   echo "still running after $seconds s: a pass for a long-running unit"
-elif [[ $state =~ ^(failed|deactivating)$ && $result == timeout && $limit == RuntimeMaxSec &&
-  $stopped == false && $(show ActiveEnterTimestampMonotonic) != 0 ]]; then
-  # RuntimeMaxSec ends a long-running unit with a timeout once it is active,
-  # and a slow stop leaves it deactivating; a start that timed out never
-  # made it active.
+elif stopped_by_runtime_limit_after_start; then
   echo "still running after $seconds s: a pass for a long-running unit"
 elif [[ $state =~ ^(failed|deactivating)$ ]]; then
   echo "failed: $result, exit status $(show ExecMainStatus)"
