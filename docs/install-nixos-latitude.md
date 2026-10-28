@@ -6,7 +6,9 @@ the repository is public and nixos-desktop and nixos-rog accept nothing from
 the LAN.
 
 1. Open the BIOS setup with F2 at the Dell logo. Disable Secure Boot, and set the
-   boot mode to UEFI.
+   boot mode to UEFI. nixos-latitude uses systemd-boot
+   (`boot.loader.systemd-boot` in `nixosModules/bootloader.nix`), which needs
+   Secure Boot off in the firmware.
 2. Boot the USB stick. F12 at the Dell logo picks the boot device.
 3. Connect to Wi-Fi. The ISO uses NetworkManager, and `nmtui` does the same
    interactively:

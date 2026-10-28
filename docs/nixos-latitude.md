@@ -19,6 +19,12 @@ per condition, unless a line says otherwise. Re-measure before you rely on one.
   and 255. Writing `pwm1_enable=0` returns `Invalid argument` (2026-09-21).
 - The platform profile is the only fan lever. `power-profiles-daemon` sets it
   (`nixosModules/peripherals.nix`).
+- The Blueman applet's KillSwitch plugin soft-blocks the Dell Bluetooth radio
+  at login. `systemd-rfkill` saves that block, and the next boot restores it
+  before the Intel firmware loads, so the Bluetooth controller disappears.
+  `home-manager/modules/niri-session.nix` turns the plugin off with
+  `dconf.settings` (`"org/blueman/general".plugin-list = [ "!KillSwitch" ]`)
+  on every host that offers niri.
 
 ## Fan and heat
 
@@ -93,7 +99,13 @@ rotated out.
 
 `features.alwaysOn` in the machine record turns these on through
 `nixosModules/always-on.nix`, so that the next such stop leaves evidence and
-nixos-latitude restarts without anyone present:
+nixos-latitude restarts without anyone present. A host with the feature never
+sleeps: `systemd.sleep.settings.Sleep` refuses suspend, hibernation, hybrid
+sleep and suspend-then-hibernate, and the `sleep`, `suspend`, `hibernate` and
+`hybrid-sleep` targets are disabled. The module leaves the lid and power keys
+to each host. `machines/nixos-latitude/configuration.nix` sets
+`services.logind.settings.Login` so that the lid switch and the power key do
+nothing. The panic and watchdog settings are:
 
 - `panic=10` reboots 10 s after a kernel panic.
 - `efi_pstore.pstore_disable=0` turns on EFI pstore, which the CachyOS kernel

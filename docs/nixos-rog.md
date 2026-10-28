@@ -120,16 +120,17 @@ steps of the script (`scripts/lib/pull-main.sh`). The notifications and the wait
 for a failed `main` stay in `scripts/pull-main.sh`.
 
 `oruc-auto-update.service` reads a fine-grained GitHub token,
-`github-update-token`, limited to this repository. The script writes it to a
-private Nix config file and a private `gh` config under the service's runtime
+`github-update-token`, limited to this repository, as a systemd credential. The
+script writes it to a private Nix config file and a private `gh` config under the service's runtime
 directory. Nix's GitHub fetches then stay within the API limit, and
 `deploy.sh` can ask `gh` which pull request merged a running release.
 Child-process environments carry only the file paths. systemd removes the directory after the run. Processes of `oruc`
 can still read the file; this removes the token from inherited environments
 without isolating the service from that user.
 
-To deploy `main` now, run `upgrade` on nixos-rog. It prints the unit's log
-while it runs and exits with the run's status. From nixos-desktop:
+To deploy `main` now, run `upgrade` on nixos-rog (`nixosModules/upgrade.nix`,
+a command the hosts share). It runs this unit now, prints the unit's log while
+it runs and exits with the run's status. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade
@@ -202,6 +203,13 @@ unit on nixos-rog. The exit codes come from `deploy.sh`; the
 
 A clone or fetch fails while GitHub answers when, for example, the account
 lost access to the repository.
+
+The script's traps report a failed exit and the time limit. A run that ends
+another way skips them, such as a kernel kill for memory (oom-kill, which skips
+the TERM trap too) or a SIGKILL. `oruc-auto-update-died.service`
+(`machines/nixos-rog/auto-update.nix`) covers those runs. It stays quiet for the
+results `exit-code` and `timeout`, which the traps already reported. Its popup
+goes through systembus-notify, which `nixosModules/monitoring.nix` turns on.
 
 A stop during `deploy.sh` leaves the rollback timer armed. The timer restores
 the previous system when it fires, at most 420 seconds after the deploy armed
@@ -278,9 +286,12 @@ server were down. The `risoluto-dev-allowlisted` or
 `statuslantern-com-allowlisted` check in `scripts/verify-nixos-rog.sh` also
 fails.
 
-When a Wi-Fi sign-in page does not load, switch to the network's own plain DNS
-until you are logged in. Then switch back. The first command switches, and the
-second switches back:
+A Wi-Fi sign-in page (hotel, cafe) often blocks DNS-over-TLS until you log in.
+When it does not load, switch to the network's own plain DNS until you are
+logged in. `captive-dns on` (`nixosModules/nextdns.nix`) adds a drop-in under
+`/run/systemd/resolved.conf.d/` that sorts after `nextdns.conf`, clears the
+NextDNS servers and uses the network's own DNS in plain text. The first command
+switches, and the second removes the drop-in and switches back:
 
 ```sh
 sudo captive-dns on
@@ -313,9 +324,12 @@ them) and the `claude` shell function. Its `claude-usage.timer` runs
 `claude-usage` every 10 minutes while the checkout's
 `desktop/claude-code/accounts.json` exists. It writes each Claude Code
 account's usage limits and login state to `~/.cache/claude-usage/usage.json`,
-and reads the files of risoluto-dev-1 and nixos-desktop over SSH. nixos-desktop
-reads this host's file with a key that `machines/nixos-rog/claude-usage-read.nix`
-allows only to print it. The account list and the shared preferences stay in
+and reads the files of risoluto-dev-1 and nixos-desktop over SSH. nixos-desktop's
+everyday SSH key has a passphrase that no timer can type, so it reads this
+host's file with a key of its own. `machines/nixos-rog/claude-usage-read.nix`
+allows that key only to print the file: its entry in `authorized_keys` forces
+`cat .cache/claude-usage/usage.json` and sets `restrict`, which turns off the
+terminal and every forwarding. The account list and the shared preferences stay in
 the private checkout, because this repository is public.
 The Claude accounts widget in the top bar shows that file.
 `oruc.plasma.claudeAccountsWidget` installs it from
@@ -335,9 +349,12 @@ nixos-desktop, gets a scope of its own on nixos-rog.
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too.
 The deploy unit runs outside heavy; its `MemoryHigh` slows it above 12 GiB
-(`machines/nixos-rog/auto-update.nix`) but never stops it. A repository whose test script follows infra's `heavy` contract, such
-as gastrodili's `scripts/heavy.ts`, picks it up from PATH. Run any other Nix
-evaluation of this flake as `heavy nix ...` on the host you work on, never over
+(`machines/nixos-rog/auto-update.nix`) but never stops it.
+
+`heavy` follows the contract of infra's `heavy` on risoluto-dev-1. It exports
+`HEAVY_ACTIVE=1`, and a repository script that finds `heavy` on PATH while
+`HEAVY_ACTIVE` and `CI` are unset runs its suite through it, such as
+gastrodili's `scripts/heavy.ts`. Run any other Nix evaluation of this flake as `heavy nix ...` on the host you work on, never over
 SSH on the other one: on 2026-10-27 agents on nixos-desktop filled nixos-rog's
 memory that way. The cap covers evaluation only: Nix builds run in
 `nix-daemon.service`, outside the scope.
@@ -388,21 +405,51 @@ Facts that matter when you change or measure them:
   `performance`.
 - The profile you pick stays after a reboot, because power-profiles-daemon
   saves it in `/var/lib/power-profiles-daemon/state.ini` and starts in it.
-  Without a saved profile, it starts in balanced.
+  Without a saved profile, it starts in balanced. So the running profile is the
+  one a reboot brings back, and the `ppd-profile-kept` check of
+  `scripts/verify-nixos-rog.sh` compares the saved and the running profile.
 - Every profile set, even to the current profile, makes asusd write that
   profile's power limits and fan curves again. Write a test override after
-  the switch.
-- An s2idle resume resets the CPU temperature limit in the SMU (the chip's
-  power controller) to 95 °C. `oruc-cpu-limits` sets it again after a resume
-  through systemd. `rtcwake`, as in `verify-nixos-rog.sh --suspend`, skips
-  systemd's sleep hooks, so the unit also checks the limit every 30 s. Each
-  check reads the current power profile again, so a missed profile signal
-  cannot restore the previous profile's limits.
+  the switch. In asusd's journal, the rewrite ended 75 ms after a profile set,
+  and `thermal-test-rog.sh` waits 4 s before it writes its overrides.
+- Nothing but `oruc-cpu-limits` sets a profile's CPU temperature limit or top
+  clock. The unit writes both at start, after each power-profiles-daemon profile
+  change, after a resume, and when the charger is plugged in or out.
+- The CPU temperature limit lives in the SMU (the chip's power controller) and
+  is lost at reboot. `oruc-cpu-limits` writes it with ryzenadj through
+  `ryzen_smu` (`machines/nixos-rog/apps.nix`). It survives a profile switch and
+  an asusd restart, but an s2idle resume resets it to 95 °C, and the unit sets it
+  again after a resume through systemd. `rtcwake`, as in
+  `verify-nixos-rog.sh --suspend`, skips systemd's sleep hooks and runs no
+  resume command, so the unit also checks both limits every 30 s. Each check
+  reads the current power profile again, so a missed profile signal cannot
+  restore the previous profile's limits.
+- Each profile's limits in `machines/nixos-rog/cpu-limits.nix` are 70 °C in
+  power-saver, 80 °C with a 4.0 GHz top clock in balanced and 85 °C in
+  performance. Power-saver and performance keep each core's own top clock.
 - Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
   `temp1` shows the same value.
-- How the firmware reads a fan curve (the rounding of each point, each fan's
-  1 % floor, and the first point's speed below its temperature) is in the
-  comment above `fanCurveTable` in `machines/nixos-rog/asus.nix`.
+- The firmware takes the power limits in `machines/nixos-rog/asus.nix` only
+  while every fan follows a custom curve. `fan-curves.json` maps each profile
+  (quiet, balanced, performance) and each fan (CPU, GPU, MID) to 8 points of
+  (°C, PWM 0 to 255). Neither value falls from left to right, and the `curveOk`
+  assertion in `asus.nix` fails the evaluation when a curve breaks that rule,
+  has another point count or leaves out a fan. The kernel sends each point as
+  100 × PWM / 255 percent, rounded down. In a sweep on 2026-10-13 every fan
+  started from stop at 1 % (PWM 3), and PWM 0 to 2 send 0 %, which stops the
+  fan. The firmware also runs each fan at its first point's speed below that
+  point's temperature. So the CPU and GPU fans start at PWM 3 and never stop.
+  The MID fan starts at 0 and stops when cool, because at 1 % it turns at 3400
+  to 4300 rpm, against about 2200 for the others. The CPU curve ends at 82 °C
+  with PWM 104 in quiet, at 94 °C with 165 in balanced and at 86 °C with 200 in
+  performance.
+- asusd writes the asus-armoury limits and the fan curves of the platform
+  profile on each profile change, and the firmware applies the `ppt_*` limits;
+  `ryzenadj -i` shows them as its STAPM and PPT limits. The kernel keeps the
+  curve it last sent to the firmware in the `asus_custom_fan_curve` hwmon, where
+  `pwmN_enable` reads 1 while it applies. asus-wmi numbers the fans `pwm1` to
+  `pwm3` as CPU, GPU and MID. `scripts/verify-nixos-rog.sh` switches to each
+  profile and compares these files with the deployed config.
 - The fans do not follow Tctl exactly. On 2026-10-13 the MID fan kept turning
   at a Tctl of 47 °C, under its first point (50, 55 or 52 °C in quiet, balanced
   and performance), and stopped at 44 °C. Judge a curve change by the fan speeds
@@ -453,7 +500,8 @@ matched to its commit. On exit it sets the original profile again and restarts
 asusd and `oruc-cpu-limits`, which write that profile's own limits and curves.
 
 The test builds stress-ng and gpu-burn from the release deployed on nixos-rog,
-so it needs a prior deploy. It exits 75 when another thermal test runs there.
+so it needs a prior deploy. It builds gpu-burn only for the RTX 4070's CUDA
+architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when another thermal test runs there.
 
 ### CPU and power profile
 
@@ -472,7 +520,8 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
   `drivers/cpufreq/amd-pstate.c`, read 2026-10-12). On the laptop in performance,
   `energy_performance_available_preferences` lists only `performance` (read
   2026-10-13).
-- scx_lavd runs in its performance mode in every profile. Its balanced and
+- scx_lavd runs in its performance mode in every profile
+  (`services.scx` in `machines/nixos-rog/configuration.nix`). Its balanced and
   powersave modes use core compaction (packing tasks onto as few cores as the
   load needs), and with `--autopower` the scheduler picked powersave in
   power-saver, where the pointer lagged. On 2026-10-18 in power-saver, a
@@ -484,12 +533,17 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
   desktop in use) was 15.0 to 16.9 W with `--autopower`, 13.6 W with
   `--performance` and 13.9 W with no sched_ext.
 - Boost stays on in balanced because `oruc-cpu-limits` caps that profile's top
-  clock at 4.0 GHz (`machines/nixos-rog/cpu-limits.nix`). Boost off cuts
+  clock at 4.0 GHz (`machines/nixos-rog/cpu-limits.nix`). One busy thread at
+  5.1 GHz held the CPU at 74 °C and spun the fans up. At 4.0 GHz it stayed at
+  56 °C with the fans at their floor. Power-saver needs no clock cap, because
+  power-profiles-daemon turns boost off there. Boost off cuts
   all-core speed by about 45 % and one-core speed by about 60 %. In performance
   under full load on 2026-10-10, stress-ng fell from 45 406 to 24 959 operations
   per second on all cores and from 4 567 to 1 806 on one core, while Tctl fell
   from 95 to 67 °C and CPU power from 71 to 36 W. That run used the power
   settings of that day, not today's.
+- The Zen 5c cores stop at 3.29 GHz, below any clock cap in `cpu-limits.nix`, so
+  a cap changes only the Zen 5 cores.
 - The same file sets balanced's CPU temperature limit to 80 °C. The balanced fan
   curve is a separate setting in `fan-curves.json`, applied by asusd. Its CPU
   points run from 55 to 94 °C, so the points above 80 °C matter only when Tctl
@@ -503,15 +557,35 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
 - The asus-armoury ranges on the GA605WI, read on AC on 2026-10-13:
   `ppt_pl1_spl` 15 to 80 W, `ppt_pl2_sppt` and `ppt_pl3_fppt` 35 to 80 W,
   `nv_tgp` 55 to 85 W, `nv_dynamic_boost` 5 to 20 W and `nv_temp_target` 75 to
-  87 °C.
+  87 °C. Each value in `acTunings` and `dcTunings` (`machines/nixos-rog/asus.nix`)
+  stays inside the GA605W range of the kernel's asus-armoury table. On battery
+  the only GPU limit is the temperature target. Quiet takes each range's minimum
+  and performance each GPU range's maximum; the other values trade speed for
+  heat and fan noise. In a 4-minute all-thread stress-ng run on AC, the CPU
+  peaked at 62 °C in quiet (boost off), 75 °C in balanced and 81 °C in
+  performance. The fan curves' first points changed after that run, so rerun it
+  with `scripts/thermal-test-rog.sh`. `cpu-limits.nix` caps each profile's CPU
+  temperature.
+- asusd writes `/sys/firmware/acpi/platform_profile` itself when you switch in
+  ROG Control Center or with `asusctl profile set`. power-profiles-daemon
+  missed that write: it kept its old profile, governor and EPP, and
+  `oruc-cpu-limits` kept the old profile's limits. The daemon watches the file's
+  directory inside its own sysfs mount, and that watch never fired.
+  `oruc-profile-sync` (`machines/nixos-rog/profile-sync.nix`) watches the file
+  itself in the host's mount and sets the profile in the daemon. When the daemon
+  sets a profile, it writes the file before it answers D-Bus calls, so the unit
+  then reads the same profile and sets nothing.
 
 ### RTX 4070 sleep
 
 - The RTX 4070 sleeps only while nothing reads it. A program that shows its
   usage or temperature, such as a ksystemstats sensor or `nvidia-smi`, keeps it
-  awake, so the kVitals panel widget shows only the Radeon. KWin, niri and
+  awake, so the kVitals panel widget shows only the Radeon (`gpuSelection` is
+  `gpu1` in `home-manager/modules/plasma-panels.nix`). ksystemstats numbers GPUs
+  in PCI address order. On nixos-rog, the only hybrid machine, the RTX 4070
+  (`0000:65:00.0`) comes first, so `gpu1` is the Radeon 890M. KWin, niri and
   nvidia-powerd keep `/dev/nvidia0` open but do not keep it awake. A display
-  on its HDMI port keeps it awake, and the `dgpu-runtime-suspended` check of
+  on a connector it drives, such as its HDMI port, keeps it awake, and the `dgpu-runtime-suspended` check of
   `scripts/verify-nixos-rog.sh` then expects it active.
 - A running `nvidia-smi dmon` under ksystemstats means some client still
   holds an RTX 4070 sensor. After a login on 2026-10-13 it kept running with
@@ -527,8 +601,11 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
   2026-10-11 on driver 615.78.08, BIOS 316, idle on battery: 4 of 4 drops from
   100 to 96 % woke it with the stock driver, and 0 of 4 with the two patches of
   [NVIDIA pull request 1299](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299)
-  that `machines/nixos-rog/graphics.nix` applies. Repeat the count after a
-  driver update. The comment in `graphics.nix` says when to drop the patches.
+  that `patchesOpen` in `kernel-cache/nvidia-driver.nix` lists, which
+  `machines/nixos-rog/graphics.nix` imports. Both commits are kept in
+  `kernel-cache/patches/`, so a rewritten pull request cannot break a rebuild.
+  Repeat the count after a driver update, and drop the patches when a driver
+  release includes that pull request.
 - The patches do not cover unplugging the charger or switching the platform
   profile. Each still wakes the card once. In a 25-minute patched run on
   2026-10-12, those two wakes kept it awake for 44 s.
@@ -543,7 +620,8 @@ so it needs a prior deploy. It exits 75 when another thermal test runs there.
 
 Apps that record from the default source get HushMic's denoised internal
 microphone, "HushMic". HushMic, from `machines/nixos-rog/hushmic.nix`, runs
-Ceva's DPDFNet model on the raw microphone. `mic-default-source.service`, in
+Ceva's DPDFNet model on the raw microphone, not on EasyEffects' source, so no
+audio is denoised twice. `mic-default-source.service`, in
 `machines/nixos-rog/media.nix`, makes that source the default and sets the
 microphone level after every HushMic start. While HushMic is not running,
 WirePlumber falls back to an earlier default source it remembers, such as
@@ -575,6 +653,13 @@ scripts/mic-ab-on-rog.sh level 0.3 0.5 0.7
 scripts/mic-ab-on-rog.sh ab
 ```
 
+`micVolume` in `machines/nixos-rog/media.nix` is 0.25, the `wpctl` volume that
+`mic-default-source.service` sets for the internal microphone. At 1.0 the codec
+adds 60 dB (Capture +30 dB and Internal Mic Boost +30 dB), and speech clips. On
+2026-10-13, `scripts/mic-ab-on-rog.sh` found that speech clipped 36726 samples
+at 0.45 and peaked at -3.2 dBFS at 0.3. At 0.25 the 60 s A/B take peaked at
+-5.2 dBFS with no clipped samples.
+
 ## Check the running laptop
 
 After a deploy, check the running laptop from nixos-desktop:
@@ -588,9 +673,13 @@ exits 1 when a check fails. It switches the laptop to each power profile in
 turn, checks that the CPU limits, fan curves and asus-armoury limits there match
 the deployed config, then sets the original profile again. It also checks that
 the Plasma panel widgets are installed and that KWin loaded the effects the
-config turns on. A Plasma session that started before the deploy shows as
-manual, because it keeps the plugins of the old system; log out and in, then
-rerun.
+config turns on. A running Plasma session keeps the plugins it loaded at login,
+so a deploy or a `plasma-look` that drops or adds one shows only after the next
+login. The `plasma-session` check shows as manual while plasmashell started
+before the current system or the last `plasma-look`; log out and in, then
+rerun. The `oled-care-state` check fails while a failed OLED shift has left a
+guard that stops every later shift, until `oled-care.service` restores the
+panels ([Plasma panels](#plasma-panels)).
 
 `--suspend` adds three s2idle cycles. They darken the screen, so they do not
 run, and the check fails, while someone uses the laptop (a local session that is
@@ -613,7 +702,11 @@ window's edges at full size before you judge them, with `--crop WxH+X+Y` in
 the screen's pixels.
 
 Text contrast in Ghostty depends on what shows through the blur, and a white
-window behind it is the worst case. Before you judge a change to Ghostty's
+window behind it is the worst case. The default `background-opacity` is 0.9
+(`home-manager/modules/applications.nix`). At 0.65, a white window behind turned
+the background mid-gray, and the text fell to 3:1 contrast. At 0.90, the base04
+gray keeps 5:1. The Glass look sets 0.66, and its contrast over a white window
+is not measured. Before you judge a change to Ghostty's
 opacity or colors, or to a terminal app's theme, ask Omer to put a white
 window where the Ghostty window opens.
 
@@ -678,13 +771,29 @@ setup](#claude-code-and-codex-setup)).
   restart plasma-plasmashell` ended it. `overlays/plasma-desktop.nix` patches
   the loop. Drop the overlay only when the bar's spacing is above 0, or once
   Plasma's `containments/panel/LayoutManager.js` steps at least one pixel.
+- The title bar widget (`titleBar` in `home-manager/modules/plasma-panels.nix`)
+  shows the active window's app icon and name. The widget's default leaves 10 px
+  after the name. The top bar ends the title with a spacer, so it leaves none. In
+  the floating bar's left island, a margin of 6 plus the island's end margin
+  leaves as much space after the name as before the launcher icon (16 px each in
+  a screenshot of nixos-rog).
+- In the floating bar, the title bar fills the panel's height (36 px, read
+  through plasmashell scripting) and the other widgets keep 4 px free above and
+  below (28 px), so the vertical margins (4 px top and bottom) give every
+  background the same height. With spacing 0 and side margins, the backgrounds
+  of an island meet without a seam and leave 6 px inside each end.
 - A logout can show a black screen with a cursor for about a minute. On
   2026-10-13 plasmashell did not quit, and systemd killed it at its stop
   timeout. The cause is not confirmed.
 - To build the panels from the Nix file as the next login would, without a
   logout, deploy and then run `scripts/panels-rebuild-on-rog.sh`. It backs up
   the panel files, restarts ksystemstats and plasmashell in login order, runs
-  plasma-manager's panel script and prints the RTX 4070's power state. Then run
+  plasma-manager's panel script and prints the RTX 4070's power state. At a
+  login ksystemstats starts before plasmashell. Repeated ksystemstats restarts
+  under a running plasmashell left kVitals without updates on 2026-10-13. The
+  script deletes plasma-manager's last-run record for the panel script so that
+  it runs again, and waits up to 20 s for plasmashell's scripting interface
+  first. Then run
   `scripts/verify-nixos-rog.sh`.
 - To try a panel setting before you write it into the Nix file, run a script in
   the running plasmashell. A script's `writeConfig` reaches the panel file, but
@@ -726,14 +835,23 @@ A Plasma look is the Plasma style, window decoration, Qt style, color scheme
 and KWin blur that belong together. Each look is a file in
 `home-manager/modules/plasma-looks/`, and `plasmaLookNames` in
 `machines/selectors.nix` lists them. `theme.plasmaLook` in the machine record
-names the default look. The looks are:
+names the default look. Every other look is a Home Manager specialisation of the
+same generation (`machines/variants.nix`), which `plasma-look`
+(`nixosModules/hm-variants.nix`) activates without a rebuild. A look writes its
+keys only while it is active. The looks are:
 
 - `glass`: the Glass decoration, Qt style and blur with the translucent Base16
   scheme, square corners and a floating top bar of three islands. The left
   island holds the macOS Tahoe theme's launcher and the active app, the
   middle one the clock, and the right one the song with a play/pause button
   while Spotify or Brave has a song loaded, then the system monitor, tray and
-  show-desktop button.
+  show-desktop button. Its Plasma style, `oruc-glass`
+  (`pkgs/oruc-glass-plasma-theme.nix`), is Breeze with see-through popups. Breeze
+  fills the background of menus, popups, notifications and KRunner with the
+  window color at 85% opacity. This style fills it at 50%, the opacity of the top
+  bar's widgets, so the Glass blur shows through. Plasma takes every element the
+  style leaves out from Breeze, and the build fails when Breeze's dialog
+  background no longer has a fill at 85%.
 
   While Glass is the active look, Ghostty gets the opacity (0.66) and
   padding (12 x 10 px) of the iglass Frosted theme in every session,
@@ -773,13 +891,14 @@ To add a look:
    `plasma-looks/once-per-login.nix`, because Home Manager starts it again at
    every switch.
 2. Install its packages whenever Plasma runs, not only while the look is
-   active. A look other than the default is a Home Manager specialisation, and
-   a specialisation cannot install packages on this setup; the evaluation
-   fails when it tries.
+   active, so each look installs its packages while any look is active. A look
+   other than the default is a Home Manager specialisation, and a
+   specialisation cannot install packages on this setup
+   (`home-manager/modules/variants.nix`); the evaluation fails when it tries.
 3. Write each KWin plugin switch the look owns as false while another look is
-   active, because plasma-manager never removes a key that a look leaves out. The evaluation
-   fails while two looks write different `kwinrc` Plugins switches, and the
-   error names the missing ones.
+   active, because plasma-manager never removes a key that a look leaves out.
+   `nixosModules/plasma-looks.nix` fails the evaluation while two looks write
+   different `kwinrc` Plugins switches, and the error names the missing ones.
 
 `scripts/verify-nixos-rog.sh` checks the widgets, KWin effects and panels of
 the stored look.
@@ -839,14 +958,17 @@ On nixos-rog:
   unidentifiable application". A Wayland client types through the remote desktop
   portal, which Plasma has and niri does not. The service exits 5 when another
   Deskflow already runs, such as a copy that Plasma's autostart or the menu
-  started. The unit treats 5 as success and does not restart.
+  started. The unit treats 5 as success and does not restart, because a restart
+  would only raise that instance's window again.
 - The unit sets `RefuseManualStart` and `RefuseManualStop`, so a deploy never
   starts a client you quit and never stops a running one. With
-  `RefuseManualStart` alone, Home Manager stops a changed client and cannot
-  start it again. If the cursor is on the laptop at that moment, the server
-  keeps nixos-desktop's keyboard and mouse captured. `systemctl --user start`
-  and `stop app-org.deskflow.deskflow` fail for the same reason; open Deskflow
-  from the menu, and quit it from its window.
+  `RefuseManualStart` alone, Home Manager's switch (sd-switch) stops a changed
+  client and cannot start it again. If the cursor is on the laptop at that
+  moment, the server keeps nixos-desktop's keyboard and mouse captured for a
+  client that is gone. A login and a logout still start and stop the client,
+  because the target's `Wants` and `PartOf` are not manual.
+  `systemctl --user start` and `stop app-org.deskflow.deskflow` fail for the
+  same reason; open Deskflow from the menu, and quit it from its window.
 - `overlays/deskflow.nix` builds Deskflow against libportal 0.10.0 or newer.
   With an older libportal, Deskflow builds without clipboard code and the laptop
   never sends what you copy. The overlay's install check fails the build in that
@@ -861,10 +983,13 @@ On nixos-desktop:
 - The `app-org.deskflow.deskflow` user service in
   `machines/nixos-desktop/home.nix` starts the server at a Plasma login, with
   the same `RefuseManualStart`, `RefuseManualStop` and exit 5 rules as the
-  client. The server reads the keyboard and mouse through the input capture
-  portal.
-- Home Manager writes the server mode, the screen links file, the log setting
-  and one `[computer_<name>]` group for each machine into `Deskflow.conf`.
+  client. Deskflow on Wayland reads the keyboard and mouse through the input
+  capture portal, so the server starts at a Plasma login, and the unit name
+  gives the portal the app ID, as on nixos-rog.
+- Home Manager writes the server mode, the screen links file (`deskflowLayout`
+  in `machines/nixos-desktop/home.nix`, which puts nixos-rog left of
+  nixos-desktop's screen), the log setting and one `[computer_<name>]` group for
+  each machine into `Deskflow.conf`.
   Deskflow 1.27 reads the computers from those groups and skips a `screens`
   section in the links file, so a computer missing there stops the server with
   `unknown computer name`.

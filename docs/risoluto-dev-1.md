@@ -35,9 +35,13 @@ reaches it like the workstations.
 
 ## Disk and boot
 
-`disk.nix` is a disko layout for `/dev/vda`: a 1 MiB BIOS boot partition, an
-ESP of 4 GiB at `/boot` (masks 0077 like the other hosts), and one ext4 root on
-the rest.
+`disk.nix` is a disko layout for `/dev/vda`, a GPT disk: a 1 MiB BIOS boot
+partition (type EF02, which Limine's BIOS stage needs), an ESP of 4 GiB at
+`/boot` (masks 0077 like the other hosts), and one ext4 root on the rest. The
+ESP is 4 GiB as on the other hosts, because every kept generation stores a
+kernel and an initrd on it. The firmware of a UEFI boot needs the ESP, so the
+layout fits either firmware (`oruc.machine.biosDevice`), and only the BIOS boot
+is tested.
 
 The box boots through BIOS today, and the firmware setting stays. The record
 sets `biosDevice = "/dev/vda"`, so Limine installs its BIOS stage on the disk
@@ -387,9 +391,16 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives oruc the common layer and `home.nix`, which adds the
   hourly `desktop-sync.sh --config`, the Claude account tools of
-  `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`,
-  which every minute moves a named Claude agent in herdr off an account that
-  hit its usage limit and starts the agents again after a herdr restart.
+  `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`
+  (next bullet).
+- `claude-limit-switch.timer` runs `claude-limit-switch scan` of
+  `pkgs/claude-tools` every minute. A run starts herdr's default session through
+  `herdr-default.service` when no server runs, starts the recorded Claude agents
+  again after a server restart, and moves each named agent whose screen ends in
+  a usage limit message to another account. A failed run means one agent could
+  not move. The log names the agent and the reason:
+  `journalctl --user -u claude-limit-switch.service` and
+  `~/.local/state/claude-limit-switch/events.log`.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
   and the box's own list) and runs Omer's agent services as user services of
   oruc: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
@@ -400,9 +411,10 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   (`X-SwitchMethod = "keep-old"`), so the new version starts at their next
   restart. Their secrets come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
-- `stay-green.timer` keeps Omer's Teams status Available on weekdays from 09:00
-  to 18:00 Istanbul time with `pkgs/stay-green.nix`, built from the
-  `stay-green` flake input. The sign-in is in `~/.local/state/stay-green`. A
+- `stay-green.timer` starts a run every 4 minutes around the clock. A run keeps
+  Omer's Teams status Available on weekdays from 09:00 to 18:00 Istanbul time
+  with `pkgs/stay-green.nix`, built from the `stay-green` flake input, and does
+  nothing outside that schedule. The sign-in is in `~/.local/state/stay-green`. A
   failed run usually means the sign-in expired or was revoked; sign in again
   from a workstation with `stay-green login risoluto-dev-1`. Read a run with
   `journalctl --user -u stay-green.service -n 20`.
@@ -418,9 +430,13 @@ before its config exists.
 
 - The keys, the management key, the share node's `ts.net` name, its Tailscale
   auth key and the Cloudflare token are in `secrets/risoluto-dev-1-cliproxy.yaml`.
-  sops-nix renders the app's config from them (`services.nix`), and
-  `cliproxy-up.sh` copies it to `$XDG_RUNTIME_DIR/cliproxy`, because the
-  management panel can change it. After a key changes, run
+  sops-nix renders the app's config and an environment file from them
+  (`services.nix`). `cliproxy.service` sets `CLIPROXY_RENDERED_CONFIG` and
+  `CLIPROXY_DNS_TOKEN_FILE` to the rendered config and the Cloudflare token
+  file, and passes `CLIPROXY_SHARE_HOST` and `CLIPROXY_TS_AUTHKEY` through its
+  `EnvironmentFile`. The management panel can change the config, so
+  `cliproxy-up.sh` gives the app a writable copy in `$XDG_RUNTIME_DIR/cliproxy`,
+  which is tmpfs, and makes the copy again on every start. After a key changes, run
   `systemctl --user restart cliproxy.service`. A deploy that changes a file
   of the folder restarts the unit too, which stops the containers for the
   length of a start.
@@ -431,8 +447,10 @@ before its config exists.
   `cliproxy/tls-proxy/`. Caddy serves the `ts.net` name with the certificate
   from the sidecar's tailscaled, and `cliproxy.risoluto.dev` with a Let's
   Encrypt certificate from the DNS-01 challenge.
-- `cliproxy.risoluto.dev` is a public, DNS-only A record to the share node's
-  tailnet address, so it answers only on the tailnet. `cliproxy-up.sh` runs
+- `cliproxy.risoluto.dev` (`CLIPROXY_PUBLIC_HOST` in `env.public`) is the share
+  node's second name, beside its `ts.net` name (`CLIPROXY_SHARE_HOST`). It is a
+  public, DNS-only A record at Cloudflare to the node's tailnet address, so it
+  answers only on the tailnet. `cliproxy-up.sh` runs
   `cliproxy/dns-record.sh apply` after every start and update; the script
   changes only that one record. To see what it would do, run
   `"$(dirname "$(systemctl --user show -p ExecStart --value cliproxy.service | grep -o '/nix/store/[^ ;]*cliproxy-up.sh')")"/dns-record.sh plan`
@@ -440,8 +458,9 @@ before its config exists.
 - `cliproxy-update.timer` reloads the unit daily at 04:30 Istanbul time. The
   reload pulls the CLIProxyAPI and Tailscale images, rebuilds `tls-proxy`, and
   recreates the containers whose image changed.
-- OAuth token files, logs, the sidecar's Tailscale state and Caddy's
-  certificates stay in `~/.local/state/fleet/cliproxy`.
+- OAuth token files stay in `~/.local/state/fleet/cliproxy/auths`, because the
+  app owns that store. The logs, the sidecar's Tailscale state and Caddy's
+  certificates are under `~/.local/state/fleet/cliproxy` too.
 - A provider's OAuth login in the panel redirects to a callback port on
   127.0.0.1 of the box (8085, 1455, 54545, 51121 or 11451, by provider).
   Forward that port from a workstation before the login, for example
@@ -552,8 +571,12 @@ its config and answers the three names with test certificates, and the
 firewall drops a connection to port 443 from outside. A forged
 `Tailscale-User-Login` does not reach any backend. Docker and Podman answer as
 oruc through their user sockets, a port that Docker publishes lies outside the
-host's outbound range and answers, and a busybox image that the build puts on
-the disk runs under both. `box-browser status` passes, and the Chromium of
+host's outbound range and answers, to a client on loopback and to a client at
+the host's own global address, and a busybox image that the build puts on
+the disk runs under both. The second client stands for a tailnet peer. RootlessKit 3
+tries to keep the source address of a client that is not on loopback
+(`--source-ip-transparent`, on by default), and never tries it for a loopback
+client. `box-browser status` passes, and the Chromium of
 nixpkgs' Playwright, found through oruc's session variables, loads a local page
 headless.
 
@@ -581,7 +604,15 @@ that fails during a switch makes `switch-to-configuration` exit 4, which `deploy
 unit would roll back every deploy. Run it with
 `scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-units`. It is separate from
 the boot test because disko's booted machine has a read-only `/nix/store` and no
-database of its closure, which fails the Home Manager units there.
+database of its closure, which fails the Home Manager units there for reasons
+the box does not have. This test uses qemu-vm's standard store, which is
+writable and registered.
+
+A unit that failed after boot has happened: `smartd` failed to start in the boot
+test (`smartd.service: Failed with result 'exit-code'`) on a virtio disk, the
+kind this host has, and `nixosModules/monitoring.nix` enables smartd unless a
+host says otherwise. So `configuration.nix` sets `services.smartd.enable =
+false`.
 
 The test also starts a test ACME server (pebble) and a DNS server for the
 challenge (`ci/server-units/acme.nix`), and swaps lego's DNS provider for its
@@ -595,9 +626,16 @@ leaves the self-signed certificate in place and shows only in the journal,
 which reaches SigNoz without an alert.
 
 The test also holds the `chmod` of each order's output for 10, 20 and 30
-seconds, so the orders of the first issuance overlap on purpose. A real order
-passes the `chmod` in milliseconds, so that overlap is rare on the box and
-certain in the test. In each run of this test without the ordering of Caddy
+seconds (`ci/server-units/acme.nix`), so the orders of the first issuance
+overlap on purpose. Each order copies its files into `out/`, then runs `chmod`
+and `chown` for the web server's group, and until that `chmod` the files are
+0600, so Caddy cannot read them. Orders that share an account run at the same
+time, except the first, which runs alone, and an order that is done restarts
+Caddy while the others are in that window. A real order passes the `chmod` in
+milliseconds, so that overlap is rare on the box and certain in the test. The
+held `chmod` is the one on `out`, and it logs `test: chmod of out waited N s`
+after the wait, so the test can check that the wait still happens after a
+nixpkgs move. In each run of this test without the ordering of Caddy
 after the orders, Caddy exited with status 1.
 
 ## Deploy test in a VM
@@ -679,8 +717,10 @@ connection, or the netcup CPU. The cutover proves the first two.
 These are VM numbers: `machine` has 4 cores of nixos-desktop's CPU, not the
 netcup box's. Each cell is the average busy cores over 30 seconds, from
 `/proc/stat` (`ci/server-desktop/cpu.py`). The load runs on `machine` itself as
-oruc, in the RDP session: Chromium on a 20000-line page that a script scrolls,
-and Chromium on a 20 s looping 1080p VP9 video. The client asks for H.264 at
+oruc, in the RDP session: Chromium on a 20000-line text page that a script scrolls,
+and Chromium on a 20 s looping 1080p VP9 video, a synthetic test pattern that
+Chromium decodes in software on a host with no GPU (`workload` in
+`ci/server-desktop/machine.nix`). The client asks for H.264 at
 1920x1080 (`/gfx:AVC420`) and gets x264 from xrdp.
 
 | Load | whole VM | `xrdp` process | `Xorg` of the session |

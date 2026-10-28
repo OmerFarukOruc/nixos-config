@@ -55,7 +55,11 @@ A change reaches `main` only through the git hooks of `devenv.nix`, which
 direnv installs when it loads the devenv shell. GitHub runs no check of a
 commit that a person pushes. It builds the kernel
 ([kernel-cache](../kernel-cache/README.md)) and checks the updates that
-`.github/workflows/update.yml` prepares ([Updater](nixos-rog.md#updater)).
+`.github/workflows/update.yml` prepares ([Updater](nixos-rog.md#updater)). A
+workflow run takes over an hour, and `main` moves several times a day. When
+`main` moved during a run, the workflow puts the update commit on the new `main`
+and runs both checks again. It does not check the new `main`'s own commits
+again, because they passed the hooks at their push.
 
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
@@ -72,8 +76,9 @@ devenv tasks run ci
 ```
 
 The hooks see the staged tree, because prek sets unstaged edits aside while a
-hook runs. Commit everything before you push, so the checked tree is the
-pushed one. No hook builds a host's system. The deploy builds it on the target
+hook runs. The checked tree is the pushed one only when you committed
+everything staged and the push sends `HEAD`, so commit everything before you
+push. No hook builds a host's system. The deploy builds it on the target
 and changes nothing when the build fails, and the update workflow builds every
 host before its own merge; a commit that does not build for another host
 therefore also fails the workflow's next run. `devenv tasks run ci` builds them
@@ -82,9 +87,13 @@ all before a push.
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
 ran `direnv allow` has no hooks, and on nixos-rog and nixos-desktop `heavy`
-fails without a user session bus, which fails the push hook. Git holds the SSH
-connection to GitHub open while the pre-push hook runs, and GitHub closes it
-when it stays idle, so `home-manager/modules/git.nix` sends SSH keepalives.
+fails without a user session bus, which fails the push hook. Git opens the SSH
+connection to GitHub before the pre-push hook runs and holds it open, and GitHub
+closes it when it stays idle. A push whose hook took 420 s failed without
+keepalives and passed with them (2026-10-23). So `home-manager/modules/git.nix`
+sets `core.sshCommand` to `ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10`.
+Ten missed keepalives, 300 s, end the connection, which is more than the 190 to
+224 s that the pre-push checks took on nixos-rog.
 
 A worktree gets the hooks from the shared `.git/hooks`, but their config is a
 link that the devenv shell writes. Until `direnv allow <worktree>` and a first
@@ -211,7 +220,11 @@ uncommitted edits, and `--allow-dirty` would ship them.
 First find the hosts that the push affects. A push can carry several commits,
 so the script compares the system `drvPath` of every host at the pushed commit
 `<sha>` with the one at `<old>`, the `main` the push landed on. The host that
-runs it evaluates both from GitHub, so this step needs no worktree. nixos-rog
+runs it evaluates both from GitHub, so this step needs no worktree. It runs
+one `nix eval` per host, under `heavy` where the host has it, because `heavy`
+(`home-manager/modules/heavy.nix`) caps the memory of each evaluation. One
+evaluation per host stays under that cap. Three systems in one evaluation did
+not, and systemd-oomd killed it. nixos-rog
 took 70 to 90 seconds (measured on 2026-10-15), and nixos-desktop about 160
 seconds for one revision (2026-10-24). From the main checkout, run:
 
@@ -304,7 +317,9 @@ drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkou
 A server deploys itself, so it follows `main` without anyone at a keyboard. The
 host sets `oruc.deploy.self.enable`, and `nixosModules/deploy-host.nix` then
 adds two timers. It does not use `system.autoUpgrade`, which would skip the
-deploy lock and the rollback when sshd or tailscaled break.
+deploy lock and the rollback when sshd or tailscaled break. No NixOS option or
+upstream module runs `deploy.sh` from a timer, so the module builds the unit
+itself.
 
 **The deploy timer.** `self-deploy.timer` starts `self-deploy.service` at minute
 30 of every even hour, with up to 10 minutes of random delay. The calendar is in
@@ -312,10 +327,16 @@ UTC, because `nixosModules/common.nix` sets the timezone to Europe/Istanbul.
 Every 2 hours matches nixos-rog's deploy unit
 ([Deploy unit](nixos-rog.md#deploy-unit)). The update workflow merges at most
 every 6 hours, so `main` reaches the server within 2 hours and 10 minutes of a
-merge. A run that finds nothing to deploy costs one `git fetch` and one
-evaluation. The service runs `scripts/self-deploy.sh` as root. The unit is the
-one that nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`), and the
-clone and deploy steps are in `scripts/lib/pull-main.sh`. Each run:
+merge. The even hours at minute 30 keep a run clear of the 02:10 UTC reboot. A
+run that finds nothing to deploy costs one `git fetch` and one evaluation. The
+service runs `scripts/self-deploy.sh` as root. The unit is the one that
+nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`, from
+`machines/nixos-rog/auto-update.nix`), and the clone and deploy steps are in
+`scripts/lib/pull-main.sh`. The update workflow moves the inputs and builds and
+checks every host before it merges to `main`, so the script only deploys.
+nixos-rog's `scripts/pull-main.sh` is its twin. A failure here is the unit's own
+status and a line at priority err, where nixos-rog shows a desktop notification.
+Each run:
 
 1. fetches `main` into its own clone, `/var/lib/self-deploy/repo`;
 2. stops when the host runs a clean release of `main` and boots the same system;
@@ -328,16 +349,20 @@ clone and deploy steps are in `scripts/lib/pull-main.sh`. Each run:
    [What the deploy does](#what-the-deploy-does).
 
 A main whose deploy failed is not deployed again until `main` moves, as on
-nixos-rog. Exit 70 and 77 (another deploy is under way) do not fail the run, but
-the same status in two runs in a row does, because a deploy that long is stuck.
-Exit 71, 74 and 79 fail the run, and the next run tries again. Exit 78 fails the
+nixos-rog. After the activation, a try has already restarted services and undone
+the change, and a failed build fails again. Exit 70 and 77 (another deploy is
+under way) do not fail the run, but the same status in two runs in a row does,
+because a deploy that long is stuck. Exit 71, 74 and 79 fail the run, and the
+next run tries again, because none is the fault of `main`. Exit 78 fails the
 run until the work of the running release reaches `main`, or until someone runs
 `./deploy.sh --replace <host> switch` from a checkout of `main` on nixos-desktop
 or nixos-rog.
 
 **Who sees a failure.** A failed run leaves `self-deploy.service` in the failed
 state, which `systemctl --failed` lists, and writes its reason at journal
-priority err (`journalctl -u self-deploy -p err`). The run stays failed, and
+priority err (`journalctl -u self-deploy -p err`). The script sets the priority
+with a leading `<N>` on a line of its output, such as `<3>` for err and `<4>`
+for warning. The run stays failed, and
 repeats its line every 2 hours, until `main` moves or someone fixes the cause.
 The host ships the lines of `self-deploy.service` and
 `self-deploy-reboot.service` at priority info and above to SigNoz
@@ -352,12 +377,16 @@ clear the failed state by hand, run
 `sudo systemctl reset-failed self-deploy.service`.
 
 **Limits.** The unit loads a GitHub token as a credential when the host sets
-`oruc.deploy.self.githubTokenFile`, and `scripts/lib/pull-main.sh` writes it to a
-private Nix config and `gh` config for the run, as nixos-rog's unit does
-([Deploy unit](nixos-rog.md#deploy-unit)). risoluto-dev-1 sets it to its sops
+`oruc.deploy.self.githubTokenFile`, and `github_config` in
+`scripts/lib/pull-main.sh` writes it to a private `nix.conf` and `gh` config
+under the unit's runtime directory, as nixos-rog's unit does
+([Deploy unit](nixos-rog.md#deploy-unit)). It points `NIX_CONFIG` and
+`GH_CONFIG_DIR` at them. Shell builtins write the files, so the token is never
+in a command line, and the exported variables carry paths only. risoluto-dev-1 sets it to its sops
 secret ([Rotate the box's token](risoluto-dev-1.md#rotate-the-boxs-token)).
-Without a token Nix reaches GitHub within the limit for a client without one, 60
-requests an hour, and `deploy.sh` cannot ask `gh` which pull request merged a
+Nix fetches the flake inputs through GitHub's API. Without a token it stays
+within the limit for a client without one, 60 requests an hour, which is too low
+for an evaluation, and `deploy.sh` cannot ask `gh` which pull request merged a
 running release. A release that someone test-deployed from a branch, and that
 later merged as a squash, then makes the run exit 78 until someone runs
 `--replace`.
@@ -366,7 +395,22 @@ A failed download in the evaluation, such as GitHub's API limit or an outage
 after the fetch succeeded, says nothing about `main`. The run fails and writes
 its reason at priority err, records no failed `main`, and the next run tries
 again. While the cause lasts, every run fails the same way, every 2 hours.
-nixos-rog's run does the same for its build.
+nixos-rog's run does the same for its build. Only an `error:` line that says
+`unable to download` counts, because Nix also prints a warning for each retry of
+a download that later succeeds. Any other error is the fault of `main`
+(`exit_on_download_failure` in `scripts/lib/pull-main.sh`).
+
+**Time and memory limits.** The unit stops a run after 3 hours
+(`TimeoutStartSec` in `nixosModules/deploy-unit.nix`, shared with nixos-rog's
+deploy unit). Without a limit, one hung network call keeps the unit active and
+the timer never starts it again. The slowest deploy of 119 runs of nixos-rog's
+old updater took 659 s (journal, 2026-10-16 to 2026-10-23), and the rest of the
+3 hours is room for compiling packages that no cache holds. A stop sends the
+script SIGTERM, and its trap reports. A stop during `deploy.sh` leaves the
+rollback timer to restore the previous system. `MemoryHigh = "12G"` slows the
+run above 12 GiB and never kills it, so the script's traps still report, which a
+`MemoryMax` kill would skip. The old updater, which also evaluated every host,
+peaked at 7.5 GiB (journal, 2026-10-26).
 
 **Why root.** A deploy from nixos-desktop or nixos-rog logs in as root over
 Tailscale SSH, because oruc's sudo needs a password on a server and a deploy
@@ -388,10 +432,14 @@ records to oruc's home.
 **The reboot.** `self-deploy-reboot.timer` starts `self-deploy-reboot.service`
 at 02:10 UTC every day (`*-*-* 02:10:00 UTC`). The service schedules a reboot
 in one minute when the kernel, the initrd or the kernel modules of
-`/run/booted-system` differ from those of `/run/current-system`, the test that
-NixOS's own upgrade reboot uses. It skips the night, with a warning, when the
-boot default is not the running system (a `test` deploy), or when a deploy runs,
-holds the lock or has armed a rollback timer. It never starts a deploy. A deploy
+`/run/booted-system` differ from those of `/run/current-system`, because a
+deploy since the boot changed them. The test is the one that NixOS's own upgrade
+reboot uses. It compares the kernel modules too, which hold the modules the
+running kernel loads. It skips the night, with a warning at priority warning,
+when the boot default is not the running system (a `test` deploy leaves the boot
+default behind, and a reboot would drop what runs now), or when a deploy runs,
+holds the lock or has armed a rollback timer. A skip exits 0, and the next night
+tries again. It never starts a deploy. A deploy
 that starts within that one minute can still be cut short by the reboot, and
 the host then boots the previous system, the boot default that the deploy had
 not yet replaced. Limine counts no boot attempts, so a new kernel that does not
@@ -399,9 +447,12 @@ boot leaves the host down until someone opens the provider's console and picks
 the previous entry from Limine's menu; nothing reports it. The telemetry work
 that ships the journal is where an alert on a missing host belongs.
 
-**The session check.** The deploy user's running services form the session
-check of step 10 below. The running system lists the services to leave out in
-`/etc/nixos-config-deploy/session-ignore`, one shell glob per line. A host sets
+**The session check.** SSH can still answer while a switch broke the desktop.
+The deploy user's running services form the session check of step 10 below,
+such as the compositor, the shell and the keyring. The running system lists the
+services to leave out in `/etc/nixos-config-deploy/session-ignore`, one shell
+glob per line. They are long-running agents that a switch may restart and that
+no deploy should undo. A host sets
 the list with `oruc.deploy.sessionIgnore`; a host without the option has no
 file and leaves out nothing more. On risoluto-dev-1 the list holds the
 long-running agents of oruc. A deploy of that host runs as root, whose session
@@ -437,15 +488,23 @@ The deploy runs these steps in order:
    `/boot` is mounted (exit 79 otherwise).
 9. For `switch` and `boot`, it checks the free space on the ESP. The ESP needs
    room for all kernels and initrds of the new generation and its
-   specialisations together, plus 1 GiB.
-   Without that room, it exits 74 and does not touch the ESP.
+   specialisations together, plus 1 GiB. Each boot entry copies its kernel and
+   initrd to the ESP before the installer removes old ones, so a nearly full ESP
+   would fail halfway through. The deploy counts every distinct kernel and
+   initrd of the candidate and its specialisations, even those already on the
+   ESP. Every host has a 4 GiB ESP, and the 1 GiB left free covers a few more
+   generations. Without that room, it exits 74 and does not touch the ESP, and
+   nothing on the target has changed.
 10. For `switch` and `test`, when the deploy user is logged in, it records that
-    user's running services. The list leaves out:
+    user's running services, because SSH can still answer while the switch broke
+    the desktop. The session is the compositor, the shell and the keyring. The
+    list leaves out these services, which come and go on their own:
     - services that a timer, socket or path started
-    - apps that a launcher started (`app-*`)
+    - apps that a launcher or autostart started (`app-*`)
     - `systemd-run` jobs (`run-*`)
     - transient D-Bus services (`dbus-*`)
-    - services that the running system lists for this check
+    - services that the running system lists for this check, such as
+      long-running agents that a switch may restart
       ([The session check](#self-deploy-of-a-server))
 
     When the deploy cannot list the services, it stops before it arms the
@@ -537,21 +596,47 @@ such as 1.
 | 79 | `/boot` is not mounted. | Unchanged. |
 | 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
 
+nixos-rog's deploy unit (`scripts/pull-main.sh`) and a server's self-deploy
+(`scripts/self-deploy.sh`) share `deploy_main` in `scripts/lib/pull-main.sh`.
+It sorts the exit status of `deploy.sh` into four outcomes:
+
+- **done.** The status is 0, and the host runs `main`.
+- **wait.** The status is 70 (the rollback timer of another deploy is pending),
+  77 (another deploy holds the lock) or 78 (a running release holds files that
+  `main` lacks). None of them changed the host.
+- **retry.** The status is 71 (the rollback timer could not be armed), 74 (the
+  ESP is full) or 79 (`/boot` is not mounted). None is the fault of `main`, so
+  the next run tries again.
+- **failed.** Any other status, such as a build that fails again, or 73, after
+  which the host runs `main` while the next boot starts the previous system.
+
+`deploy_main` asks `systemctl is-active deploy-rollback.timer` before it starts
+`deploy.sh`, and takes status 70 without running it when the timer is active.
+`deploy.sh` uploads a release in step 3 before it finds a pending rollback timer
+in step 4, so asking first keeps a held-back run from leaving a release behind.
+
 ## One deploy at a time
 
 Only one deploy runs on a host at a time. A second deploy exits 77 and names
 the deploy that holds the lock.
 
-The lock goes when that deploy exits or loses its connection. Keepalives on
-both ends close a dead connection within about 45 seconds.
+The target's shell takes the lock with `flock` on `deploy.lock` in
+`~/.local/state/nixos-config-deploy/` and holds it while it reads the deploy's
+open pipe. The lock goes when that deploy exits or loses its connection.
+Keepalives on both ends close a dead connection. The deploy's `ssh` probes every
+10 seconds and ends the connection after 3 missed probes, 30 seconds. The
+target's sshd (`nixosModules/ssh.nix`) probes every 15 seconds and ends it after
+3 missed probes, 45 seconds. The target's end frees the lock, so the lock is
+free within about 45 seconds.
 
-When a deploy finds its own lock dropped before activation, it does these
-steps:
+When a deploy finds its own lock dropped before activation, another deploy may
+have run since. It does these steps:
 
 1. It takes the lock again.
 2. It repeats the release check in
    [Dirty trees and other checkouts](#dirty-trees-and-other-checkouts).
-3. It reads the running system again for the rollback.
+3. It reads the running system again, because the rollback must restore that
+   one.
 
 It exits 77 if another deploy holds the lock by then, or 70 if another deploy
 left a rollback timer. During activation, the pending rollback timer keeps

@@ -67,11 +67,28 @@ cache. With `--record` it then starts the `kernel-cache` workflow, which finds
 every path in the cache and records the build.
 
 ```sh
+CACHIX_AUTH_TOKEN=... scripts/build-local.sh [--rev <sha>] [--record] <variant>...
+```
+
+- `--rev` is the full 40-character SHA of the nix-cachyos-kernel revision to
+  build. Without it the script builds the revision in `flake.lock`.
+- `--record` starts the `kernel-cache` workflow afterwards, so the workflow
+  records the build.
+- A variant is a name from the `variants` list in `flake.nix`, such as `zen4` or
+  `x86_64-v3`. The script needs at least one.
+
+For example:
+
+```sh
 CACHIX_AUTH_TOKEN=... scripts/build-local.sh --rev <nix-cachyos-kernel sha> --record zen4 x86_64-v3
 ```
 
-The token comes from the environment; push only the outputs in `flake.nix`,
-because the cache is public. The `kernel-cache` workflow can also be started by
+The token comes from the environment and reaches the container through a 0600
+env file, never a command-line argument. The script keeps the compilers and
+earlier builds in the Docker volume `nix-kernel-cache-store` between runs. It
+needs only the cachix client from its own nixpkgs pin, which need not match the
+kernel-cache lock. Push only the outputs in `flake.nix`, because the cache is
+public. The `kernel-cache` workflow can also be started by
 hand for one revision: `gh workflow run kernel-cache -f rev=<sha>`. On
 nixos-desktop,
 [docs/updates.md](../docs/updates.md#when-the-cache-lacks-the-kernel) has the

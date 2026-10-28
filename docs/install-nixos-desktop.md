@@ -11,7 +11,14 @@ what you keep first. Before you start, have these ready:
   (`ssh_host_ed25519_key`, `ssh_host_rsa_key`, `ssh_host_ecdsa_key` and their
   `.pub` files) on nixos-rog. `secrets/nixos-desktop.yaml` is encrypted to the
   age key derived from `ssh_host_ed25519_key.pub`, so sops-nix decrypts it on
-  the first boot only with these keys.
+  the first boot only with these keys. `.sops.yaml` holds that age key for
+  nixos-desktop and for nixos-rog, and `programs.ssh.knownHosts` in
+  `nixosModules/common.nix` holds the host keys of nixos-desktop,
+  nixos-latitude and nixos-rog, so the scripts and deploys that SSH from one
+  host to another, or from a host to itself, need no key accepted by hand.
+  Putting the old keys back keeps both files valid. A host reinstalled with
+  new keys needs its `.sops.yaml` entry re-derived and its `knownHosts` line
+  changed.
 - The commit to install, pushed to GitHub. The ISO downloads it over HTTPS,
   because the repository is public and nixos-rog accepts nothing from the LAN.
 

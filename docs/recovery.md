@@ -10,8 +10,10 @@
 - [nixos-desktop](#nixos-desktop)
 
 Each host keeps the newest 5 system generations, one from each of the last 7
-days, the running one, and the booted one. The boot menu lists only the newest
-5. angrr deletes the other generations before the daily `nix-gc`. `nix-gc`
+days, the running one, and the booted one. `services.angrr` in
+`nixosModules/common.nix` sets this. The boot menu lists only the newest 5,
+and the other kept generations stay in the profile without a menu entry.
+angrr deletes the generations it does not keep before the daily `nix-gc`. `nix-gc`
 then deletes the unreachable store paths. angrr sees only generations with a
 root in `/nix/var/nix/gcroots/auto`. The generation `nixos-install` made has
 none, so it stays until someone deletes it by hand
@@ -76,7 +78,9 @@ steps:
 The normal generation uses the selected CachyOS kernel and the themed greeter.
 The `recovery` specialisation of each generation boots the kernel set in
 `oruc.recovery.kernelPackages` (the stock kernel by default) with the stock
-greeter (`nixosModules/recovery.nix`). nixos-rog sets it to
+greeter (`nixosModules/recovery.nix`). It clears
+`services.displayManager.sddm.theme`, which `nixosModules/login.nix` sets, in
+case the theme renders a blank screen. nixos-rog sets it to
 `linuxPackages_latest`; see [nixos-rog](#nixos-rog). A runtime switch cannot
 load a different kernel, so recovery needs a reboot:
 

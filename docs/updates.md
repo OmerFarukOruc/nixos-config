@@ -31,10 +31,12 @@ scripts/update-kernel.sh
 ```
 
 The script first checks that every path the builder recorded for that revision
-is in the `omerfarukoruc` Cachix cache. Those paths are the kernels, the NVIDIA
-open modules, and ryzen-smu, turbostat and nct6687d for zen4. When one is missing, the
-script leaves `flake.lock` unchanged. So a host never compiles the kernel
-itself.
+is in the `omerfarukoruc` Cachix cache, which `nixosModules/kernel.nix` adds as a
+substituter. The kernel-cache workflow builds the cache's contents. Those paths are
+the kernels, the NVIDIA open modules, and ryzen-smu, turbostat and nct6687d for
+zen4. When one is missing, the script leaves `flake.lock` unchanged. So a host
+never compiles the kernel itself. A plain `nix flake update` does not check the
+cache.
 
 The script changes `flake.lock` and does not commit it. Commit the lock, then
 deploy as [deploy.md](deploy.md#deploy) describes. The script prints a reminder
@@ -42,8 +44,9 @@ to do so only when its output is a terminal.
 
 ### Move the kernel pin
 
-`kernel-cache/flake.nix` pins nix-cachyos-kernel to a commit, and nothing moves
-that pin on its own. To move it, read what changed upstream since the pin:
+`kernel-cache/flake.nix` pins nix-cachyos-kernel to a commit on upstream's
+default branch, and nothing moves that pin on its own. No upstream build tests
+those commits, so read what changed upstream since the pin before you move it:
 
 ```sh
 gh api 'repos/xddxdd/nix-cachyos-kernel/compare/<old sha>...<new sha>' --jq '.files[] | "\(.status) +\(.additions) -\(.deletions) \(.filename)"'
@@ -57,8 +60,10 @@ Read every other changed file in full.
 Then change the commit in `kernel-cache/flake.nix`, run
 `scripts/check.sh --fix`, which locks the new commit in
 `kernel-cache/flake.lock`, and push the change to `main`. The push starts the
-kernel-cache workflow, which builds and records the new revision. The
-update workflow then moves the hosts with `update-kernel.sh`.
+kernel-cache workflow, which builds and records the new revision. The workflow
+checks out the tip of `main`, not the commit that queued the run. A run that
+waited behind another one would otherwise build its older lock and record it over
+the newer one. The update workflow then moves the hosts with `update-kernel.sh`.
 
 ### When the cache lacks the kernel
 
@@ -163,14 +168,22 @@ airpods-tui, herdr, KVitals, linctl and Smart Video Wallpaper name none, so
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s
 `postinst` (`dpkg-deb -e <deb> <dir>`). Grok Bot's registers the APT
-repository that its `passthru.aptIndex` names.
+repository at `downloads.cursor.com` that its `passthru.aptIndex` names. That
+repository's package record names SpaceXAI as the vendor.
 
 | App | Release source |
 | --- | --- |
 | Claude Desktop, ChatGPT, Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
-| herdr web UI | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the `outputHash` of the Bun dependencies. It learns that hash again when nixpkgs' bun is not the `passthru.depsBun` version, because the hash follows bun |
+| herdr web UI | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the `outputHash` of the Bun dependencies. `passthru.depsBun` holds the bun version that produced that hash, so `update-app.sh` learns the hash again when nixpkgs' bun differs |
 | cf, impeccable, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
+
+The wrapper `package.json` of cf depends on cf, because cf has only beta releases
+and its own `package.json` pins dev dependencies that do not resolve. The wrapper
+of `openchamber-web` depends on `@openchamber/web`, the web server that
+risoluto-dev-1 runs. `pkgs/openchamber.nix` is the OpenChamber desktop app. The
+`workerd` binary that `cf dev` runs goes through nix-ld
+(`nixosModules/common.nix`).
 
 The update workflow moves the apps against `main`'s `flake.lock` and builds each
 moved app on its own first. A version that does not build stays out of the

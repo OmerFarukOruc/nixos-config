@@ -4,7 +4,9 @@
 - [Login sessions](#login-sessions)
 - [Add a host, launcher, shell or kernel profile](#add-a-host-launcher-shell-or-kernel-profile)
 - [Theme](#theme)
+- [Secrets](#secrets)
 - [Home Manager](#home-manager)
+- [nixos-desktop case fans](#nixos-desktop-case-fans)
 - [kernel-cache](#kernel-cache)
 
 The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `risoluto-dev-1`.
@@ -113,7 +115,11 @@ These rules follow from the list:
   display manager session per shell, named `<desktop>-<shell>`, in place of its
   own. The session's launcher sets `ORUC_SHELL`, and each shell's services
   start only when it matches. Every niri shell's launcher sets `NIRI_CONFIG` to
-  a file that adds the shell's binds after `/etc/niri/config.kdl`.
+  `/etc/niri/session-<shell>.kdl`, a file that adds the shell's binds after
+  `/etc/niri/config.kdl` (`niri/config.kdl`, the system-wide niri config). With
+  one niri shell there is no such file, and niri uses `/etc/niri/config.kdl`
+  when `~/.config/niri/config.kdl` is absent. With several, niri does not read
+  `~/.config/niri/config.kdl`.
   A niri session that is already open misses a deploy that changes the
   launcher. [Deploy](deploy.md#deploy) says how to tell and what to do.
 - **Plasma owns the shared look.** With Plasma present, Plasma owns
@@ -125,6 +131,13 @@ These rules follow from the list:
   same step sets the GTK 3 theme to adw-gtk3 (the dark one for a dark scheme)
   in `settings.ini` and in dconf, but only while the theme is unset or already
   adw-gtk3, so a theme chosen in System Settings stays.
+- **Blur rules.** Blur shows only through translucent pixels, so the
+  `window-rule` and `layer-rule` blocks in `niri/config.kdl` are an allow-list of
+  surfaces that are translucent. niri enables xray blur with any background
+  effect, which blurs the wallpaper once and reuses it. The DMS dock is not on
+  the list, because DMS requests blur for the dock's own shape. A rule that
+  matched the dock's full-width surface painted a dark strip about 90 px tall
+  over the bottom of the windows (observed 2026-09-21).
 
 ## Add a host, launcher, shell or kernel profile
 
@@ -167,11 +180,20 @@ file in the repository, so it needs no import from derivation, and the
 recoloring runs in the build of each variant.
 
 `theme.schemes` in the machine record lists other schemes. Each one, with each
-Plasma look, is a Home Manager variant (`machines/variants.nix`): the
-generation itself for the record's scheme and default look, and a
-specialisation for each other pair (`home-manager/modules/variants.nix`).
+Plasma look, is a Home Manager variant (`machines/variants.nix`). With Plasma,
+there is one row per look and scheme. Without Plasma, there is one row per
+scheme, and that row has no look. The row of the record's scheme, and of
+`theme.plasmaLook` when the machine has Plasma, is the Home Manager generation.
+Each other row is a specialisation (`home-manager/modules/variants.nix`), which
+`plasma-look` and `theme` activate (`nixosModules/hm-variants.nix`). The `name`
+function in `machines/variants.nix` is the only encoder of a specialisation's
+directory. The shell commands read the finished rows and do not rebuild them.
+
 `theme <scheme>` activates one at run time and keeps it across deploys
-([Switch the scheme](nixos-rog.md#switch-the-scheme)). Every variant adds a
+([Switch the scheme](nixos-rog.md#switch-the-scheme)). `plasma-look <look>` and
+`theme <scheme>` each store a choice and activate the variant of both stored
+choices. Each deploy and each boot activates the default variant first, so the
+Home Manager service then activates the stored one. Every variant adds a
 Home Manager evaluation to each deploy. With two looks and four schemes,
 an evaluation of nixos-rog's system on nixos-rog took 59 to 66 seconds in 3
 runs, against 29 to 46 seconds in 4 runs with one scheme (measured
@@ -187,7 +209,17 @@ and names them.
 
 `assets/schemes` holds the schemes that tinted-theming lacks. The
 `warm-burnout-dark` and `warm-burnout-light` schemes there copy the palette of
-the `warm-burnout` input's pinned commit. With either of them,
+the `warm-burnout` input's pinned commit (github:felipefdl/warm-burnout v1.8.0,
+`nvim/lua/warm-burnout/palette.lua`). Some slots are derived, not copied:
+
+- In both schemes, `base06` lies halfway between `base05` and `base07`.
+- In `warm-burnout-dark.yaml`, `base07` comes from the theme's Home Assistant
+  version, `base02` is the translucent selection and `base03` the gutter color,
+  each drawn over the background.
+- In `warm-burnout-light.yaml`, `base02` is the VS Code theme's translucent
+  selection drawn over the background.
+
+With either of them,
 `home-manager/modules/theme.nix` also installs that input's own VS Code
 extension and Neovim color scheme in place of the Base16 ones. To move the
 input, change its commit in `flake.nix`, compare the new palette
@@ -233,8 +265,22 @@ These stay fixed on purpose, and the check does not cover them:
 - The keyboard's Aura color follows only the machine record's scheme, because
   asusd reads it from a system file (`machines/nixos-rog/asus.nix`).
 - Brave keeps its synced theme, because a managed theme policy would lock the
-  setting and override the synced one (`nixosModules/brave.nix`).
+  setting and override the synced one. `nixosModules/brave.nix` writes Brave's
+  settings as policies, which Brave Origin reads from `/etc/brave/policies`. The
+  recommended policies set the values a new profile starts with, and the
+  settings page can still change them. Notification permissions and the theme
+  color are managed-only policies, and Brave Sync carries them, so they stay in
+  the profile.
 - Grok and Codex themes live outside this repository.
+
+## Secrets
+
+`.sops.yaml` lists the recipients of the encrypted files under `secrets/`. Omer
+edits them with the SSH key he shares across his devices,
+`~/.ssh/id_ed25519_omer`. Each host decrypts its own file with the age key
+derived from its SSH host key (`ssh-to-age` on
+`/etc/ssh/ssh_host_ed25519_key.pub`). [Secrets](nixos-rog.md#secrets) says how
+to edit a file.
 
 ## Home Manager
 
@@ -244,6 +290,13 @@ These stay fixed on purpose, and the check does not cover them:
 `workstation.nix` for every workstation, and `personal.nix` for the machines
 Omer works at every day, with GPU tools that follow the machine record. Units a
 host can share, such as desktop-sync, are in `home-manager/modules/`.
+
+## nixos-desktop case fans
+
+`machines/nixos-desktop/fans.nix` runs the Phanteks D30 case fans, on channels
+3, 5 and 7 of the motherboard's nct6687 chip, at one low fixed speed from boot.
+The BIOS keeps every other fan. `case-fans off` hands the three channels back to
+the BIOS until the next boot or `case-fans on`. `fan-status` lists every fan.
 
 ## kernel-cache
 
