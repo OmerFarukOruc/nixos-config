@@ -111,6 +111,12 @@ in
       "xrdp.service"
       "xrdp-sesman.service"
     ];
+    # oruc's rootless Docker daemon (nixosModules/rootless-containers.nix) and
+    # Sunshine of the streamed desktop (nixosModules/streamed-desktop.nix).
+    journalUserUnits = [
+      "docker.service"
+      "sunshine.service"
+    ];
   };
 
   networking = {

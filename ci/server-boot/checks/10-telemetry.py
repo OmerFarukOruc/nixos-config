@@ -3,6 +3,7 @@
 # leave in the sink of modules/telemetry.nix. The collector exports to that sink
 # and not to the central endpoint, so TLS and the real endpoint are not covered.
 
+import json as tel_json
 import re
 import shlex as tel_shlex
 
@@ -65,6 +66,20 @@ def tel_attr(file, key, value):
     return tel_count(file, f'"key":"{key}","value":{{"stringValue":"{value}"}}')
 
 
+# The records of the sink as (resource attributes, body fields) pairs. The
+# journald receiver puts each journal field into the body.
+def tel_records(file):
+    records = []
+    for line in machine.succeed(f"cat {tel_dir}/{file}").splitlines():
+        for resource_logs in tel_json.loads(line).get("resourceLogs", []):
+            resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}
+            for scope_logs in resource_logs["scopeLogs"]:
+                for record in scope_logs["logRecords"]:
+                    body = {f["key"]: f["value"].get("stringValue") for f in record["body"].get("kvlistValue", {}).get("values", [])}
+                    records.append((resource, body))
+    return records
+
+
 # A login of oruc over SSH, then sudo as oruc changes a file under /etc. The
 # session has a login id, which the etc-change rule needs.
 machine.succeed("install -d -m 0755 -o oruc -g oruc /home/oruc")
@@ -103,6 +118,39 @@ tel_wait("logs.json", "telemetry-probe-2")
 machine.succeed("systemctl start telemetry-unit-probe.service")
 tel_wait("logs.json", "telemetry-unit-probe-line")
 tel_wait("metrics.json", "system.memory.usage")
+
+# A unit of oruc's user manager. Its own info line and the line that the
+# manager writes about the unit's start ship, and its debug line does not. The
+# Finished line comes after both unit lines, so the debug line has had its
+# chance to ship when that line is in the sink.
+tel_uid = machine.succeed("id -u oruc").strip()
+machine.succeed(f"systemctl start user@{tel_uid}.service")
+machine.succeed("systemctl --user -M oruc@ start telemetry-user-probe.service")
+# The debug line is in the journal at priority 7, so its absence in the sink
+# below comes from the receiver's priority filter.
+machine.wait_until_succeeds(
+    "journalctl -b _SYSTEMD_USER_UNIT=telemetry-user-probe.service PRIORITY=7 -o cat | grep -Fx telemetry-user-probe-debug"
+)
+tel_wait("logs.json", "telemetry-user-probe-info")
+tel_wait("logs.json", "Finished telemetry-user-probe.service")
+tel_user_records = [
+    (resource, body)
+    for resource, body in tel_records("logs.json")
+    if "telemetry-user-probe" in body.get("MESSAGE", "")
+]
+tel_own = [
+    r for r in tel_user_records
+    if r[1]["MESSAGE"] == "telemetry-user-probe-info" and r[1].get("_SYSTEMD_USER_UNIT") == "telemetry-user-probe.service"
+]
+assert len(tel_own) == 1, f"the sink did not get exactly the info line of the user unit: {tel_user_records}"
+assert tel_own[0][1].get("_UID") == tel_uid, f"the user unit line is not from oruc: {tel_own[0][1]}"
+assert tel_own[0][0].get("service.name") == "infra-units", "the user unit line lacks service.name infra-units"
+tel_manager = [
+    r for r in tel_user_records
+    if r[1].get("USER_UNIT") == "telemetry-user-probe.service" and r[1]["MESSAGE"].startswith("Finished ")
+]
+assert len(tel_manager) == 1, f"the sink did not get exactly the Finished line of the user manager: {tel_user_records}"
+assert not any(b["MESSAGE"] == "telemetry-user-probe-debug" for _, b in tel_user_records), "the debug line of the user unit shipped"
 
 # Two logins, so two lines. A third would mean the restart sent the journal
 # again.

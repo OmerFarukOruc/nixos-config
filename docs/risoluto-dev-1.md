@@ -169,6 +169,15 @@ outage loses nothing that the retry window covers.
   `acme-*.service`, and `nixosModules/deploy-host.nix` adds `self-deploy.service`
   and `self-deploy-reboot.service`, so each service that comes to the box later needs its unit
   in `journalUnits` before its lines ship.
+  The lines of user units ship under the same `service.name` through
+  `journalUserUnits`, which lists exact names, because a glob matches nothing
+  there. This box lists `docker.service`. A line carries `_SYSTEMD_USER_UNIT`
+  when the unit wrote it and `USER_UNIT` when the user's systemd wrote it about
+  the unit, such as a start or the failure after a start limit, and both carry
+  `_UID`. The receiver has no `--user-unit` option, and that option would read
+  only the collector's own uid, so the module matches both fields. The
+  collector reads the user journals (`user-<uid>.journal`) through the same
+  `systemd-journal` group as the system journal.
 - The endpoint is a public DNS name that resolves to a tailnet address, so it
   answers only on the tailnet. It is a plain option and no secret.
 
@@ -223,7 +232,8 @@ collector on loopback (a sink that writes files). The check logs in as oruc
 over SSH, runs `sudo` to change a file under `/etc`, reads a secret as
 `nobody`, which the `credstore` rule logs although the read fails, stops the
 collector for a second login, and checks that the sink got each record after
-the restart, the unit journal line, and the host metrics. It proves that the
+the restart, the unit journal line, the info line of a user unit of oruc and
+the manager's line about it (not its debug line), and the host metrics. It proves that the
 collector loads its config, that auditd loads the rules, and that the audit and
 sshd records travel through the journal into the collector's pipeline and out
 over OTLP. It does not prove TLS, the real endpoint, or
@@ -320,12 +330,22 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   box instead narrows Docker's range with a wrapper script. A port that a
   container publishes without an address listens on every address, so tailnet
   peers reach it, and the firewall blocks the public interface. If
-  `docker.service` (a user unit) fails three times in 60 s it stays failed;
-  nothing alerts, and its journal lines are not in `journalUnits`, which lists
-  system units.
+  `docker.service` (a user unit) fails three times in 60 s it stays failed.
+  `journalUserUnits` ships its journal lines at priority info and above to
+  SigNoz, including the line of oruc's systemd about the failure
+  ([Telemetry](#telemetry)). The failure line is the signal an alert rule can
+  use. The SigNoz alert rules live in statuslantern-scraper's
+  `deploy/signoz/alerts/`, and none reads these lines yet. The rule waits for
+  the first NixOS deploy to ship them, as for
+  [self-deploy](deploy.md#self-deploy-of-a-server) failures, so until then
+  only someone on the host sees the failed state.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
-  `DOCKER_HOST`, the docker CLI and its Compose plugin.
+  `DOCKER_HOST`, the docker CLI and its Compose plugin. `podman.service`, which
+  the socket starts for each client, stops after 5 s without a request
+  (`podman system service --time` default) and has no start limit
+  (`StartLimitIntervalSec=0`), so a burst of failures does not block the next
+  client's start. Its lines are not shipped.
 - Rootful Docker, sysbox and iocost, which the Debian box has for its CI
   runners, stay out of the move, because the runners are dropped.
 
@@ -422,8 +442,8 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   Sunshine stops, and LightDM shows its greeter. `systemctl restart
   display-manager` as root logs oruc in again.
 - **Logs.** `journalUnits` lists `display-manager.service`, `xrdp.service` and
-  `xrdp-sesman.service`. Sunshine is a user unit, so its lines are not in
-  `journalUnits` (the same gap as `docker.service`); read them with
+  `xrdp-sesman.service`. Sunshine is a user unit, so `journalUserUnits` lists
+  `sunshine.service`; read its lines on the host with
   `journalctl _SYSTEMD_USER_UNIT=sunshine.service`.
 - **Audio** is not set up or tested. PipeWire runs on the box already, because
   the XFCE module turns it on.

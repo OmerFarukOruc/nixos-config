@@ -1,8 +1,8 @@
 # What a server reports to SigNoz: the host's metrics, the OTLP its own
-# processes send to loopback, the journals of sshd and a list of units, and the
-# audit records of auditd. One OpenTelemetry collector (the contrib build)
-# ships all of it over gRPC with TLS to the central endpoint, which the host
-# passes.
+# processes send to loopback, the journals of sshd and lists of system and user
+# units, and the audit records of auditd. One OpenTelemetry collector (the
+# contrib build) ships all of it over gRPC with TLS to the central endpoint,
+# which the host passes.
 #
 # The audit records reach the journal through auditd's syslog plugin and not
 # through journald's own audit socket, because records from that socket carry
@@ -92,6 +92,23 @@ let
     };
   };
 
+  # journalctl matches a user unit through two fields: _SYSTEMD_USER_UNIT on the
+  # unit's own lines, and USER_UNIT on the lines that the user's systemd writes
+  # about it, such as a start or a failure. The receiver has no option for
+  # `journalctl --user-unit`, and that option pins _UID to the caller, here the
+  # collector's dynamic user (systemd's add_matches_for_user_unit_full).
+  # Matches of one field combine with OR, and the receiver's `+` joins these
+  # groups into one OR term, which `--priority` still limits (journalctl 262,
+  # `SYSTEMD_LOG_LEVEL=debug` prints the filter).
+  userUnitMatches = lib.concatMap (unit: [
+    { _SYSTEMD_USER_UNIT = unit; }
+    { USER_UNIT = unit; }
+  ]) cfg.journalUserUnits;
+
+  unitReceivers =
+    lib.optional (cfg.journalUnits != [ ]) "journald/units"
+    ++ lib.optional (cfg.journalUserUnits != [ ]) "journald/user_units";
+
   agentProcessors = [
     "memory_limiter"
     "resource/agent"
@@ -156,10 +173,24 @@ in
       '';
     };
 
+    journalUserUnits = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      example = [ "docker.service" ];
+      description = ''
+        User units, of any user, whose journal lines ship at priority info or
+        above, from the end of the journal at the first start. A name is exact,
+        and a glob matches nothing. The lines are the unit's own and the ones
+        that the user's systemd writes about it, so a start limit that leaves
+        the unit failed ships too. The lines carry `_SYSTEMD_USER_UNIT` or
+        `USER_UNIT` and `_UID`.
+      '';
+    };
+
     unitsServiceName = mkOption {
       type = types.str;
       default = "infra-units";
-      description = "Value of service.name on the lines of `journalUnits`.";
+      description = "Value of service.name on the lines of `journalUnits` and `journalUserUnits`.";
     };
   };
 
@@ -233,6 +264,11 @@ in
             start_at = "end";
             priority = "info";
             units = cfg.journalUnits;
+          });
+          "journald/user_units" = lib.mkIf (cfg.journalUserUnits != [ ]) (journald {
+            start_at = "end";
+            priority = "info";
+            matches = userUnitMatches;
           });
         };
 
@@ -330,8 +366,8 @@ in
               ];
               exporters = [ "otlp_grpc/logs" ];
             };
-            "logs/units" = lib.mkIf (cfg.journalUnits != [ ]) {
-              receivers = [ "journald/units" ];
+            "logs/units" = lib.mkIf (unitReceivers != [ ]) {
+              receivers = unitReceivers;
               processors = [
                 "memory_limiter"
                 "resource/units"

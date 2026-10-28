@@ -30,6 +30,7 @@ in
     endpoint = lib.mkForce "127.0.0.1:4317";
     insecure = true;
     journalUnits = [ "telemetry-unit-probe.service" ];
+    journalUserUnits = [ "telemetry-user-probe.service" ];
   };
 
   systemd.services.telemetry-sink = {
@@ -46,6 +47,16 @@ in
   systemd.services.telemetry-unit-probe.serviceConfig = {
     Type = "oneshot";
     ExecStart = "${pkgs.coreutils}/bin/echo telemetry-unit-probe-line";
+  };
+
+  # A user unit of oruc, started by the check. The prefix of each line sets its
+  # journal priority: 6 is info and ships, 7 is debug and does not.
+  systemd.user.services.telemetry-user-probe.serviceConfig = {
+    Type = "oneshot";
+    ExecStart = [
+      "${pkgs.coreutils}/bin/echo <6>telemetry-user-probe-info"
+      "${pkgs.coreutils}/bin/echo <7>telemetry-user-probe-debug"
+    ];
   };
 
   environment.systemPackages = [ pkgs.curl ];
