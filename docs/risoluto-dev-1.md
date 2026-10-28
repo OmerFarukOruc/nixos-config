@@ -361,8 +361,9 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   dotfiles checkout call `/usr/bin/zsh` and `/usr/bin/bash` with a PATH that
   holds nothing of NixOS, so the module adds `bash`, `zsh`, `systemctl` and
   `podman` to the fallback directory. The units find herdr, claude and the other
-  profile tools through their PATH, which lists `/etc/profiles/per-user/%u/bin`
-  (dotfiles commit 5bfd6d7); there is no `/usr/local/bin` on this host, so a
+  profile tools through their PATH, which lists `/etc/profiles/per-user/%u/bin`,
+  and coreutils such as `dirname` through `/run/current-system/sw/bin`, which
+  the PATH also lists; there is no `/usr/local/bin` on this host, so a
   tool that only infra installed there (linctl, micro, lazygit, node and
   others) is missing until the profile or mise provides it.
 - The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
