@@ -8,9 +8,6 @@
 let
   desktop = sessions.hasAnyDesktop config.oruc.machine;
   scrub = config.fileSystems."/".fsType == "btrfs";
-  # The unattended units whose failures would otherwise go unseen. Each must
-  # stay enabled, or NixOS writes a unit with no ExecStart=, which systemd
-  # refuses. A host file adds its own units with the same onFailure.
   watched = [
     "angrr"
     "nix-gc"
@@ -34,6 +31,18 @@ in
     interval = "monthly";
     fileSystems = [ "/" ];
   };
+
+  assertions =
+    lib.mapAttrsToList
+      (name: service: {
+        assertion = service.enable && (service.script != "" || service.serviceConfig ? ExecStart);
+        message = "${name} notifies on failure but has no ExecStart=; turn its module on or drop it from the watched units.";
+      })
+      (
+        lib.filterAttrs (
+          _: service: lib.elem "notify-failure@%p.service" service.onFailure
+        ) config.systemd.services
+      );
   # The popup names the unit without its instance (%p), because an instance
   # such as btrfs-scrub@-.service cannot be an instance name itself.
   systemd.services = lib.mkMerge [
