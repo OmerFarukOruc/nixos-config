@@ -33,3 +33,8 @@ creation_rules:
       - age:
           - *omer-all-devices
           - *risoluto-dev-1
+  - path_regex: secrets/risoluto-dev-1-fleet-bots\.yaml$
+    key_groups:
+      - age:
+          - *omer-all-devices
+          - *risoluto-dev-1

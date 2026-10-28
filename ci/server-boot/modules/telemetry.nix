@@ -31,6 +31,7 @@ in
     insecure = true;
     journalUnits = [ "telemetry-unit-probe.service" ];
     journalUserUnits = [ "telemetry-user-probe.service" ];
+    auditDropUnits = [ "telemetry-audit-drop-probe" ];
   };
 
   systemd.services.telemetry-sink = {
@@ -47,6 +48,13 @@ in
   systemd.services.telemetry-unit-probe.serviceConfig = {
     Type = "oneshot";
     ExecStart = "${pkgs.coreutils}/bin/echo telemetry-unit-probe-line";
+  };
+
+  # A unit whose start and stop audit records the collector drops, started by
+  # the check.
+  systemd.services.telemetry-audit-drop-probe.serviceConfig = {
+    Type = "oneshot";
+    ExecStart = "${pkgs.coreutils}/bin/true";
   };
 
   # A user unit of oruc, started by the check. The prefix of each line sets its

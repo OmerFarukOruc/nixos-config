@@ -40,6 +40,8 @@ in
     secrets = {
       cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       github-update-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
+      fleet-bots-ts-client-id.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
+      fleet-bots-ts-client-secret.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
     };
   };
 }

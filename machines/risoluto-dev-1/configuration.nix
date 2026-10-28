@@ -15,6 +15,7 @@ in
     ./disk.nix
     ../../nixosModules/agent-runtime.nix
     ../../nixosModules/envfs.nix
+    ../../nixosModules/fleet-bots-pin.nix
     ../../nixosModules/rootless-containers.nix
     ../../nixosModules/tailnet-web.nix
   ];
@@ -66,7 +67,17 @@ in
       # The deploy unit's token (docs/risoluto-dev-1.md, Rotate the box's
       # token) has its own file.
       github-update-token.sopsFile = ../../secrets/risoluto-dev-1-github.yaml;
+      # The Tailscale OAuth client of the fleet-bots pin (devices write), in a
+      # file of its own for the same reason.
+      fleet-bots-ts-client-id.sopsFile = ../../secrets/risoluto-dev-1-fleet-bots.yaml;
+      fleet-bots-ts-client-secret.sopsFile = ../../secrets/risoluto-dev-1-fleet-bots.yaml;
     };
+    # The credential file that fleet-bots-ts-name reads. It is not a secret of
+    # its own, because the helper wants both values in one file.
+    templates."fleet-bots-ts-client".content = ''
+      TS_OAUTH_CLIENT_ID=${secret "fleet-bots-ts-client-id"}
+      TS_OAUTH_CLIENT_SECRET=${secret "fleet-bots-ts-client-secret"}
+    '';
     # The public address stays out of this repository, so networkd reads it
     # from a file that sops-nix renders when the system activates. On a boot
     # activation runs before systemd starts, and a switch that changes the file
@@ -112,6 +123,17 @@ in
     ];
     # oruc's rootless Docker daemon (nixosModules/rootless-containers.nix).
     journalUserUnits = [ "docker.service" ];
+  };
+
+  # The Grok bots on risoluto-bots-1 log in as oruc over OpenSSH on port 2222
+  # with this key, from the machine's current tailnet address only.
+  oruc.fleetBots = {
+    enable = true;
+    user = "oruc";
+    peer = "risoluto-bots-1";
+    tag = "tag:grok-box";
+    publicKeyFile = ./fleet-bots.pub;
+    credentialFile = config.sops.templates."fleet-bots-ts-client".path;
   };
 
   networking = {
