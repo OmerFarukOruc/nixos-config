@@ -228,6 +228,15 @@ Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
 `machines/inventory.nix` sets `deployed = false`; no host sets it now.
 
+nixos-rog and risoluto-dev-1 deploy `main` themselves every 2 hours, through
+the [deploy unit](nixos-rog.md#deploy-unit) and
+[self-deploy](#self-deploy-of-a-server). Leave an affected one to its timer,
+and deploy it by hand only when the change needs proof on that host now, such
+as a new systemd unit or a change on screen. A hand deploy and a timer deploy
+take the same lock, so the one that starts second exits 77
+([One deploy at a time](#one-deploy-at-a-time)).
+nixos-desktop and nixos-latitude have no timer, so deploy each affected one.
+
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it
 exists, prints the path of a new log as its only output, and deploys with its
