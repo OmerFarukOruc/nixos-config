@@ -1,9 +1,3 @@
-# Omer's Claude Code account tools (pkgs/claude-tools/README.md): claude-accounts
-# and claude-usage for several accounts on one machine, claude-rotate behind the
-# `claude` shell function, claude-limit-switch for the agents in herdr, and the
-# agent-* and orch-* commands that start and watch them. The scripts find each
-# other next to themselves in bin. The account list and the shared preferences
-# stay in the private dotfiles checkout (CLAUDE_ACCOUNTS_DATA).
 {
   bash,
   python3,
@@ -20,13 +14,10 @@ stdenvNoCC.mkDerivation {
   dontBuild = true;
   installPhase = ''
     mkdir -p $out/bin $out/share/claude-tools
-    # Files only: a run from the source tree leaves bin/__pycache__.
     find bin -maxdepth 1 -type f -exec cp -t $out/bin {} +
     substitute claude-accounts.sh $out/share/claude-tools/claude-accounts.sh --subst-var-by bin $out/bin
     cp README.md $out/share/claude-tools/
   '';
-  # orch-watch loads agent-peek, and agent-peek loads claude-limit-switch, from
-  # their own folder, so its help proves that the Python tools find each other.
   doInstallCheck = true;
   installCheckPhase = ''
     export HOME=$TMPDIR PYTHONDONTWRITEBYTECODE=1

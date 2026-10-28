@@ -1,7 +1,3 @@
-# OpenChamber's web server (risoluto-dev-1), from npm; pkgs/openchamber.nix is
-# the desktop app. openchamber-web/package.json is a wrapper project that
-# depends on @openchamber/web, with the lockfile npm wrote for it.
-# scripts/update-app.sh rewrites both and npmDepsHash for a new release.
 {
   lib,
   buildNpmPackage,
@@ -31,8 +27,6 @@ buildNpmPackage {
       --add-flags $out/lib/node_modules/openchamber-web-cli/node_modules/@openchamber/web/bin/cli.js
   '';
 
-  # A new release can add a native module that builds but does not load, so
-  # the check loads the terminal one and starts the CLI.
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck

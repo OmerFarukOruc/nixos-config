@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# An agent tells the orchestrator something, in any state: `orch-notify NEED|DONE|INFO TEXT [--from NAME]`.
-# It appends one line, UTC time, agent, kind and text separated by tabs, to $ORCH_INBOX (default
-# ~/.local/state/orch/inbox.log), which orch-watch reads and prints. NEED means the agent waits for a reply.
-# The agent name is --from (whitespace in it becomes "_", so the record keeps its four fields), else the
-# `herdr agent list` entry whose pane is $HERDR_PANE_ID; when neither gives a name the notice is still delivered
-# as "unknown", because a lost NEED costs more than a missing name.
-# A text longer than HEAD_MAX goes whole to a file in notes/ beside the inbox, and the record starts with
-# "full text: <path> |", because the Monitor tool that wakes the orchestrator cuts each event at 500 characters.
 import argparse
 import fcntl
 import json
@@ -18,10 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 KINDS = ("NEED", "DONE", "INFO")
-# Chosen, not measured: a notice is a pointer to the report, not the report.
 TEXT_MAX = 500
-# The Monitor event cut (500 characters, seen in Claude Code 2.1.311) minus the orch-watch prefix of time, a
-# 32-character agent name, the kind and " (reply required) | ".
 HEAD_MAX = 430
 
 

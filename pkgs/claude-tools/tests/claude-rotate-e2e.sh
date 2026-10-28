@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# End-to-end check of claude-rotate's account picker with real Claude accounts, on a host with at least two logged-in
-# accounts (risoluto-dev-1). The run starts claude-rotate in its own tmux server, like `claude` in a terminal.
-#   1. The seeded usage cache ranks C first, then A; C is marked limited in the seeded limits.json. The account picker
-#      opens with the cursor on A as the account with the most room and C held back; Down moves the cursor, Up brings
-#      it back, and Enter starts the session on A with the run's --model and --dangerously-skip-permissions.
-#   2. /exit ends claude-rotate with exit code 0, and no claude of the run is left.
-#   3. A second claude-rotate quits from its picker with q: it starts no claude and exits 0.
-# The move to another account after a usage limit is not covered: only a real limit shows it, and a run cannot
-# reach one on purpose. The run costs one haiku start.
-#   claude-rotate-e2e.sh [SCRIPT]    SCRIPT defaults to ../bin/claude-rotate next to this folder
-#   CR_E2E_A, CR_E2E_C               the accounts (defaults work1-team, dopamine)
-# Passes when it prints PASS and exits 0. The run folder, kept on failure, holds the pane log and state/.
 set -euo pipefail
 rotate="$(readlink -f "${1:-$(dirname "$0")/../bin/claude-rotate}")"
 profiles="$(dirname "$rotate")/claude-accounts"
@@ -37,7 +25,6 @@ for n in "$A" "$C"; do
   "$profiles" names | grep -qx "$n" || fail "no account $n here"
 done
 
-# The seeded cache: every account at 95% except A (1%) and C (0%, but limited for an hour).
 "$usage_bin" --json --max-age 600 >"$dir/real-usage.json"
 jq --arg a "$A" --arg c "$C" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};
@@ -56,7 +43,7 @@ CLAUDE_ROTATE_STATE=$dir/state $rotate --model haiku \
 t set-option -t "$run" remain-on-exit on
 wrapper=$(t display -p -t "$run" '#{pane_pid}')
 
-picker() { # session; waits for the account picker and prints its screen
+picker() {
   local screen
   for _ in $(seq 30); do
     screen=$(t capture-pane -p -t "$1")
@@ -79,7 +66,6 @@ sleep 1
 grep -q "^ ❯ [0-9]  $A " <<<"$(t capture-pane -p -t "$run")" || fail "Up did not bring the cursor back to $A"
 t send-keys -t "$run" Enter
 
-# claude process of this run -> "pid<TAB>CLAUDE_CONFIG_DIR<TAB>argv"
 child() {
   local p env
   for p in $(pgrep -x 'claude|\.claude-wrapped'); do

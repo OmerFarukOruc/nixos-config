@@ -1,6 +1,3 @@
-# Smart Video Wallpaper Reborn, a Plasma wallpaper plugin that plays videos on
-# the desktop and the lock screen. It names no release source, so
-# scripts/update-app.sh skips it; move version and hash by hand.
 {
   lib,
   stdenv,

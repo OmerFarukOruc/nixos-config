@@ -1,26 +1,4 @@
 #!/usr/bin/env bash
-# End-to-end check of claude-limit-switch on risoluto-dev-1, with a real herdr server and real Claude accounts.
-# Everything runs in its own herdr session, cls-e2e-<run>, with its own state folder, so Omer's agents and records
-# stay untouched, and two runs, such as an author's and a reviewer's, can overlap. A scratch Claude agent (haiku)
-# starts on work1-team, learns a code word, and schedules a `/loop`; work2 is marked limited.
-#   1. `switch` moves the agent to the usable account with the lowest weekly use, never work1-team or work2. The
-#      loop makes `/exit` open the "Background work is running" dialog; the switch answers it, and the loop
-#      comes back with the session.
-#   2. `scan` records the agent and leaves it on its account, because its screen shows no limit message. A move
-#      after a real usage limit is not covered: a run cannot reach one on purpose, and an agent that prints the
-#      message itself is not the screen Claude Code shows.
-#   3. The session's server stops, as in a crash; `scan` starts it and brings the agent back in its pane on the
-#      same account.
-#   4. The agent deletes its loop and exits on purpose; `scan` leaves it gone and moves it to "ended" in its record.
-#   5. Its workspace closes; `resume` starts it on the same account in a new workspace. A second `resume` leaves
-#      the running agent alone, and `resume` of an unknown name fails.
-#   6. The agent exits again and `resume` runs as soon as its claude is gone, while herdr may still hold the name;
-#      the agent comes back with the same session.
-# After each move or restore the agent must have the expected account, the same session id, its --model and
-# --dangerously-skip-permissions arguments, and the code word. The run costs a few haiku turns; each move reads the
-# candidates' usage through claude-usage.
-#   claude-limit-switch-e2e.sh [SCRIPT]    SCRIPT defaults to ../bin/claude-limit-switch next to this folder
-# Passes when it prints PASS and exits 0.
 set -euo pipefail
 cls="$(readlink -f "${1:-$(dirname "$0")/../bin/claude-limit-switch}")"
 profiles="$(dirname "$cls")/claude-accounts"
@@ -44,7 +22,6 @@ fail() {
   exit 1
 }
 
-# pane -> "CLAUDE_CONFIG_DIR<TAB>argv joined by spaces" of the Claude process in it; empty when none runs
 claude_in() {
   local p env
   for p in $(pgrep -x 'claude|\.claude-wrapped'); do
@@ -68,8 +45,6 @@ session() { h agent get "$name" | jq -r '.result.agent.agent_session.value'; }
 ask() { h agent prompt "$name" "$1" --wait --timeout 180000 >/dev/null; }
 check_word() {
   ask "What was the code word I gave you at the start? Reply with only the code word followed directly by the digit 7, no space."
-  # The answer is read from the session transcript, because a pane read of Claude's alternate screen can miss
-  # it. The settled state can come before the answer is written, so look for up to a minute.
   local t
   t=$(ls ~/.claude/projects/*/"$sid".jsonl)
   for _ in $(seq 30); do
@@ -78,14 +53,14 @@ check_word() {
   done
   fail "the agent lost the code word after $1"
 }
-check_agent() { # step
+check_agent() {
   h agent wait "$name" --timeout 180000 >/dev/null
   [[ "$(session)" == "$sid" ]] || fail "$1 changed the session id"
   claude_in "$pane" | cut -f2 | grep -q -- "--model haiku" || fail "$1 dropped --model haiku"
   claude_in "$pane" | cut -f2 | grep -q -- "--dangerously-skip-permissions" || fail "$1 dropped --dangerously-skip-permissions"
   check_word "$1"
 }
-check_loop() { # step
+check_loop() {
   ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
   local t
   t=$(ls ~/.claude/projects/*/"$sid".jsonl)
@@ -95,7 +70,7 @@ check_loop() { # step
   done
   fail "the agent does not have exactly one scheduled job after $1"
 }
-check_move() { # step old_account
+check_move() {
   local now
   now=$(account "$pane")
   [[ "$now" != "$2" && "$now" != work2 ]] || fail "$1 left the agent on $now"
@@ -119,13 +94,10 @@ fi
 h agent wait "$name" --until idle --timeout 60000 >/dev/null
 [[ "$(account "$pane")" == work1-team ]] || fail "scratch agent did not start on work1-team"
 ask "Remember the code word PELICAN. Reply only OK."
-# The slash-command menu can take the first Enter, so submit again while the text is still in the input box.
 h agent prompt "$name" "/loop 6h reply only with the word tick" >/dev/null 2>&1 || true
 sleep 3
 h agent read "$name" --source visible | grep -q '❯ /loop' && h agent send-keys "$name" enter >/dev/null
 h agent wait "$name" --until idle --until "done" --until blocked --timeout 120000 >/dev/null
-# The /loop skill offers a cloud schedule for an interval of 60 minutes or more (a 6h loop keeps a tick out of
-# this run); the test needs the job in this session.
 if h agent read "$name" --source visible | grep -q "This session only"; then
   h agent send-keys "$name" down >/dev/null
   h agent send-keys "$name" enter >/dev/null
@@ -145,7 +117,6 @@ first=$(account "$pane")
 check_move switch work1-team
 grep -q "answered the background-work dialog of $name" "$CLAUDE_LIMIT_SWITCH_STATE/events.log" ||
   fail "switch did not answer the background-work dialog"
-# Enter must end claude itself; the ctrl+c fallback starts 30 s after the watch.
 answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$CLAUDE_LIMIT_SWITCH_STATE/events.log" | cut -d' ' -f1)" +%s)
 moved=$(date -d "$(grep -m1 "$name: moved from" "$CLAUDE_LIMIT_SWITCH_STATE/events.log" | cut -d' ' -f1)" +%s)
 ((moved - answered < 25)) || fail "the move came $((moved - answered)) s after the dialog answer, so Enter did not end claude"

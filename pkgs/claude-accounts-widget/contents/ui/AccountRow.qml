@@ -5,8 +5,6 @@ import org.kde.plasma.components as PlasmaComponents3
 
 import "Logic.js" as Logic
 
-// One account across hosts: usage windows from the newest reading, then one line per host with its login and a
-// Log in button.
 ColumnLayout {
     id: item
 
@@ -60,7 +58,6 @@ ColumnLayout {
         Layout.fillWidth: true
     }
 
-    // Weekly limits of one model, such as Fable.
     Repeater {
         model: item.account.scoped || []
 

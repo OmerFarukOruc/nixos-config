@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-# Usage limits and login state of every claude-accounts account, written to ~/.cache/claude-usage/usage.json for the
-# Claude accounts widget (nixos-config pkgs/claude-accounts-widget), claude-rotate and claude-limit-switch. People run
-# it as `claude-accounts [OPTIONS]`; the widget and claude-usage.timer run it by path.
-#   claude-accounts                    check every account, write the cache, print one card per account
-#   claude-accounts --json             the same, and print the cache as JSON instead, plus "combined": one entry per
-#                                      account across hosts (see combined())
-#   claude-accounts --cached           print the cache only; no account is checked
-#   claude-accounts --max-age SECONDS  check only when the cache is older than SECONDS
-#   claude-accounts --account NAME     check NAME only (repeatable); the others keep their cached entry
-#   claude-accounts --quiet            print nothing (claude-usage.timer)
-#   claude-accounts --watch            redraw every 30 s; check the accounts when the cache is older than 5 min
-# It never refreshes a token, because Claude Code rotates the refresh token on use and a second refresher logs the CLI
-# out. An access token valid for more than FRESH seconds reads GET /api/oauth/usage. Any other account runs a one-turn
-# `claude -p` in safe mode (no hooks, MCP servers or CLAUDE.md) under its own CLAUDE_CONFIG_DIR, so Claude Code
-# refreshes the token under its own lock, and the run's rate_limit_event carries the same two windows.
-# remote_hosts in accounts.json (claude-accounts' CLAUDE_ACCOUNTS_DATA) names, per host, the hosts whose cache it reads over ssh, so the
-# views show each host's logins. READ_KEY, when it exists, is offered first: nixos-rog accepts it only for reading its
-# cache (nixos-config machines/nixos-rog), because the everyday key has a passphrase no timer can type. Usage limits belong to the account, not the host, so the views show each account once with the
-# newest reading from any host, and one login per host. CLAUDE_USAGE_CACHE points the cache elsewhere.
 from __future__ import annotations
 
 import argparse
@@ -46,10 +27,7 @@ ACCOUNTS = Path(os.environ.get("CLAUDE_ACCOUNTS_DATA") or HOME / "Desktop/worksp
 CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage/usage.json")
 PROBE_DIR = HOME / ".cache/claude-usage/probe"
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
-# Chosen, not measured: a token that ends sooner than this goes through the probe, so a request never races its expiry.
 FRESH = 300
-# Claude Code warns 3 days before a login ends (authentication docs, "Renew an expiring login"); the widget and
-# `claude-accounts login-all` warn earlier, so a login can be renewed on a day Omer is at that device. Chosen.
 EXPIRING = 5 * 86400
 PROBE_TIMEOUT = 90
 SSH_TIMEOUT = 20
@@ -87,7 +65,6 @@ def identity(config_dir: str, creds: dict) -> dict:
     cfg = read_json(Path(config_dir) / ".claude.json" if config_dir else HOME / ".claude.json") or {}
     acct = cfg.get("oauthAccount") or {}
     email, org = acct.get("emailAddress"), acct.get("organizationName")
-    # One email can hold a personal plan and a Team seat; claude-accounts list calls the first "personal" too.
     if org and email and org == f"{email}'s Organization":
         org = "personal"
     plan = creds.get("subscriptionType")
@@ -137,7 +114,6 @@ def api_usage(token: str, version: str) -> dict:
         return {"used": float(w["utilization"]), "resets_at": epoch(w.get("resets_at"))} if w else None
 
     try:
-        # Weekly limits of one model, such as Fable, are only in the limits list.
         scoped = [{"label": ((x.get("scope") or {}).get("model") or {}).get("display_name") or "model",
                    "used": float(x["percent"]), "resets_at": epoch(x.get("resets_at"))}
                   for x in data.get("limits") or [] if x.get("kind") == "weekly_scoped"]
@@ -200,7 +176,6 @@ def check(config_dir: str, old: dict | None, version: str) -> dict:
     def stale(err: str) -> dict:
         entry["state"], entry["error"] = "error", err
         if old and old.get("five_hour"):
-            # checked stays the time of the reading, so a reader can tell its age.
             entry.update(five_hour=old["five_hour"], seven_day=old["seven_day"], scoped=old.get("scoped", []),
                          source="stale",
                          checked=old.get("checked"))
@@ -221,7 +196,6 @@ def check(config_dir: str, old: dict | None, version: str) -> dict:
                 entry["state"], entry["error"] = "logged-out", str(e)
                 return entry
             return stale(str(e))
-        # The probe refreshed the token when it had expired; read the identity and login end it may have changed.
         creds = oauth(config_dir)
         entry.update(identity(config_dir, creds))
         if expires := creds.get("refreshTokenExpiresAt"):
@@ -279,7 +253,6 @@ def refresh(only: list[str]) -> dict:
         try:
             result.append({"name": n, **check(d, old.get(n), version)})
         except Exception as e:  # noqa: BLE001 - one account's failure must not cost the others their reading
-            # The last good entry stays, marked like a stale() carry-over.
             kept = old.get(n) or {"email": None, "org": None, "plan": None, "five_hour": None, "seven_day": None,
                                   "login_expires_at": None, "checked": now()}
             result.append({**kept, "name": n, "state": "error", "error": f"claude-usage failed: {e!r}"[:200],
@@ -377,7 +350,6 @@ class Cards:
 
     def __init__(self, color: bool, width: int):
         self.color = color
-        # The rest of a window row takes about 56 columns.
         self.bar = max(12, min(40, width - 56))
 
     def c(self, text: str, *codes: str) -> str:
@@ -490,7 +462,7 @@ def watch(every: int, max_age: int) -> int:
     """Redraws the view every EVERY seconds from the cache and checks the accounts when the cache is older than
     MAX_AGE, until ctrl+c."""
     out = sys.stdout
-    out.write("\033[?1049h\033[?25l")  # the terminal's second screen, without a cursor
+    out.write("\033[?1049h\033[?25l")
     try:
         while True:
             data = locked_refresh([], max_age)
@@ -507,7 +479,6 @@ def watch(every: int, max_age: int) -> int:
 
 
 ANSI = re.compile(r"\033\[[0-9;]*m")
-# The selected row's background, and the picker's exit codes for claude-rotate.
 ROW_BG = "48;2;48;44;42"
 PICKED, CANCELLED, REFRESH = 0, 1, 3
 
@@ -626,7 +597,6 @@ class Picker:
         fd = os.open("/dev/tty", os.O_RDWR)
         old = termios.tcgetattr(fd)
         mode = termios.tcgetattr(fd)
-        # No echo, no line buffering, and ctrl+c as a key, so the claude-rotate waiting on this process sees nothing.
         mode[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG)
         mode[6][termios.VMIN], mode[6][termios.VTIME] = 1, 0
 
@@ -671,9 +641,7 @@ def locked_refresh(only: list[str], max_age: int | None) -> dict:
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     with (CACHE.parent / "lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        # A run that waited for the lock finds the cache the other run just wrote.
         data = load_cache()
-        # An account added, renamed or deleted since the last run makes the cache wrong at any age.
         if (max_age is None or only or now() - data.get("updated", 0) > max_age
                 or sorted(x["name"] for x in data.get("accounts", [])) != sorted(accounts())):
             data = refresh(only)
@@ -693,7 +661,6 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true", help="print nothing")
     ap.add_argument("--watch", action="store_true",
                     help="redraw every 30 s and check the accounts when the cache is older than --max-age (300)")
-    # claude-rotate's account picker; see Picker.
     ap.add_argument("--pick", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--recommend", metavar="NAME", help=argparse.SUPPRESS)
     ap.add_argument("--held", action="append", default=[], metavar="NAME", help=argparse.SUPPRESS)

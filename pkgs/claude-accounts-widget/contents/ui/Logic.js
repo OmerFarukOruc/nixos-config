@@ -27,7 +27,6 @@ function usedOf(w) {
     return (w && w.used !== null && w.used !== undefined) ? Number(w.used) : null
 }
 
-// The binding window of an account is the one with the higher use.
 function maxUsed(a) {
     var f = usedOf(a.five_hour), s = usedOf(a.seven_day)
     if (f === null && s === null)
@@ -35,7 +34,6 @@ function maxUsed(a) {
     return Math.max(f === null ? 0 : f, s === null ? 0 : s)
 }
 
-// Local account in state ok or expiring with the most room left, or null.
 function bestAccount(data) {
     var best = null, bestUsed = 0
     var list = (data && data.accounts) || []
@@ -75,7 +73,6 @@ function anyNeedsLogin(data) {
     return false
 }
 
-// "2h 10m", "35m", "3d 4h"
 function duration(secs) {
     if (secs <= 0)
         return "now"

@@ -1,33 +1,4 @@
 #!/usr/bin/env python3
-# Keeps Claude Code agents in herdr running: moves an agent to another account when its account hits a usage
-# limit, and starts the agents again after the herdr server restarted.
-#   claude-limit-switch scan                        restore, then switch each named Claude agent whose screen ends
-#                                                   in a limit message (claude-limit-switch.timer runs this)
-#   claude-limit-switch restore                     only the restore step of scan
-#   claude-limit-switch switch NAME [--to ACCOUNT]  switch one agent now
-#   claude-limit-switch resume NAME                 start a recorded agent that is not running, such as one that
-#                                                   ended by an accidental /exit
-#   claude-limit-switch usage [ACCOUNT ...]         print the session and weekly meters of each account
-# Accounts are the claude-accounts accounts. They share ~/.claude/projects, so `claude --resume <session>`
-# continues the same conversation under another account. A switch types /exit in the agent's pane, sets
-# CLAUDE_CONFIG_DIR there, starts Claude like `clauded --resume <session>` with its other old arguments under the same agent
-# name, and tells the agent to continue. ~/.config/claude-limit-switch/resume/NAME replaces that message for
-# agent NAME. `--resume` brings back a fixed-interval /loop but not a self-paced one or a Monitor, so an agent that
-# runs them needs a message that checks CronList first (the dotfiles checkout's desktop/reference/unattended-agents.md).
-# The new account is the one with the lowest weekly use among those under both limits below. Each candidate
-# is measured with `claude-usage --account NAME`, which reads the usage endpoint or runs a one-turn `claude -p`.
-# herdr itself resumes Claude as plain `claude --resume`, without the flag and the account (see
-# the dotfiles checkout's desktop/reference/headless-clis/herdr.md), so its own restore is off. Instead each scan records the named Claude
-# agents and the server process in agents.json. When the next scan finds a different server process, it starts each
-# recorded agent that is missing like `clauded --resume <session>` with its account, in its old pane or a new
-# workspace, and sends it the resume message. An agent that is missing while the same server runs was ended on
-# purpose; the record keeps it under "ended" with its last session for ENDED_KEEP, and only `resume NAME` starts it
-# again, the same way. A start that fails closes the workspace it made, and the next try waits COOLDOWN. When no
-# server runs, scan starts it (herdr-default.service for the default session).
-# State is in ~/.local/state/claude-limit-switch: limits.json (account: limited until, reason), agents.json,
-# switched.json and restore-failed.json (name: time of the last try), and events.log with the one before it in
-# events.log.1. CLAUDE_LIMIT_SWITCH_STATE and CLAUDE_LIMIT_SWITCH_SESSION (a herdr session name) point a test
-# elsewhere.
 from __future__ import annotations
 
 import argparse
@@ -53,25 +24,17 @@ SESSION = os.environ.get("CLAUDE_LIMIT_SWITCH_SESSION", "")
 RESUME = HOME / ".config/claude-limit-switch/resume"
 USAGE = BIN / "claude-usage"
 USAGE_CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage/usage.json")
-# Chosen values, not measured: an account at or above either meter is not picked, so the agent gets some
-# turns before the next switch.
 SESSION_MAX = 90
 WEEK_MAX = 95
-# An account whose limit message names no reset time, such as a model limit, is skipped for this long.
 NO_RESET_WAIT = 3600
 # scan skips an agent this long after a move it tried, and restore waits this long after a failed start. After a
 # switch the screen keeps the old limit message until the agent answers; after a move with no room or a failed
 # start, scan runs every minute and would otherwise try again on each run.
 COOLDOWN = 300
-# Chosen, not measured: events.log moves to events.log.1, replacing it, once it reaches this size.
 EVENTS_MAX = 1 << 20
-# Chosen, not measured: an ended agent stays resumable by name this long; older entries leave agents.json.
 ENDED_KEEP = 30 * 86400
 SKIP_PERMISSIONS = "--dangerously-skip-permissions"
-# Chosen, not measured: how long a new pane's shell may take before it runs typed input, such as a direnv load of a
-# devenv shell; a cached load took about 3 s on 2026-10-28.
 READY_WAIT_S = 180
-# The limit message is the agent's last output, so it sits in the last few lines above the input box.
 TAIL = 6
 
 LIMIT = re.compile(r"You've hit your (session|weekly) limit · resets (.+?\))")
@@ -287,7 +250,7 @@ def gone(pid: int, seconds: float) -> bool:
 
 
 def exit_claude(name: str, pid: int) -> None:
-    herdr("agent", "send-keys", name, "esc", check=False)  # closes a dialog, such as the limit options
+    herdr("agent", "send-keys", name, "esc", check=False)
     time.sleep(1)
     herdr("agent", "prompt", name, "/exit", check=False)
     # With a scheduled task, /exit opens "Background work is running"; match its selected first choice, so a
@@ -309,7 +272,6 @@ def exit_claude(name: str, pid: int) -> None:
 
 
 def wait_freed(name: str) -> None:
-    # herdr frees the name a moment after the process ends, and a start before that fails with agent_name_taken.
     deadline = time.time() + 30
     while time.time() < deadline:
         if herdr("agent", "get", name, check=False).get("error", {}).get("code") == "agent_not_found":
@@ -324,7 +286,6 @@ def wait_shell_ready(pane: str) -> None:
     out. Each try types a marker command that prints a new number, so an old marker on screen never matches."""
     deadline = time.time() + READY_WAIT_S
     while time.time() < deadline:
-        # A claude left by a failed start would take each marker as a prompt.
         try:
             claude_process(pane)
         except Failed:
@@ -341,7 +302,6 @@ def wait_shell_ready(pane: str) -> None:
 
 def start_claude(pane: str, name: str, config_dir: str, args: list[str]) -> None:
     wait_shell_ready(pane)
-    # CLAUDE_ACCOUNTS_PLAIN keeps the claude shell function from showing its account list for the typed `claude`.
     env = "export CLAUDE_ACCOUNTS_PLAIN=1; " + (
         f"export CLAUDE_CONFIG_DIR={shlex.quote(config_dir)}" if config_dir else "unset CLAUDE_CONFIG_DIR"
     )
@@ -358,7 +318,6 @@ def start_claude(pane: str, name: str, config_dir: str, args: list[str]) -> None
                 continue
             if code != "agent_not_ready":
                 raise
-        # The account has not trusted this folder yet. The session ran here before, so trust it.
         if "Yes, I trust this folder" not in screen_of(name):
             raise Failed(f"{name} is blocked at startup by something other than the folder trust question")
         herdr("agent", "send-keys", name, "down")
@@ -500,7 +459,7 @@ def restore(record: dict, server: str, wait: bool = True) -> list[str]:
     for n in to_restore(record, live_names(), server):
         r = record["agents"][n]
         if wait and tried.get(n, 0) > time.time() - COOLDOWN:
-            failed.append(n)  # the failure line already named the next try
+            failed.append(n)
             continue
         try:
             pane = start_recorded(n, r, "The herdr server restarted")
@@ -521,7 +480,7 @@ def resume(record: dict, name: str) -> None:
             log(f"{name} is running already; `herdr agent get {name}` shows its pane")
             return
         except Failed:
-            wait_freed(name)  # its claude just exited
+            wait_freed(name)
     r = recorded(record, name)
     pane = start_recorded(name, r, "This agent had exited")
     log(f"{name}: resumed in pane {pane} by hand, session {r['session']}")
@@ -532,7 +491,6 @@ def snapshot(server: str, record: dict, failed: list[str]) -> None:
     agents = {}
     for a in herdr("agent", "list")["result"]["agents"]:
         name, sid = a.get("name"), (a.get("agent_session") or {}).get("value")
-        # A pane can show no agent while its claude starts; the claude process below decides then.
         if a.get("agent") not in ("claude", None) or name is None or not sid:
             continue
         try:

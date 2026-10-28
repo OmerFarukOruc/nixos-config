@@ -34,8 +34,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     dbus
     libpulseaudio
   ];
-  # These tests start a session dbus-daemon, which finds no session.conf in
-  # the build sandbox.
   checkFlags = [ "--skip=bluez_tests::" ];
 
   meta = {

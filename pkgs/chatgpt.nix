@@ -1,6 +1,3 @@
-# ChatGPT, OpenAI's official Linux build, repacked from its .deb.
-# scripts/update-app.sh moves version and hash to the newest entry of
-# passthru.aptIndex.
 {
   lib,
   stdenv,
@@ -92,7 +89,6 @@ stdenv.mkDerivation rec {
     libXrandr
     libxcb
   ];
-  # Loaded with dlopen, so autoPatchelf does not see them.
   runtimeDependencies = [
     (lib.getLib systemd)
     libGL

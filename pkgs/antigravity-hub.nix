@@ -1,7 +1,3 @@
-# Antigravity, Google's agent desktop app, the official Linux AppImage.
-# scripts/update-app.sh moves version and hash to the newest release in
-# passthru.releaseFeed, the electron-builder feed the app's own updater reads.
-# The download URL also embeds a build ID, and update-app.sh moves it.
 {
   lib,
   appimageTools,
@@ -21,8 +17,6 @@ appimageTools.wrapAppImage {
   inherit pname version;
   src = contents;
   executableName = "antigravity";
-  # Google sign-in returns to the app through antigravity:// links. The window
-  # class is lower case, unlike the StartupWMClass the AppImage ships.
   extraInstallCommands = ''
     install -Dm644 ${contents}/antigravity.desktop -t $out/share/applications
     substituteInPlace $out/share/applications/antigravity.desktop \

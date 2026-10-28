@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# Ends a named Claude or codex agent: `agent-stop NAME`. For claude it types /exit in the agent's pane the way
-# claude-limit-switch does (including the "Background work is running" dialog); for codex it presses Ctrl+C until
-# codex quits, because the first one only interrupts a running turn. Then it waits for herdr to free the name and closes
-# the agent's tab, only when the tab is named NAME and holds that one pane, which is what agent-start makes; any
-# other tab stays open. When herdr already dropped the name, it still closes such a tab and prints which. Exits 1
-# with the reason, and leaves the tab for a look, when no agent and no such tab exist, the agent does not exit, or
-# herdr still lists NAME while no claude or codex process is found, because that agent may be alive.
-# CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one.
 import sys
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader

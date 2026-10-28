@@ -1,8 +1,3 @@
-# Cloudflare's cf CLI, from npm. It has only beta releases, and its own
-# package.json pins dev dependencies that do not resolve, so cf/package.json
-# is a wrapper project that depends on cf, with the lockfile npm wrote for it.
-# scripts/update-app.sh rewrites both and npmDepsHash for a new release.
-# Its workerd binary (cf dev) runs through nix-ld (nixosModules/common.nix).
 {
   lib,
   buildNpmPackage,

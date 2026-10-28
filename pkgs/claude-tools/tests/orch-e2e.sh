@@ -1,21 +1,4 @@
 #!/usr/bin/env bash
-# End-to-end check of agent-start, agent-stop, agent-peek, orch-notify and orch-watch on risoluto-dev-1, with a real
-# herdr server and real Claude agents (sonnet). It runs in its own herdr session, orch-e2e-<run>, with its own
-# inbox and state folder, so Omer's agents and records stay untouched.
-#   1. A notice is already in the inbox before any watcher or agent exists.
-#   2. agent-start runs from the folder above the work folder with a relative --cwd,
-#      and the pane starts in the work folder. The brief makes the agent run orch-notify NEED, so the notice
-#      carries the agent's name, found from its pane, and reaches the inbox through the pane's environment.
-#   3. A second notice is sent while no watcher runs; orch-watch then prints all three notices at start.
-#   4. A turn of the agent ends; orch-watch prints `working -> idle` (or done) with the agent's STATUS line, and agent-peek
-#      shows the same line.
-#   5. orch-watch is stopped and started again; a third notice prints and the earlier three do not.
-#   6. agent-start of a running name is refused and adds no tab.
-#   7. agent-stop removes the agent and its tab; the same name starts and stops again at once.
-#   8. An agent whose claude exited on its own (/exit typed to it) leaves a tab with a shell; agent-stop closes it.
-# The run costs a few sonnet turns and about 2 minutes.
-#   orch-e2e.sh [BIN]    BIN is the folder with the scripts, default: ../bin next to this folder
-# Passes when it prints PASS and exits 0; the log shows each step and the output of each orch-watch run.
 set -euo pipefail
 bin="$(readlink -f "${1:-$(dirname "$0")/../bin}")"
 dir=$(mktemp -d /tmp/orch-e2e.XXXXXX)
@@ -54,7 +37,6 @@ fail() {
   exit 1
 }
 step() { echo "step $1: $2"; }
-# wait_for SECONDS COMMAND...: runs the command once a second until it succeeds
 wait_for() {
   local n=$1
   shift
@@ -67,7 +49,6 @@ wait_for() {
 tab_labelled() { h tab list | jq -e --arg n "$1" '[.result.tabs[] | select(.label == $n)] | length > 0' >/dev/null; }
 tab_count() { h tab list | jq --arg n "$1" '[.result.tabs[] | select(.label == $n)] | length'; }
 agent_listed() { h agent get "$1" 2>/dev/null | jq -e '.result.agent' >/dev/null; }
-# true once no agent runs in pane $1, which is when claude has exited and a shell is left
 pane_has_no_agent() { [[ "$(h pane get "$1" | jq -r '.result.pane.agent // "none"')" == none ]]; }
 inbox_has() { grep -qP "$1" "$ORCH_INBOX" 2>/dev/null; }
 watch_has() { grep -qF -- "$1" "$dir/watch.log"; }

@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-# Starts an interactive Claude Code session on the claude-accounts account with the most room, and moves the session
-# to the next account when it hits a usage limit. claude-accounts.sh makes `claude` a shell function that
-# runs this, unless `claude --account NAME` pins an account, CLAUDE_CONFIG_DIR is set, CLAUDE_ACCOUNTS_PLAIN marks a
-# herdr agent that claude-limit-switch moves, or stdin or stdout is no terminal.
-#   claude-rotate [CLAUDE ARGS...]
-# Any non-interactive call (-p, --version, a subcommand such as `auth`) runs plain claude with nothing changed.
-# The pick: the account with the lowest weekly use among those under MAX_USED in both windows, from the claude-usage
-# cache, skipping accounts marked limited and accounts without a reading. With no such account, claude starts on the
-# account the environment already selects. Before the start, `claude-usage --pick` shows every account with that pick
-# under the cursor: enter starts it, another row starts another account, q starts nothing. CLAUDE_ACCOUNTS_PICK=0
-# starts on the pick without asking.
-# The move: Claude Code fires the StopFailure hook with matcher rate_limit when a turn fails on a limit, and
-# The dotfiles checkout's desktop/claude-code/hooks/rotate-on-limit.sh writes the hook input to $XDG_RUNTIME_DIR/claude-rotate/ID-PID.json, where
-# ID is CLAUDE_ROTATE_ID from this process and PID is the Claude process the hook belongs to. This process then marks
-# the account limited until its window resets, stops Claude with SIGTERM (the transcript stays resumable; checked on
-# 19-10-2026 with 2.1.303), and starts `claude --resume SESSION MESSAGE` with the original flags on the next account.
-# When no account is free, the session stays where it is until the first other account's recorded limit ends, if that
-# comes before its own account's; then this process picks again and moves the session to the account that is free.
-# The accounts share ~/.claude/projects, so the session carries over.
-# State: ~/.local/state/claude-rotate/limits.json (account: limited until, reason) and events.log.
 from __future__ import annotations
 
 import json
@@ -40,17 +20,11 @@ CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage
 STATE = Path(os.environ.get("CLAUDE_ROTATE_STATE") or HOME / ".local/state/claude-rotate")
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/claude-rotate-{os.getuid()}") / "claude-rotate"
 HELP_CACHE = HOME / ".cache/claude-rotate"
-# claude-limit-switch's SESSION_MAX, here for both windows; a guess, so a moved session gets some turns before the
-# next move.
 MAX_USED = 90
-# Chosen: a cache older than this is refreshed before the pick; claude-usage.timer runs every 10 min.
 CACHE_MAX_AGE = 900
-# An account whose limit names no reset time, such as a model limit, is skipped for this long (claude-limit-switch).
 NO_RESET_WAIT = 3600
-# The exit codes of claude-usage --pick (claude-usage Picker).
 PICKED, CANCELLED, REFRESH = 0, 1, 3
 NON_INTERACTIVE = {"-p", "--print", "-v", "--version", "-h", "--help"}
-# Dropped on resume: they pick or fork the session, which --resume SESSION replaces.
 SESSION_FLAGS = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "--from-pr"}
 
 
@@ -117,7 +91,7 @@ def resume_args(args: list[str], opts: dict[str, str], session: str, message: st
         if a == "--":
             break
         if not a.startswith("-"):
-            continue  # the first prompt; the session already holds it
+            continue
         name = a.split("=", 1)[0]
         kind = "" if "=" in a else opts.get(name, "")
         taken = []
@@ -175,7 +149,6 @@ def pick(names: list[str], skip: str | None, entries: dict[str, dict], limits: d
         if (n == skip or limits.get(n, {}).get("until", 0) > now or not e or e["state"] not in ("ok", "expiring")
                 or not e.get("five_hour")):
             continue
-        # Team plans have no weekly window.
         five, week = e["five_hour"]["used"], (e.get("seven_day") or {}).get("used", 0)
         if five >= MAX_USED or week >= MAX_USED:
             continue
@@ -232,7 +205,7 @@ class Runner:
         self.child: subprocess.Popen | None = None
         self.quit = False
         for s in (signal.SIGINT, signal.SIGQUIT):
-            signal.signal(s, signal.SIG_IGN)  # Claude reads the keys itself; the terminal's signals reach it directly
+            signal.signal(s, signal.SIG_IGN)
         for s in (signal.SIGTERM, signal.SIGHUP):
             signal.signal(s, self.forward)
 
@@ -242,7 +215,6 @@ class Runner:
             self.child.send_signal(sig)
 
     def start(self, argv: list[str], env: dict) -> None:
-        # Claude must not inherit the ignored SIGINT and SIGQUIT.
         def restore() -> None:
             signal.signal(signal.SIGINT, signal.SIG_DFL)
             signal.signal(signal.SIGQUIT, signal.SIG_DFL)
@@ -255,18 +227,16 @@ class Runner:
         while True:
             try:
                 got, status = os.waitpid(pid, os.WNOHANG | os.WUNTRACED)
-            except ChildProcessError:  # the signal handler's poll() reaped it
+            except ChildProcessError:
                 code = self.child.returncode or 0
                 return code if code >= 0 else 128 - code
             if got == pid:
                 if os.WIFSTOPPED(status):
-                    # Claude suspended itself (ctrl+z); stop too, so the shell gets the terminal back, and wake it
-                    # with us on `fg`, which sends SIGCONT to the whole job.
                     os.kill(os.getpid(), signal.SIGSTOP)
                     continue
                 code = os.waitstatus_to_exitcode(status)
                 self.child.returncode = code
-                return code if code >= 0 else 128 - code  # a shell's exit status for a signal
+                return code if code >= 0 else 128 - code
             if not self.quit and flag.exists():
                 try:
                     data = json.loads(flag.read_text())
@@ -327,7 +297,6 @@ def main() -> int:
         limits = load_json(STATE / "limits.json")
         current = pick(names, None, usage(), limits, time.time())
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as e:
-        # Claude still starts, on the account the environment selects, without moves.
         say(f"could not pick an account ({e}); running plain claude")
         os.execvp("claude", ["claude", *args])
     if os.environ.get("CLAUDE_ACCOUNTS_PICK") != "0":
@@ -352,7 +321,7 @@ def main() -> int:
             if isinstance(got, int):
                 return got
             try:
-                if got is None:  # another account's limit has ended
+                if got is None:
                     session = waiting[0]
                     now = time.time()
                     limits = {n: v for n, v in load_json(STATE / "limits.json").items() if v.get("until", 0) > now}
@@ -364,11 +333,8 @@ def main() -> int:
             except Exception as e:  # noqa: BLE001 - Claude keeps the terminal, so this process must keep waiting
                 log(f"session {session}: no move, picking the next account failed: {e!r}")
                 nxt = None
-            # A SIGTERM or SIGHUP during the pick ends Claude; that ends this process too, without a move.
             if nxt and not runner.quit:
                 break
-            # The session stays on its account, and Claude shows the limit; a later limit event tries again, and so
-            # does the end of another account's limit when it comes first.
             try:
                 wake = next_reset(current, names, time.time())
             except Exception as e:  # noqa: BLE001 - a broken limits.json must not end the session
@@ -383,7 +349,7 @@ def main() -> int:
         message = (f"Your Claude account {current} hit its usage limit, so claude-rotate resumed this session on the "
                    f"{nxt} account. Continue where you stopped.")
         argv = ["claude", *resume_args(args, opts, session, message)]
-        args = argv[1:-3]  # the flags without the prompt, for the next move
+        args = argv[1:-3]
         current = nxt
 
 

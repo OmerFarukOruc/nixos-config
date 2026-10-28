@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-# Starts a named Claude agent in its own herdr tab, in the caller's workspace:
-#   agent-start NAME --cwd DIR [--account ACCOUNT] [--model M] [--effort E] [--permission-mode MODE] [--brief FILE]
-# ACCOUNT is a claude-accounts account name or a CLAUDE_CONFIG_DIR folder; the default is the caller's own
-# account. The agent starts with --dangerously-skip-permissions, as Omer's `clauded` alias does, and gets one
-# prompt that names FILE (its path, not its text, so a long brief never goes through argv). --permission-mode
-# starts it in that mode instead, keeps bypass reachable with shift+tab, and waits until the footer shows the mode
-# before the brief goes out, because a mode switched by keypresses after start raced the brief once.
-# A name whose agent just exited is waited for, since herdr frees it a moment later. When any step fails after the
-# tab exists, the agent that started is stopped and the tab is closed, so the same command can run again. Exits 1
-# with the herdr error code. `agent-stop NAME` ends an agent this command started.
-# The tab opens with --no-focus, so the view of whoever looks at herdr stays where it is.
-# CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one; the tab then opens in the
-# session's own workspace, because the caller's pane id belongs to its own session.
 import argparse
 import os
 import re
@@ -31,11 +18,10 @@ def load(name: str):
 
 cls = load("claude-limit-switch")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
-# `claude --help` choices, with the footer text each mode shows; dontAsk has no footer seen yet, so it is not checked.
 MODE_FOOTERS = {"acceptEdits": "accept edits on", "auto": "auto mode on", "bypassPermissions": "bypass permissions on",
                 "manual": "manual mode on", "dontAsk": "", "plan": "plan mode on"}
 MODE_WAIT_S = 15
-NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")  # herdr's rule for an agent name
+NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 
 
 def resolve_account(account: str | None, dirs: dict[str, str], caller_dir: str) -> str:
@@ -89,7 +75,7 @@ def start(args: argparse.Namespace) -> None:
         try:
             cls.claude_process(pane)
         except cls.Failed:
-            cls.wait_freed(args.name)  # its claude just exited
+            cls.wait_freed(args.name)
         else:
             raise cls.Failed(f"{args.name} is already running; `agent-stop {args.name}` ends it")
     config_dir = resolve_account(args.account, cls.accounts() if args.account else {}, os.environ.get("CLAUDE_CONFIG_DIR", ""))
@@ -126,7 +112,7 @@ def main(argv: list[str]) -> int:
         ap.error(f"NAME {args.name!r} must match {NAME.pattern}")
     if not args.cwd.is_dir():
         ap.error(f"--cwd {args.cwd} is not a folder")
-    args.cwd = args.cwd.resolve()  # herdr resolves a relative path against its own folder, not this one
+    args.cwd = args.cwd.resolve()
     if args.brief and not args.brief.is_file():
         ap.error(f"--brief {args.brief} is not a file")
     try:

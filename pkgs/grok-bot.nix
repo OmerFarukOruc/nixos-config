@@ -1,7 +1,3 @@
-# Grok Bot, repacked from the .deb in the APT repository at downloads.cursor.com,
-# whose package record names SpaceXAI as vendor.
-# scripts/update-app.sh moves version and hash to the newest entry of
-# passthru.aptIndex.
 {
   lib,
   stdenv,
@@ -87,7 +83,6 @@ stdenv.mkDerivation rec {
     libXrandr
     libxcb
   ];
-  # Loaded with dlopen, so autoPatchelf does not see them.
   runtimeDependencies = [
     (lib.getLib systemd)
     libGL

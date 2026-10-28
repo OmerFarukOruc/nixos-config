@@ -1,6 +1,3 @@
-# Claude Desktop, official Linux build, repacked from Anthropic's .deb.
-# scripts/update-app.sh moves version and hash to the newest entry of
-# passthru.aptIndex.
 {
   lib,
   stdenv,
@@ -104,7 +101,6 @@ stdenv.mkDerivation rec {
     libcap_ng
     pipewire
   ];
-  # Loaded with dlopen, so autoPatchelf does not see them.
   runtimeDependencies = [
     (lib.getLib systemd)
     libGL
@@ -135,8 +131,6 @@ stdenv.mkDerivation rec {
       substituteInPlace "$f" \
         --replace-quiet "/usr/lib/claude-desktop/claude-desktop" "$out/bin/claude-desktop" \
         --replace-quiet "Exec=claude-desktop" "Exec=$out/bin/claude-desktop"
-      # Releases differ in which of the two forms they use, so each replacement
-      # may change nothing; every Exec line must point at the wrapper afterwards.
       if grep -E '^(Try)?Exec=' "$f" | grep -qvE "^(Try)?Exec=$out/bin/claude-desktop( |$)"; then
         echo "$f has an Exec line that does not run $out/bin/claude-desktop." >&2
         exit 1

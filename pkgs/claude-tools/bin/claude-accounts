@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Several Claude Code accounts on one machine, one config folder each, selected with CLAUDE_CONFIG_DIR: their usage,
-# logins and folders. How it works and its invariants: nixos-config pkgs/claude-tools/README.md.
-# The account list and the shared preferences stay private, in the dotfiles checkout's desktop/claude-code
-# (CLAUDE_ACCOUNTS_DATA), because this repository is public.
 set -euo pipefail
 
 main="$HOME/.claude"
@@ -78,8 +74,6 @@ profile_folders() {
   for d in "$HOME"/.claude-*/; do [[ -f "$d$marker" ]] && echo "${d%/}"; done
 }
 
-# An account's name is its marker's content; add and rename write it. Older accounts have an empty marker,
-# and their name is the folder suffix.
 folder_name() { local n; n="$(<"$1/$marker")"; echo "${n:-${1#"$HOME"/.claude-}}"; }
 
 profile_names() { local d; while read -r d; do folder_name "$d"; done < <(profile_folders); }
@@ -95,8 +89,6 @@ all_names() { { main_name; profile_names; } | sort; }
 
 taken() { is_main "$1" || profile_folder "$1" >/dev/null 2>&1; }
 
-# The folder for a new account NAME: ~/.claude-NAME, or ~/.claude-NAME-2, -3, and so on while that path
-# exists, as it does for an account renamed during a session.
 new_folder() {
   local d i=2
   d="$(profile_dir "$1")"
@@ -127,9 +119,6 @@ link_shared() {
   return "$bad"
 }
 
-# Moves the files of a profile's own copy of a shared folder into ~/.claude, so link_shared can link it.
-# A file ~/.claude already has keeps its copy; the profile's copy goes to $dir/$name.unmerged. A file both
-# already have stays put, so link_shared refuses the folder and update reports it.
 fold_dir() {
   local src="$1/$2" dst="$main/$2" rel to kept=0
   [[ -d "$src" && ! -L "$src" ]] || return 0
@@ -150,9 +139,6 @@ fold_dir() {
 # account goes to the repo and to the other accounts (json-config.py sync_prefs). A running session keeps a key
 # written to its file from outside (checked on 10-10-2026 with Claude Code 2.1.296), so this does not wait for idle.
 prefs="$data/account-prefs.json"
-# json-config.py reads and rewrites every account's file, so all of them are locked first, all or none, and released in
-# the same call, also when the call ends early or gets INT or TERM (bash runs the EXIT trap then); when one stays
-# held, none of the files changes.
 cmd_prefs() {
   local d f rc=0 configs=("$HOME/.claude.json") locked=()
   trap claude_config_unlock_all EXIT
@@ -169,10 +155,6 @@ cmd_prefs() {
   return "$rc"
 }
 
-# Copies from ~/.claude.json what a profile's own .claude.json needs: MCP servers; the onboarding keys,
-# because `claude auth login` leaves them unset and the first start then reruns the first-run wizard;
-# the trusted folders, so the trust question is not asked again; and the values in the preferences file.
-# It holds the file's lock (claude-config-lock.sh) from the read to the move, and releases it on INT or TERM too.
 sync_config() {
   local f="$1/.claude.json" tmp ok=0
   if [[ ! -f "$f" ]]; then
@@ -208,7 +190,6 @@ in_use() {
 
 require_idle() { ! in_use "$1" || { echo "a claude session still runs with $1; close it first" >&2; exit 1; }; }
 
-# One tab-separated line per account: name, email, organization, plan, links, MCP servers.
 row() {
   local name="$1" dir cfg status login org plan mcp links=- f
   dir="$(config_dir "$name")"
@@ -225,7 +206,6 @@ row() {
     links="split"
   fi
   login="$(jq -r 'if .loggedIn then .email // "?" else "not logged in" end' <<<"$status" 2>/dev/null || echo unknown)"
-  # One email can belong to several organizations (a personal Max plan and a Team seat), one account each.
   org="$(jq -r 'if .loggedIn then (.orgName // "?") as $o | if $o == (.email + "\u0027s Organization") then "personal" else $o end else "-" end' <<<"$status" 2>/dev/null || echo -)"
   plan="$(jq -r 'if .loggedIn then .subscriptionType // "?" else "-" end' <<<"$status" 2>/dev/null || echo -)"
   # The usage tier (5x, 20x) is only in the credentials file, as rateLimitTier "default_claude_max_20x".
@@ -249,7 +229,6 @@ cmd_list() {
   fi
 }
 
-# Prints the folder of extra account NAME, creating and linking it when it does not exist yet.
 ensure_folder() {
   local name="$1" dir
   if dir="$(profile_folder "$name" 2>/dev/null)"; then
@@ -322,24 +301,19 @@ cmd_delete() {
     [[ "$answer" == [yY] ]] || { echo "kept $dir"; return; }
   fi
   CLAUDE_CONFIG_DIR="$dir" claude auth logout >/dev/null 2>&1 || echo "logout failed; deleting anyway"
-  # rm does not follow the symlinks, so the shared config in ~/.claude is untouched
   rm -rf -- "$dir"
   echo "deleted $dir"
 }
 
-# ---- logins ----
-
 # Every device keeps its own browser login for every account in claude-code/accounts.json; never copy a
 # .credentials.json between devices, because Claude Code rotates the refresh token on use.
 bin_dir="$(dirname "$self")"
-login_soon=$((5 * 86400)) # claude-usage EXPIRING: renew a login that ends within 5 days
-# An unreachable host fails within seconds instead of waiting for the TCP timeout, and no prompt hangs the widget.
+login_soon=$((5 * 86400))
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
-login_wait=900 # chosen: how long a remote login waits for the browser
+login_wait=900
 
 account_field() { jq -r --arg n "$1" --arg f "$2" '.accounts[$n][$f] // empty' "$accounts_file"; }
 
-# The org label claude-accounts list shows: "personal" for the email's own organization.
 status_label() {
   jq -r 'if .loggedIn then .email + " " + ((.orgName // "?") as $o
     | if $o == (.email + "\u0027s Organization") then "personal" else $o end) else "not logged in" end'
@@ -367,7 +341,6 @@ cmd_login() {
   got="$(with_account "$name" claude auth status --json 2>/dev/null | status_label)"
   want="$email $org"
   if [[ -n "$email" && "$got" != "$want" ]]; then
-    # A login to the wrong organization would let this account stand in for another one in rotation and the cards.
     with_account "$name" claude auth logout >/dev/null 2>&1 || true
     "$bin_dir/claude-usage" --account "$name" --quiet || true
     echo "✗ $name got \"$got\", but accounts.json expects \"$want\", so it is logged out again; run login $name" \
@@ -379,14 +352,9 @@ cmd_login() {
   "$bin_dir/claude-usage" --account "$name" --quiet || true
 }
 
-# Runs `login NAME` on HOST in a tmux session there. The remote claude writes its authorize URL to a file (through
-# claude-login-browser), this device opens it in the account's Brave profile, and an ssh tunnel carries the browser's
-# redirect to localhost:PORT back to the remote claude. When the authorize page shows a code instead, paste it here.
 login_remote() {
   local rc=0
   login_host="$2" login_session="claude-login-$1" tunnel=""
-  # The remote tmux session and the tunnel end with this login, also on ctrl+c or a closed window, which exit through
-  # the EXIT trap.
   trap cleanup_remote EXIT
   trap 'exit 130' INT TERM HUP
   login_remote_run "$@" || rc=$?
@@ -449,7 +417,6 @@ login_remote_run() {
   return "$rc"
 }
 
-# Opens a terminal window that runs login and waits for a key, for the widget, which has no terminal of its own.
 cmd_login_window() {
   local run term a
   # plasmashell, which starts this for the widget, has no ~/.local/bin on PATH, where claude lives on two hosts.
@@ -466,7 +433,6 @@ cmd_login_window() {
   return 1
 }
 
-# The accounts in accounts.json that need a login on this device, or on HOST: missing, logged out, or ending soon.
 due_accounts() {
   local host="${1:-}" usage
   if [[ -n "$host" ]]; then
@@ -491,7 +457,6 @@ cmd_login_all() {
       *) usage ;;
     esac
   done
-  # An assignment keeps errexit, so an unreachable host fails here instead of reading as "nothing due".
   text="$(due_accounts "$host")"
   mapfile -t due < <([[ -z "$text" ]] || printf '%s\n' "$text")
   if (( list )); then (( ${#due[@]} == 0 )) || printf '%s\n' "${due[@]}"; return; fi

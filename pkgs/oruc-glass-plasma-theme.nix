@@ -1,8 +1,3 @@
-# The Plasma style of the Glass look: Breeze with see-through popups. Breeze
-# fills the background of menus, popups, notifications and KRunner with the
-# window color at 85% opacity; this style fills it at 50%, the opacity of the
-# top bar's widgets, so the Glass blur shows through. Plasma takes every
-# element this style leaves out from Breeze.
 {
   jq,
   libplasma,

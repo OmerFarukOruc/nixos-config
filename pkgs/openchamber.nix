@@ -1,6 +1,3 @@
-# OpenChamber desktop, the official Linux AppImage from GitHub releases.
-# scripts/update-app.sh moves version and hash to the newest release in
-# passthru.releaseFeed, the electron-builder feed the app's own updater reads.
 {
   lib,
   appimageTools,
@@ -18,7 +15,6 @@ in
 appimageTools.wrapAppImage {
   inherit pname version;
   src = contents;
-  # Pairing links (openchamber://connect) open in the app.
   extraInstallCommands = ''
     install -Dm644 ${contents}/openchamber.desktop -t $out/share/applications
     substituteInPlace $out/share/applications/openchamber.desktop \

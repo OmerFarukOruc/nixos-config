@@ -1,8 +1,3 @@
-# herdr's web UI (github.com/devswha/herdr-web-ui), served on risoluto-dev-1.
-# Bun installs the locked dependencies, with the patches its package.json
-# names, in a fixed-output derivation; the client is built here, so the
-# server starts with no build. The server runs its PTY sidecar on Node, which
-# the wrapper puts on PATH; without it panes are only mirrored.
 {
   lib,
   stdenv,
@@ -46,7 +41,6 @@ stdenv.mkDerivation {
     bun
     makeWrapper
   ];
-  # node-pty's prebuilt module links the C++ runtime.
   buildInputs = [ stdenv.cc.cc.lib ];
 
   configurePhase = ''
@@ -70,8 +64,6 @@ stdenv.mkDerivation {
   autoPatchelfIgnoreMissingDeps = true;
 
   passthru.githubRepo = "devswha/herdr-web-ui";
-  # The bun that made outputHash; update-app.sh learns the hash again when
-  # nixpkgs' bun differs.
   passthru.depsBun = "1.4.2";
 
   meta = {

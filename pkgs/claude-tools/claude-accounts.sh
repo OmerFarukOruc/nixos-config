@@ -1,17 +1,4 @@
 # shellcheck shell=bash
-# Sourced by Home Manager's zsh (home-manager/modules/claude-accounts.nix). It makes `claude` a function and completes
-# claude-accounts:
-#   claude [ARGS]                 claude-rotate shows every account's usage with the one with the most room under the
-#                                 cursor, starts the session on the account you pick, and moves it to the next account
-#                                 when it hits a usage limit (CLAUDE_ACCOUNTS_PICK=0 skips the list)
-#   claude --account NAME [ARGS]  one session on NAME, without rotation; --account may sit anywhere before a `--`, so
-#                                 the clauded alias (claude --dangerously-skip-permissions) takes it too
-# Plain claude runs when CLAUDE_CONFIG_DIR is set, inside a claude-rotate session (CLAUDE_ROTATE_ID), for a herdr agent
-# that claude-limit-switch moves (CLAUDE_ACCOUNTS_PLAIN=1, which its tools export before `herdr agent start` types
-# `claude` at the pane's prompt), and when stdin or stdout is no terminal. A herdr pane you type in gets the list.
-# CLAUDE_ACCOUNTS_PICK and CLAUDE_ACCOUNTS_PLAIN count for one start. The function unsets them in the calling shell, so
-# a pane that exported them for an agent, or whose tab was created with them in --env, shows the list for the next
-# `claude` typed there.
 
 claude() {
   local bin="@bin@" pin=0 name="" dir a
@@ -61,9 +48,8 @@ _claude_accounts_words() {
   fi
 }
 
-# Completion only where the shell has it loaded: an interactive zsh after compinit, an interactive bash.
 if [ -n "${ZSH_VERSION:-}" ] && type compdef >/dev/null 2>&1; then
-  # shellcheck disable=SC2046 # one completion per word
+  # shellcheck disable=SC2046
   _claude_accounts() { compadd $(_claude_accounts_words $((CURRENT - 1))); }
   compdef _claude_accounts claude-accounts
 elif [ -n "${BASH_VERSION:-}" ] && type complete >/dev/null 2>&1; then

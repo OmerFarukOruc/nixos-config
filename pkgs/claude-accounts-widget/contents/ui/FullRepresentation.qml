@@ -7,7 +7,6 @@ import org.kde.plasma.components as PlasmaComponents3
 
 import "Logic.js" as Logic
 
-// Popup: header with age and Refresh, the hosts that could not be read, then one row per account across hosts.
 Item {
     id: full
 

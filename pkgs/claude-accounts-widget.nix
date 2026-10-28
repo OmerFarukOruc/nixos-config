@@ -1,6 +1,3 @@
-# The Claude accounts widget (org.oruc.claudeaccounts) for the Plasma top bar.
-# It shows ~/.cache/claude-usage/usage.json, which claude-usage writes, and its
-# buttons run claude-usage and claude-accounts of pkgs/claude-tools.nix.
 {
   claudeTools,
   lib,

@@ -15,7 +15,6 @@
 # granularity, about 4 ms on this host (kernel 6.12), and finer on kernels with multigrain timestamps (6.13 and later).
 
 CLAUDE_CONFIG_LOCK_STALE=10
-# The locks this shell holds: lock path to the identity of the directory it created.
 declare -A _claude_lock_id=()
 
 _claude_lock_age() {
@@ -24,7 +23,6 @@ _claude_lock_age() {
   echo $(($(date +%s) - mtime))
 }
 
-# _claude_lock_identity DIR: prints "inode birth-time" of DIR. Fails when the filesystem reports no birth time.
 _claude_lock_identity() {
   local id
   id=$(stat -c '%i %w' -- "$1" 2>/dev/null) || return 1
@@ -46,9 +44,6 @@ _claude_lock_break() {
   ) 9>"$lock.break"
 }
 
-# _claude_lock_try FILE TRIES: takes FILE.lock, trying up to TRIES times 0.1 s apart and breaking a stale lock on the way.
-# Returns 0 when it holds the lock, 1 when the lock stayed held, and 2 (with a message) when the filesystem reports no
-# birth time.
 _claude_lock_try() {
   local lock="$1.lock" tries="$2" id age n
   for ((n = 0; n < tries; n++)); do
@@ -70,9 +65,6 @@ _claude_lock_try() {
   return 1
 }
 
-# claude_config_lock FILE: takes FILE.lock, waiting up to 10 s and breaking a lock nobody has touched for more than
-# 10 s (a killed holder leaves one). When the lock stays held it says so on stderr and returns 1; FILE is then not to
-# be changed.
 claude_config_lock() {
   local rc=0
   _claude_lock_try "$1" 100 || rc=$?
@@ -125,7 +117,6 @@ claude_config_unlock() {
   return 0
 }
 
-# claude_config_unlock_all: releases every lock this shell holds, for an EXIT trap.
 claude_config_unlock_all() {
   local lock
   for lock in "${!_claude_lock_id[@]}"; do claude_config_unlock "${lock%.lock}"; done

@@ -1,9 +1,3 @@
-# Two QML plasmoids of the macOS Tahoe Plasma theme: its launcher, and the
-# icons-only variant of its dock task manager. The theme's own theme-assets
-# package also holds them, but with its whole look, icons and a second copy of
-# Panel Colorizer. The variant is only metadata whose X-Plasma-RootPath points at the
-# compiled task manager, as Plasma's own icontasks does. src is the mac-tahoe
-# flake input.
 {
   lib,
   stdenvNoCC,

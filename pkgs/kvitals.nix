@@ -1,8 +1,3 @@
-# KVitals, a Plasma panel widget that shows CPU, memory, GPU, temperature,
-# battery and network readings from Plasma's own sensors. The widget is QML
-# only, so the package copies it into the plasmoid directory. It names no
-# release source, so scripts/update-app.sh skips it; move version and hash by
-# hand.
 {
   lib,
   stdenvNoCC,

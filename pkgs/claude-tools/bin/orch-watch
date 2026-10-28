@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-# Wakes the orchestrator: prints one line for each event in a herdr session, so a Monitor on it delivers them.
-#   orch-watch [NAME-REGEX]    NAME-REGEX must match a whole agent name; the default is the list of agents
-#                              below, so reviewer subagents do not wake the orchestrator
-# Lines, each starting with the UTC time:
-#   NAME working -> idle | STATUS: ...   a watched agent finished a turn, with its last STATUS: or NEED: line from
-#                                        the screen, else from the session transcript
-#   NAME HELD PROMPT / ALERT             a watched agent is blocked on a prompt, turned unknown, or left the list
-#   NAME NEED (reply required) | text    a notice from orch-notify (also DONE and INFO), for any agent
-#   ALERT host ...                       load, swap or /tmp inodes crossed their limit; "recovered" when they fall back
-# The first poll only records state, so a restart prints nothing for agents that were already idle. Notices that
-# arrived while no watcher ran print at start: the byte offset read so far is kept in $ORCH_INBOX.offset.
-#   ALERT watcher STEP failing (...)     a poll step (inbox, host meters, agents) raised; the loop goes on, and the
-#                                        line repeats only when the error changes
-# One watcher runs for each inbox, so each notice wakes the orchestrator once: a new watcher stops the older one
-# (its pid is in $ORCH_INBOX.watcher) and prints "watcher replaced pid N", and the older one prints "watcher stopped
-# by SIGTERM" as its last line. Re-arming a Monitor is therefore safe.
-# CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one.
 import fcntl
 import os
 import re
@@ -43,8 +26,6 @@ cls = peek.cls
 
 DEFAULT_NAMES = r"coolify-naming|infra-docs|scraper-ci|env-improve|followups-fix|rebase-two|gd-.*|gastro-thermo"
 POLL = 5
-# Guesses to tune: load1 above LOAD_PER_CORE x cores, swap used above SWAP_MAX percent, /tmp inodes used above
-# INODES_MAX percent.
 LOAD_PER_CORE = 2
 SWAP_MAX = 80
 INODES_MAX = 70
@@ -61,7 +42,7 @@ def guarded(key: str, step: Callable[[], None], failing: dict[str, str]) -> None
     try:
         step()
     except BrokenPipeError:
-        raise  # nobody reads the output any more
+        raise
     except (OSError, cls.Failed, subprocess.TimeoutExpired) as e:
         msg = f"{type(e).__name__}: {e}"
         if failing.get(key) != msg:
@@ -86,7 +67,7 @@ class Inbox:
         try:
             return int(self.offset_file.read_text())
         except (OSError, ValueError):
-            return 0  # no offset, or a write that a crash cut off: replay rather than lose records
+            return 0
 
     def save(self) -> None:
         if self.offset == self.saved:
@@ -136,7 +117,7 @@ def take_over(lock_path: Path, wait: float = 10.0):
             try:
                 argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
             except OSError:
-                argv = []  # the holder is exiting, or wrote its pid only now: wait for the lock
+                argv = []
             if argv and argv[0]:
                 if not any(Path(a.decode(errors="replace")).name == "orch-watch" for a in argv[:2]):
                     raise SystemExit(f"orch-watch: {lock_path} is held by pid {pid}, which is not orch-watch; not starting")

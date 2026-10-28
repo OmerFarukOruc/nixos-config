@@ -1,8 +1,4 @@
-# Pins the rule set that ruff 0.16.2 enables by default, so the check gives the same result
-# on every ruff version. Each entry is a whole rule prefix.
 required-version = ">=0.16.2"
-# The oldest Python the tools may meet. Without it each ruff version picks its own
-# default target, and version-gated rules such as UP017 differ between hosts.
 target-version = "py313"
 
 [lint]

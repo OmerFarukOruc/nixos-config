@@ -5,8 +5,6 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 
 
-// Panel view: one bar for the local account with the most room left, and a red
-// dot when any account needs a login. Without data it shows the plasmoid icon.
 Item {
     id: compact
 

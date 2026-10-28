@@ -5,7 +5,6 @@ import org.kde.plasma.components as PlasmaComponents3
 
 import "Logic.js" as Logic
 
-// One usage window: label, bar, percent and reset time.
 RowLayout {
     id: row
 
@@ -13,7 +12,6 @@ RowLayout {
     property var win: null
     property real now: 0
     property bool weekday: false
-    // The window's length in seconds and the time of the reading, for the pace mark.
     property int length: 0
     property real checked: 0
 

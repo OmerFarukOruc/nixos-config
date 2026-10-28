@@ -1,7 +1,6 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
 
-// A rounded bar for a percentage. A null value draws only the track.
 Item {
     id: bar
 
