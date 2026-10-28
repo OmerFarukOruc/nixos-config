@@ -53,7 +53,10 @@ holds back an app, and a broken app never holds back the inputs. Its jobs:
    `devenv.nix` still builds with it (`devenv build shell`). It commits only
    `flake.nix`, `flake.lock`, `devenv.lock` and `pkgs/`. Either job fails when
    its moves changed another file. A move that stays out shows as a warning
-   on the run's page.
+   on the run's page. Both modes take the host whose system decides the moves
+   and a file `CHANGES`, where they write the commit body that lists the moves,
+   or nothing when nothing moved. The script needs nix, `gh` with `GH_TOKEN`,
+   curl, jq and python3.
 2. **check-apps** runs the checks of the pre-push hook
    ([Check before you deploy](deploy.md#check-before-you-deploy)),
    `ci/checks.sh` and `ci/unit-cycles.sh`, on the apps commit.
