@@ -1,9 +1,3 @@
-# Deskflow 1.27.0, which nixpkgs does not have yet. Once nixpkgs' deskflow
-# reaches 1.27.0, the version check below passes it through unchanged; then
-# delete the version override. Release 1.27.0 drops the evdev.xml path, the
-# legacy tests and the user docs that nixpkgs' 1.26.0 build patches, runs and
-# installs.
-#
 # Deskflow shares the clipboard on Wayland only when it builds against
 # libportal 0.10.0 or newer, which adds the clipboard API. Without it the
 # client never sends what you copy to the server. Only Deskflow gets the newer
@@ -29,38 +23,9 @@ let
         patches = [ ];
       });
   withLibportal = prev.deskflow.override { inherit libportal; };
-  deskflow =
-    if final.lib.versionAtLeast withLibportal.version "1.27.0" then
-      withLibportal
-    else
-      withLibportal.overrideAttrs (_old: {
-        version = "1.27.0";
-        src = final.fetchFromGitHub {
-          owner = "deskflow";
-          repo = "deskflow";
-          tag = "v1.27.0";
-          hash = "sha256-CgmK/2MbxUJD16q/WdJHz4ppWsMvxIxuwZ8nIgWoH/4=";
-        };
-        postPatch = ''
-          substituteInPlace deploy/linux/deploy.cmake \
-            --replace-fail 'message(FATAL_ERROR "Unable to read file /etc/os-release")' 'set(RELEASE_FILE_CONTENTS "")'
-          substituteInPlace translations/CMakeLists.txt \
-            --replace-fail 'PATHS ''${QT_ROOT_DIR} PATH_SUFFIXES "translations" "share/qt/translations"' 'PATHS "${final.qt6.qttranslations}/translations"'
-          substituteInPlace src/lib/net/CMakeLists.txt \
-            --replace-fail "set(OPENSSL_USE_STATIC_LIBS TRUE)" ""
-        '';
-        checkPhase = ''
-          runHook preCheck
-          export QT_QPA_PLATFORM=offscreen
-          ctest --test-dir "src/unittests" --output-on-failure --parallel 1 \
-            --exclude-regex "OSX(KeyState|Clipboard)Tests"
-          runHook postCheck
-        '';
-        postInstall = "";
-      });
 in
 {
-  deskflow = deskflow.overrideAttrs {
+  deskflow = withLibportal.overrideAttrs {
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
