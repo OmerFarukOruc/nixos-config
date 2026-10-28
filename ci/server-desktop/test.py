@@ -3,6 +3,10 @@ from datetime import timedelta
 
 SD_ENV = "XDG_RUNTIME_DIR=/run/user/1003 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1003/bus XAUTHORITY=/home/oruc/.Xauthority"
 SD_TCP_PORTS = [3389, 47984, 47989, 47990, 48010]
+# Moonlight runs as alice, in her X and audio session, the way a user runs it.
+# 1000 is alice's uid (nixos/tests/common/user-account.nix).
+SD_ALICE_ENV = "DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
+SD_ALICE = f"runuser -u alice -- env {SD_ALICE_ENV}"
 
 dnsserver.start()
 acme.start()
@@ -265,7 +269,7 @@ machine.wait_for_open_port(47990)
 # The web UI answers on the box only: a tailnet peer gets "forbidden".
 sd_web_status = client.succeed(f"curl -sk -o /dev/null -w '%{{http_code}}' https://{SD_TAILNET_ADDRESS}:47990/")
 assert sd_web_status == "403", f"the web UI answered a tailnet peer with {sd_web_status}"
-client.execute(f"DISPLAY=:0 moonlight pair {SD_TAILNET_ADDRESS} --pin 1234 > /tmp/moonlight-pair.log 2>&1 &")
+client.execute(f"{SD_ALICE} moonlight pair {SD_TAILNET_ADDRESS} --pin 1234 > /tmp/moonlight-pair.log 2>&1 &")
 SD_API = "curl --fail --insecure -u testuser:testpass"
 for _ in range(30):
     sd_pending = json.loads(machine.succeed(f"{SD_API} https://localhost:47990/api/pin"))
@@ -285,7 +289,7 @@ print(client.succeed("cat /tmp/moonlight-pair.log"))
 assert sd_pair["status"] is True, sd_pair
 
 SD_MOONLIGHT = (
-    "env DISPLAY=:0 moonlight --video-decoder software --video-codec H.264 --1080 --fps 60"
+    f"{SD_ALICE} moonlight --video-decoder software --video-codec H.264 --1080 --fps 60"
     f" --display-mode borderless --absolute-mouse stream {SD_TAILNET_ADDRESS} Desktop"
 )
 
@@ -314,11 +318,25 @@ def sd_stream():
     machine.sleep(15)
 
 
+# PipeWire has no sound card in the VM and makes a dummy sink, as on a real
+# client with an audio server. Moonlight opens it when the stream starts.
+# pactl prints the placeholder @DEFAULT_SINK@ while the server has no default sink yet.
+print("default sink of alice:", client.wait_until_succeeds(f"{SD_ALICE} pactl get-default-sink | grep -E '^[^@]'", timeout=timedelta(seconds=60)))
+print(client.succeed(f"{SD_ALICE} pactl list short sinks"))
 sd_stream()
 client.screenshot("moonlight-xfce")
 sd_log = sd_stream_log()
 print(sd_log[-3000:])
 print(client.succeed("tail -n 30 /tmp/moonlight-stream.log"))
+# A client that cannot open audio retries every second from its audio thread,
+# which is not the path of a real client, and that retry can corrupt the heap
+# of Moonlight 6.2.0 (SDL3 allows an audio init and quit on the main thread only).
+sd_client_log = client.succeed("cat /tmp/moonlight-stream.log")
+print("\n".join(line for line in sd_client_log.splitlines() if "audio" in line.lower()))
+for line in ("Obtained audio buffer", "SDL audio driver:"):
+    assert line in sd_client_log, f"Moonlight did not open audio: no '{line}' in its log"
+for line in ("Failed to open audio device", "Reinitializing audio renderer"):
+    assert line not in sd_client_log, f"Moonlight retries its audio device: '{line}' in its log"
 assert "Creating encoder [libx264]" in sd_log, "Sunshine did not use the software encoder for the stream"
 
 # Mouse: an absolute move on the client lands on the same spot of the desktop.
@@ -362,4 +380,8 @@ except Exception:
     raise
 client.screenshot("moonlight-xfce-typed")
 sd_conditions("sunshine", ":0")
+# The audio device stayed open for the whole stream, with no retry.
+sd_client_log = client.succeed("cat /tmp/moonlight-stream.log")
+for line in ("Failed to open audio device", "Reinitializing audio renderer"):
+    assert line not in sd_client_log, f"Moonlight retried its audio device during the stream: '{line}' in its log"
 print("SDRESULTS " + json.dumps(SD_RESULTS))

@@ -583,7 +583,8 @@ about 10 minutes once everything is built (the passing run on
 nixos-desktop). `machine`
 runs the host's own modules, as the
 [unit check](#unit-check-in-a-vm) does, with 6 GiB of RAM and 4 cores. A second
-node, `client`, runs an X session with FreeRDP and Moonlight.
+node, `client`, runs an X session with FreeRDP and Moonlight, and PipeWire
+with a dummy sink (the VM has no sound card).
 
 `machine` has a second network card that the test renames to tailscale0, which
 the firewall trusts. So a connection from `client` through eth1 stands for the
@@ -610,15 +611,22 @@ Sunshine at the end.
 4. FreeRDP, asking for H.264, logs in as oruc and gets XFCE, and xrdp's log says
    it matched H.264 and used x264. After a disconnect the session keeps
    running, and sesman logs a reconnect to the same XFCE and its windows.
-5. Moonlight pairs with Sunshine (the PIN goes through Sunshine's API), streams
-   the desktop, and the log of that stream shows the software encoder. A move of the
+5. Moonlight, run as alice like a user runs it, pairs with Sunshine (the PIN
+   goes through Sunshine's API), streams the desktop, and the log of that stream
+   shows the software encoder. Moonlight's log shows that it opened the audio
+   sink, with no retry of the audio device. A move of the
    client's pointer lands on the same spot of the desktop, and keys typed on
    the client reach a program on the desktop.
 6. The CPU use of `machine` for each route ([measurements](#cpu-measurements)).
 
 The test does not show Moonlight or an RDP client from the tailnet, a real
-Tailscale connection, audio, or the netcup CPU. The cutover proves the first
-two.
+Tailscale connection, sound that a person hears, or the netcup CPU. The cutover
+proves the first two.
+
+The client has audio like a real client. Without it, Moonlight 6.2.0 retries
+the audio device every second from its audio thread, which calls SDL's audio
+init and quit off the main thread, and the heap can corrupt (the client aborted
+in some runs). Moonlight still has that bug; the test only avoids it.
 
 ### CPU measurements
 
