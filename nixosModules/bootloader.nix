@@ -6,11 +6,8 @@
 let
   inherit (config.oruc.machine) bootloader biosDevice;
   limine = config.boot.loader.limine;
-  # Every listed generation keeps a kernel and initrd on the ESP. The menu lists
-  # the newest this many generations, which is also angrr's newest-N rule. angrr
-  # keeps older generations too (one per day, the running one and the booted
-  # one); they stay in the profile without a menu entry.
-  generations = config.services.angrr.settings.profile-policies.system.keep-latest-n;
+  menuGenerationsLikeAngrrKeepLatest =
+    config.services.angrr.settings.profile-policies.system.keep-latest-n;
 in
 {
   config = lib.mkMerge [
@@ -19,7 +16,7 @@ in
     (lib.mkIf (bootloader == "systemd-boot") {
       boot.loader.systemd-boot = {
         enable = true;
-        configurationLimit = generations;
+        configurationLimit = menuGenerationsLikeAngrrKeepLatest;
       };
     })
 
@@ -40,7 +37,7 @@ in
         };
         biosSupport = biosDevice != null;
         biosDevice = lib.mkIf (biosDevice != null) biosDevice;
-        maxGenerations = generations;
+        maxGenerations = menuGenerationsLikeAngrrKeepLatest;
         style =
           let
             inherit (config) scheme;
