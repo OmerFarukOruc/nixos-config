@@ -1,6 +1,3 @@
-# The Klassy look: the Klassy window decoration, Qt style and Plasma style with
-# the opaque Base16 scheme and KWin's own blur. Klassy keeps its own settings in
-# ~/.config/klassy/klassyrc, which its settings app writes.
 {
   config,
   lib,

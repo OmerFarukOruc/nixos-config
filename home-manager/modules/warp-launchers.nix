@@ -1,5 +1,3 @@
-# Desktop launchers that send Discord and Brave through the WARP proxy of
-# nixosModules/warp.nix, for when zapret2 does not get Discord through.
 {
   config,
   lib,
@@ -33,9 +31,6 @@ in
   xdg.desktopEntries = {
     discord-warp = {
       name = "Discord (WARP)";
-      # Discord runs one instance, so the proxy applies only when Discord
-      # is not already open. Chromium sends only TCP through SOCKS, so voice
-      # may not work over WARP.
       exec = "discord --proxy-server=${proxy}";
       icon = "discord";
       categories = [
@@ -45,9 +40,6 @@ in
     };
     brave-warp = {
       name = "Brave (WARP)";
-      # Its own profile runs as its own instance, so the proxy applies
-      # while the normal Brave is open. Host names resolve through the
-      # proxy, so DNS-based blocking does not apply.
       exec = "${lib.getExe brave-warp} %U";
       icon = "brave-origin";
       categories = [

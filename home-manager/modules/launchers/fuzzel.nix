@@ -10,7 +10,6 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "fuzzel";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  # Hex without "#", which fuzzel expects before the alpha byte.
   inherit (config) scheme;
   inherit (config.oruc.theme) fonts;
   commands = {

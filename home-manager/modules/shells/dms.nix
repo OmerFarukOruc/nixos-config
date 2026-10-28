@@ -55,7 +55,6 @@ in
     programs.dank-material-shell = {
       enable = true;
       systemd.enable = true;
-      # Colors come from the scheme, not from matugen.
       enableDynamicTheming = false;
       settings = {
         currentThemeName = "custom";
@@ -67,13 +66,9 @@ in
         weatherEnabled = false;
         showWeather = false;
         showDock = true;
-        # The dock reserves no space. It hides only while a window covers it, and
-        # hovering the bottom edge reveals it.
         dockAutoHide = false;
         dockSmartAutoHide = true;
         dockTransparency = 0.85;
-        # The whole default entry is written, because a partial entry does not
-        # merge with the defaults.
         barConfigs = [
           {
             id = "default";
@@ -152,8 +147,6 @@ in
             hoverPopoutDelay = 150;
           }
         ];
-        # DMS idle stays off. swayidle in idle.nix handles idle and screen off
-        # for every niri session. The values pin the DMS defaults.
         acLockTimeout = 0;
         batteryLockTimeout = 0;
         acSuspendTimeout = 0;
@@ -161,9 +154,7 @@ in
         lockBeforeSuspend = false;
       };
       session = {
-        # Without this DMS follows the Qt locale, which picks up tr_TR.
         locale = "en";
-        # Pinning in the DMS window does not persist, because this file is read-only.
         pinnedApps = import ./pinned-apps.nix;
       }
       // {

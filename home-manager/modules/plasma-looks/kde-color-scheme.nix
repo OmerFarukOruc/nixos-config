@@ -1,7 +1,3 @@
-# A KDE color-scheme file for one Base16 scheme. `translucent` turns the Window
-# and View backgrounds into the Glass alphas. theme.nix calls it opaque.
-# plasma-looks/glass.nix calls it translucent and writes the file only while
-# that look is active. The ColorScheme id is OrucBase16 or OrucBase16Glass.
 { lib, rawScheme }:
 translucent:
 let

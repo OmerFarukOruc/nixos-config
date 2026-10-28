@@ -6,7 +6,6 @@
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
-  # legacyPackages refuses the unfree spotify, so import the pinned nixpkgs.
   pinned = import inputs.nixpkgs-spotify {
     inherit system;
     config.allowUnfree = true;
@@ -24,7 +23,6 @@ in
     # Marketplace refuses to install themes while this theme is set, because
     # the local theme is not named marketplace.
     theme = spicePkgs.themes.sleek // {
-      # Continuous progress transitions keep the GPU busy during playback.
       additionalCss = ''
         .x-progressBar-fillColor,
         .progress-bar__slider {
@@ -32,10 +30,6 @@ in
         }
       '';
     };
-    # Spicetify writes the colors into the Spotify package, which a scheme
-    # variant of Home Manager cannot replace (nixosModules/hm-variants.nix).
-    # Spotify therefore follows the machine record's scheme, not `theme`. The
-    # keys are those of Sleek's color.ini sections.
     customColorScheme = {
       text = scheme.base05;
       subtext = scheme.base04;

@@ -8,7 +8,6 @@
     lineNumberMode = "relative";
 
     options = {
-      # auto-session's recommended set; localoptions keeps filetype and highlighting.
       sessionoptions = "blank,buffers,curdir,folds,help,tabpages,winsize,winpos,terminal,localoptions";
       tabstop = 4;
       shiftwidth = 4;
@@ -19,7 +18,6 @@
       smartcase = true;
       cursorline = true;
       termguicolors = true;
-      # Keeps the text from shifting when a sign appears.
       signcolumn = "yes";
       backspace = "indent,eol,start";
       splitright = true;

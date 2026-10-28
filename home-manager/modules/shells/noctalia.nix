@@ -64,8 +64,6 @@ in
           enabled = false;
           lock_before_suspend = false;
         };
-        # Widget names in the bar lists below resolve to a definition here, or to a
-        # built-in widget of the same name.
         bar = {
           order = [ "default" ];
           default = {
@@ -99,7 +97,6 @@ in
           };
         };
         widget = {
-          # Opens the configured launcher, not Noctalia's own.
           launcher-search = {
             type = "custom_button";
             glyph = "search";
@@ -138,7 +135,6 @@ in
             network_speed_compact = true;
           };
         };
-        # The dock reserves no space and reveals from the bottom edge.
         dock = {
           enabled = true;
           position = "bottom";

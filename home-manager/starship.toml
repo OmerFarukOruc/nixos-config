@@ -1,10 +1,5 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Based on Starship's pastel-powerline preset. The segments sit on two grey
-# surfaces and only their text takes an accent. home-manager/modules/shell.nix
-# selects the `scheme` palette and appends it from the active Base16 scheme, so
-# a scheme change recolors the prompt.
-
 format = """
 [](surface2)\
 $os\
@@ -35,7 +30,6 @@ $time\
 [ ](fg:surface1)\
 """
 
-# Disable the blank line at the start of the prompt.
 add_newline = false
 
 [username]

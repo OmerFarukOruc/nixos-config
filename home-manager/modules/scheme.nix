@@ -1,6 +1,3 @@
-# The Base16 scheme of this Home Manager generation and the oruc.theme values
-# that follow it (nixosModules/theme-module.nix). It defaults to the machine
-# record's scheme; variants.nix gives each specialisation another one.
 {
   inputs,
   lib,

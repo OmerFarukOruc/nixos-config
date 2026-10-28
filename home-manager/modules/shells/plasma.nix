@@ -16,7 +16,6 @@ in
     systemd.user.services.oruc-plasma-wallpaper = {
       Unit = {
         Description = "Apply the selected Plasma wallpaper";
-        # Only a Plasma session reaches plasma-workspace.target.
         After = [
           "plasma-workspace.target"
           "plasma-plasmashell.service"

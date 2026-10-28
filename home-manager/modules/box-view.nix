@@ -1,8 +1,3 @@
-# Opens the box browser (features.boxBrowser, docs/box-browser.md) from this PC:
-# an SSH tunnel to the box's Xvnc, then a VNC viewer on the tunnel. Xvnc has no
-# password and listens on the box's loopback only, so the tunnel is the only way
-# in. The menu entry and `box-view` do the same; the menu has no terminal, so a
-# failure there shows as a notification.
 { lib, pkgs, ... }:
 let
   defaultHost = "risoluto-dev-1";
@@ -72,7 +67,6 @@ let
         fail "The SSH tunnel to $host did not come up: ''${reason:-no answer in 15 seconds}"
       fi
 
-      # -Log lowers the viewer's default info level (30) to errors only (0).
       rc=0
       vncviewer -Log '*:stderr:0' "127.0.0.1::$port" || rc=$?
       if ((rc != 0)); then

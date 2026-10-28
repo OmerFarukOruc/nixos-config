@@ -9,8 +9,6 @@
 let
   inherit (config) scheme;
 
-  # `pct` percent of color `a` over color `b`, both six hex digits. Integer math
-  # keeps the result a plain hex value, which Mermaid can parse.
   mixHex =
     pct: a: b:
     let
@@ -28,9 +26,6 @@ let
       2
     ];
 
-  # WCAG 2.x contrast ratio of two colors, each six hex digits. Nix has no
-  # power function, so x^2.4 is x^2 times the square of the fifth root of x,
-  # which Newton's method finds.
   contrast =
     a: b:
     let
@@ -60,9 +55,6 @@ let
     in
     (lib.max la lb + 0.05) / (lib.min la lb + 0.05);
 
-  # `color` moved toward the text color by the fewest whole percent that gives
-  # it a 4.5:1 contrast on the code background. A color that already reads
-  # keeps its value, and one that needs help keeps close to its hue.
   onCode =
     color:
     let
@@ -74,8 +66,6 @@ let
     else
       moved pct;
 
-  # The viewer reads this file when it renders, so `theme` can change the
-  # colors without a new package.
   themeCss = ''
     :root {
       --bg: #${scheme.base00};
@@ -105,7 +95,6 @@ let
     }
   '';
 
-  # The script carries its own pandoc, so no host needs it in its package list.
   viewer = pkgs.writeShellApplication {
     name = "pandoc-md-viewer";
     runtimeInputs = with pkgs; [
@@ -128,7 +117,6 @@ let
   ];
 in
 {
-  # The viewer opens a browser, so only a machine with a desktop session gets it.
   config = lib.mkIf (sessions.hasAnyDesktop osConfig.oruc.machine) {
     home.packages = [ viewer ];
 

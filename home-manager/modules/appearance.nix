@@ -17,7 +17,6 @@ let
   dconf = lib.getExe pkgs.dconf;
   dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
 
-  # Named colors of libadwaita, which adw-gtk3 reuses for GTK 3.
   gtkColors = ''
     @define-color accent_color ${scheme.base0D};
     @define-color accent_bg_color ${scheme.base0D};
@@ -59,14 +58,8 @@ let
   '';
 in
 {
-  # Plasma writes the GTK settings and the cursor itself, so a machine with a
-  # Plasma session leaves them to Plasma and its niri session inherits them. Only
-  # the scheme's named colors are ours there (the Plasma branch below).
   config = lib.mkMerge [
     (lib.mkIf (hasNiri && !hasPlasma) {
-      # The cursor follows the machine record's scheme, because its name goes
-      # into XCURSOR_THEME in the session-variables package, which `theme`
-      # cannot switch (variants.nix).
       home.pointerCursor = {
         inherit (osConfig.oruc.theme.cursor) name size;
         package = pkgs.bibata-cursors;
@@ -93,8 +86,6 @@ in
     })
 
     (lib.mkIf hasPlasma {
-      # plasma-manager names this cursor and icon theme, and niri's theme.kdl the
-      # cursor. adw-gtk3 is the GTK 3 theme that reads the named colors.
       home.packages = [
         pkgs.adw-gtk3
         pkgs.bibata-cursors
@@ -171,9 +162,6 @@ in
     })
 
     (lib.mkIf hasNiri {
-      # Plasma's platform theme gives every Qt application the colors and icons
-      # that kdeglobals names, which theme.nix writes from the scheme. qt6ct is
-      # not an alternative: it left Dolphin light (observed 2026-09-21).
       qt = {
         enable = true;
         platformTheme.name = "kde";

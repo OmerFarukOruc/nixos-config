@@ -33,5 +33,4 @@ if new != text:
     with open(path + ".tmp", "w") as f:
         f.write(new)
     os.replace(path + ".tmp", path)
-    # Fails harmlessly when no server runs; a new server reads the file.
     subprocess.run([herdr, "server", "reload-config"], capture_output=True)

@@ -1,7 +1,3 @@
-# VS Code with a transparent, frameless window, which the compositor blurs.
-# The steps mirror what the vscode-vibrancy-continued extension does to an
-# installed VS Code, done at build time because the store is read-only. Each
-# edit fails the build when VS Code no longer has the text it changes.
 {
   config,
   inputs,
@@ -21,10 +17,6 @@ let
   themeName = if config.oruc.theme.isLight then "Default Light" else "Default Dark";
   theme = builtins.fromJSON (builtins.readFile (vibrancy + "/themes/${themeName}.json"));
 
-  # The fixed colors in the extension's stylesheet for each theme, each with
-  # the scheme color that replaces it at the same alpha. An evaluation fails
-  # when the input no longer holds one of them, so a new release cannot keep
-  # a grey unnoticed.
   rgbOf =
     slot: alpha:
     "rgba(${
@@ -69,11 +61,6 @@ let
     ) "vscode-vibrancy's ${themeName}.css no longer holds ${builtins.toJSON missing}.";
     builtins.replaceStrings (lib.attrNames colors) (lib.attrValues colors) css;
 
-  # The extension's global.vscode_vibrancy_plugin on Linux, in the shape that
-  # buildMainJS in v1.4.0's extension/index.js builds; a new release can
-  # change that shape. The settings are the defaults, except that the
-  # theme follows the scheme's variant and the background is the scheme's
-  # base00.
   injectData = {
     vibrancyVersion = (lib.importJSON "${vibrancy}/package.json").version;
     os = "linux";
@@ -108,9 +95,6 @@ let
     };
   };
 
-  # VS Code reads the settings from a file at start, because they follow the
-  # scheme and `theme` switches the scheme without a new VS Code package
-  # (home-manager/modules/variants.nix).
   injectFile = "${config.xdg.configHome}/oruc/vscode-vibrancy.json";
   bootstrapJs = pkgs.writeText "vscode-vibrancy-bootstrap.js" ''
 
@@ -133,7 +117,6 @@ let
 
       cp -r "${vibrancy}/runtime-pre-esm" "${appOut}/${runtimeDir}"
 
-      # A frameless, transparent window.
       sed -i 's/experimentalDarkMode/frame:false,transparent:true,experimentalDarkMode/g' "$windowFile"
       grep -q 'frame:false,transparent:true,experimentalDarkMode' "$windowFile" ||
         { echo "vibrancy: no window options to patch in $windowFile" >&2; exit 1; }
@@ -143,7 +126,6 @@ let
       cat vscode-vibrancy-bootstrap.js >>"${appOut}/main.js"
       rm vscode-vibrancy-bootstrap.js
 
-      # Allow the runtime's Trusted Types policy.
       sed -i 's/^[[:space:]]*trusted-types$/& VscodeVibrancyContinued/' "${appOut}/${workbench}"
       grep -q 'trusted-types VscodeVibrancyContinued' "${appOut}/${workbench}" ||
         { echo "vibrancy: no trusted-types line in ${workbench}" >&2; exit 1; }
@@ -159,10 +141,6 @@ let
       mv product.json.new resources/app/product.json
     '';
   });
-  # The settings the extension's applySettings writes: see-through
-  # backgrounds from its key lists in extension/file-transforms.js, with an
-  # opacity of -1 meaning the theme's Linux opacity. A key keeps the colour
-  # it would have without vibrancy and gets only a new alpha.
   alpha =
     opacity:
     lib.toLower (lib.fixedWidthString 2 "0" (lib.toHexString (builtins.floor (opacity * 255 + 0.5))));
@@ -229,20 +207,16 @@ in
 
   config = lib.mkIf (sessions.hasAnyDesktop osConfig.oruc.machine) {
     oruc.vscodeSettings = {
-      # Ghostty's font, which every host installs. A missing family falls
-      # back to a proportional font and breaks the column layout.
       "editor.fontFamily" = "${ghosttyFonts}, monospace";
       "extensions.autoCheckUpdates" = false;
       "extensions.autoUpdate" = false;
       "remote.SSH.defaultExtensions" = [ "mhutchie.git-graph" ];
-      # Every folder opens trusted, without the Restricted Mode prompt.
       "security.workspace.trust.enabled" = false;
       "telemetry.telemetryLevel" = "off";
       "terminal.integrated.fontFamily" = ghosttyFonts;
       "terminal.integrated.gpuAcceleration" = "off";
       "window.autoDetectColorScheme" = false;
       "window.controlsStyle" = "custom";
-      # Dialogs drawn in the window, where scripts/vscode-cdp-on-rog.sh reaches them.
       "window.dialogStyle" = "custom";
       "window.systemColorTheme" = theme.systemColorTheme;
       "update.mode" = "none";
@@ -264,12 +238,6 @@ in
       };
     };
 
-    # Home Manager's own step fails the switch when it cannot merge, such as
-    # after a hand edit that is not JSON5, and a deploy then rolls back. This
-    # runs the same merge, but a failure only warns and keeps the file. The
-    # inject file is written in the same activation, and only after the merge
-    # succeeds, so a settings file that does not parse stays with the previous
-    # inject file.
     home.activation.vscodeMutableUserSettings = lib.mkForce (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
         ${import "${inputs.home-manager}/modules/programs/vscode/mutableSettings.nix" {
@@ -290,9 +258,6 @@ in
       ''
     );
 
-    # A key set any other way, including through the two update-check
-    # options, reaches settings.json without the ignore list, so Settings
-    # Sync copies it to the other machines.
     assertions =
       let
         profile = config.programs.vscode.profiles.default;

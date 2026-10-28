@@ -36,7 +36,6 @@
       misc.enable = true;
       operators = {
         enable = true;
-        # The default gx prefix would hide Neovim's open-URL gx.
         setupOpts.exchange.prefix = "cx";
       };
       pairs.enable = true;

@@ -21,7 +21,6 @@ let
   colorizerWith = general: style: {
     name = "luisbocanegra.panel.colorizer";
     config.General = general // {
-      # The widget shows only in the panel's edit mode.
       hideWidget = true;
       globalSettings = builtins.toJSON style;
     };
@@ -33,10 +32,6 @@ let
   # stays out of the profile. So the settings are also the package's defaults
   # (contents/config/main.xml), which the copy reads for a key not yet written.
   # Only the keys that differ from kVitals' own defaults are here.
-  # Showing the RTX 4070's sensors keeps it awake (docs/nixos-rog.md, Power and
-  # heat), so kVitals shows only the iGPU. ksystemstats numbers GPUs in PCI
-  # address order; on nixos-rog, the only hybrid machine, the RTX 4070
-  # (0000:65:00.0) comes first, so gpu1 is the Radeon 890M.
   # kVitals colors its own text, so the top bar's accent color reaches it only
   # through fontColor. Its threshold colors still take precedence.
   # warningColor is base09 and criticalColor base08, as in the other warning
@@ -85,9 +80,6 @@ let
         ) packageDefaults
       );
   });
-  # The package takes the machine record's color, because `theme` cannot
-  # switch packages (variants.nix); the widget's own settings carry the active
-  # scheme's color.
   packageDefaults = kvitalsSettings // {
     fontColor = osConfig.scheme.withHashtag.base0D;
     warningColor = osConfig.scheme.withHashtag.base09;
@@ -116,15 +108,11 @@ let
       alpha = 0.3;
     };
   };
-  # Hides Plasma's own panel background, so only the colorizer draws one.
   hiddenNativeBackground.background = {
     opacity = 0;
     shadow = false;
   };
 
-  # This style makes a transparent bar. Each widget sits on its own blurred
-  # background with slightly rounded corners and an outline in the accent color,
-  # and its text and icons take that color.
   topBarStyle = {
     nativePanel = hiddenNativeBackground;
     widgets.normal = {
@@ -141,7 +129,6 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      # For a widget, margin is the space between its background and its content.
       margin = {
         enabled = true;
         side = {
@@ -156,9 +143,6 @@ let
     };
   };
 
-  # The dock style: one blurred, rounded, faintly tinted background with no
-  # outline, icons in the scheme's text color, and popups that float clear of
-  # the panel. The blur follows this radius.
   dockStyle = {
     nativePanel = {
       background.opacity = 0;
@@ -187,11 +171,6 @@ let
     };
   };
 
-  # The icon and name of the active window's app. The widget's default leaves
-  # 10 px after the name. The top bar ends the title with a spacer, so it
-  # leaves none. In the floating bar's left island, 6 plus the island's end
-  # margin left as much space after the name as before the launcher icon
-  # (16 px each in a screenshot of nixos-rog).
   titleBar = rightMargin: {
     applicationTitleBar = {
       layout.elements = [
@@ -211,9 +190,6 @@ let
     };
   };
 
-  # The song that Spotify or Brave plays, with its
-  # album cover and a play/pause button. The widget hides while no player has
-  # a song loaded; a paused song keeps it.
   # plasma-manager's plasmusicToolbar writes some keys that Plasmusic 4 no
   # longer reads, so the keys come from its contents/config/main.xml.
   music = {
@@ -233,11 +209,6 @@ let
     };
   };
 
-  # One floating top panel with no background of its own. Panel Colorizer
-  # draws the widgets on blurred, rounded backgrounds with an outline in the
-  # accent color. With islandsEnabled it joins each run of widgets that panel
-  # spacers separate into one background (utils.js, updateIslandWidgetTypes),
-  # so the two spacers make three islands. The spacers stay clear.
   islandsStyle = {
     nativePanel = {
       background.opacity = 0;
@@ -258,12 +229,6 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      # The title bar fills the panel's height (36 px, read through plasmashell
-      # scripting) and the other widgets keep 4 px free above and below
-      # (28 px), so the vertical margins give every background the same
-      # height. With spacing 0 and side margins instead, the
-      # backgrounds of an island meet without a seam and leave 6 px inside
-      # each end.
       # A drag over a bar with this spacing freezes plasmashell without
       # overlays/plasma-desktop.nix.
       spacing = 0;
@@ -279,9 +244,6 @@ let
     };
   };
 
-  # The dock task manager and the launcher of the macOS Tahoe theme.
-  # The task manager is Plasma's own with hover zoom (dockMagnification, a
-  # percentage from 100 to 150) and notification badges.
   tahoe = inputs.mac-tahoe.lib.mkPackages pkgs;
   tahoePlasmoids = pkgs.callPackage ../../pkgs/mac-tahoe-plasmoids.nix {
     src = inputs.mac-tahoe;
@@ -294,15 +256,12 @@ let
     config.General.icon = "view-app-grid-symbolic";
   };
 
-  # The Claude accounts widget (org.oruc.claudeaccounts) shows each Claude
-  # Code account's usage and login state (pkgs/claude-accounts-widget.nix).
   claudeAccounts = lib.optional config.oruc.plasma.claudeAccountsWidget "org.oruc.claudeaccounts";
 
   dock = {
     location = "bottom";
     height = 80;
     floating = true;
-    # The dock hides only while a window overlaps it.
     hiding = "dodgewindows";
     lengthMode = "fit";
     alignment = "center";
@@ -318,9 +277,6 @@ in
 {
   options.oruc.plasma.claudeAccountsWidget = lib.mkEnableOption "the Claude accounts widget in the top bar";
 
-  # plasma-manager owns the panels. Whenever this layout changes, it deletes
-  # plasma-org.kde.plasma.desktop-appletsrc at the next login and builds the
-  # panels again, so a panel or widget change made in Plasma lasts only until then.
   config = lib.mkIf isPlasma {
     home.packages = [
       kvitalsPackage
@@ -356,7 +312,6 @@ in
     '';
 
     programs.plasma = {
-      # The panel layout file also holds the wallpaper, so it is set here too.
       workspace = {
         inherit wallpaper;
         wallpaperFillMode = "preserveAspectCrop";
@@ -372,8 +327,6 @@ in
               widgets = [
                 "org.kde.plasma.kickerdash"
                 (titleBar 0)
-                # Plasma sizes two expanding spacers so the widget between them sits
-                # in the middle of the panel.
                 "org.kde.plasma.panelspacer"
                 "org.kde.plasma.digitalclock"
                 "org.kde.plasma.panelspacer"

@@ -9,12 +9,9 @@ let
 
   batPreview = "bat --color=always --style=numbers --line-range=:200 {}";
   treePreview = "eza --tree --level=2 --color=always --icons=always {}";
-  # fzf's default walker for Ctrl-T lists directories as well as files.
   pathPreview = "if [ -d {} ]; then ${treePreview}; else ${batPreview}; fi";
   previewWindow = "--preview-window=right:50%:wrap";
 
-  # Commands that print or set a secret stay out of both histories. Atuin
-  # takes regexes, zsh's HISTORY_IGNORE glob patterns of the whole line.
   secretCommands = [
     "gh auth token"
     "secret-tool lookup"
@@ -32,22 +29,18 @@ let
   ];
 in
 {
-  # root imports this file alone, so it brings the scheme along.
   imports = [ ./scheme.nix ];
 
   programs.zsh = {
     enable = true;
     enableCompletion = true;
     autosuggestion.enable = true;
-    # zsh-patina highlights instead; see initContent.
     syntaxHighlighting.enable = false;
     autocd = true;
     setOptions = [
       "CORRECT"
       "AUTO_PUSHD"
     ];
-    # CORRECT would otherwise offer completion functions such as _cowsay for a
-    # command that is not installed.
     localVariables.CORRECT_IGNORE = "_*";
     history = {
       size = 100000;
@@ -77,8 +70,6 @@ in
         "sudo"
       ];
     };
-    # Up and Down search the history for the text typed so far. Ctrl-P and
-    # Ctrl-N are bound below; Atuin keeps Ctrl-R.
     historySubstringSearch = {
       enable = true;
       searchUpKey = [
@@ -121,13 +112,10 @@ in
         export PATH="$HOME/.local/bin:$HOME/go/bin:$HOME/.cargo/bin:$PATH"
         zstyle ':omz:update' mode disabled
 
-        # Keep fzf's file and directory widgets, but leave Ctrl-R to Atuin.
         eval "$(${lib.getExe config.programs.fzf.package} --zsh)"
         bindkey -r '^R'
       '')
       (lib.mkOrder 2000 ''
-        # Agent-launched interactive shells do not enter commands into Atuin.
-        # Native Zsh history stays active in every shell as a fallback.
         if [[ -z "''${CLAUDECODE:-}" \
            && -z "''${CLAUDE_CODE_NEW_INIT:-}" \
            && -z "''${CODEX_SESSION_ID:-}" \
@@ -138,15 +126,11 @@ in
           eval "$(${lib.getExe config.programs.atuin.package} init zsh --disable-up-arrow)"
         fi
 
-        # Ctrl-P and Ctrl-N search the history like Up and Down, and step
-        # through it when the line is empty.
-        # Oh My Zsh makes emacs the main keymap; viins covers a switch to vi mode.
         for keymap in emacs viins; do
           bindkey -M "$keymap" '^P' history-substring-search-up
           bindkey -M "$keymap" '^N' history-substring-search-down
         done
       '')
-      # Last, so the highlighter wraps every widget defined before it.
       (lib.mkOrder 2500 ''
         eval "$(${lib.getExe pkgs.zsh-patina} activate)"
       '')
@@ -172,8 +156,6 @@ in
         "session"
         "global"
       ];
-      # At the default of 0 the search fills the screen and pins a short
-      # result list to the bottom, far below the prompt.
       inline_height = 20;
       tmux = {
         enabled = true;
@@ -194,7 +176,6 @@ in
   };
 
   home.sessionVariables.FZF_DEFAULT_OPTS_FILE = "${config.xdg.configHome}/fzf/fzfrc";
-  # Colors in the slots of the tinted-theming fzf template.
   xdg.configFile."fzf/fzfrc".text = lib.concatStringsSep "\n" [
     "--height=40%"
     "--layout=reverse"
@@ -223,8 +204,6 @@ in
     enable = true;
     enableZshIntegration = false;
     defaultCommand = "${lib.getExe pkgs.fd} --type f --hidden --exclude .git";
-    # The options live in a file, because `theme` switches the colors without
-    # a new session-variables package (variants.nix).
     defaultOptions = [ ];
     colors = { };
     fileWidget.options = [
@@ -237,7 +216,6 @@ in
     ];
   };
 
-  # The base16 theme uses the terminal's ANSI colors, which come from the scheme.
   programs.bat = {
     enable = true;
     config.theme = "base16";
@@ -260,17 +238,12 @@ in
     enable = true;
     enableZshIntegration = true;
   };
-  # nix-index-database supplies the database, and comma runs a missing
-  # command from it.
   programs.nix-index-database.comma.enable = true;
 
   programs.starship = {
     enable = true;
     enableZshIntegration = true;
   };
-  # Starship reads its config at each prompt, so `theme` recolors open shells.
-  # The surfaces blend base00 toward base05, because schemes disagree on
-  # whether base01 is lighter or darker than base00.
   xdg.configFile."starship.toml".text =
     let
       slot =

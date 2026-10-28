@@ -8,13 +8,10 @@
 }:
 let
   isNiri = sessions.hasDesktop osConfig.oruc.machine "niri";
-  # Brave uses KWallet in every session of such a machine; see applications.nix.
   needsKwallet = isNiri && sessions.hasDesktop osConfig.oruc.machine "plasma";
 
   scheme = config.scheme.withHashtag;
   inherit (config.oruc.theme) isLight;
-  # The icons are light lavender images, so a light scheme draws its buttons
-  # in the darkest slots.
   button = {
     background = if isLight then scheme.base05 else scheme.base01;
     color = if isLight then scheme.base00 else scheme.base05;
@@ -31,9 +28,6 @@ in
     ];
   };
 
-  # SDDM's PAM stack holds the login password for KWallet, and Plasma hands it
-  # over with its own unit. This unit does the same at a niri login, so the
-  # wallet opens without asking for the password.
   systemd.user.services.kwallet-pam = lib.mkIf needsKwallet {
     Unit.Description = "Unlock KWallet with the login password";
     Service = {
@@ -51,9 +45,6 @@ in
     })
     (lib.mkIf needsKwallet { kwallet-pam = "niri"; })
   ];
-  # The applet's KillSwitch plugin soft-blocks the Dell Bluetooth radio at login.
-  # systemd-rfkill saves that block, and the next boot restores it before the
-  # Intel firmware loads, so the controller disappears.
   dconf.settings = lib.mkIf isNiri {
     "org/blueman/general".plugin-list = [ "!KillSwitch" ];
   };

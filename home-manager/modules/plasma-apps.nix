@@ -1,6 +1,3 @@
-# Settings of the KDE apps that plasma-manager knows. Plasma 6 installs
-# Okular, and home-manager/profiles/personal.nix installs Kate, so neither module
-# adds a package.
 {
   config,
   lib,
@@ -111,8 +108,6 @@ in
           pointSize = 10;
         };
         theme.name = kateThemeName;
-        # The module writes every editor setting; these two keep Kate's own
-        # defaults.
         brackets.automaticallyAddClosing = true;
         indent.showLines = false;
       };

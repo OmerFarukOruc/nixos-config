@@ -1,6 +1,3 @@
-# Claude Code's color theme from the Base16 scheme, on every host. The dotfiles
-# settings.json selects `custom:scheme`. Claude Code reloads a changed theme
-# file, so `theme` recolors open sessions too.
 {
   config,
   lib,
@@ -15,19 +12,13 @@ let
       "g"
       "b"
     ];
-  # Each channel PERCENT of the way from A to B.
   mix =
     a: b: percent:
     lib.zipListsWith (x: y: (x * (100 - percent) + y * percent) / 100) a b;
   bg = slot "base00";
   fg = slot "base05";
-  # Some schemes (Catppuccin) keep base03 and base04 as surface colors, so the
-  # dim text pulls them toward the text color: hints stay above 4.5:1 and
-  # subtle text above 3:1 in the schemes on the machine record.
   inactive = mix (slot "base04") fg 40;
   subtle = mix (slot "base03") fg 25;
-  # Claude Code's own themes draw a shimmer lighter than its color in both
-  # variants, so it moves toward the lightest slot.
   shimmer = color: mix color (slot (if isLight then "base00" else "base07")) 35;
   fastMode = mix (slot "base09") (slot "base0A") 50;
   rainbow = {
@@ -40,8 +31,6 @@ let
     violet = slot "base0E";
   };
 
-  # Every color token of Claude Code's built-in themes; a token it does not
-  # know is ignored, so a renamed one falls back to the base theme.
   colors = {
     text = slot "base06";
     inverseText = bg;
@@ -78,8 +67,6 @@ let
     diffRemovedDimmed = mix bg (slot "base08") 12;
     diffAddedWord = mix bg (slot "base0B") 50;
     diffRemovedWord = mix bg (slot "base08") 50;
-    # A blend toward the text color, because schemes disagree on whether
-    # base01 is lighter or darker than base00.
     userMessageBackground = mix bg fg 8;
     userMessageBackgroundHover = mix bg fg 14;
     composerSidebarBackground = mix bg fg 5;
@@ -108,7 +95,6 @@ let
 in
 {
   config = lib.mkIf config.programs.claude-code.enable {
-    # `/theme` saves an edited theme over the link, and Home Manager replaces it.
     home.file.".claude/themes/scheme.json" = {
       force = true;
       text = builtins.toJSON {

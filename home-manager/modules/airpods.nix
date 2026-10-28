@@ -1,7 +1,6 @@
 { lib, pkgs, ... }:
 let
   airpods-tui = pkgs.callPackage ../../pkgs/airpods-tui.nix { };
-  # Its OSD default calls swayosd-client, which no session here runs.
   settingsFile = (pkgs.formats.toml { }).generate "airpods-tui.toml" {
     volume_osd_command = [ ];
     volume_set_command = [
@@ -22,16 +21,12 @@ in
 
   xdg.configFile."airpods-tui/config.toml".source = settingsFile;
 
-  # The daemon owns the AirPods control channel; the TUI talks to it over a
-  # socket in XDG_RUNTIME_DIR.
   systemd.user.services.airpods-tui = {
     Unit = {
       Description = "AirPods control daemon";
       After = [ "graphical-session.target" ];
       PartOf = [ "graphical-session.target" ];
-      # The daemon reads its config only at start.
       X-Restart-Triggers = [ "${settingsFile}" ];
-      # Without a Bluetooth adapter the daemon exits at start.
       StartLimitIntervalSec = 60;
       StartLimitBurst = 3;
     };

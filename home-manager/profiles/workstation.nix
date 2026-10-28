@@ -35,9 +35,6 @@
   # NixOS's udev rules, so the dialog never opens.
   dconf.settings."io/missioncenter/MissionCenter".first-time-running = false;
 
-  # The RDP client for the desktop of risoluto-dev-1
-  # (nixosModules/streamed-desktop.nix). It starts when Omer opens it, not in
-  # the tray at login.
   services.remmina = {
     enable = true;
     systemdService.enable = false;
@@ -60,7 +57,6 @@
     [
       # keep-sorted start
       deskflow
-      # The dev shell and git hooks of a nixos-config checkout (devenv.nix).
       devenv
       discord
       kdePackages.ark

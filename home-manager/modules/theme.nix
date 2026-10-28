@@ -9,7 +9,6 @@
 }:
 let
   cfg = osConfig.oruc.machine;
-  # base00 and the other slots are hex without "#"; withHashtag adds it.
   rawScheme = config.scheme;
   scheme = config.scheme.withHashtag;
   theme = config.oruc.theme;
@@ -18,8 +17,6 @@ let
   hasDesktop = sessions.hasAnyDesktop cfg;
   hasFonts = sessions.hasGraphicalUser cfg;
 
-  # A warm-burnout-* scheme brings Warm Burnout's own VS Code and Neovim
-  # themes, which color syntax beyond the 16 Base16 slots.
   isWarmBurnout = lib.hasPrefix "warm-burnout-" config.oruc.scheme;
   warmBurnoutVariant = if theme.isLight then "light" else "dark";
   warmBurnoutVersion = (lib.importJSON "${inputs.warm-burnout}/vscode/package.json").version;
@@ -38,11 +35,6 @@ let
     src = "${inputs.warm-burnout}/nvim";
   };
 
-  # Every other scheme gets the whole VS Code theme that tinted-vscode's
-  # template renders from it. The template is rendered in a build, so the
-  # evaluation reads nothing from it. VS Code finds the extension through a
-  # link that Home Manager writes, so a `theme` switch needs no new VS Code
-  # package.
   tintedThemeLabel = "Base16 ${rawScheme.scheme-name}";
   tintedVscode = pkgs.vscode-utils.buildVscodeExtension {
     pname = "oruc-base16-theme";
@@ -102,7 +94,6 @@ in
 {
   fonts.fontconfig.enable = hasFonts;
 
-  # These packages provide the families named by oruc.theme.fonts.
   home.packages = lib.optionals hasFonts (
     with pkgs;
     [
@@ -140,13 +131,10 @@ in
   oruc.vscodeSettings = {
     "workbench.colorTheme" =
       if isWarmBurnout then "Warm Burnout ${lib.toSentenceCase warmBurnoutVariant}" else tintedThemeLabel;
-    # vscode.nix sets the see-through backgrounds. The terminal takes
-    # Ghostty's colors.
     "workbench.colorCustomizations" = {
       "terminal.foreground" = scheme.base05;
     }
     // vscodeAnsiColors;
-    # The default ratio of 4.5 shifts terminal colors away from the palette.
     "terminal.integrated.minimumContrastRatio" = 1;
   };
 
@@ -171,8 +159,6 @@ in
     (if isWarmBurnout then warmBurnoutVscode else tintedVscode)
   ];
 
-  # Neovim loads its colors from a file, because `theme` switches the scheme
-  # without a new Neovim package (variants.nix). Both color schemes are installed.
   xdg.configFile."oruc/nvim-theme.lua".text =
     if isWarmBurnout then
       "vim.cmd.colorscheme('warm-burnout-${warmBurnoutVariant}')"
@@ -184,7 +170,6 @@ in
       } })";
 
   programs.nvf.settings.vim = {
-    # nvf's own base16 plugin, which its base16 theme would start.
     startPlugins = [ "base16" ];
     extraPlugins.oruc-theme = {
       package = warmBurnoutNvim;
@@ -213,27 +198,18 @@ in
     };
   };
 
-  # The Plasma platform theme reads the scheme that kdeglobals names. Plasma
-  # writes kdeglobals itself, so a machine with a Plasma session gets the
-  # scheme and icons through oruc-plasma-colors instead.
   xdg.configFile."kdeglobals" = lib.mkIf (isNiri && !isPlasma) {
     text = opaqueScheme + "\n[Icons]\nTheme=${theme.icons}\n";
   };
 
-  # Each session applies its own scheme and Qt style at login, because both
-  # sessions read the same kdeglobals. The Plasma look names them.
   systemd.user.services.oruc-plasma-colors = lib.mkIf isPlasma {
     Unit = {
       Description = "Apply the color scheme and Qt style of the Plasma look";
-      # Only a Plasma session reaches plasma-workspace.target.
       After = [
         "plasma-workspace.target"
         "plasma-plasmashell.service"
       ];
       PartOf = [ "plasma-workspace.target" ];
-      # Stop retrying when Plasma keeps rejecting the scheme. A skipped start
-      # counts too, and a deploy with a stored Plasma look starts the unit
-      # twice, so the limit leaves room for a plasma-look right after it.
       StartLimitIntervalSec = 60;
       StartLimitBurst = 5;
     };
@@ -241,7 +217,6 @@ in
       Type = "oneshot";
       ExecCondition = colorsOnce.condition;
       ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
-      # The niri session reads the same kdeglobals, so it needs the icon theme too.
       ExecStartPost = [
         (setWidgetStyle config.oruc.plasma.widgetStyle)
       ]
@@ -253,8 +228,6 @@ in
     Install.WantedBy = [ "plasma-workspace.target" ];
   };
 
-  # niri blurs only the windows that niri/config.kdl lists, so its sessions
-  # put back the opaque scheme and Breeze.
   systemd.user.services.oruc-niri-colors = lib.mkIf (isPlasma && isNiri) {
     Unit = {
       Description = "Apply the opaque Base16 color scheme and the Breeze style";

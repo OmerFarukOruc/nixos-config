@@ -25,8 +25,6 @@
     ./modules/vscode.nix
   ];
 
-  # Nothing uses Public or Templates, so they point at /var/empty, Projects is
-  # left unset, and no folder is created; the other folders keep their defaults.
   xdg.userDirs = {
     enable = true;
     createDirectories = false;

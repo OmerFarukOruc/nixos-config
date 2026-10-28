@@ -9,9 +9,6 @@
   ...
 }:
 let
-  # A machine with no desktop session gets the command-line tools only, and
-  # with a streamed desktop only the browsers and fonts of a graphical user.
-  # Ghostty and the terminal variable need a login session.
   hasDesktop = sessions.hasAnyDesktop osConfig.oruc.machine;
   hasScreen = sessions.hasGraphicalUser osConfig.oruc.machine;
   # Brave keeps the key that encrypts its cookies and passwords in KWallet
@@ -35,8 +32,6 @@ let
         "AcceleratedVideoEncoder"
       ]
     );
-  # Brave Origin 1.98.60 moves to Chromium 156 for its security fixes, and
-  # nixpkgs still builds 1.97.59. Remove the override once nixpkgs has 1.98.60.
   braveOrigin =
     if lib.versionOlder pkgs.brave-origin.version "1.98.60" then
       pkgs.brave-origin.overrideAttrs (
@@ -65,10 +60,7 @@ let
       securityPkgs.google-chrome
     else
       pkgs.google-chrome;
-  # Days a release must age before a package manager installs it.
   releaseAgeDays = 3;
-  # OpenCode 2 from llm-agents installs as opencode2, beside version 1. It is
-  # the only OpenCode here, so it also answers to opencode.
   opencode = pkgs.symlinkJoin {
     name = "opencode-${agents.opencode2.version}";
     paths = [ agents.opencode2 ];
@@ -123,7 +115,6 @@ in
       zip
       # keep-sorted end
     ]
-    # Interactive coding agents used directly on this host.
     ++ (with agents; [
       # keep-sorted start
       agentsview
@@ -140,11 +131,6 @@ in
     ]
   );
 
-  # Claude Code gets the NixOS MCP server, so it looks up option and package
-  # names instead of guessing them. Home Manager delivers the server list as
-  # a plugin in ~/.claude/skills/claude-code-home-manager; desktop/bin/desktop-sync.sh
-  # in the dotfiles checkout (docs/nixos-rog.md, Claude Code and Codex setup)
-  # links the other entries there and removes only dangling ones.
   programs.mcp = {
     enable = true;
     servers.nixos.command = lib.getExe pkgs.mcp-nixos;
@@ -159,10 +145,6 @@ in
     enableMcpIntegration = true;
   };
 
-  # Package managers install only releases that have aged releaseAgeDays, so a
-  # hijacked release is usually pulled before it reaches this host. Each tool
-  # takes its own unit. npm, bun and pnpm come from project shells, so only
-  # their config is installed here; pnpm's is with xdg.configFile below.
   programs.uv = {
     enable = true;
     settings = {
@@ -187,7 +169,6 @@ in
     settings.install.minimumReleaseAge = releaseAgeDays * 86400;
   };
 
-  # The TTY theme follows the terminal's 16 ANSI colors, which come from the scheme.
   programs.btop = {
     enable = true;
     settings = {
@@ -196,8 +177,6 @@ in
     };
   };
 
-  # Ghostty reloads its config, theme included, on SIGUSR2. The variant
-  # activator runs this list and does not name Ghostty.
   oruc.variantReloads = lib.mkIf config.programs.ghostty.enable [
     ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true''
   ];
@@ -206,7 +185,6 @@ in
     enable = true;
     enableZshIntegration = true;
     settings = {
-      # The bars use oruc.theme.fonts.mono instead.
       font-family = "CaskaydiaCove Nerd Font Mono";
       font-size = 13;
       font-feature = [
@@ -215,9 +193,6 @@ in
         "-dlig"
       ];
       font-shaping-break = "cursor";
-      # At 0.65 a white window behind turned the background mid-gray, and the
-      # text fell to 3:1 contrast. At 0.90 the base04 gray keeps 5:1. The Glass
-      # look sets 0.66; its contrast over a white window is not measured.
       background-opacity = lib.mkDefault 0.9;
       background-blur = true;
       notify-on-command-finish = "unfocused";
@@ -244,8 +219,6 @@ in
       clipboard-paste-bracketed-safe = false;
       clipboard-paste-protection = false;
       shell-integration = "detect";
-      # Sets TERM to xterm-256color on ssh, so remote hosts without Ghostty's
-      # terminfo still render.
       shell-integration-features = "ssh-env";
       unfocused-split-opacity = 0.85;
       alpha-blending = "linear-corrected";
@@ -291,8 +264,6 @@ in
     keyMode = "vi";
     mouse = true;
     terminal = "tmux-256color";
-    # Ctrl-h/j/k/l cross tmux panes and Neovim splits; the Neovim side needs
-    # the matching vim-tmux-navigator plugin.
     plugins = [ pkgs.tmuxPlugins.vim-tmux-navigator ];
     extraConfig = ''
       set -g renumber-windows on
@@ -307,8 +278,6 @@ in
       "x-scheme-handler/http" = [ "brave-origin.desktop" ];
       "x-scheme-handler/https" = [ "brave-origin.desktop" ];
       "application/pdf" = [ "brave-origin.desktop" ];
-      # Claude Code writes this handler file itself and registers it again with
-      # xdg-mime, which replaces the Home Manager link with a plain file.
       "x-scheme-handler/claude-cli" = [ "claude-code-url-handler.desktop" ];
     };
   };

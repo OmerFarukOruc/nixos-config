@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Renders a Markdown file as styled HTML and opens it in Brave.
-# It skips xdg-open because KDE can route text/html to the DMS app picker,
-# which is not running under Plasma.
-# PANDOC_MD_ASSETS names the directory with the stylesheet, the after-body
-# script and the code highlighting theme. PANDOC_MD_KATEX names the KaTeX dist
-# directory, so math renders without a download. The colors come from
-# oruc/pandoc-md-theme.css in the user config directory, which Home Manager
-# writes for the active scheme.
 set -euo pipefail
 
 fail() {
@@ -25,12 +17,10 @@ theme_css="${XDG_CONFIG_HOME:-$HOME/.config}/oruc/pandoc-md-theme.css"
 name="$(basename -- "$file")"
 dir="$(dirname -- "$file")"
 
-# Remove renders older than an hour so /tmp does not grow without bound.
 find /tmp -maxdepth 1 -name 'pandoc-*.html' -mmin +60 -delete 2>/dev/null || true
 
 out="$(mktemp --suffix=.html /tmp/pandoc-XXXXXX)" || fail "could not create temp file"
 
-# Add a table of contents only when the document has enough headings to need one.
 toc=()
 if [ "$(grep -cE -e '^#{1,6}[[:space:]]' -- "$file" || true)" -ge 3 ]; then
   toc=(--toc --toc-depth=3)
@@ -45,8 +35,6 @@ fi
 #    is left as it is.
 # The reader also drops yaml_metadata_block, so a leftover or mid-file --- fence
 # cannot stop the render.
-# --highlight-style is the option pandoc 3.7 (nixpkgs) knows; pandoc 3.8 and later
-# replaced it with --syntax-highlighting and deprecates the old name.
 awk '
 function emit(line) {
   if (match(line, /^[[:space:]]*(```|~~~)/)) {

@@ -1,5 +1,3 @@
-# Omer's own apps and dev tools, on top of the workstation profile, for the
-# machines he works at every day. The GPU tools follow the machine record.
 {
   agents,
   inputs,
@@ -10,7 +8,6 @@
 }:
 let
   inherit (osConfig.oruc.machine) gpu;
-  # hybrid is a Radeon with an NVIDIA card, as on nixos-rog.
   hasAmd = gpu == "amd" || gpu == "hybrid";
   hasNvidia = gpu == "nvidia" || gpu == "hybrid";
   nvtop =
@@ -73,11 +70,8 @@ in
       (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
       (pkgs.callPackage ../../pkgs/chatgpt.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
-      # The Linear CLI agents run from a repository with a .linctl.toml pin.
       (pkgs.callPackage ../../pkgs/linctl.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
-      # `stay-green login risoluto-dev-1` signs in here, in the browser, and
-      # stores the sign-in on the box, where stay-green.timer runs.
       (pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; })
     ]
     ++ [ agents.antigravity-cli ];

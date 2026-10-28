@@ -9,7 +9,6 @@ let
   machine = osConfig.oruc.machine;
   selectors = import ../../machines/selectors.nix;
 
-  # The unit that is up exactly while a session of this desktop runs.
   sessionUnit = {
     niri = "niri.service";
     plasma = "plasma-workspace.target";
@@ -55,9 +54,6 @@ in
 
   config = lib.mkMerge [
     {
-      # A switch leaves these running on the old version, so an update never
-      # restarts the panel or the keyring mid-session; the next login starts
-      # the new one.
       systemd.user.services = lib.mapAttrs (_: _: {
         Unit.X-SwitchMethod = "keep-old";
       }) (config.oruc.sessionServices // config.oruc.shellServices);

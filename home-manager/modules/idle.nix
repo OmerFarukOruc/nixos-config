@@ -8,12 +8,8 @@
 let
   machine = osConfig.oruc.machine;
   isNiri = sessions.hasDesktop machine "niri";
-  # Without a battery the machine is always on AC.
   idle = if machine.hasBattery then machine.idle else { inherit (machine.idle) ac; };
 
-  # niri has no idle settings of its own, and Noctalia has one set of idle
-  # timeouts for both power states, so one swayidle serves every niri session.
-  # DMS can split its timeouts by power state, but dms.nix leaves them off.
   oruc-idle = pkgs.writeShellApplication {
     name = "oruc-idle";
     runtimeInputs = [
@@ -22,7 +18,6 @@ let
       pkgs.niri
     ];
     text = ''
-      # usage: oruc-idle battery|ac dim|screen-off, or oruc-idle undim
       dimmed=''${XDG_RUNTIME_DIR:?}/oruc-idle-dimmed
       shopt -s nullglob
 
@@ -39,7 +34,6 @@ let
         echo ac
       }
 
-      # The same panel backlights as the brightness keys in niri/config.kdl.
       if [[ $1 == undim ]]; then
         if [[ -e $dimmed ]]; then
           for device in /sys/class/backlight/*_b*; do
@@ -58,7 +52,6 @@ let
         done
         touch "$dimmed"
       else
-        # niri turns the monitors back on at the next input.
         niri msg action power-off-monitors
       fi
     '';

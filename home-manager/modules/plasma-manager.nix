@@ -27,9 +27,6 @@ let
     };
   noAutoSuspend.AutoSuspendAction = 0;
 
-  # ksplashqml finds a look-and-feel package by its id under
-  # ~/.local/share/plasma/look-and-feel. The files come from the scheme of this
-  # Home Manager generation, so each scheme variant carries its own colors.
   splashId = "oruc.splash";
   scheme = config.scheme.withHashtag;
   # ksplashqml sets `stage` from 1 to 5 while the session starts, and quits at 6.
@@ -70,10 +67,6 @@ in
 {
   imports = [ inputs.plasma-manager.homeModules.plasma-manager ];
 
-  # plasma-manager writes only the keys named here. overrideConfig stays off,
-  # because it deletes every Plasma config file that this list does not cover.
-  # The Base16 color scheme stays with theme.nix and oruc-plasma-colors, because
-  # plasma-manager can only apply a scheme file that already exists.
   config = lib.mkIf isPlasma {
     programs.plasma = {
       enable = true;
@@ -88,7 +81,6 @@ in
         splashScreen.theme = splashId;
       };
 
-      # Plasma's default sizes, in the scheme's fonts.
       fonts =
         let
           ui = pointSize: {
@@ -108,7 +100,6 @@ in
           };
         };
 
-      # The lock screen plays the login screen's video.
       kscreenlocker.appearance.wallpaperCustomPlugin = lib.mkIf (osConfig.oruc.login.video != null) {
         plugin = "luisbocanegra.smart.video.wallpaper.reborn";
         config.General = {
@@ -118,7 +109,6 @@ in
               enabled = true;
             }
           ];
-          # The login theme's BackgroundSpeed in Themes/jake_the_dog.conf.
           PlaybackRate = 1.2;
           # The lock screen ignores the plugin's window-based pause rules, so
           # the video would keep decoding while the display is off. The plugin
@@ -128,11 +118,8 @@ in
         };
       };
 
-      # The window effects of every look. Each look in plasma-looks/ adds its
-      # own blur.
       kwin = {
         effects = {
-          # Moving past the last desktop wraps to the first.
           desktopSwitching.navigationWrapping = true;
           windowOpenClose.animation = "glide";
           minimization.animation = "magiclamp";
@@ -160,8 +147,6 @@ in
         Effect-overview.BorderActivate = 9;
         Effect-slide.SlideBackground = false;
 
-        # plasma-manager deletes a key whose value is null. These keys are left
-        # from the Better Blur DX, tiling and macOS Tahoe looks, which are gone.
         Plugins = {
           better_blur_dxEnabled = null;
           krohnkiteEnabled = null;
@@ -179,11 +164,7 @@ in
         ] (_: null);
       };
       input.keyboard.numlockOnStartup = "on";
-      # Apps that start at login come from Home Manager units, such as the
-      # Deskflow client, not from the last session.
       session.sessionRestore.restoreOpenApplicationsOnLogin = "startWithEmptySession";
-      # A laptop sleeps at critical battery. nixos-rog has no disk swap, so it
-      # cannot hibernate.
       powerdevil.batteryLevels.criticalAction = lib.mkIf hasBattery "sleep";
 
       hotkeys.commands =
@@ -220,17 +201,12 @@ in
       # web shortcuts whenever plasma-manager is enabled.
       configFile.kuriikwsfilterrc = lib.mkForce { };
 
-      # Plasma's own power profile switch; it is also on Fn+F5 (Launch4) of the
-      # ROG laptop, as in the Noctalia and DMS sessions. Every machine runs
-      # power-profiles-daemon (nixosModules/peripherals.nix).
       shortcuts.org_kde_powerdevil.powerProfile = [
         "Battery"
         "Meta+B"
         "Launch (4)"
       ];
 
-      # plasma-manager writes powerdevilrc itself, so these files are written
-      # here, not linked read-only from the store.
       configFile = {
         spectaclerc = {
           General = {
@@ -243,20 +219,14 @@ in
             imageFilenameTemplate = "Screenshot_<yyyy><MM><dd>_<HH><mm><ss>";
           };
         };
-        # Baloo indexes file names only, and skips ~/Desktop/workspace, whose
-        # git checkouts, build output and worktrees change all the time. An
-        # existing index keeps the file contents it holds until
-        # `balooctl6 purge` rebuilds it.
         baloofilerc.General = {
           "only basic indexing" = true;
           "exclude folders" = "${config.home.homeDirectory}/Desktop/workspace/";
         };
-        # The clipboard keeps only the current item, and drops it at logout.
         klipperrc.General = {
           MaxClipItems = 1;
           KeepClipboardContents = false;
         };
-        # Dolphin deletes and empties the trash without asking.
         kiorc.Confirmations = {
           ConfirmDelete = false;
           ConfirmEmptyTrash = false;
@@ -265,8 +235,6 @@ in
           Autolock = false;
           Lock = false;
           LockOnResume = false;
-          # A machine that logs in by itself starts locked, so its session
-          # comes up after a reboot without opening the desktop to the room.
           LockOnStart = autoLogin;
           Timeout = 0;
         };
@@ -295,8 +263,6 @@ in
       "plasma/look-and-feel/${splashId}/contents/splash/Splash.qml".text = splashQml;
     };
 
-    # The lock screen finds the wallpaper plugin of kscreenlocker's settings
-    # above through the user profile.
     home.packages = lib.mkIf (osConfig.oruc.login.video != null) [
       (pkgs.kdePackages.callPackage ../../pkgs/smart-video-wallpaper.nix { })
     ];

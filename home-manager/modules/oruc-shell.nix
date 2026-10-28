@@ -1,6 +1,3 @@
-# Shell setup that only oruc has. Root gets none of it. sudo starts no user
-# manager for root, so no Atuin daemon socket exists, and /root has no dotfiles
-# checkout.
 { lib, ... }:
 {
   programs.zsh = {
@@ -13,12 +10,9 @@
       fi
     '';
     initContent = lib.mkOrder 1500 ''
-      # One line when the last desktop-sync run reported a problem.
       sync_status=~/Desktop/workspace/dotfiles/desktop/shell/sync-status.zsh
       [[ -r $sync_status ]] && . "$sync_status"
       unset sync_status
-      # Omer's shell API keys, which desktop-sync.sh writes on risoluto-dev-1
-      # from Infisical.
       [[ -r ~/.zshrc.local ]] && . ~/.zshrc.local
     '';
   };
@@ -30,7 +24,5 @@
     };
   };
 
-  # Home Manager supplies both units. Only the socket starts automatically;
-  # opening it asks systemd to start the daemon service on demand.
   systemd.user.services.atuin-daemon.Install.WantedBy = lib.mkForce [ ];
 }

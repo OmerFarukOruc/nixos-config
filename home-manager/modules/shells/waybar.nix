@@ -30,7 +30,6 @@ in
           "network"
           "tray"
         ];
-        # Explicit formats, so the bar does not depend on the tr_TR date order.
         clock = {
           format = "{:%H:%M}";
           format-alt = "{:%d-%m-%Y %H:%M}";

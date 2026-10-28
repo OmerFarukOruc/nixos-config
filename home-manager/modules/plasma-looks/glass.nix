@@ -1,6 +1,3 @@
-# The Glass look: the Glass window decoration, Qt style and KWin effect, the
-# translucent Base16 scheme, a Plasma style with see-through popups and a
-# floating top bar of three islands.
 {
   config,
   lib,
@@ -17,7 +14,6 @@ in
   config = lib.mkIf isPlasma (
     lib.mkMerge [
       {
-        # The Glass decoration, style and effect come from nixosModules/desktop.nix.
         home.packages = [
           (pkgs.callPackage ../../../pkgs/oruc-glass-plasma-theme.nix {
             inherit (pkgs.kdePackages) libplasma;
@@ -42,14 +38,12 @@ in
         programs.plasma = {
           workspace = {
             theme = "oruc-glass";
-            # The Glass decoration comes with the Glass Qt style.
             windowDecorations = {
               library = "org.kde.glass";
               theme = "Glass";
             };
           };
 
-          # Glass replaces the built-in blur.
           kwin.effects.blur.enable = false;
 
           configFile = {
@@ -75,8 +69,6 @@ in
                 "SourceGit"
                 "Telegram"
               ];
-              # The values of the dark-glass mode in 4v3ngR/glassOS switcher/theme,
-              # with the glow taken from the scheme's blue.
               Brightness = 0.9;
               Contrast = 1.1;
               BlurStrength = 3;
@@ -89,14 +81,10 @@ in
               RefractionStrength = 0;
               RefractionEdgeSize = 3;
               RefractionRGBFringing = 0;
-              # Square corners, written out because plasma-manager never removes
-              # a key it wrote before.
               TopCornerRadius = 0;
               BottomCornerRadius = 0;
               MenuCornerRadius = 0;
             };
-            # The Glass style and decoration share this radius, so buttons and
-            # menus follow the windows.
             glassrc.Common.CornerRadius = 0;
           };
         };

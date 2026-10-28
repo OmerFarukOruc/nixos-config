@@ -8,21 +8,16 @@
 let
   herdr = lib.getExe agents.herdr;
   configFile = "${config.xdg.configHome}/herdr/config.toml";
-  # herdr's Settings menu and first-run setup write config.toml, so it stays a
-  # writable file. Each switch sets these keys and leaves the others to herdr.
   settings = {
     onboarding = false;
-    # The terminal's 16 ANSI colors, which come from the scheme.
     theme.name = "terminal";
     ui.toast.delivery = "system";
     ui.agent_panel_sort = "spaces";
-    # Nix delivers new versions; herdr update cannot replace a store path.
     update.version_check = false;
   };
   setSettings = pkgs.writers.writePython3 "herdr-set-settings" {
     libraries = [ pkgs.python3Packages.tomlkit ];
   } (builtins.readFile ./herdr-settings.py);
-  # Each agent's config directory below $HOME, which herdr's install needs.
   integrations = {
     antigravity-cli = ".gemini/config";
     claude = ".claude";
