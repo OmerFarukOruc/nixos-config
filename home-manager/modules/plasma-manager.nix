@@ -11,6 +11,7 @@ let
   helpers = import ./launchers/helpers.nix { inherit lib pkgs; };
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
   inherit (config.oruc) theme;
+  kwinElectricBorderNone = 9;
 
   inherit (osConfig.oruc.machine) autoLogin hasBattery idle;
 
@@ -143,8 +144,7 @@ in
           Number = 4;
           Rows = 1;
         };
-        # 9 is no screen edge, so the top-left corner no longer opens Overview.
-        Effect-overview.BorderActivate = 9;
+        Effect-overview.BorderActivate = kwinElectricBorderNone;
         Effect-slide.SlideBackground = false;
 
         Plugins = {
