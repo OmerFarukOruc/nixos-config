@@ -91,7 +91,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # The disk layout of risoluto-dev-1, and the NixOS VM test that boots it
-    # under BIOS and UEFI (ci/server-boot.nix).
+    # under BIOS (ci/server-boot.nix).
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";

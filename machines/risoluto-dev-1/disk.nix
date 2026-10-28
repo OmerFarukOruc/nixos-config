@@ -1,8 +1,8 @@
 # One virtio disk. The ESP is 4 GiB as on the other hosts, because every kept
 # generation stores a kernel and an initrd on it. Limine's BIOS stage needs the
 # 1 MiB partition of type EF02 on a GPT disk, and the firmware of a UEFI boot
-# needs the ESP, so the same disk boots under either firmware
-# (oruc.machine.biosDevice).
+# needs the ESP, so the disk is laid out for either firmware
+# (oruc.machine.biosDevice). Only the BIOS boot is tested.
 _: {
   disko.devices.disk.main = {
     type = "disk";

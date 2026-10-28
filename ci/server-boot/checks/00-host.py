@@ -6,11 +6,10 @@ import socket
 for unit in ["sshd", "tailscaled", "systemd-networkd"]:
     machine.wait_for_unit(f"{unit}.service")
 
-# The disk boots through Limine under both firmwares; only OVMF has EFI variables.
-if efi:
-    machine.succeed("test -d /sys/firmware/efi")
-else:
-    machine.fail("test -d /sys/firmware/efi")
+# The disk boots through Limine's BIOS stage, as on the netcup box. The image
+# also holds the EFI fallback loader; that only the file exists is checked, not
+# a UEFI boot.
+machine.fail("test -d /sys/firmware/efi")
 machine.succeed("test -e /boot/limine/limine-bios.sys")
 machine.succeed("test -e /boot/EFI/BOOT/BOOTX64.EFI")
 

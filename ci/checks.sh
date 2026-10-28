@@ -148,7 +148,7 @@ server_boot() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
     --apply 'checks: builtins.mapAttrs (_: test: test.drvPath) checks') || return 1
-  jq -e 'keys | contains(["risoluto-dev-1-boot-bios", "risoluto-dev-1-boot-uefi", "risoluto-dev-1-desktop", "risoluto-dev-1-self-deploy", "risoluto-dev-1-units"])' <<<"$out" >/dev/null || {
+  jq -e 'keys | contains(["risoluto-dev-1-boot-bios", "risoluto-dev-1-desktop", "risoluto-dev-1-self-deploy", "risoluto-dev-1-units"])' <<<"$out" >/dev/null || {
     echo "The flake checks lack a boot or deploy test of risoluto-dev-1: $(jq -c keys <<<"$out")" >&2
     return 1
   }

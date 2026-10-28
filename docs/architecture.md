@@ -52,7 +52,8 @@ desktop. `ci/checks.sh` lists the pieces a server with a streamed desktop gets.
 as a default. A machine that boots through BIOS sets it to false, because its
 firmware keeps no boot entries to write. Limine then installs its EFI binary at
 the firmware fallback path only. With `biosDevice` in the record, Limine also
-installs its BIOS stage on that disk, so one disk boots through either firmware.
+installs its BIOS stage on that disk, so one disk is laid out for either
+firmware; risoluto-dev-1's VM test boots it through BIOS only.
 
 `machines/inventory.nix` holds one value per machine for the typed
 `oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:

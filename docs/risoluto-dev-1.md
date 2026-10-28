@@ -40,8 +40,9 @@ the rest.
 
 The box boots through BIOS today, and the firmware setting stays. The record
 sets `biosDevice = "/dev/vda"`, so Limine installs its BIOS stage on the disk
-beside its EFI binary, and the same disk boots under UEFI too. BIOS has no
-EFI variables to write, so `configuration.nix` sets
+beside its EFI binary. The disk is meant to boot under UEFI too, but the VM
+test boots it under BIOS only, so a UEFI boot is unverified. BIOS has no EFI
+variables to write, so `configuration.nix` sets
 `boot.loader.efi.canTouchEfiVariables = false`. Limine then installs the EFI
 binary at the firmware fallback path only. Any host that can boot through BIOS
 sets it the same way.
@@ -448,14 +449,14 @@ keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
 
 ## Boot test in a VM
 
-Two flake checks boot the host's own configuration with NixOS's VM test driver
-(`ci/server-boot.nix`, disko's `makeDiskoTest`). `risoluto-dev-1-boot-bios`
-boots under SeaBIOS and `risoluto-dev-1-boot-uefi` under OVMF. Both need KVM, so
-they build on the host that runs `scripts/build.sh`:
+The flake check `risoluto-dev-1-boot-bios` boots the host's own configuration
+with NixOS's VM test driver (`ci/server-boot.nix`, disko's `makeDiskoTest`)
+under SeaBIOS, the firmware the netcup box boots with (it has no
+`/sys/firmware/efi`). It needs KVM, so it builds on the host that runs
+`scripts/build.sh`:
 
 ```sh
-scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios \
-  .#checks.x86_64-linux.risoluto-dev-1-boot-uefi
+scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios
 ```
 
 The test installs the host's disk layout (`disk.nix`) and system from an
@@ -469,12 +470,12 @@ collector and auditd. A connection from outside the VM to port 2222 must get no
 answer, and must get sshd's banner once the test opens that port. A failed
 build prints the end of the driver's log, and `nix log <derivation>` on that
 host prints all of it. Nix caches a pass until the host or the test changes,
-and `ci/checks.sh` only evaluates both tests.
+and `ci/checks.sh` only evaluates the test.
 
 To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
-run in path order on `machine` (the booted host), `efi` is True under OVMF, and
-all files share one Python namespace, so give a variable or a function a name
-that only your file uses. Test values for a new sops key go in
+run in path order on `machine` (the booted host), and all files share one
+Python namespace, so give a variable or a function a name that only your file
+uses. Test values for a new sops key go in
 `ci/server-boot/secrets.yaml`. A NixOS module that only the test machine loads,
 such as a stub of an external service, goes in `ci/server-boot/modules/`.
 

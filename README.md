@@ -34,7 +34,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
-| `risoluto-dev-1` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS and UEFI |
+| `risoluto-dev-1` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS (UEFI unverified) |
 
 `machines/inventory.nix` is the source of truth for this table.
 
@@ -166,7 +166,7 @@ checkout with Nix. The update workflow runs them.
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
-| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` and `-uefi` run risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-units` its [unit check](docs/risoluto-dev-1.md#unit-check-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-self-deploy` its [deploy test](docs/risoluto-dev-1.md#deploy-test-in-a-vm), and `.#checks.x86_64-linux.risoluto-dev-1-desktop` its [desktop test](docs/risoluto-dev-1.md#desktop-test-in-a-vm) |
+| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` runs risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-units` its [unit check](docs/risoluto-dev-1.md#unit-check-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-self-deploy` its [deploy test](docs/risoluto-dev-1.md#deploy-test-in-a-vm), and `.#checks.x86_64-linux.risoluto-dev-1-desktop` its [desktop test](docs/risoluto-dev-1.md#desktop-test-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |

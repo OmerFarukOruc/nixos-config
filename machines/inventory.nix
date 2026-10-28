@@ -116,7 +116,8 @@ let
     };
 
     # Omer's dev box: a netcup KVM guest that runs his coding agents. It boots
-    # through BIOS, and Limine keeps it bootable through UEFI too.
+    # through BIOS. Limine also installs its EFI binary, but no test boots
+    # the disk under UEFI (docs/risoluto-dev-1.md, Install).
     risoluto-dev-1 = {
       system = "x86_64-linux";
       kind = "server";
