@@ -12,7 +12,6 @@ in
   options.oruc.machine = schema.machineOption;
 
   config = {
-    # Helpers that answer which desktops and shells this machine offers.
     _module.args.sessions = import ../machines/sessions.nix { inherit lib; };
 
     networking.hostName = cfg.name;

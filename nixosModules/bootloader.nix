@@ -14,11 +14,9 @@ let
 in
 {
   config = lib.mkMerge [
-    # A server on firmware that has no writable NVRAM sets it to false.
     { boot.loader.efi.canTouchEfiVariables = lib.mkDefault true; }
 
     (lib.mkIf (bootloader == "systemd-boot") {
-      # Secure Boot must be off in the firmware.
       boot.loader.systemd-boot = {
         enable = true;
         configurationLimit = generations;
@@ -40,11 +38,9 @@ in
         additionalFiles = lib.optionalAttrs (!limine.efiInstallAsRemovable) {
           "efi/boot/BOOTX64.EFI" = "${limine.package}/share/limine/BOOTX64.EFI";
         };
-        # The BIOS stage goes on the record's disk, next to the EFI loader.
         biosSupport = biosDevice != null;
         biosDevice = lib.mkIf (biosDevice != null) biosDevice;
         maxGenerations = generations;
-        # A solid menu in the machine's base16 scheme, without a wallpaper.
         style =
           let
             inherit (config) scheme;

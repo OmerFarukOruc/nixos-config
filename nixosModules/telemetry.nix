@@ -1,13 +1,3 @@
-# What a server reports to SigNoz: the host's metrics, the OTLP its own
-# processes send to loopback, the journals of sshd and lists of system and user
-# units, and the audit records of auditd. One OpenTelemetry collector (the
-# contrib build) ships all of it over gRPC with TLS to the central endpoint,
-# which the host passes.
-#
-# The audit records reach the journal through auditd's syslog plugin and not
-# through journald's own audit socket, because records from that socket carry
-# no PRIORITY and the journald receiver always passes --priority, so it would
-# skip them. The socket is off for that reason.
 {
   config,
   lib,
@@ -21,8 +11,6 @@ let
   stateDirectory = "/var/lib/opentelemetry-collector";
   journalctl = lib.getExe' pkgs.systemd "journalctl";
 
-  # The SigNoz Hosts page lists a host only when its system.* metrics carry
-  # host.name.
   resource =
     {
       service ? null,
@@ -70,9 +58,6 @@ let
     }
     // extra;
 
-  # The queue is on disk, so an outage of the central endpoint loses nothing
-  # the retry window covers. Logs retry forever, because an audit record has
-  # no later copy; metrics and traces stop after 90 minutes.
   exporter = maxElapsed: {
     inherit (cfg) endpoint;
     timeout = "5s";
@@ -92,14 +77,6 @@ let
     };
   };
 
-  # journalctl matches a user unit through two fields: _SYSTEMD_USER_UNIT on the
-  # unit's own lines, and USER_UNIT on the lines that the user's systemd writes
-  # about it, such as a start or a failure. The receiver has no option for
-  # `journalctl --user-unit`, and that option pins _UID to the caller, here the
-  # collector's dynamic user (systemd's add_matches_for_user_unit_full).
-  # Matches of one field combine with OR, and the receiver's `+` joins these
-  # groups into one OR term, which `--priority` still limits (journalctl 262,
-  # `SYSTEMD_LOG_LEVEL=debug` prints the filter).
   userUnitMatches = lib.concatMap (unit: [
     { _SYSTEMD_USER_UNIT = unit; }
     { USER_UNIT = unit; }
@@ -202,7 +179,6 @@ in
         extensions = {
           "file_storage/state" = {
             directory = stateDirectory;
-            # The build's validate run has no state directory.
             create_directory = true;
           };
           health_check.endpoint = "127.0.0.1:13133";
@@ -278,7 +254,6 @@ in
             limit_mib = 384;
             spike_limit_mib = 64;
           };
-          # Metrics that no SigNoz panel or rule reads.
           "filter/unread_metrics".metrics.exclude = {
             match_type = "regexp";
             metric_names = [
@@ -307,7 +282,6 @@ in
             send_batch_size = 1024;
             timeout = "5s";
           };
-          # Journal records are larger than metrics, so logs batch smaller.
           "batch/logs" = {
             send_batch_size = 256;
             timeout = "5s";
@@ -380,9 +354,6 @@ in
       };
     };
 
-    # The Debian box logs sshd at VERBOSE, which adds lines to what SigNoz
-    # shows, such as failed key attempts. The default level already logs
-    # `Accepted publickey` with the key's fingerprint.
     services.openssh.settings.LogLevel = "VERBOSE";
 
     systemd.sockets.systemd-journald-audit.wantedBy = lib.mkForce [ ];
@@ -394,11 +365,6 @@ in
 
     security.audit = {
       backlogLimit = 8192;
-      # The first rule that matches a call decides, so the specific /etc rules
-      # come before etc-change, and the excludes come last: auditctl stops at
-      # the first rule that fails to load, and a failed exclude then leaves
-      # every watch loaded. A path or dir rule fails to load when its target
-      # does not exist, so each target below exists after activation.
       rules = lib.mkMerge [
         [
           "-a always,exit -F arch=b64 -F dir=/etc/systemd -F perm=wa -F key=unit-change"
@@ -408,19 +374,12 @@ in
           "-a always,exit -F arch=b64 -F path=/etc/passwd -F perm=wa -F key=identity"
           "-a always,exit -F arch=b64 -F path=/etc/shadow -F perm=wa -F key=identity"
           "-a always,exit -F arch=b64 -F path=/etc/group -F perm=wa -F key=identity"
-          # A change under /etc by a login session. The deploy timer and other
-          # units have no login id, so their writes do not log.
           "-a always,exit -F arch=b64 -F dir=/etc -F perm=wa -F auid!=unset -F key=etc-change"
           "-a always,exit -F arch=b64 -F path=/run/wrappers/bin/sudo -F perm=x -F key=sudo-exec"
-          # sops-nix keeps the decrypted secrets under /run/secrets.d. The key
-          # keeps its name from the old credential store, so existing SigNoz
-          # queries still match.
           "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=wa -F key=credstore"
           "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=r -F uid!=0 -F key=credstore"
         ]
         (lib.mkAfter [
-          # Records of processes with no login session, such as Docker or
-          # systemd. The same types from a login session still log.
           "-a always,exclude -F msgtype=NETFILTER_CFG -F auid=unset"
           "-a always,exclude -F msgtype=ANOM_PROMISCUOUS -F auid=unset"
           "-a always,exclude -F msgtype=BPF -F auid=unset"
@@ -428,9 +387,6 @@ in
       ];
     };
 
-    # The sudo rule needs the wrapper to exist, and a rule follows the file it
-    # saw at load. Each change to the wrappers makes a new directory behind
-    # /run/wrappers/bin, so the rules load again then.
     systemd.services.audit-rules-nixos = {
       after = [ "suid-sgid-wrappers.service" ];
       restartTriggers = [ config.systemd.units."suid-sgid-wrappers.service".unit ];

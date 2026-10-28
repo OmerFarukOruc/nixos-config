@@ -1,10 +1,3 @@
-# A signed-in, headful browser that coding agents share (features.boxBrowser).
-# Xvnc is the display, localhost only and with no password, and Omer signs in to
-# sites through a VNC viewer behind an SSH tunnel (box-view, in
-# home-manager/modules/box-view.nix). Chromium runs on that display with a
-# persistent profile and a DevTools port on localhost, and agent-browser drives
-# it through the box-browser wrapper, one session per agent
-# (docs/box-browser.md).
 {
   config,
   lib,
@@ -14,8 +7,6 @@
 let
   displayNumber = 20;
   display = ":${toString displayNumber}";
-  # Xvnc serves display :N on port 5900 + N; the number is spelled out because
-  # box-view tunnels to this port.
   vncPort = 5920;
   cdpPort = 9344;
 
@@ -38,8 +29,6 @@ let
     '';
   };
 
-  # agent-browser comes from PATH: Home Manager installs it for the agents'
-  # user (home-manager/modules/agent-cli.nix).
   boxBrowser = pkgs.writeShellApplication {
     name = "box-browser";
     runtimeInputs = [
@@ -92,10 +81,8 @@ let
 in
 {
   config = lib.mkIf config.oruc.machine.features.boxBrowser {
-    # The units run with no login session.
     users.users.oruc.linger = true;
 
-    # A server has no fonts, and Chromium draws no text without one.
     fonts.enableDefaultPackages = lib.mkDefault true;
 
     environment.systemPackages = [ boxBrowser ];
@@ -103,9 +90,6 @@ in
     systemd.user.services.box-display = {
       description = "Box browser display: Xvnc ${display}, localhost only, no password";
       wantedBy = [ "default.target" ];
-      # Every user manager loads these units, and root's starts when a deploy
-      # logs in as root. Its Xvnc found oruc's on the same display and failed
-      # in a loop, which the deploy's session check took for a broken switch.
       unitConfig = {
         ConditionUser = "oruc";
         StartLimitIntervalSec = 0;
@@ -118,7 +102,6 @@ in
           "-rfbport ${toString vncPort}"
           "-nolisten tcp"
           "-SecurityTypes None"
-          # The viewer's window title.
           "-desktop box-browser"
           "-geometry 1920x1080"
           "-depth 24"
@@ -129,8 +112,6 @@ in
       };
     };
 
-    # partOf makes a restart of the display restart the browser, whose window
-    # lives on it.
     systemd.user.services.box-browser = {
       description = "Box browser: Chromium on ${display}, DevTools on 127.0.0.1:${toString cdpPort}";
       requires = [ "box-display.service" ];
@@ -150,7 +131,6 @@ in
           "--remote-debugging-address=127.0.0.1"
           "--remote-debugging-port=${toString cdpPort}"
           "--ozone-platform=x11"
-          # Without a keyring, Chromium would ask for one at the first cookie.
           "--password-store=basic"
           "--no-first-run"
           "--no-default-browser-check"

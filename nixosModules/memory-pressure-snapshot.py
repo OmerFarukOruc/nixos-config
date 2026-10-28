@@ -1,14 +1,3 @@
-# Writes a snapshot of every process and user cgroup when memory pressure
-# rises, so an OOM kill that follows can be traced to the process that
-# spawned the memory. The kernel's OOM task table names no parent and no
-# command line, and the processes are gone by the time anyone looks.
-#
-#   memory-pressure-snapshot [--once]
-#
-# Without --once it waits on a PSI trigger on /proc/pressure/memory
-# (Documentation/accounting/psi.rst) and writes at most one snapshot per
-# MIN_GAP. --once writes one snapshot now and exits. Snapshots go to
-# $XDG_STATE_HOME/oom-snapshots (default ~/.local/state/oom-snapshots).
 import os
 import select
 import sys
@@ -20,13 +9,8 @@ from pathlib import Path
 # threshold is a guess, not measured. An unprivileged trigger needs a window
 # that is a multiple of 2 s (psi.rst).
 TRIGGER = b"some 300000 2000000\0"
-# Guesses. A process line is at most about 230 bytes (a 200-character command
-# line plus the numbers), so a snapshot of 6000 processes is about 1.4 MB and
-# the folder at most about 140 MB. Under steady pressure the 100 files cover
-# only the last 100 minutes.
 MIN_GAP = 60
 KEEP = 100
-# Guesses at what fits on a screen.
 TOP_GROUPS = 20
 TOP_NAMES = 10
 TOP_CGROUPS = 30
@@ -36,7 +20,6 @@ CMDLINE_MAX = 200
 def state_dir():
     base = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
     path = Path(base) / "oom-snapshots"
-    # Command lines can hold tokens, so only the owner reads the snapshots.
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     path.chmod(0o700)
     return path
@@ -157,8 +140,6 @@ def snapshot():
     path = folder / f"{stamp}.txt"
     tmp = path.with_suffix(".tmp")
     try:
-        # An OOM often ends in a reset, so the file reaches the disk before
-        # its name appears.
         with open(tmp, "w", encoding="utf-8", errors="replace") as f:
             f.write("\n".join(lines) + "\n")
             f.flush()
@@ -177,8 +158,6 @@ def snapshot():
 
 
 def watch():
-    # A folder that cannot be made fails here, at login, and not at the
-    # first pressure event.
     state_dir()
     fd = os.open("/proc/pressure/memory", os.O_RDWR | os.O_NONBLOCK)
     os.write(fd, TRIGGER)
@@ -195,7 +174,6 @@ def watch():
                 try:
                     snapshot()
                 except OSError as e:
-                    # A full disk now may have room at the next event.
                     print(f"memory-pressure-snapshot: {e}", file=sys.stderr,
                           flush=True)
                 last = time.monotonic()

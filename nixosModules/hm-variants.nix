@@ -1,8 +1,3 @@
-# The Home Manager variants of oruc (machines/variants.nix): one per Plasma
-# look and scheme. `plasma-look <look>` and `theme <scheme>` store a choice
-# and activate the variant of both stored choices. Each deploy and each boot
-# activates the default variant, so the Home Manager service then activates
-# the stored one.
 {
   config,
   lib,
@@ -15,7 +10,6 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.oruc;
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
-  # Home Manager's own service passes the same version.
   driverVersion = if config.home-manager.enableLegacyProfileManagement then "0" else "1";
 
   # NixOS installs only the generation's own packages (useUserPackages), so
@@ -31,7 +25,6 @@ let
     ) hm.specialisation
   );
 
-  # The shell functions that both commands share.
   common = ''
     state=''${XDG_STATE_HOME:-$HOME/.local/state}/oruc
     base=${hm.home.activationPackage}
@@ -41,8 +34,6 @@ let
     default_scheme=${lib.escapeShellArg variants.defaultScheme}
     looks=(${lib.escapeShellArgs variants.looks})
     schemes=(${lib.escapeShellArgs variants.schemes})
-    # generation|name|scheme|look. look is empty when the machine has no Plasma.
-    # machines/variants.nix is the only place that builds name.
     variant_rows=${
       lib.escapeShellArg (
         lib.concatMapStrings (
@@ -51,8 +42,6 @@ let
       )
     }
 
-    # stored FILE DEFAULT CHOICE...: the stored choice, or DEFAULT when none
-    # is stored or the stored one no longer exists.
     stored() {
       local file=$1 default=$2 choice
       shift 2
@@ -67,7 +56,6 @@ let
     stored_look() { stored plasma-look "$default_look" "''${looks[@]}"; }
     stored_scheme() { stored scheme "$default_scheme" "''${schemes[@]}"; }
 
-    # variant_dir LOOK SCHEME prints the activation directory of that row.
     variant_dir() {
       local want_look=$1 want_scheme=$2 gen name scheme look
       while IFS='|' read -r gen name scheme look; do
@@ -85,7 +73,6 @@ let
       return 1
     }
 
-    # activate LOOK SCHEME: activates their variant.
     activate() {
       local dir
       dir=$(variant_dir "$1" "$2") || return 1
@@ -101,7 +88,6 @@ let
       ${lib.concatStringsSep "\n" (map (command: "      ${command}") hm.oruc.variantReloads)}
     }
 
-    # choose FILE CHOICE: stores the choice for the next activations.
     choose() {
       mkdir -p "$state"
       echo "$2" >"$state/$1"

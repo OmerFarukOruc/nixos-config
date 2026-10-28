@@ -20,7 +20,6 @@ let
   '';
 in
 {
-  # Home Manager uses these packages (useGlobalPkgs), so its overlays go here.
   nixpkgs.overlays = [
     (import ../overlays/khal.nix)
     (import ../overlays/ghostty.nix)
@@ -29,14 +28,12 @@ in
 
   imports = [ inputs.home-manager.nixosModules.home-manager ];
 
-  # A host adds its own layer through home-manager.users.oruc.imports.
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
     backupCommand = homeManagerBackup;
     extraSpecialArgs = {
       inherit inputs sessions;
-      # The llm-agents.nix packages.
       agents = llmAgents // {
         herdr = pkgs.callPackage ../pkgs/herdr.nix { inherit (llmAgents) herdr; };
       };
@@ -52,7 +49,6 @@ in
       }
     ];
     users.oruc.imports = [ ../home-manager/common.nix ];
-    # sudo -i gets the same shell, aliases and tools as oruc.
     users.root.imports = [ ../home-manager/modules/shell.nix ];
   };
   users.users.root.shell = pkgs.zsh;

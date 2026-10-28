@@ -1,11 +1,3 @@
-# Failure visibility: disk health, a monthly scrub of a btrfs root, and a
-# desktop popup when a maintenance unit fails. smartd watches every disk and
-# logs to the journal. With features.diskSelfTests it also runs a short
-# self-test daily at 02:00 and a long one on Sundays at 03:00.
-# systembus-notify turns a system D-Bus signal into a notification in the
-# logged-in session. Any local user can send such a signal, and a signal sent
-# while nobody is logged in is lost; the journal still has the failure. A
-# machine with no desktop session gets neither the notifier nor the popup.
 {
   config,
   lib,
@@ -25,7 +17,6 @@ let
     "nix-optimise"
     "smartd"
   ]
-  # The template; the scrub of / runs as btrfs-scrub@-.service.
   ++ lib.optional scrub "btrfs-scrub@";
 in
 {
@@ -52,8 +43,6 @@ in
       })
     ))
     (lib.mkIf scrub {
-      # On battery the month's scrub is skipped, and the timer waits for the
-      # next month. A host without a battery always meets the condition.
       "btrfs-scrub@".unitConfig.ConditionACPower = true;
     })
     (lib.mkIf desktop {

@@ -1,11 +1,5 @@
-# zapret2 rewrites the first packets of outgoing HTTP, TLS and QUIC
-# connections, so DPI on the line cannot block them (Discord on the home line).
-# Discord starts on the list; other non-excluded hosts join after zapret2 sees a
-# connection to one of them fail three times. Each host names its uplink in
-# services.zapret2.firewall.interfaces.
 { config, pkgs, ... }:
 let
-  # The HTTP and TLS profiles add failing hosts here; QUIC only reads it.
   autoHosts = "/var/lib/zapret2/auto-hosts.txt";
   autodetect = {
     enable = true;
@@ -17,8 +11,6 @@ let
     "microsoftonline.com"
     "microsoft.com"
   ];
-  # Discord's domains start on the list, so the first visits do not have to
-  # fail before zapret2 learns them. Subdomains match too.
   discord = [
     "discord.com"
     "discord.gg"
@@ -28,7 +20,6 @@ let
   ];
 in
 {
-  # null means every interface, tailscale0 and docker0 included.
   assertions = [
     {
       assertion = config.services.zapret2.firewall.interfaces != null;
@@ -37,9 +28,6 @@ in
   ];
 
   networking.nftables.enable = true;
-  # NixOS blacklists ip_tables once nftables is on, so tailscaled must not
-  # fall back to iptables, and Docker needs its nftables backend, which calls
-  # nft itself.
   systemd.services.tailscaled.environment.TS_DEBUG_FIREWALL_MODE = "nftables";
   virtualisation.docker.daemon.settings.firewall-backend = "nftables";
   virtualisation.docker.extraPackages = [ pkgs.nftables ];
@@ -53,7 +41,6 @@ in
       ];
       udpPorts = [ 443 ];
     };
-    # The strategies CachyOS ran on nixos-rog, tuned there on the home line.
     profiles = {
       http = {
         priority = 1;
@@ -94,7 +81,6 @@ in
       };
     };
   };
-  # The QUIC profile's list must exist before the first failure writes it.
   systemd.services."nfqws2@default".serviceConfig.ExecStartPre =
     "${pkgs.coreutils}/bin/touch ${autoHosts}";
 }

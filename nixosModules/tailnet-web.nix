@@ -1,9 +1,3 @@
-# Web names for the tailnet. Each name has a public, DNS-only A record to the
-# host's tailnet address, so it resolves everywhere and connects only from the
-# tailnet: Caddy listens on every address, and the firewall (tailscale.nix)
-# opens no port on the public interface and trusts tailscale0 only. Caddy
-# terminates TLS with a certificate per name from security.acme (Let's Encrypt,
-# DNS-01 challenge at Cloudflare) and proxies the name to a local port.
 {
   config,
   lib,
@@ -34,10 +28,6 @@ in
       defaults = {
         dnsProvider = "cloudflare";
         credentialFiles.CLOUDFLARE_DNS_API_TOKEN_FILE = cfg.dnsTokenFile;
-        # The host's resolvers can keep answering NXDOMAIN for the challenge
-        # record until lego's time limit, and Let's Encrypt does not use them.
-        # lego still waits for the zone's own name servers, which
-        # dnsPropagationCheck = false would skip as well.
         extraLegoFlags = [ "--dns.propagation.disable-rns" ];
       };
       certs = lib.mapAttrs (_: _: { }) cfg.sites;
@@ -45,13 +35,10 @@ in
 
     services.caddy = {
       enable = true;
-      # The admin API is off, so Caddy cannot reload; a change restarts it.
       enableReload = false;
       globalConfig = ''
         auto_https off
         admin off
-        # Open event streams would otherwise hold a restart until systemd's
-        # stop timeout. 10 s is the Debian box's value.
         grace_period 10s
       '';
       virtualHosts = lib.mapAttrs' (

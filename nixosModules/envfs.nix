@@ -10,8 +10,6 @@ let
   ) (throw "envfs: no fallback-path option") config.fileSystems."/usr/bin".options;
 in
 {
-  # Scripts from other repositories run with their `#!/bin/bash` shebangs.
-  # envfs serves /bin and /usr/bin from the PATH of the calling process.
   services.envfs.enable = true;
   # Chromium overwrites its environ for the process title, so envfs sees no
   # PATH for Electron apps. detect-libc in ChatGPT's file watcher then falls
@@ -51,7 +49,6 @@ in
         kill -KILL "$pid" || true
       done < "$procs"
       for _ in $(seq 50); do
-        # systemd removes the cgroup once it is empty.
         [ -n "$(cat "$procs" 2>/dev/null)" ] || exit 0
         sleep 0.1
       done

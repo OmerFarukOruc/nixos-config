@@ -1,24 +1,17 @@
-# How a server is reached: Tailscale with its SSH server and an exit node, and
-# OpenSSH on port 2222. The public interface keeps only Tailscale's UDP port
-# (tailscale.nix), so sshd answers on the tailnet interface only; Tailscale SSH
-# keeps port 22 on the tailnet address.
 { config, lib, ... }:
 let
   cfg = config.oruc.machine;
 in
 lib.mkIf (cfg.kind == "server") {
   services.tailscale = {
-    # Turns on IPv4 and IPv6 forwarding, which an exit node needs.
     useRoutingFeatures = "server";
     extraSetFlags = [
       "--ssh"
       "--advertise-exit-node"
-      # The host's resolvers come from its network file.
       "--accept-dns=false"
     ];
   };
 
-  # Nothing answers on the public interface, ping included.
   networking.firewall.allowPing = false;
 
   services.openssh = {

@@ -19,9 +19,6 @@ let
       inherit shell;
     };
 
-  # Starts niri with that shell's binds. niri-session imports this environment
-  # into the user manager, where niri reads NIRI_CONFIG. A desktop with several
-  # shells also sets ORUC_SHELL, which those shells' services check.
   niriLauncher =
     shell:
     pkgs.writeShellScript "niri-session-${shell}" ''
@@ -29,8 +26,6 @@ let
       ${lib.optionalString (sessions.hasSeveralShells cfg "niri") "export ORUC_SHELL=${shell}"}
       exec ${lib.getExe' pkgs.niri "niri-session"}
     '';
-  # One display manager session per niri shell, named by sessions.sessionName.
-  # With one shell that name is niri, so the stock desktop file is replaced.
   niriSessions = pkgs.symlinkJoin {
     name = "niri-sessions";
     paths = [ pkgs.niri ];
@@ -56,8 +51,6 @@ in
   config = lib.mkMerge [
     (lib.mkIf (sessions.hasAnyDesktop cfg) {
       services.displayManager = {
-        # Off unless the machine record turns it on; plasma-manager.nix then
-        # starts the session locked.
         autoLogin = {
           enable = cfg.autoLogin;
           user = lib.mkIf cfg.autoLogin "oruc";
@@ -71,8 +64,6 @@ in
       };
 
       services.greetd.enable = false;
-      # Puts the Qt plugins and QML modules of the system profile on each
-      # session's search path.
       qt.enable = true;
       services.orca.enable = false;
       hardware.graphics.enable = true;
@@ -83,20 +74,13 @@ in
     (lib.mkIf hasNiri {
       programs.niri.enable = true;
       programs.niri.package = niriSessions;
-      # niri starts it on demand for X11 applications when it is on the PATH.
       environment.systemPackages = [ pkgs.xwayland-satellite ];
       environment.etc = lib.mkMerge [
         {
           "niri/config.kdl".source = ../niri/config.kdl;
-          # config.kdl includes this. The session file adds the shell's binds
-          # after config.kdl, so the stub stays a comment for one shell and for several.
           "niri/shell.kdl".text = ''
             // The session file adds this shell's binds after config.kdl.
           '';
-          # The keyboard layout of the greeter, the machine record's touchpad
-          # settings, and hardware settings that a machine's modules append;
-          # included by config.kdl. niri caches the localed layout at startup, so it
-          # writes the layout here instead.
           "niri/host.kdl".text = ''
             // Settings for this machine's hardware.
             input {
@@ -111,7 +95,6 @@ in
                 }
             }
           '';
-          # Colors for the compositor, included by config.kdl.
           "niri/theme.kdl".text =
             let
               scheme = config.scheme.withHashtag;
@@ -163,28 +146,18 @@ in
         (import ../overlays/ksystemstats.nix)
         (import ../overlays/plasma-desktop.nix)
       ];
-      # Konsole stays for Dolphin's F4 terminal.
       environment.plasma6.excludePackages = with pkgs.kdePackages; [
         elisa
         khelpcenter
       ];
       programs.kde-pim.enable = false;
-      # Plasma starts no SSH agent. gcr's agent unlocks the shared key with the
-      # password saved in KWallet; niri's gnome-keyring already turns it on for
-      # a host that also has niri. secret-tool saves that password
-      # (home-manager/README.md, Per-host credentials).
       services.gnome.gcr-ssh-agent.enable = true;
       environment.systemPackages = [
         # The effect loads only into the exact KWin it was built for. The flake
         # follows our nixpkgs, so both come from the same revision.
         inputs.kwin-effects-glass.packages.${pkgs.stdenv.hostPlatform.system}.default
-        # The Glass Qt 6 style and window decoration, built the same way.
         inputs.glass-style.packages.${pkgs.stdenv.hostPlatform.system}.glass-qt6
-        # Video and Wallpaper Engine wallpapers. Wallpaper Engine scenes need
-        # the content from the Steam app.
         pkgs.kdePackages.wallpaper-engine-plugin
-        # Claude Code's sound hook (the dotfiles' stop-sound.sh) asks KWin
-        # whether Ghostty is the focused window.
         pkgs.kdotool
         pkgs.libsecret
       ];

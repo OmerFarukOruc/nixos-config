@@ -1,6 +1,3 @@
-# The Base16 scheme and the read-only oruc.theme values that follow it. NixOS
-# (theme.nix) and Home Manager (home-manager/modules/scheme.nix) both import
-# it, each with the function that reads its scheme name from its config.
 schemeOf:
 {
   config,
@@ -77,7 +74,6 @@ in
               "webp"
             ]
           );
-          # The scheme's 16 colors, base00 to base0F.
           colors = lib.genList (i: config.scheme.withHashtag."base0${lib.toHexString i}") 16;
           recolored = pkgs.runCommand "wallpaper-${schemeName}" { nativeBuildInputs = [ pkgs.lutgen ]; } ''
             mkdir "$out"

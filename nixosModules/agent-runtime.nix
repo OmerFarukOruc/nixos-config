@@ -1,6 +1,3 @@
-# What the coding agents of a server run against: the /usr/bin paths that
-# scripts and user units hardcode, and the tools the Cursor worker and the Amp runner drive
-# on their virtual desktops.
 {
   config,
   lib,
@@ -22,12 +19,6 @@
     ln -s /run/current-system/sw/bin/podman $out/podman
   '';
 
-  # The Cursor worker (computer use) drives an X session on Xvnc with XFCE, and
-  # the Amp runner (desktop) drives a labwc Wayland session. Neither starts a
-  # login manager. The XFCE module also turns on udisks2, accounts-daemon, gvfs,
-  # tumbler, colord, polkit and gnome-keyring. Its screensaver would lock the
-  # Cursor worker's session, where nobody types a password; the Debian box had
-  # no screensaver installed (dpkg-query, 2026-10-28).
   services.xserver.desktopManager.xfce = {
     enable = true;
     enableScreensaver = false;
@@ -64,8 +55,6 @@
     xwininfo
   ];
 
-  # Chromium draws no text without a font; these cover the system Chromium and
-  # the desktops' applications.
   fonts.packages = with pkgs; [
     freefont_ttf
     ipafont
@@ -76,6 +65,5 @@
     wqy_zenhei
   ];
 
-  # Every terminal type, because agents log in from many terminals.
   environment.enableAllTerminfo = true;
 }

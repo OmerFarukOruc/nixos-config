@@ -1,5 +1,3 @@
-# Mission Center's extra values. Its fan readings need nothing, because hwmon
-# fan inputs are world-readable.
 {
   config,
   lib,
@@ -17,8 +15,6 @@ lib.mkIf (cfg.kind == "workstation") {
     SUBSYSTEM=="powercap", KERNEL=="intel-rapl:*", RUN+="${pkgs.coreutils}/bin/chgrp wheel /sys%p/energy_uj", RUN+="${pkgs.coreutils}/bin/chmod g+r /sys%p/energy_uj"
   '';
 
-  # Per-process network usage comes from nethogs, found through PATH, which
-  # needs packet capture and access to other processes' sockets.
   security.wrappers.nethogs = {
     source = "${pkgs.nethogs}/bin/nethogs";
     owner = "root";

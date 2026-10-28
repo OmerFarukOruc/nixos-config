@@ -1,4 +1,3 @@
-# Rootful Docker daemon with the compose v2 plugin. oruc uses the socket.
 {
   config,
   lib,
@@ -6,8 +5,6 @@
   ...
 }:
 lib.mkIf config.oruc.machine.features.docker {
-  # Container logs go to the journal, NixOS's default log driver, so the
-  # journal's size cap in common.nix also bounds them.
   virtualisation.docker = {
     enable = true;
     autoPrune = {

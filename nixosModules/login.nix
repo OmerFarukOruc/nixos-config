@@ -77,13 +77,9 @@ in
           null;
     }
 
-    # recovery.nix clears the theme in the recovery entry, in case the theme
-    # renders a blank screen.
     (lib.mkIf themed {
       services.displayManager.sddm = {
         theme = "sddm-astronaut-theme";
-        # The greeter finds the theme's Qt modules through its wrapper, which
-        # takes them from the package's propagated inputs.
         extraPackages = [ jake ];
       };
       environment.systemPackages = [ jake ];

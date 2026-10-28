@@ -1,7 +1,3 @@
-# Checks of the Plasma looks of oruc (home-manager/modules/plasma-looks).
-# `plasma-look` comes from hm-variants.nix. The facts below describe each look
-# with the record's scheme, because the scheme does not change its widgets or
-# effects.
 {
   config,
   lib,
@@ -39,7 +35,6 @@ in
   config = lib.mkIf hasPlasma {
     assertions = [
       {
-        # The names become shell variable names in /etc/oruc/verify-facts.
         assertion = lib.all (look: builtins.match "[a-z0-9]+" look != null) looks;
         message = "Plasma look names may hold only lowercase letters and digits: ${toString looks}";
       }
@@ -54,8 +49,6 @@ in
       }
     ];
 
-    # scripts/verify-nixos-rog.sh checks that each panel widget of the stored
-    # look is installed, and that each KWin effect it turns on is loaded.
     oruc.verifyFacts = {
       plasma_look_default = variants.defaultLook;
       scheme_default = variants.defaultScheme;
@@ -76,10 +69,6 @@ in
       }
     ) lookConfigs;
 
-    # scripts/verify-nixos-rog.sh compares the panel file after a panel build
-    # with the settings of the stored look and scheme, because widget colors
-    # follow the scheme (scripts/lib/plasma-panel-settings.py).
-    # The values hold slashes and JSON, which verify-facts does not allow.
     environment.etc = lib.listToAttrs (
       map
         (

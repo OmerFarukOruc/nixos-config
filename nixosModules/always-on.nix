@@ -1,9 +1,3 @@
-# A machine nobody watches recovers on its own (features.alwaysOn). It never
-# sleeps. A panic reboots it after 10 s and leaves its log in EFI pstore, which
-# CachyOS's kernel turns off by default; systemd-pstore then moves the log to
-# /var/lib/systemd/pstore. A hung system resets through the hardware watchdog
-# when the platform provides one, and a failed mount after the initrd no longer
-# stops at the emergency shell. The lid and power keys stay with each host.
 { config, lib, ... }:
 lib.mkIf config.oruc.machine.features.alwaysOn {
   systemd.sleep.settings.Sleep = {

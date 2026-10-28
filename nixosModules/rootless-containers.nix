@@ -1,10 +1,4 @@
-# Containers without root: Docker through RootlessKit and Podman with its user
-# socket, both for oruc (the subuid and subgid ranges are in the host's user
-# record). oruc is in no docker group; each daemon answers on a socket in
-# $XDG_RUNTIME_DIR.
 _: {
-  # RootlessKit 3, because 2.x lets the kernel kill dockerd after connections to
-  # a published port (overlays/rootlesskit.nix).
   nixpkgs.overlays = [ (import ../overlays/rootlesskit.nix) ];
 
   # Rootless Docker picks the host port of a published container from the
@@ -20,19 +14,12 @@ _: {
 
   virtualisation.docker.rootless = {
     enable = true;
-    # DOCKER_HOST for oruc's shells; the socket is $XDG_RUNTIME_DIR/docker.sock.
     setSocketVariable = true;
-    # The build cache cap that the Debian box has used, with no measurement
-    # behind it.
     daemon.settings.builder.gc = {
       enabled = true;
       defaultMaxUsedSpace = "80GB";
     };
   };
 
-  # Podman has no daemon; podman.socket (a user unit that the module wants at
-  # sockets.target) starts `podman system service` for each client of
-  # $XDG_RUNTIME_DIR/podman/podman.sock. cliproxy's compose file reaches it with
-  # DOCKER_HOST and the docker CLI.
   virtualisation.podman.enable = true;
 }

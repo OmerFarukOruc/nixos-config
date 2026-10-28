@@ -14,14 +14,12 @@
       extraPackages = with pkgs; [
         intel-compute-runtime
         intel-media-driver
-        # VDPAU through VA-API, for players that only speak VDPAU.
         libvdpau-va-gl
         vpl-gpu-rt
       ];
     };
     environment.variables.VDPAU_DRIVER = "va_gl";
 
-    # intel_gpu_top, with the capability it needs to read the GPU counters.
     hardware.intel-gpu-tools.enable = true;
   };
 }

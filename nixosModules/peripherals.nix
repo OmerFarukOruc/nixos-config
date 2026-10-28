@@ -20,17 +20,8 @@ lib.mkIf (cfg.kind == "workstation") {
   services.blueman.enable = isNiri;
 
   services.udisks2.enable = true;
-  # The battery widgets of the desktop shells read UPower. Plasma turns it on
-  # without a battery too, because its power management needs it.
   services.upower.enable = lib.mkDefault cfg.hasBattery;
 
-  # Plasma's battery applet and the niri shells' power menus switch profiles
-  # through this daemon. On a host without a firmware platform profile
-  # (/sys/firmware/acpi/platform_profile) a profile changes only the CPU's
-  # governor, energy preference (EPP) and boost.
   services.power-profiles-daemon.enable = true;
-  # The daemon starts at boot rather than on the first D-Bus call. It starts
-  # in the profile last set, which it keeps in its state file, or in balanced
-  # when the file holds none.
   systemd.services.power-profiles-daemon.wantedBy = [ "graphical.target" ];
 }

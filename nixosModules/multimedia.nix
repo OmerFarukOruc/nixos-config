@@ -6,9 +6,6 @@
 }:
 let
   inherit (config.oruc.machine.features) audioEffects;
-  # Qt aborts when EasyEffects starts before the compositor creates the Wayland
-  # socket. On 2026-10-21 the unit dumped core twice at login, then the third
-  # start worked because the socket existed by then.
   waitForDisplay = pkgs.writeShellScript "easyeffects-wait-display" ''
     set -eu
     runtime="''${XDG_RUNTIME_DIR:?}"
@@ -54,7 +51,6 @@ lib.mkIf (config.oruc.machine.kind == "workstation") {
   xdg.portal.enable = true;
 
   environment.systemPackages = [
-    # vainfo and vdpauinfo show which video decoders each GPU offers.
     pkgs.libva-utils
     pkgs.vdpauinfo
   ]
