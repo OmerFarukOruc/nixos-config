@@ -9,8 +9,6 @@
 {
   wants = [ "network-online.target" ];
   after = [ "network-online.target" ];
-  # The service runs the switch itself; restarting it then would kill deploy.sh
-  # before it confirms the new system.
   restartIfChanged = false;
   unitConfig.X-StopOnRemoval = false;
   path = [
