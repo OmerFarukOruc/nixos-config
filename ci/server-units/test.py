@@ -24,3 +24,18 @@ for dp_name in ["openchamber", "herdr", "herdr-fleet"]:
     machine.succeed(f"journalctl -b -u acme-order-renew-{dp_name}.risoluto.dev -o cat | grep -q 'test: chmod of out waited'")
     machine.succeed(f"openssl x509 -noout -issuer -in /var/lib/acme/{dp_name}.risoluto.dev/cert.pem | grep -i pebble")
     machine.wait_until_succeeds(f"openssl s_client -connect 127.0.0.1:443 -servername {dp_name}.risoluto.dev < /dev/null 2> /dev/null | openssl x509 -noout -issuer | grep -i pebble")
+
+# Home Manager's units of oruc. systemd splits an Environment= value at a space
+# unless it is quoted, so stay-green would get a schedule without its hours.
+dp_uid = machine.succeed("id -u oruc").strip()
+machine.wait_for_unit("default.target", "oruc")
+
+
+def dp_user_env(unit):
+    return machine.succeed(
+        f"runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/{dp_uid} systemctl --user show -p Environment --value {unit}"
+    )
+
+
+assert '"STAY_GREEN_SCHEDULE=Mon-Fri 09:00-18:00"' in dp_user_env("stay-green.service"), dp_user_env("stay-green.service")
+assert "CLIPROXY_RENDERED_CONFIG=/run/secrets/rendered/cliproxy-config.yaml" in dp_user_env("cliproxy.service")

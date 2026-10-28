@@ -562,7 +562,8 @@ settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets files, that the netcup network works, that
 Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI and
 stay-green start (they need a registry and a Teams sign-in, so the test turns
-them off; it checks their secrets and unit settings only), that Let's Encrypt issues the three certificates with the real
+them off and checks their secrets only; the unit check below checks their
+settings), that Let's Encrypt issues the three certificates with the real
 Cloudflare token, or that the BIOS stage installs from the kexec installer. The
 cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no
@@ -573,8 +574,9 @@ and a 9p `/nix/store`, which is disko's test wrapper.
 
 The flake check `risoluto-dev-1-units` (`ci/server-units.nix`) boots the host's
 own modules in a plain NixOS test and fails when any unit has failed after boot,
-Home Manager's included. A unit that fails during a switch makes
-`switch-to-configuration` exit 4, which `deploy.sh` rolls back, so one failed
+Home Manager's included. It also reads the environment of oruc's stay-green and
+cliproxy units, because systemd splits an unquoted value at a space. A unit
+that fails during a switch makes `switch-to-configuration` exit 4, which `deploy.sh` rolls back, so one failed
 unit would roll back every deploy. Run it with
 `scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-units`. It is separate from
 the boot test because disko's booted machine has a read-only `/nix/store` and no
