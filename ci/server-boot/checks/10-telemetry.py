@@ -6,6 +6,7 @@
 import json as tel_json
 import re
 import shlex as tel_shlex
+import time as tel_time
 
 tel_dir = "/var/lib/telemetry-sink"
 
@@ -67,10 +68,19 @@ def tel_attr(file, key, value):
 
 
 # The records of the sink as (resource attributes, body fields) pairs. The
-# journald receiver puts each journal field into the body.
+# journald receiver puts each journal field into the body. The sink writes a
+# line in parts, so a read can end inside one; the read is repeated until it
+# ends with a whole line.
 def tel_records(file):
     records = []
-    for line in machine.succeed(f"cat {tel_dir}/{file}").splitlines():
+    for _ in range(30):
+        out = machine.succeed(f"cat {tel_dir}/{file}")
+        if out.endswith("\n"):
+            break
+        tel_time.sleep(1)
+    else:
+        raise AssertionError(f"{file} still ended inside a line after 30 s")
+    for line in out.splitlines():
         for resource_logs in tel_json.loads(line).get("resourceLogs", []):
             resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}
             for scope_logs in resource_logs["scopeLogs"]:
