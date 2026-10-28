@@ -56,9 +56,7 @@ in
       gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
       wallpaper =
         let
-          # A copy of the one file, because a path inside the flake makes every
-          # change to this repository a new wallpaper store path.
-          copyOf =
+          storePathOfFileAlone =
             file:
             "${
               lib.fileset.toSource {
@@ -77,10 +75,10 @@ in
           colors = lib.genList (i: config.scheme.withHashtag."base0${lib.toHexString i}") 16;
           recolored = pkgs.runCommand "wallpaper-${schemeName}" { nativeBuildInputs = [ pkgs.lutgen ]; } ''
             mkdir "$out"
-            lutgen apply -R -o "$out/${schemeName}.png" ${copyOf ../assets/wallpapers/default.png} -- ${lib.escapeShellArgs colors}
+            lutgen apply -R -o "$out/${schemeName}.png" ${storePathOfFileAlone ../assets/wallpapers/default.png} -- ${lib.escapeShellArgs colors}
           '';
         in
-        if named == null then "${recolored}/${schemeName}.png" else copyOf named;
+        if named == null then "${recolored}/${schemeName}.png" else storePathOfFileAlone named;
       ansiNames = [
         "Black"
         "Red"
