@@ -17,6 +17,9 @@
       sync_status=~/Desktop/workspace/dotfiles/desktop/shell/sync-status.zsh
       [[ -r $sync_status ]] && . "$sync_status"
       unset sync_status
+      # Omer's shell API keys, which desktop-sync.sh writes on risoluto-dev-1
+      # from Infisical.
+      [[ -r ~/.zshrc.local ]] && . ~/.zshrc.local
     '';
   };
 

@@ -111,5 +111,4 @@ need their own login. Behavior below was observed on nixos-rog on 2026-10-10.
   its own folder and takes `CLAUDE_CONFIG_DIR=~/.claude-<name> claude auth login`.
   Do not copy a `.credentials.json` from another machine, because Claude Code
   rotates the refresh token on use and the first refresh on one machine logs
-  the other out. The account folder layout is in `desktop/bin/guide.md` of the
-  dotfiles checkout.
+  the other out. The account folder layout is in `pkgs/claude-tools/README.md`.

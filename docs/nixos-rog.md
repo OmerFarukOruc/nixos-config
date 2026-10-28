@@ -779,8 +779,8 @@ theme gruvbox-dark-medium
 ```
 
 Ghostty (which `theme` tells to reload its config) and new Neovim windows take
-the new colors at once, and so does Claude Code on nixos-rog, where the dotfiles
-`settings.json` selects `custom:scheme`. The wallpaper of a scheme without a
+the new colors at once, and so does Claude Code, whose dotfiles `settings.json`
+selects `custom:scheme`. The wallpaper of a scheme without a
 file in `assets/wallpapers` is the default one recolored to that scheme
 ([Theme](architecture.md#theme)). On Plasma, `oruc-plasma-wallpaper` sets it
 again at each activation, so the desktop wallpaper changes with the scheme. VS Code takes its theme extension and

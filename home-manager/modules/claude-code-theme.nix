@@ -1,8 +1,6 @@
-# Claude Code's color theme from the Base16 scheme. The dotfiles settings.json
-# selects `custom:scheme` on each host that desktop-sync.sh manages, and on
-# nixos-rog it leaves ~/.claude/themes/scheme.json to this file; the other
-# hosts it manages get a static copy from the dotfiles repository. Claude Code
-# reloads a changed theme file, so `theme` recolors open sessions too.
+# Claude Code's color theme from the Base16 scheme, on every host. The dotfiles
+# settings.json selects `custom:scheme`. Claude Code reloads a changed theme
+# file, so `theme` recolors open sessions too.
 {
   config,
   lib,

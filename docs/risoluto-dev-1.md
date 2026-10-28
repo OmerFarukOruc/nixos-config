@@ -390,8 +390,6 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`,
   which every minute moves a named Claude agent in herdr off an account that
   hit its usage limit and starts the agents again after a herdr restart.
-  `desktop-sync.sh` there treats the box as a Home Manager host once
-  `/etc/NIXOS` exists.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
   and the box's own list) and runs Omer's agent services as user services of
   oruc: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
