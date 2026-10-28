@@ -4,6 +4,7 @@
   config,
   inputs,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -35,6 +36,15 @@ in
   networking.firewall = {
     enable = true;
     trustedInterfaces = [ config.services.tailscale.interfaceName ];
+  };
+
+  # Since nixpkgs cd731290f728, Podman opens port 53 on podman* for
+  # aardvark-dns by default. Rootless networks run their DNS inside the user's
+  # network namespace, so the host port serves only rootful networks, which no
+  # host here makes. The check keeps this valid on a nixpkgs from before that
+  # commit, which has no such option.
+  virtualisation.podman = lib.optionalAttrs (options.virtualisation.podman ? dns) {
+    dns.openFirewall = false;
   };
 
   # Outside tailscale0 the only open port is Tailscale's own UDP port. The
