@@ -29,10 +29,8 @@ The host imports four more modules for its services: `tailnet-web.nix`,
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
 ([Streamed desktop](#streamed-desktop)).
 
-The box runs Debian until the move to NixOS, so no deploy goes to it yet. Its
-record sets `deployed = false`, so `scripts/affected-hosts.sh` prints it as
-`not-deployed`; remove the field at the move. After the move, the box deploys
-itself ([Deploys](#deploys)).
+The box deploys itself ([Deploys](#deploys)), and the deploy rule of AGENTS.md
+reaches it like the workstations.
 
 ## Disk and boot
 
@@ -257,9 +255,6 @@ The long-running agent units of oruc are in `oruc.deploy.sessionIgnore` in
 `configuration.nix`. deploy.sh's session check leaves them out of a deploy as
 oruc. A deploy as root, which is every deploy above, checks only root's own
 services.
-
-When the box moves to NixOS, remove `deployed = false` from its record in
-`machines/inventory.nix`, so the deploy rule of AGENTS.md reaches it.
 
 ## Web names
 

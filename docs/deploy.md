@@ -226,8 +226,7 @@ it with its parent.
 
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
-`machines/inventory.nix` sets `deployed = false`, now risoluto-dev-1, which runs
-Debian until its move to NixOS.
+`machines/inventory.nix` sets `deployed = false`; no host sets it now.
 
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it

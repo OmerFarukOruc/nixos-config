@@ -183,7 +183,7 @@ checkout with Nix. The update workflow runs them.
 
 </details>
 
-`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop or nixos-latitude; risoluto-dev-1 runs Debian until its move), `--allow-dirty` for a
+`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop, nixos-latitude or risoluto-dev-1), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
 says when to use either flag. Every deploy command can change boot or running
 system state.
