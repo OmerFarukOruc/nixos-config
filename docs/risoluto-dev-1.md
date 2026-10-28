@@ -3,7 +3,6 @@
 - [What it is](#what-it-is)
 - [Disk and boot](#disk-and-boot)
 - [Access](#access)
-- [Bot logins](#bot-logins)
 - [Install](#install)
 - [Network and secrets](#network-and-secrets)
 - [Telemetry](#telemetry)
@@ -25,9 +24,8 @@ It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/risoluto-dev-1/` (`configuration.nix`, `disk.nix`,
 `hardware-configuration.nix`, `home.nix`) and `nixosModules/server-access.nix`.
-The host imports five more modules for its services: `tailnet-web.nix`,
-`rootless-containers.nix`, `agent-runtime.nix`, `envfs.nix` and
-`fleet-bots-pin.nix`. Its record sets
+The host imports four more modules for its services: `tailnet-web.nix`,
+`rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
 ([Streamed desktop](#streamed-desktop)).
 
@@ -66,62 +64,18 @@ drops ping.
   on the public interface and accepts everything on tailscale0, so only the
   tailnet reaches sshd. Port 22 on the tailnet address belongs to Tailscale SSH.
 - Root logs in by key, and only with the three keys in the module (Omer's shared
-  key, the box's own key and the co-admin's). oruc logs in with Omer's shared
-  key, which `nixosModules/common.nix` declares, and sshd also reads oruc's
-  `~/.ssh/authorized_keys`, which `fleet-bots-pin.service` writes
-  ([Bot logins](#bot-logins)). `AllowUsers` lists root and oruc.
-
-## Bot logins
-
-The Grok bots on `risoluto-bots-1` log in as oruc over OpenSSH on tailnet port
-2222 with one key. `nixosModules/fleet-bots-pin.nix` writes that key, with the
-public key in `machines/risoluto-dev-1/fleet-bots.pub`, as the only line of
-oruc's `~/.ssh/authorized_keys`, limited with `from=` to the current tailnet
-IPv4 address of `risoluto-bots-1`:
-
-- The address is read at run time with `tailscale ip -4 risoluto-bots-1` and
-  never committed. A tag or a range would not do. `risoluto-bots-1` holds a
-  Tailscale OAuth client that can join any machine under its tag, and any
-  machine that joined that way would pass a rule that checks only the tag. The
-  bots get no Tailscale SSH for the same reason.
-- `fleet-bots-pin.timer` starts `fleet-bots-pin.service` 2 minutes after boot and
-  then every 5 minutes, because `risoluto-bots-1` gets a new address each time
-  it logs in to the tailnet again. A run rewrites the file only when the line, its
-  mode (600) or its owner (oruc) differs. When the daemon reports no address,
-  the run keeps the current line and does not fail, so a restart of tailscaled
-  does not lock the bots out. An address that is not a dotted quad is refused,
-  and so is a symlink in place of `~/.ssh`, which oruc owns.
-- A machine that logs in while its old node is still registered comes back as
-  `risoluto-bots-1-1`. Before the pin, `fleet-bots-ts-name` renames the online
-  node back to `risoluto-bots-1`, and every offline `risoluto-bots-1` or
-  `risoluto-bots-1-<n>` node that carries `tag:grok-box` to
-  `risoluto-bots-1-retired-<node id>`. It never deletes a device, and a node
-  retired by mistake gets its name back with one rename in the admin console.
-- The rename reads `fleet-bots-ts-client`, a Tailscale OAuth client with
-  `devices:core` write. It is in `secrets/risoluto-dev-1-fleet-bots.yaml` as
-  `fleet-bots-ts-client-id` and `fleet-bots-ts-client-secret`, encrypted for the
-  same two recipients as the other files of the box (`.sops.yaml`), and
-  `configuration.nix` renders both into the one file that the unit passes to
-  `fleet-bots-ts-name`. Without that file the run skips the rename and still
-  pins the address that the daemon reports. The values are `TAILSCALE_BOTS_DEVICES_CLIENT_ID` and
-  `TAILSCALE_BOTS_DEVICES_CLIENT_SECRET` in Infisical's `/infra` folder of the
-  `statuslantern` project. Rotate them the way
-  [Rotate the box's token](#rotate-the-boxs-token) does, with the two keys. The
-  client reaches every device of the tailnet, so it stays on this box.
-- When the rename fails, for example with the Tailscale API down, the run still
-  pins the address that the daemon reports, and the unit ends failed. The
-  failure lines (priority info to warning) ship to SigNoz through
-  `journalUnits`, with the `pinned` lines.
+  key, the box's own key and the co-admin's). oruc keeps `~/.ssh/authorized_keys`
+  on top of the declared key. Omer adds the Grok bots' key there by hand.
+  `AllowUsers` lists root and oruc.
 
 ## Install
 
 sops-nix decrypts `secrets/risoluto-dev-1.yaml`,
-`secrets/risoluto-dev-1-acme.yaml`, `secrets/risoluto-dev-1-github.yaml` and
-`secrets/risoluto-dev-1-fleet-bots.yaml` while the system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`.
+`secrets/risoluto-dev-1-acme.yaml` and `secrets/risoluto-dev-1-github.yaml`
+while the system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`.
 The first boot needs that key in place, because the network file and both
 password hashes come from the first file, the Cloudflare token for the
-certificates from the second, the deploy unit's GitHub token from the third, and
-the Tailscale client of the bots' pin from the fourth.
+certificates from the second, and the deploy unit's GitHub token from the third.
 An install that makes new host keys boots with no address, no password, no
 certificates and no deploy token. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
@@ -129,7 +83,7 @@ with `nixos-anywhere --copy-host-keys`, and check that
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
 it waits for the move. `scripts/check-secrets.sh` without an argument checks
-all four sops files; with a file argument it compares only the main file.
+all three sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
@@ -267,17 +221,11 @@ Changes from the Debian setup. One collector replaces the two there, because on
 NixOS it reads the journal through the `systemd-journal` group and needs no
 chroot. Health checks and self-metrics use `127.0.0.1:13133` and
 `127.0.0.1:8888`. The filters that dropped the start and stop records of
-`sysbox-fuse-watchdog` and `infra-reconcile@infra`, and the watchdog's run
-lines, are gone with those units. systemd sends a `SERVICE_START` and a
-`SERVICE_STOP` record for every unit start, and the collector ships all of them
-except the units in `oruc.telemetry.auditDropUnits`.
-`nixosModules/fleet-bots-pin.nix` adds `fleet-bots-pin` there: its timer runs
-every 5 minutes, and a SigNoz count on the Debian box over 11 to 12 October
-2026 found 586 records of it among 76,271 (infra's
-`docs/runners/measurements.md`). The audit log on disk
-keeps them, and `journalUnits` ships the unit's own lines, so its runs stay
-visible. A unit that starts rarely, such as the deploy timer, ships its
-records. Add a unit to the list when SigNoz shows its records as noise.
+`sysbox-fuse-watchdog`, `infra-reconcile@infra` and `fleet-bots-pin`, and the
+watchdog's run lines, are gone with those units. systemd sends a
+`SERVICE_START` and a `SERVICE_STOP` record for every unit start, and the
+collector now ships all of them. A unit that starts often, such as the deploy
+timer, adds noise. Add a filter when SigNoz shows it.
 
 The boot test covers it in `ci/server-boot/checks/10-telemetry.py`. Its module
 `ci/server-boot/modules/telemetry.nix` points the collector at a second
@@ -285,8 +233,7 @@ collector on loopback (a sink that writes files). The check logs in as oruc
 over SSH, runs `sudo` to change a file under `/etc`, reads a secret as
 `nobody`, which the `credstore` rule logs although the read fails, stops the
 collector for a second login, and checks that the sink got each record after
-the restart, the start and stop records of a unit and none of a unit in
-`auditDropUnits` (which the journal holds), the unit journal line, the info line of a user unit of oruc and
+the restart, the unit journal line, the info line of a user unit of oruc and
 the manager's line about it (not its debug line), and the host metrics. It proves that the
 collector loads its config, that auditd loads the rules, and that the audit and
 sshd records travel through the journal into the collector's pipeline and out
@@ -589,30 +536,6 @@ seconds, so the orders of the first issuance overlap on purpose. A real order
 passes the `chmod` in milliseconds, so that overlap is rare on the box and
 certain in the test. In each run of this test without the ordering of Caddy
 after the orders, Caddy exited with status 1.
-
-The test also runs the bots' login ([Bot logins](#bot-logins)) with the real
-sshd on port 2222 and the real sops-nix credential, against two stand-ins:
-`tailscale ip -4` answers from a file, because the VM has no tailnet, and a
-second node (`tsapi`, `ci/server-units/tailscale-api.py`) answers the four
-Tailscale API calls of the rename over TLS, with a certificate of the test CA.
-The test key replaces the real one, whose private half the test does not hold; a
-check shows that the real public key parses. A client binds a loopback address
-as its source, which is the address that sshd matches against `from=`. The test
-shows that the bot logs in from the pinned address, that sshd refuses the same
-key from another address with its `from=` message, that a new address replaces
-the old one, that a run with an unchanged address writes nothing, that a
-changed mode or owner is repaired, that a symlinked key directory fails the run,
-that an address the daemon no longer knows
-keeps the line, that a run without the credential file skips the rename and
-still pins, that the rename retires the stale nodes and pins the renamed node's
-address, that an online holder of the name only retires the offline numbered
-nodes, that two online numbered nodes rename nothing and fail the unit, and that
-a failed API call still pins and fails the unit. It does
-not show a real tailnet address, the real OAuth client (the test client has the
-values of `ci/server-boot/secrets.yaml`) or the shape of the real API replies,
-because the stand-in's replies are not copies of a live response. The helper
-already runs against the real API on the Debian box, and the cutover proves the
-rest.
 
 ## Deploy test in a VM
 

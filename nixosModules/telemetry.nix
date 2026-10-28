@@ -187,20 +187,6 @@ in
       '';
     };
 
-    auditDropUnits = mkOption {
-      type = types.listOf (types.strMatching "[A-Za-z0-9_@-]+");
-      default = [ ];
-      example = [ "fleet-bots-pin" ];
-      description = ''
-        Units whose start and stop audit records (`SERVICE_START` and
-        `SERVICE_STOP`) do not ship, such as a timer unit that runs every few
-        minutes. A name is the one in the record, without `.service`. The audit
-        rules cannot match a unit name, so the collector drops them. The local
-        audit log keeps them, and `journalUnits` still ships the unit's own
-        lines.
-      '';
-    };
-
     unitsServiceName = mkOption {
       type = types.str;
       default = "infra-units";
@@ -305,15 +291,6 @@ in
               "^scrape_(series_added|duration_seconds|samples_scraped|samples_post_metric_relabeling)$"
             ];
           };
-          # systemd sends every start and stop of a unit as an audit record from
-          # pid 1 with no login session. A security module such as AppArmor adds
-          # a subj= field before msg=.
-          "filter/audit_units" = lib.mkIf (cfg.auditDropUnits != [ ]) {
-            error_mode = "ignore";
-            logs.log_record = [
-              ''IsMatch(body["MESSAGE"], "^type=SERVICE_(START|STOP) msg=audit[(][0-9.:]+[)]: pid=1 uid=0 auid=4294967295 ses=4294967295 [^']*msg='unit=(${lib.concatStringsSep "|" cfg.auditDropUnits}) ")''
-            ];
-          };
           "resource/agent" = resource { environment = true; };
           "resource/audit" = resource { service = "host-audit"; };
           "resource/units" = resource { service = cfg.unitsServiceName; };
@@ -384,9 +361,6 @@ in
               receivers = [ "journald/audit" ];
               processors = [
                 "memory_limiter"
-              ]
-              ++ lib.optional (cfg.auditDropUnits != [ ]) "filter/audit_units"
-              ++ [
                 "resource/audit"
                 "batch/logs"
               ];

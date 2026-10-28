@@ -115,20 +115,8 @@ machine.sleep(3)
 machine.succeed("systemctl start opentelemetry-collector.service")
 tel_wait("logs.json", "telemetry-probe-2")
 
-# The start and stop records of a unit in auditDropUnits do not ship, and those
-# of any other unit do. The audit pipeline keeps its order, so once the records
-# of the second unit are in the sink, those of the first would be too.
-machine.succeed("systemctl start telemetry-audit-drop-probe.service")
 machine.succeed("systemctl start telemetry-unit-probe.service")
 tel_wait("logs.json", "telemetry-unit-probe-line")
-for tel_type in ["START", "STOP"]:
-    tel_wait("logs.json", f"type=SERVICE_{tel_type}[^}}]*unit=telemetry-unit-probe ")
-    # The record exists in the journal, so its absence in the sink is the filter.
-    machine.succeed(
-        "journalctl -b -o cat SYSLOG_IDENTIFIER=audisp-syslog | "
-        f"grep -E 'type=SERVICE_{tel_type} .*unit=telemetry-audit-drop-probe '"
-    )
-assert tel_count("logs.json", "unit=telemetry-audit-drop-probe") == 0, "the audit records of a dropped unit shipped"
 tel_wait("metrics.json", "system.memory.usage")
 
 # A unit of oruc's user manager. Its own info line and the line that the

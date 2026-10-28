@@ -13,7 +13,6 @@
 let
   pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
   acmeNodes = import ./server-units/acme.nix { inherit inputs; };
-  fleetNodes = import ./server-units/fleet-bots.nix { inherit inputs host; };
 in
 {
   risoluto-dev-1-units = pkgs.testers.runNixOSTest {
@@ -25,14 +24,9 @@ in
     };
     nodes.acme = acmeNodes.acme;
     nodes.dnsserver = acmeNodes.dnsserver;
-    nodes.tsapi = fleetNodes.tsapi;
     # The host's modules are those of mkMachine in machines/inventory.nix. The
-    # acme client and the sops stub are the test's additions, and so is the
-    # fleet-bots client, which only this test needs.
-    nodes.machine.imports = [
-      (import ./server-units/machine.nix { inherit host acmeNodes; })
-      fleetNodes.client
-    ];
+    # acme client and the sops stub are the test's additions.
+    nodes.machine = import ./server-units/machine.nix { inherit host acmeNodes; };
     testScript = builtins.readFile ./server-units/test.py;
   };
 }

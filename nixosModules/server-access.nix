@@ -31,8 +31,8 @@ lib.mkIf (cfg.kind == "server") {
         "oruc"
       ];
     };
-    # oruc reads ~/.ssh/authorized_keys, where fleet-bots-pin.nix writes the
-    # Grok bots' key.
+    # oruc also reads ~/.ssh/authorized_keys, where Omer adds the Grok bots'
+    # key by hand.
     # root reads only the keys declared here; the Match block must stay last.
     extraConfig = ''
       Match User root
