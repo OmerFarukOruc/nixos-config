@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# The BROWSER that `claude-accounts login` gives `claude auth login`, which calls it with the authorize URL.
+#   CLAUDE_LOGIN_URL_FILE=F  write the URL to F and open nothing (a login on a headless host, `login NAME --on HOST`)
+#   CLAUDE_LOGIN_BRAVE_PROFILE=NAME  open the URL in the Brave profile whose display name is NAME, so the claude.ai
+#                            session of that profile signs in; unset or empty opens Brave's last profile
+# A NAME this device has no profile for gets a new one in the folder "Claude <name as a slug>". Its Preferences file
+# names it before Brave first opens it, and Brave takes that name into its profile list (checked on 19-10-2026 with
+# brave-origin and a scratch --user-data-dir). An existing folder is never written.
+# Brave is brave-origin (Brave-Origin profiles) on nixos-desktop and nixos-rog. Each device resolves
+# the display name to its own profile folder through the browser's Local State file.
 set -euo pipefail
 url="${1:?usage: claude-login-browser URL}"
 

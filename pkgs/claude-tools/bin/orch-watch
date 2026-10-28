@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+# Wakes the orchestrator: prints one line for each event in a herdr session, so a Monitor on it delivers them.
+#   orch-watch [NAME-REGEX]    NAME-REGEX must match a whole agent name; the default is the list of agents
+#                              below, so reviewer subagents do not wake the orchestrator
+# Lines, each starting with the UTC time:
+#   NAME working -> idle | STATUS: ...   a watched agent finished a turn, with its last STATUS: or NEED: line from
+#                                        the screen, else from the session transcript
+#   NAME HELD PROMPT / ALERT             a watched agent is blocked on a prompt, turned unknown, or left the list
+#   NAME NEED (reply required) | text    a notice from orch-notify (also DONE and INFO), for any agent
+#   ALERT host ...                       load, swap or /tmp inodes crossed their limit; "recovered" when they fall back
+# The first poll only records state, so a restart prints nothing for agents that were already idle. Notices that
+# arrived while no watcher ran print at start: the byte offset read so far is kept in $ORCH_INBOX.offset.
+#   ALERT watcher STEP failing (...)     a poll step (inbox, host meters, agents) raised; the loop goes on, and the
+#                                        line repeats only when the error changes
+# One watcher runs for each inbox, so each notice wakes the orchestrator once: a new watcher stops the older one
+# (its pid is in $ORCH_INBOX.watcher) and prints "watcher replaced pid N", and the older one prints "watcher stopped
+# by SIGTERM" as its last line. Re-arming a Monitor is therefore safe.
+# CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one.
 import fcntl
 import os
 import re

@@ -81,6 +81,10 @@ in
           "niri/shell.kdl".text = ''
             // The session file adds this shell's binds after config.kdl.
           '';
+          # The keyboard layout of the greeter, the machine record's touchpad
+          # settings, and hardware settings that a machine's modules append;
+          # included by config.kdl. niri caches the localed layout at startup, so it
+          # writes the layout here instead.
           "niri/host.kdl".text = ''
             // Settings for this machine's hardware.
             input {

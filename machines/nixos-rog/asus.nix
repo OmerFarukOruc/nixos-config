@@ -200,6 +200,9 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
 
   services.asusd = {
     enable = true;
+    # asusd reads every field here; a missing one makes it start from its
+    # own defaults, which switch profiles. It copies this file into /etc and
+    # may rewrite it at runtime; the next activation restores it.
     asusdConfig.text = ''
       (
           charge_control_end_threshold: 80,
@@ -254,10 +257,15 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
       )
     '';
   };
+  # asusd reads most of its files only when it starts. It reloads a changed
+  # asusd.ron, but kept applying the old power limits after that, so every
+  # change restarts it.
   systemd.services.asusd.restartTriggers = lib.mapAttrsToList (_: file: file.source) (
     lib.filterAttrs (name: _: lib.hasPrefix "asusd/" name) config.environment.etc
   );
 
+  # The Slash LED bar on the lid stays dark on battery. The asusd module has no
+  # option for this file.
   environment.etc."asusd/slash.ron" = {
     mode = "0644";
     text = ''

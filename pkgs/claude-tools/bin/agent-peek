@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# Shows where a herdr agent stands without opening its pane: `agent-peek NAME [LINES]`.
+# It prints the agent's state, its last STATUS: or NEED: line, and the last LINES (default 20) lines of its last
+# answer, read from the session transcript because the screen can miss an answer on Claude's alternate screen
+# (the dotfiles checkout's desktop/reference/headless-clis/herdr.md). Without a transcript it prints the visible screen instead.
+# CLAUDE_LIMIT_SWITCH_SESSION names another herdr session than the default one.
 import json
 import re
 import sys

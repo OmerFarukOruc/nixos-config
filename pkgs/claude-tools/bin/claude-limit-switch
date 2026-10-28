@@ -1,4 +1,33 @@
 #!/usr/bin/env python3
+# Keeps Claude Code agents in herdr running: moves an agent to another account when its account hits a usage
+# limit, and starts the agents again after the herdr server restarted.
+#   claude-limit-switch scan                        restore, then switch each named Claude agent whose screen ends
+#                                                   in a limit message (claude-limit-switch.timer runs this)
+#   claude-limit-switch restore                     only the restore step of scan
+#   claude-limit-switch switch NAME [--to ACCOUNT]  switch one agent now
+#   claude-limit-switch resume NAME                 start a recorded agent that is not running, such as one that
+#                                                   ended by an accidental /exit
+#   claude-limit-switch usage [ACCOUNT ...]         print the session and weekly meters of each account
+# Accounts are the claude-accounts accounts. They share ~/.claude/projects, so `claude --resume <session>`
+# continues the same conversation under another account. A switch types /exit in the agent's pane, sets
+# CLAUDE_CONFIG_DIR there, starts Claude like `clauded --resume <session>` with its other old arguments under the same agent
+# name, and tells the agent to continue. ~/.config/claude-limit-switch/resume/NAME replaces that message for
+# agent NAME. `--resume` brings back a fixed-interval /loop but not a self-paced one or a Monitor, so an agent that
+# runs them needs a message that checks CronList first (the dotfiles checkout's desktop/reference/unattended-agents.md).
+# The new account is the one with the lowest weekly use among those under both limits below. Each candidate
+# is measured with `claude-usage --account NAME`, which reads the usage endpoint or runs a one-turn `claude -p`.
+# herdr itself resumes Claude as plain `claude --resume`, without the flag and the account (see
+# the dotfiles checkout's desktop/reference/headless-clis/herdr.md), so its own restore is off. Instead each scan records the named Claude
+# agents and the server process in agents.json. When the next scan finds a different server process, it starts each
+# recorded agent that is missing like `clauded --resume <session>` with its account, in its old pane or a new
+# workspace, and sends it the resume message. An agent that is missing while the same server runs was ended on
+# purpose; the record keeps it under "ended" with its last session for ENDED_KEEP, and only `resume NAME` starts it
+# again, the same way. A start that fails closes the workspace it made, and the next try waits COOLDOWN. When no
+# server runs, scan starts it (herdr-default.service for the default session).
+# State is in ~/.local/state/claude-limit-switch: limits.json (account: limited until, reason), agents.json,
+# switched.json and restore-failed.json (name: time of the last try), and events.log with the one before it in
+# events.log.1. CLAUDE_LIMIT_SWITCH_STATE and CLAUDE_LIMIT_SWITCH_SESSION (a herdr session name) point a test
+# elsewhere.
 from __future__ import annotations
 
 import argparse

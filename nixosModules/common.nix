@@ -106,6 +106,9 @@ in
     boot.initrd.compressor = "zstd";
     boot.initrd.compressorArgs = [ "-19" ];
 
+    # Kernel modules no one here uses, with a history of local privilege
+    # escalations: IPsec ESP, RxRPC, and RDS. An IPsec VPN needs esp4 and
+    # esp6 back.
     boot.extraModprobeConfig =
       lib.concatMapStrings
         (module: ''

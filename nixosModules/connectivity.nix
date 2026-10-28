@@ -6,6 +6,8 @@ lib.mkIf (cfg.kind == "workstation") {
   networking.networkmanager = {
     enable = true;
     wifi.powersave = lib.mkIf (cfg.formFactor == "laptop") false;
+    # Without a check URI, NetworkManager guesses connectivity once at activation
+    # and never rechecks, so the tray shows "!" after a VPN goes down.
     settings.connectivity.uri = "http://nmcheck.gnome.org/check_network_status.txt";
   };
 

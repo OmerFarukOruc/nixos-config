@@ -32,6 +32,8 @@ let
         "AcceleratedVideoEncoder"
       ]
     );
+  # Brave Origin 1.98.60 moves to Chromium 156 for its security fixes, and
+  # nixpkgs still builds 1.97.59. Remove the override once nixpkgs has 1.98.60.
   braveOrigin =
     if lib.versionOlder pkgs.brave-origin.version "1.98.60" then
       pkgs.brave-origin.overrideAttrs (

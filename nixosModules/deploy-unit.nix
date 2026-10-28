@@ -11,6 +11,7 @@
   after = [ "network-online.target" ];
   restartIfChanged = false;
   unitConfig.X-StopOnRemoval = false;
+  # deploy.sh calls sudo, which lives in /run/wrappers/bin.
   path = [
     "/run/wrappers"
     config.nix.package

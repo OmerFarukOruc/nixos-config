@@ -47,6 +47,8 @@ in
     KWIN_ALLOW_VULKAN_MGPU_COPIES = "1";
   };
 
+  # The NixOS NVIDIA module turns on only when "nvidia" is listed here, also on
+  # Wayland. The iGPU driver comes first so nothing keeps the dGPU awake.
   services.xserver.videoDrivers = [
     "amdgpu"
     "nvidia"
@@ -81,12 +83,19 @@ in
       nvidiaBusId = "PCI:101@0:0:0";
     };
 
+    # Saves video memory across suspend. With the open module at 595 or newer,
+    # NixOS uses the kernel's suspend notifiers instead of nvidia-suspend units.
     powerManagement.enable = true;
     powerManagement.finegrained = true;
     dynamicBoost.enable = true;
   };
+  # asusd starts nvidia-powerd when AC is plugged in and stops it when AC is
+  # unplugged, but never at its own start, so a boot on battery skips it here.
   systemd.services.nvidia-powerd.unitConfig.ConditionACPower = true;
 
+  # The binary cache holds the NVIDIA module only for the selected kernel, so
+  # the recovery kernel would compile it on the machine; the recovery entry
+  # drops the driver instead. Without it, NixOS no longer blacklists nouveau.
   specialisation.recovery.configuration = {
     services.xserver.videoDrivers = lib.mkForce (
       lib.remove "nvidia" config.services.xserver.videoDrivers
@@ -96,6 +105,7 @@ in
   };
 
   boot.kernelParams = [
+    # The video memory saved at suspend goes to disk, never to a RAM-backed /tmp.
     "nvidia.NVreg_TemporaryFilePath=/var/tmp"
     "nvidia.NVreg_EnableS0ixPowerManagement=1"
   ];

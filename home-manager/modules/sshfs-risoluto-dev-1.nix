@@ -1,3 +1,14 @@
+# Mounts the whole of risoluto-dev-1 read-only, as oruc over Tailscale SSH, so
+# local apps open its paths: /tmp/x on the box is ~/remote/risoluto-dev-1/tmp/x
+# here. Keep the unit name sshfs-risoluto-dev-1.service, because dotfiles'
+# `ropen` starts it when the mount is down.
+#
+# The mount point is under $XDG_RUNTIME_DIR and ~/remote/risoluto-dev-1 is a
+# symlink to it, because Baloo, find and rg walk the home folder without
+# following symlinks; a mount inside the home folder would have them crawl the
+# box's disk. After a suspend or a network drop, a read can wait up to 45
+# seconds (ServerAliveInterval times ServerAliveCountMax) before sshfs drops the
+# dead connection; `reconnect` then opens a new one on the next read.
 { lib, pkgs, ... }:
 let
   mount = "%t/sshfs/risoluto-dev-1";
@@ -16,6 +27,12 @@ in
     Unit = {
       Description = "sshfs mount of risoluto-dev-1 at ~/remote/risoluto-dev-1";
       StartLimitIntervalSec = 0;
+      # A switch that changes NetworkManager stops it until activation ends,
+      # so a restart then cannot reach the box: it held activation for the 30 s
+      # of ExecStartPost and left the unit waiting to restart, which fails
+      # deploy.sh's user service check (exit 75, journal 2026-10-26 20:08).
+      # The running mount keeps working and reconnects; the next start uses
+      # the new unit.
       X-SwitchMethod = "keep-old";
     };
     Service = {

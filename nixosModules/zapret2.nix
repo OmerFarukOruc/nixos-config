@@ -28,6 +28,9 @@ in
   ];
 
   networking.nftables.enable = true;
+  # NixOS blacklists ip_tables once nftables is on, so tailscaled must not
+  # fall back to iptables, and Docker needs its nftables backend, which calls
+  # nft itself.
   systemd.services.tailscaled.environment.TS_DEBUG_FIREWALL_MODE = "nftables";
   virtualisation.docker.daemon.settings.firewall-backend = "nftables";
   virtualisation.docker.extraPackages = [ pkgs.nftables ];

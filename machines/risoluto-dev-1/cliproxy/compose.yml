@@ -1,9 +1,14 @@
 
+# Do not start this file by itself. cliproxy-up.sh copies the config that
+# sops-nix renders first. A bare `up` with an empty config file would start an
+# unauthenticated proxy.
 services:
   cliproxy:
     image: ${CLIPROXY_IMAGE:?set CLIPROXY_IMAGE}
     pull_policy: missing
     container_name: cliproxy
+    # systemd renders the tmpfs config before it starts this container.
+    # Podman must not start it independently after a reboot.
     restart: "no"
     environment:
       TZ: Europe/Istanbul

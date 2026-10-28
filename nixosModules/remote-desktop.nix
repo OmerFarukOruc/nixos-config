@@ -3,9 +3,13 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
   nixpkgs.overlays = [ (import ../overlays/sunshine.nix) ];
   services.sunshine = {
     enable = true;
-    capSysAdmin = true;
+    capSysAdmin = true; # KMS capture on Wayland
     autoStart = true;
     openFirewall = false;
+    # In automatic mode Sunshine on Plasma asked the XDG portal first, which
+    # waits for someone to approve a dialog on the host's screen, so Sunshine
+    # never started listening. KMS needs no approval. With settings set, the
+    # web UI can no longer change the configuration, but pairing still works.
     settings.capture = "kms";
   };
   # A restart from the tray menu or web UI exits with 75 (overlays/sunshine.nix).

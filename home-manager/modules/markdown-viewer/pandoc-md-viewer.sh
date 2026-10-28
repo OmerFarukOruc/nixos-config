@@ -35,6 +35,8 @@ fi
 #    is left as it is.
 # The reader also drops yaml_metadata_block, so a leftover or mid-file --- fence
 # cannot stop the render.
+# --highlight-style is the option pandoc 3.7 (nixpkgs) knows; pandoc 3.8 and later
+# replaced it with --syntax-highlighting and deprecates the old name.
 awk '
 function emit(line) {
   if (match(line, /^[[:space:]]*(```|~~~)/)) {
