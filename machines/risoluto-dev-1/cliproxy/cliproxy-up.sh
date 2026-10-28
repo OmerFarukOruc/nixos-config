@@ -40,10 +40,11 @@ elif [ ! -s "${CLIPROXY_RENDERED_CONFIG:-}" ] || [ -z "${CLIPROXY_SHARE_HOST:-}"
   echo "cliproxy-up: the sops config or CLIPROXY_SHARE_HOST is missing; start it through cliproxy.service" >&2
   exit 78
 fi
-# An empty key would start an unauthenticated proxy.
+# An empty key would start an unauthenticated proxy. A secret with a line break
+# or a quote breaks the JSON, which jq refuses too.
 if [ "${1:-}" != stop ] && ! jq -e '(."api-keys" | length > 0 and all(length > 0))
     and (."remote-management"."secret-key" | length > 0)' "$CLIPROXY_RENDERED_CONFIG" >/dev/null; then
-  echo "cliproxy-up: the config has an empty API key or management key" >&2
+  echo "cliproxy-up: the config is not valid JSON, or it has an empty API key or management key" >&2
   exit 78
 fi
 
