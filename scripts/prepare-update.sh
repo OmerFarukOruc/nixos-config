@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# usage: scripts/prepare-update.sh HOST CHANGES
-# Runs in a clean checkout of main from .github/workflows/update.yml. Moves the
-# flake inputs and the apps in pkgs/ to their newest releases in the working
-# tree and writes the commit body that lists the moves to CHANGES. It writes
-# nothing to CHANGES when nothing moved.
-# - Every input except the two below moves with move-inputs.sh.
+# usage: scripts/prepare-update.sh apps|inputs HOST CHANGES
+# Runs in a clean checkout of main from .github/workflows/update.yml, which
+# commits each mode's moves as its own commit, so a failing input move never
+# holds back an app. It writes the commit body that lists the moves to CHANGES,
+# and nothing when nothing moved.
+# apps: each app in pkgs/ moves with update-app.sh against main's flake.lock and
+#   stays only when it builds on its own, so one broken release never holds
+#   back the rest.
+# inputs:
+# - Every input except the two below moves with move-inputs.sh, and those
+#   moves stay only while every host's system evaluates; otherwise nixpkgs
+#   stays where it is, and when that is not enough every input does.
 # - The kernel moves only once the kernel cache holds its build
 #   (update-kernel.sh).
 # - llm-agents moves only while cache.numtide.com holds every coding agent that
 #   HOST's system uses.
-# - Each app moves with update-app.sh and stays only when it builds on its own,
-#   so one broken release never holds back the rest.
+# - An app with a passthru.depsBun line, whose locked dependencies follow
+#   nixpkgs' bun, moves again against the moved inputs.
 # - devenv.lock moves only with another move and only while the dev shell of
 #   devenv.nix builds.
 # A move that stays out prints a GitHub warning annotation and the run goes on.
@@ -18,8 +24,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-host=${1:?usage: prepare-update.sh HOST CHANGES}
-out=${2:?usage: prepare-update.sh HOST CHANGES}
+usage="usage: prepare-update.sh apps|inputs HOST CHANGES"
+mode=${1:?$usage}
+host=${2:?$usage}
+out=${3:?$usage}
+[[ $mode == apps || $mode == inputs ]] || {
+  echo "$usage" >&2
+  exit 2
+}
 : >"$out"
 
 # warn TEXT: a line in the run's log that GitHub also shows as an annotation.
@@ -27,14 +39,100 @@ warn() { echo "::warning::$1"; }
 
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
+# shellcheck source=/dev/null
+. scripts/lib/build-error.sh
+
+# move_apps [FILE...]: moves each app, or every app in pkgs/ without an
+# argument, with update-app.sh and keeps each move only when the app builds on
+# its own. Appends "- APP: VERSION" lines to $apps.
+apps=
+move_apps() {
+  local file app version reason restore files=("$@")
+  ((${#files[@]})) || files=(pkgs/*.nix)
+  for file in "${files[@]}"; do
+    app=$(basename "$file" .nix)
+    if ! version=$(scripts/update-app.sh "$app" 2>"$work/app.err"); then
+      cat "$work/app.err" >&2
+      warn "$app stays where it is: $(tail -n 1 "$work/app.err")"
+      continue
+    fi
+    [[ -n $version ]] || continue
+    if nix build --no-link --impure --expr \
+      "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" \
+      </dev/null 2>"$work/build.log"; then
+      cat "$work/build.log" >&2
+      apps+=$'\n'"- $app: $version"
+      continue
+    fi
+    cat "$work/build.log" >&2
+    # An npm wrapper project keeps its package.json and lockfile in pkgs/NAME/.
+    restore=("$file")
+    grep -q '^  passthru.npmPackage = ' "$file" && [[ -d pkgs/$app ]] && restore+=("pkgs/$app")
+    git checkout -- "${restore[@]}"
+    reason=$(build_error "$work/build.log")
+    warn "$app $version does not build: ${reason:-no error line}. It stays where it is."
+  done
+}
+
+if [[ $mode == apps ]]; then
+  move_apps
+  printf '%s\n' "${apps#$'\n'}" | sed '/^$/d' >"$out"
+  exit 0
+fi
+
 git show HEAD:flake.lock >"$work/base.lock"
 git show HEAD:devenv.lock >"$work/base-devenv.lock"
+cp flake.nix flake.lock "$work/"
 
 # The devenv of main's nixpkgs, which a cache holds, rather than one from the
 # nixpkgs this run moves to.
 devenv=$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#devenv)/bin/devenv
 
+# eval_error: prints "HOST does not evaluate: LINE" for the first host whose system does not
+# evaluate, with the first error line of that evaluation, or nothing.
+eval_error() {
+  local h hosts
+  hosts=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames 2>"$work/eval.log") || {
+    cat "$work/eval.log" >&2
+    printf 'the flake does not evaluate: %s\n' "$(eval_line "$work/eval.log")"
+    return
+  }
+  for h in $(jq -r '.[]' <<<"$hosts"); do
+    if ! nix eval --raw ".#nixosConfigurations.$h.config.system.build.toplevel.drvPath" \
+      >/dev/null 2>"$work/eval.log"; then
+      cat "$work/eval.log" >&2
+      printf '%s does not evaluate: %s\n' "$h" "$(eval_line "$work/eval.log")"
+      return
+    fi
+  done
+}
+# eval_line LOG: the line of a failed evaluation that names the cause, such as
+# a failed assertion, which Nix prints below its error: line.
+eval_line() {
+  local line
+  line=$(sed -n 's/^[[:space:]]*- //p' "$1" | head -n 1)
+  [[ -n $line ]] || line=$(grep -m 1 'error:' "$1" | sed 's/^[[:space:]]*//')
+  printf '%s\n' "${line:0:200}"
+}
+
 tags=$(scripts/move-inputs.sh)
+failed=$(eval_error)
+if [[ -n $failed ]]; then
+  # Nix names lock nodes in walk order, so the root's nixpkgs can have another
+  # name in each lock.
+  jq --slurpfile old "$work/base.lock" '
+    .nodes[.nodes.root.inputs.nixpkgs] = $old[0].nodes[$old[0].nodes.root.inputs.nixpkgs]' \
+    flake.lock >"$work/lock"
+  cp "$work/lock" flake.lock
+  rev() { jq -r '.nodes[.nodes.root.inputs.nixpkgs].locked.rev' "$1"; }
+  if [[ $(rev flake.lock) == $(rev "$work/base.lock") ]] && again=$(eval_error) && [[ -z $again ]]; then
+    warn "With the new nixpkgs, $failed; nixpkgs stays where it is."
+  else
+    warn "With the new inputs, $failed; every input stays where it is."
+    cp "$work/flake.nix" "$work/flake.lock" .
+    tags=
+  fi
+fi
 scripts/update-kernel.sh || warn "The kernel input stays where it is."
 
 # Prints the coding agents that HOST's system would compile because
@@ -50,51 +148,29 @@ uncached_agents() {
       echo unknown
       return
     }
-  plan=$(nix build --dry-run ".#nixosConfigurations.$host.config.system.build.toplevel" 2>&1) ||
+  plan=$(nix build --dry-run ".#nixosConfigurations.$host.config.system.build.toplevel" 2>"$work/plan.log") ||
     {
-      printf '%s\n' "$plan" | tail -n 20 >&2
-      echo unknown
+      cat "$work/plan.log" >&2
+      echo "unknown, because $host does not evaluate: $(eval_line "$work/plan.log")"
       return
     }
+  plan+=$(cat "$work/plan.log")
   grep -Fo -f <(echo "$agents") <<<"$plan" || true
 }
 
-cp flake.nix flake.lock "$work/"
+mkdir "$work/agents-base"
+cp flake.nix flake.lock "$work/agents-base/"
 nix flake update llm-agents
-if ! cmp -s flake.lock "$work/flake.lock"; then
+if ! cmp -s flake.lock "$work/agents-base/flake.lock"; then
   uncached=$(uncached_agents)
   if [[ -n $uncached ]]; then
     warn "cache.numtide.com lacks: ${uncached//$'\n'/ }. llm-agents stays where it is."
-    cp "$work/flake.nix" "$work/flake.lock" .
+    cp "$work/agents-base/flake.nix" "$work/agents-base/flake.lock" .
   fi
 fi
 
-apps=
-for file in pkgs/*.nix; do
-  app=$(basename "$file" .nix)
-  if ! version=$(scripts/update-app.sh "$app" 2>"$work/app.err"); then
-    cat "$work/app.err" >&2
-    warn "$app stays where it is: $(tail -n 1 "$work/app.err")"
-    continue
-  fi
-  [[ -n $version ]] || continue
-  if nix build --no-link --impure --expr \
-    "(builtins.getFlake \"git+file://$PWD\").nixosConfigurations.$host.pkgs.callPackage ./$file { }" \
-    </dev/null 2>"$work/build.log"; then
-    cat "$work/build.log" >&2
-    apps+=$'\n'"- $app: $version"
-    continue
-  fi
-  cat "$work/build.log" >&2
-  # An npm wrapper project keeps its package.json and lockfile in pkgs/NAME/.
-  restore=("$file")
-  grep -q '^  passthru.npmPackage = ' "$file" && [[ -d pkgs/$app ]] && restore+=("pkgs/$app")
-  git checkout -- "${restore[@]}"
-  # shellcheck source=/dev/null
-  . scripts/lib/build-error.sh
-  reason=$(build_error "$work/build.log")
-  warn "$app $version does not build: ${reason:-no error line}. It stays where it is."
-done
+mapfile -t follow < <(grep -l '^  passthru.depsBun = ' pkgs/*.nix || true)
+((${#follow[@]} == 0)) || move_apps "${follow[@]}"
 
 # cachix/devenv moves about 4 times a day (29 commits on main from 2026-10-16
 # to 2026-10-23), so it moves only with another move.

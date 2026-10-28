@@ -158,8 +158,8 @@ source.
 
 Antigravity, ChatGPT, Claude Desktop, Grok Bot, OpenChamber, OpenChamber's
 web server, cf, impeccable and the herdr web UI name their release source.
-airpods-tui, herdr, KVitals and Smart Video Wallpaper name none, so `update-app.sh` leaves
-them and their version and hash move by hand.
+airpods-tui, herdr, KVitals, linctl and Smart Video Wallpaper name none, so
+`update-app.sh` leaves them and their version and hash move by hand.
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s
 `postinst` (`dpkg-deb -e <deb> <dir>`). Grok Bot's registers the APT
@@ -172,9 +172,11 @@ repository that its `passthru.aptIndex` names.
 | herdr web UI | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the `outputHash` of the Bun dependencies. It learns that hash again when nixpkgs' bun is not the `passthru.depsBun` version, because the hash follows bun |
 | cf, impeccable, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
 
-The update workflow builds each moved app on its own first. A version that
-does not build stays out of the update and shows a warning on the run's page,
-which quotes the build's last error line. The other updates go ahead.
+The update workflow moves the apps against `main`'s `flake.lock` and builds each
+moved app on its own first. A version that does not build stays out of the
+update and shows a warning on the run's page, which quotes the build's last
+error line. The other updates go ahead. The apps land as their own commit, so
+a failing input move does not hold them back ([Updater](nixos-rog.md#updater)).
 
 When an app's update check fails, the app stays where it is. Examples are an
 unreadable feed or index, or a feed file that is not the one the package

@@ -33,37 +33,55 @@ and nixos-latitude get `main` from `upgrade` on the host or from a manual
 `./deploy.sh <host> switch` ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)).
 
 The workflow runs every 6 hours and when started by hand
-(`gh workflow run update.yml`). Its jobs:
+(`gh workflow run update.yml`). It makes two commits on the same `main`, one
+for the apps and one for the inputs, and checks and merges each on its own. So
+a failing input move, such as a nixpkgs change that breaks one host, never
+holds back an app, and a broken app never holds back the inputs. Its jobs:
 
-1. **prepare** runs `scripts/prepare-update.sh` on `main`. It moves every
-   input that the table below does not name with `move-inputs.sh`, moves the
-   inputs in the table by the rules there, and moves each app with
-   `update-app.sh`; [updates.md](updates.md) has those steps. An app joins the
-   update only when it builds on its own. When something moved, it also moves
-   `devenv.lock` with `devenv update`, while the dev shell of `devenv.nix`
-   still builds with it (`devenv build shell`). It commits only `flake.nix`,
-   `flake.lock`, `devenv.lock` and `pkgs/`, and fails when the run changed
-   another file. A move that stays out shows as a warning on the run's page.
-   When nothing moved, the run ends with "Everything is current."
-2. **build** builds each host's system on its own runner, with one retry.
-3. **check** runs the checks of the pre-push hook
-   ([Check before you deploy](deploy.md#check-before-you-deploy)):
-   `ci/checks.sh` and `ci/unit-cycles.sh`.
-4. **recheck** runs on every update. When `main` moved during the run, which
-   takes over an hour, it puts the update commit on the new `main` and runs
-   both checks again. When the new `main` changed `flake.nix`, `flake.lock`,
-   `devenv.lock` or `pkgs/`, it merges nothing, shows a warning on the run's
-   page, and the next run starts from that `main`.
-5. **merge** pushes the commit to `main`. `main` takes only a fast-forward, so
-   when `main` moved again, it merges nothing, shows a warning, and the next
-   run tries again.
-   Only this job may push, and it runs no code from the repository or its
-   inputs.
+1. **prepare-apps** and **prepare-inputs** start from the same `main`.
+   prepare-apps runs `scripts/prepare-update.sh apps`, which moves each app
+   with `update-app.sh`; an app joins only when it builds on its own. It
+   commits only `pkgs/`. prepare-inputs runs `scripts/prepare-update.sh
+   inputs`. That moves every input that the table below does not name with
+   `move-inputs.sh` and the inputs in the table by the rules there;
+   [updates.md](updates.md) has those steps. When a host's system no longer
+   evaluates after the `move-inputs.sh` moves, nixpkgs stays where it is, and
+   when that is not enough, every input does; the warning names the host and
+   the error line. An app with a `passthru.depsBun` line moves again, because
+   its dependency hash follows nixpkgs' bun. When something moved, it also
+   moves `devenv.lock` with `devenv update`, while the dev shell of
+   `devenv.nix` still builds with it (`devenv build shell`). It commits only
+   `flake.nix`, `flake.lock`, `devenv.lock` and `pkgs/`. Either job fails when
+   its moves changed another file. A move that stays out shows as a warning
+   on the run's page.
+2. **check-apps** runs the checks of the pre-push hook
+   ([Check before you deploy](deploy.md#check-before-you-deploy)),
+   `ci/checks.sh` and `ci/unit-cycles.sh`, on the apps commit.
+   `ci/checks.sh` evaluates every host's system.
+3. **build** builds each host's system with the inputs commit on its own
+   runner. A failed download gets one more try; an evaluation or compile error
+   fails at once and its line shows on the run's page. Each try ends after
+   150 minutes.
+4. **check** runs the same checks on the inputs commit.
+5. **place-apps** and **place-inputs** put each commit on the current `main`
+   with `ci/place-update.sh`. When `main` moved during the run, which takes
+   up to a few hours, and the placed tree is not the checked one, both checks
+   run again. When the new `main` changed a file the commit changes, and
+   holds it otherwise than the commit does, it merges nothing, shows a warning on the run's page, and the next run starts from
+   that `main`. The inputs commit goes on top of the apps commit, so
+   place-inputs waits for merge-apps, and runs too when the apps path failed
+   or had nothing to merge.
+6. **merge-apps** and **merge-inputs** push their commit to `main` with
+   `ci/merge-update.sh`. `main` takes only a fast-forward, so when `main`
+   moved again, it merges nothing, shows a warning, and the next run tries
+   again. Only these jobs may push, and they run main's own script and no code
+   of the update or its inputs.
 
 A failed job fails the run, and GitHub sends its usual mail about a failed
-workflow run. Nothing merges, and the next run tries again from `main`. With
-`-f always=true`, a run started by hand builds and checks `main` itself when
-nothing moved, and merges nothing.
+workflow run. The other commit still merges when its own jobs pass, and the
+next run tries the failed one again from `main`. With `-f always=true`, a run
+started by hand builds and checks `main` itself when no input moved, and
+merges no inputs.
 
 The workflow pushes nothing to a cache, so each host still compiles the
 packages listed under [Packages no cache holds](#packages-no-cache-holds).
