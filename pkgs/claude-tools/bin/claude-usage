@@ -305,8 +305,7 @@ def combined(data: dict) -> list[dict]:
 
 
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
-# Severity follows the widget: under 70% green, under 90% amber, else red, where claude-rotate stops picking an
-# account. The RGB values are the status line's (claude-code/statusline.sh).
+AMBER_FROM_PERCENT, RED_FROM_PERCENT = 70, 90
 GREEN, AMBER, RED = "38;2;106;211;158", "38;2;255;197;88", "38;2;255;100;100"
 ACCENT, TRACK, DIM, BOLD = "38;2;217;119;87", "38;2;70;70;70", "2", "1"
 
@@ -357,7 +356,7 @@ class Cards:
 
     @staticmethod
     def tone(used: float) -> str:
-        return GREEN if used < 70 else AMBER if used < 90 else RED
+        return GREEN if used < AMBER_FROM_PERCENT else AMBER if used < RED_FROM_PERCENT else RED
 
     def bar_cells(self, used: float, stale: bool) -> str:
         cells = min(max(used, 0), 100) / 100 * self.bar
