@@ -1,4 +1,3 @@
-# mpv on the Radeon 890M, with an mpv-nvidia wrapper for the RTX 4070.
 {
   config,
   lib,
@@ -60,14 +59,11 @@ in
       target-colorspace-hint = true;
       scale = "ewa_lanczossharp";
       cscale = "ewa_lanczossharp";
-      # Only decoders on the Radeon; auto-copy would fall back to NVDEC.
       hwdec = "vulkan-copy,vaapi-copy";
-      # ModernZ draws the on-screen controller instead.
       osc = false;
       osd-color = scheme.base05;
       osd-border-color = scheme.base00;
     };
-    # Subtitles keep mpv's white, which stays readable on any video.
     scriptOpts.modernz = {
       osc_color = scheme.base00;
       window_title_color = scheme.base05;
@@ -97,7 +93,6 @@ in
     };
   };
 
-  # HDR through PRIME is untested.
   home.packages = [
     (pkgs.writeShellScriptBin "mpv-nvidia" ''
       VK_LOADER_DRIVERS_SELECT='*nvidia*' exec nvidia-offload ${lib.getExe config.programs.mpv.finalPackage} --hwdec=auto-copy "$@"

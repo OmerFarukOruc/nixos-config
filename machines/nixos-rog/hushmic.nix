@@ -1,6 +1,3 @@
-# HushMic denoises the internal microphone with Ceva's DPDFNet model and offers
-# the result as its own source, "HushMic". It reads the raw microphone, not
-# EasyEffects' source, so no audio is denoised twice.
 {
   config,
   inputs,
@@ -11,8 +8,6 @@
 let
   hushmic =
     (inputs.hushmic.packages.${pkgs.stdenv.hostPlatform.system}.hushmic.override {
-      # The package reads these from the deprecated xorg set, and each read
-      # prints a rename warning on every evaluation.
       xorg = {
         libX11 = pkgs.libx11;
         libXcursor = pkgs.libxcursor;
@@ -33,9 +28,7 @@ let
     enabled = true;
     inherit (import ./audio-nodes.nix) mic;
     model = "dpdfnet8_48khz_hr";
-    # 100 dB does not limit the suppression.
     attn_limit = 100;
-    # The native int8 engine when the CPU has AVX2 and FMA, else ONNX Runtime.
     inference = "auto";
     set_default = false;
     autostart = false;

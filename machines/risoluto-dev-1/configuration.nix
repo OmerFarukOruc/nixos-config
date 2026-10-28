@@ -1,5 +1,3 @@
-# Omer's dev box: a netcup KVM guest that runs his coding agents. Role and boot
-# loader: machines/inventory.nix. Access: nixosModules/server-access.nix.
 {
   config,
   inputs,
@@ -20,8 +18,6 @@ in
     ../../nixosModules/tailnet-web.nix
   ];
 
-  # The Limine install runs from a BIOS boot too, where the firmware keeps no
-  # boot entries to write (nixosModules/bootloader.nix).
   boot.loader.efi.canTouchEfiVariables = false;
 
   services.qemuGuest.enable = true;
@@ -32,14 +28,11 @@ in
   # nixosModules/monitoring.nix enables smartd unless a host says otherwise.
   services.smartd.enable = false;
 
-  # The box keeps itself on main (docs/deploy.md, Self-deploy of a server).
   oruc.deploy = {
     self = {
       enable = true;
       githubTokenFile = config.sops.secrets.github-update-token.path;
     };
-    # Long-running agents, which a switch may restart. The user services that a
-    # timer or socket starts are left out already.
     sessionIgnore = [
       "amp-runner.service"
       "cliproxy*.service"
@@ -61,17 +54,9 @@ in
       network-dns-1 = { };
       network-dns-2 = { };
       network-dns-3 = { };
-      # Its own file, because the recipients of the main one need the shared
-      # key's passphrase to add a value.
       cloudflare-acme-dns-token.sopsFile = ../../secrets/risoluto-dev-1-acme.yaml;
-      # The deploy unit's token (docs/risoluto-dev-1.md, Rotate the box's
-      # token) has its own file.
       github-update-token.sopsFile = ../../secrets/risoluto-dev-1-github.yaml;
     };
-    # The public address stays out of this repository, so networkd reads it
-    # from a file that sops-nix renders when the system activates. On a boot
-    # activation runs before systemd starts, and a switch that changes the file
-    # restarts networkd.
     templates."10-public.network" = {
       group = "systemd-network";
       mode = "0440";
@@ -111,7 +96,6 @@ in
       "xrdp.service"
       "xrdp-sesman.service"
     ];
-    # oruc's rootless Docker daemon (nixosModules/rootless-containers.nix).
     journalUserUnits = [ "docker.service" ];
   };
 
@@ -123,14 +107,11 @@ in
   environment.etc."systemd/network/10-public.network".source =
     config.sops.templates."10-public.network".path;
 
-  # A password hash that changes in the sops file applies at the next
-  # activation, and users that this configuration does not declare go away.
   users.mutableUsers = false;
   users.groups.oruc.gid = 1003;
   users.users.oruc = {
     uid = 1003;
     group = "oruc";
-    # Rootless containers map their users into this range.
     autoSubUidGidRange = false;
     subUidRanges = [
       {
@@ -144,11 +125,9 @@ in
         count = 65536;
       }
     ];
-    # oruc's user services keep running without a login.
     linger = true;
     hashedPasswordFile = config.sops.secrets.oruc-password-hash.path;
   };
-  # The netcup console logs in as root.
   users.users.root.hashedPasswordFile = config.sops.secrets.root-password-hash.path;
 
   # Agent sessions run in the user slice, so systemd-oomd must not kill it for
@@ -178,13 +157,8 @@ in
     "/tmp/.ICE-unix".x = { };
   };
 
-  # oruc's Home Manager layer: the hourly config sync of the dotfiles checkout.
   home-manager.users.oruc.imports = [ ./home.nix ];
 
-  # The web names of oruc's services. Each has a public, DNS-only A record to
-  # the host's tailnet address, so it answers only on the tailnet. The
-  # services listen on loopback: OpenChamber, then the herdr web UIs of the
-  # default session and of the bots' fleet session.
   oruc.tailnetWeb = {
     dnsTokenFile = config.sops.secrets.cloudflare-acme-dns-token.path;
     sites = {

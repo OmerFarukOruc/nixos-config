@@ -1,6 +1,3 @@
-# MSI MAG B650 Tomahawk WiFi with NixOS on the WD SN850X. Written by hand;
-# docs/install-nixos-desktop.md creates the two GPT partitions with these
-# names, so no file system UUID is needed here.
 { lib, modulesPath, ... }:
 let
   btrfs = "/dev/disk/by-partlabel/nixos";
@@ -34,7 +31,6 @@ in
     neededForBoot = true;
   };
 
-  # This disk's own ESP. Windows keeps the one on the Samsung disk.
   fileSystems."/boot" = {
     device = "/dev/disk/by-partlabel/nixos-esp";
     fsType = "vfat";

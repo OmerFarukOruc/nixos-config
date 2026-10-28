@@ -1,6 +1,3 @@
-# Home desktop: MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, Radeon RX 7900
-# XTX. NixOS is on the WD SN850X; Windows keeps the Samsung 990 PRO and its
-# own ESP. Role and login sessions: machines/inventory.nix.
 { inputs, ... }:
 
 {
@@ -17,7 +14,6 @@
   ];
 
   boot.loader.limine.style.interface.branding = "NixOS on desktop";
-  # The wired port with the default route; wlp15s0 is down and left out.
   services.zapret2.firewall.interfaces = [ "enp14s0" ];
   # Windows Boot Manager is on the Samsung disk's ESP, named by its partition
   # GUID because Limine's boot() means the ESP it booted from.
@@ -27,14 +23,11 @@
         path: guid(10036113-64c6-4117-9dd5-ea8b222762ea):/EFI/Microsoft/Boot/bootmgfw.efi
   '';
 
-  # The hardware watchdog for features.alwaysOn. The driver loads only on
-  # request, because many distributions blacklist it.
   boot.kernelModules = [ "sp5100_tco" ];
 
   # Windows keeps the hardware clock in local time.
   time.hardwareClockInLocalTime = true;
 
-  # Runs AppImages directly, through binfmt.
   programs.appimage = {
     enable = true;
     binfmt = true;
@@ -42,18 +35,14 @@
 
   nix.daemonCPUSchedPolicy = "batch";
 
-  # Compressed swap in RAM, sized to all of it. No disk swap.
   zramSwap = {
     enable = true;
     algorithm = "zstd";
     memoryPercent = 100;
   };
 
-  # oruc's user services, such as the sshfs mount, keep running without a
-  # login session.
   users.users.oruc.linger = true;
 
-  # The AWS Roles Anywhere key is sealed in the TPM; tss may use the TPM.
   security.tpm2.enable = true;
   users.users.oruc.extraGroups = [ "tss" ];
 
@@ -61,7 +50,6 @@
   # list adds to the shared flags in nixosModules/connectivity.nix.
   services.tailscale.extraSetFlags = [ "--operator=oruc" ];
 
-  # The kernel kills other processes before the ways in.
   systemd.services.sshd.serviceConfig.OOMScoreAdjust = -900;
   systemd.services.tailscaled.serviceConfig.OOMScoreAdjust = -900;
 

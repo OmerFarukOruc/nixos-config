@@ -1,4 +1,3 @@
-# TLS for both names of the cliproxy tailnet node. The share sidecar forwards its port 443 here as raw TCP.
 {
 	admin off
 	auto_https disable_redirects
@@ -16,7 +15,6 @@
 # import glob that matches nothing is skipped.
 import /data/public-host*.caddy
 
-# The *.ts.net certificate comes from the sidecar's tailscaled through the shared socket.
 https://{$CLIPROXY_SHARE_HOST} {
 	tls {
 		get_certificate tailscale

@@ -18,8 +18,6 @@ let
       type = types.nullOr types.ints.positive;
       inherit default description;
     };
-  # Idle screen timeouts for one power state. The screen never locks and the
-  # machine never suspends on idle.
   mkIdle = dim: screenOff: power: {
     dimSeconds = mkIdleSeconds dim "Seconds of inactivity ${power} before the screen dims, or null to never dim.";
     screenOffSeconds = mkIdleSeconds screenOff "Seconds of inactivity ${power} before the screen turns off, or null to keep it on.";
@@ -165,7 +163,6 @@ let
       description = "Whether the display manager logs oruc in at boot, into a locked Plasma session.";
     };
 
-    # Every desktop of the machine reads these, so its sessions behave alike.
     idle = {
       battery = mkIdle 120 300 "on battery power";
       ac = mkIdle null null "on AC power";
@@ -213,8 +210,6 @@ let
     assert lib.assertMsg (
       machine.kind == "workstation" || machine.theme.schemes == [ ]
     ) "Only workstation machines may list theme.schemes, because only they get the theme command.";
-    # nixosModules/connectivity.nix, which sets up SSH and sudo for this feature,
-    # is workstation-only.
     assert lib.assertMsg (
       machine.kind == "workstation" || !machine.features.remoteAccess
     ) "Only workstation machines may set features.remoteAccess.";
@@ -224,14 +219,12 @@ let
     assert lib.assertMsg (
       (!machine.features.remoteDesktop) || machine.features.remoteAccess
     ) "The remoteDesktop feature requires remoteAccess.";
-    # A workstation has a screen and a login session; remoteDesktop streams them.
     assert lib.assertMsg (
       machine.kind == "server" || !machine.features.streamedDesktop
     ) "Only server machines may set features.streamedDesktop; a workstation uses remoteDesktop.";
     assert lib.assertMsg (
       lib.length (lib.unique machine.sessions) == lib.length machine.sessions
     ) "Each session must pair a different desktop and shell.";
-    # nixosModules/desktop.nix makes one login entry per shell only for niri.
     assert lib.assertMsg (lib.all (
       desktop: desktop == "niri" || !sessions.hasSeveralShells machine desktop
     ) desktops) "Only niri may offer more than one shell.";
@@ -244,7 +237,6 @@ let
     assert lib.assertMsg (
       sessions.hasDesktop machine "plasma" -> machine.theme.plasmaLook != null
     ) "${machine.name} has a Plasma session and no theme.plasmaLook.";
-    # Only Plasma locks the session that autologin starts.
     assert lib.assertMsg (
       machine.autoLogin -> desktops == [ "plasma" ]
     ) "${machine.name} sets autoLogin, which needs Plasma as its only desktop.";

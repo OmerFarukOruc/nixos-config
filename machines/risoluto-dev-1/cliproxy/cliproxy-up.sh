@@ -1,21 +1,4 @@
 #!/usr/bin/env bash
-# Copies CLIProxyAPI's config from sops-nix to tmpfs and starts the loopback compose stack.
-#
-#   usage: cliproxy-up.sh [stop|update]
-#
-# `stop` stops the stack with the same derived paths, so compose can interpolate the file.
-# `update` pulls the cliproxy and Tailscale images, rebuilds tls-proxy on a fresh Caddy base,
-# recreates a container when it runs an older image, and removes the images it replaced. A
-# failed pull or build keeps the running containers. Without a Cloudflare DNS token the
-# tls-proxy leaves the CLIPROXY_PUBLIC_HOST site out and serves only CLIPROXY_SHARE_HOST.
-#
-# The docker CLI talks to the user's rootless Podman socket, whatever DOCKER_HOST the shell set.
-#
-# cliproxy.service sets CLIPROXY_RENDERED_CONFIG and CLIPROXY_DNS_TOKEN_FILE to the files that
-# sops-nix renders from secrets/risoluto-dev-1-cliproxy.yaml, and CLIPROXY_SHARE_HOST and
-# CLIPROXY_TS_AUTHKEY through its EnvironmentFile. The panel can change the config, so the app
-# gets a writable copy on tmpfs under XDG_RUNTIME_DIR, made again on every start. OAuth token
-# files persist under ~/.local/state/fleet/cliproxy/auths because the app owns that store.
 
 set -euo pipefail
 
@@ -34,14 +17,11 @@ if [ ! -f "$ENV_PUBLIC" ] || [ ! -f "$COMPOSE" ]; then
   exit 78
 fi
 if [ "${1:-}" = stop ]; then
-  # Compose interpolates every variable of the file, also to stop the stack.
   : "${CLIPROXY_SHARE_HOST:=stop}"
 elif [ ! -s "${CLIPROXY_RENDERED_CONFIG:-}" ] || [ -z "${CLIPROXY_SHARE_HOST:-}" ]; then
   echo "cliproxy-up: the sops config or CLIPROXY_SHARE_HOST is missing; start it through cliproxy.service" >&2
   exit 78
 fi
-# An empty key would start an unauthenticated proxy. A secret with a line break
-# or a quote breaks the JSON, which jq refuses too.
 if [ "${1:-}" != stop ] && ! jq -e '(."api-keys" | length > 0 and all(length > 0))
     and (."remote-management"."secret-key" | length > 0)' "$CLIPROXY_RENDERED_CONFIG" >/dev/null; then
   echo "cliproxy-up: the config is not valid JSON, or it has an empty API key or management key" >&2
@@ -63,11 +43,9 @@ export CLIPROXY_TS_SERVE_DIR="$SERVICE_DIR/ts-serve"
 export CLIPROXY_TS_SOCKET_DIR="$RUNTIME/ts-socket"
 export CLIPROXY_CADDY_DATA="$STATE/caddy"
 export CLIPROXY_CLOUDFLARE_TOKEN_PATH="$RUNTIME/cloudflare-dns-token"
-# The Caddyfile imports this site block from the Caddy data volume (/data in the container).
 PUBLIC_SITE="$STATE/caddy/public-host.caddy"
 
 set -a
-# env.public has comments and assignments only.
 # shellcheck disable=SC1090,SC1091
 . "$ENV_PUBLIC"
 set +a
@@ -78,7 +56,6 @@ build_tls_proxy() {
   DOCKER_BUILDKIT=0 docker build -q "$@" -t "$CLIPROXY_TLS_IMAGE" "$SERVICE_DIR/tls-proxy" >/dev/null
 }
 
-# Keeps the public A record on the node's tailnet address; the stack runs on without it.
 ensure_dns() {
   if [ "$(docker inspect --format '{{.State.Running}}' cliproxy-share 2>/dev/null)" = true ]; then
     "$SERVICE_DIR/dns-record.sh" apply ||
@@ -139,7 +116,6 @@ chmod 600 "$CLIPROXY_CONFIG_PATH"
 # config. Without a token the public site stays out of the config so the share host still works.
 if [ -s "$CLIPROXY_CLOUDFLARE_TOKEN_PATH" ]; then
   cat >"$PUBLIC_SITE.new" <<SITE
-# Let's Encrypt through the DNS-01 challenge; the public A record points at the node's tailnet address.
 https://$CLIPROXY_PUBLIC_HOST {
 	tls {
 		dns cloudflare {file./run/secrets/cloudflare-dns-token}
@@ -167,7 +143,6 @@ ensure_dns
 
 if [ "${#replaced[@]}" -gt 0 ]; then
   docker rmi "${replaced[@]}" >/dev/null 2>&1 || true
-  # Also drops the current build stage, so the next build compiles Caddy once more.
   docker image prune -f --filter label=dev.risoluto.cliproxy.build-stage=tls-proxy >/dev/null || true
 fi
 

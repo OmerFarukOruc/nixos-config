@@ -1,5 +1,3 @@
-# ASUS ROG Zephyrus G16 GA605WI (Ryzen AI 9 HX 370, Radeon 890M, RTX 4070
-# Laptop). Daily laptop, installed beside Windows on a shared ESP.
 {
   inputs,
   lib,
@@ -43,21 +41,16 @@
   # kernel of kernel.profile in machines/inventory.nix.
   oruc.recovery.kernelPackages = pkgs.linuxPackages_latest;
 
-  # Turkey's Wi-Fi rules instead of the world domain, which limits channels
-  # and power.
   boot.kernelParams = [ "cfg80211.ieee80211_regdom=TR" ];
 
-  # Runs AppImages directly, through binfmt.
   programs.appimage = {
     enable = true;
     binfmt = true;
   };
 
-  # The Windows system partition, read-only, mounted on first access.
   fileSystems."/mnt/windows" = {
     device = "/dev/disk/by-uuid/3818FB0C18FAC7C0";
     fsType = "ntfs3";
-    # There is no NTFS fsck here, and a failed check would stop the mount.
     noCheck = true;
     options = [
       "ro"
@@ -68,13 +61,8 @@
     ];
   };
 
-  # Builds run as batch work, so the scheduler favours the desktop over them.
-  # latitude, the lab box, uses idle instead.
   nix.daemonCPUSchedPolicy = "batch";
 
-  # Kernel scheduler from sched_ext, fixed in its performance mode. Its
-  # balanced and powersave modes pack tasks onto few cores, which made the
-  # pointer lag (docs/nixos-rog.md, CPU and power profile).
   services.scx = {
     enable = true;
     scheduler = "scx_lavd";
@@ -92,7 +80,6 @@
     RestartSec = 3;
   };
 
-  # Compressed swap in RAM, sized to all of it. No disk swap, so no hibernate.
   zramSwap = {
     enable = true;
     algorithm = "zstd";

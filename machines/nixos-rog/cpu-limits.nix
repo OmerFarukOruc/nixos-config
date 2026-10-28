@@ -1,18 +1,3 @@
-# Per-profile CPU limits on top of the power limits in asus.nix: a temperature
-# at which the CPU throttles itself, and a top clock. Nothing else sets either,
-# so this unit writes them at start, after each power-profiles-daemon profile
-# change, after resume, and when the charger is plugged in or out.
-#
-# The temperature limit lives in the SMU (the chip's power controller) and is
-# lost at reboot; ryzenadj writes it through ryzen_smu (apps.nix). It survives
-# a profile switch and an asusd restart, but an s2idle resume resets it to
-# 95 °C. A sleep that bypasses systemd, such as rtcwake, runs no resume
-# command, so the unit also checks both limits every 30 s.
-#
-# power-profiles-daemon turns boost off in power-saver, which asusd calls quiet,
-# so power-saver needs no clock cap. One busy thread at 5.1 GHz held the CPU at
-# 74 °C and spun the fans up; at 4.0 GHz it stayed at 56 °C with the fans at
-# their floor.
 {
   config,
   lib,
@@ -21,8 +6,6 @@
 }:
 let
   profiles = import ./power-profiles.nix;
-  # Keyed by power-profiles-daemon profile. maxKHz = "top" keeps each core's
-  # own top clock; the Zen 5c cores stop at 3.29 GHz below any cap here.
   limits = {
     power-saver = {
       tempC = 70;
@@ -37,7 +20,6 @@ let
       maxKHz = "top";
     };
   };
-  # A bash associative array from profile to the value of field.
   bashMap =
     field: lib.concatStringsSep " " (lib.mapAttrsToList (p: l: "[${p}]=${toString l.${field}}") limits);
   restart = "${config.systemd.package}/bin/systemctl restart --no-block oruc-cpu-limits.service";
@@ -72,7 +54,6 @@ assert lib.assertMsg (
       pkgs.glib.bin
       pkgs.ryzenadj
     ];
-    # A lasting fault, such as ryzenadj failing, fails the unit after 5 tries.
     startLimitIntervalSec = 60;
     startLimitBurst = 5;
     serviceConfig = {
@@ -92,7 +73,6 @@ assert lib.assertMsg (
         echo "$1: $temp °C, top clock $max"
       }
 
-      # Applies the limits again when the SMU or policy0 lost them.
       check() {
         local profile temp max
         profile=$(powerprofilesctl get)
@@ -106,7 +86,6 @@ assert lib.assertMsg (
 
       profile=$(powerprofilesctl get)
       apply "$profile"
-      # One line per property change; only ActiveProfile changes matter.
       active="'ActiveProfile': <'([a-z-]+)'>"
       while true; do
         if read -r -t 30 line; then
@@ -124,7 +103,6 @@ assert lib.assertMsg (
     '';
   };
 
-  # A restart applies the limits again.
   powerManagement.resumeCommands = restart;
   services.udev.extraRules = ''
     ACTION=="change", SUBSYSTEM=="power_supply", KERNEL=="ACAD", RUN+="${restart}"

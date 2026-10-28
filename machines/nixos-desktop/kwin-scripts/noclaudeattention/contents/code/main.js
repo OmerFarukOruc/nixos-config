@@ -1,7 +1,3 @@
-// Clears the "demands attention" (urgency) flag that Claude Desktop raises on
-// itself when alt-tabbing. That false flag makes auto-hide Plasma panels reveal
-// themselves. Scoped to windows whose resource class/name contains "claude" so
-// every other application keeps the normal attention behavior.
 
 function isClaude(window) {
     if (!window) {

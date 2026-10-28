@@ -1,13 +1,3 @@
-# Hands a platform profile switch that bypasses power-profiles-daemon, such as
-# a click in ROG Control Center or `asusctl profile set`, to the daemon. asusd
-# writes /sys/firmware/acpi/platform_profile itself, and power-profiles-daemon
-# missed that write: it kept its old profile, governor and EPP, and
-# oruc-cpu-limits kept the old profile's limits.
-#
-# The daemon watches the file's directory inside its own sysfs mount, and that
-# watch never fired. This unit watches the file itself in the host's mount.
-# When the daemon sets a profile, it writes the file before it answers D-Bus
-# calls, so this unit then reads the same profile and sets nothing.
 {
   config,
   lib,
@@ -35,8 +25,6 @@ in
       Restart = "always";
       RestartSec = 5;
     };
-    # No sync at start, so a boot or a restart keeps the profile the daemon
-    # restored from its state file.
     script = ''
       declare -A ppd=(${ppdNames})
       while read -r _; do
@@ -49,7 +37,6 @@ in
           echo "$platform: set $want"
         fi
       done < <(inotifywait -m -q -e modify ${file})
-      # A module reload removes the file and ends the watch.
       echo "inotifywait ended" >&2
       exit 1
     '';

@@ -1,10 +1,3 @@
-# The Home Manager variants of a machine. With Plasma, one row per look and
-# scheme. Without Plasma, one row per scheme, and that row has no look. The
-# row of the record's scheme, and of theme.plasmaLook when the machine has
-# Plasma, is the Home Manager generation. Each other row is a specialisation,
-# which `plasma-look` and `theme` activate (nixosModules/hm-variants.nix).
-# `name` is the only encoder of a specialisation's directory. The shell reads
-# the finished rows and does not rebuild them.
 { lib, sessions }:
 machine:
 let

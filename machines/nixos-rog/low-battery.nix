@@ -1,4 +1,3 @@
-# The low-battery power profile on rog.
 {
   config,
   lib,
@@ -12,8 +11,6 @@ in
 {
   oruc.verifyFacts.low_battery_percent = toString lowBatteryPercent;
 
-  # Drops to power-saver at or below lowBatteryPercent on battery, and returns
-  # to balanced on AC if this unit made the drop.
   systemd.services.oruc-low-battery = {
     description = "Switch power-profiles-daemon to power-saver on low battery";
     after = [ "power-profiles-daemon.service" ];
@@ -37,8 +34,6 @@ in
           ${ppd} set power-saver
         fi
       elif [[ $online == 1 && -e $marker ]]; then
-        # A marker with any other profile means the change never landed, so
-        # there is nothing to undo.
         if [[ $(${ppd} get) == power-saver ]]; then
           ${ppd} set balanced
         fi
@@ -51,11 +46,9 @@ in
     timerConfig = {
       OnBootSec = "1min";
       OnUnitActiveSec = "5min";
-      # Lets the wakeup coalesce with others on battery.
       AccuracySec = "1min";
     };
   };
-  # React to plugging and unplugging at once instead of on the next tick.
   services.udev.extraRules = ''
     ACTION=="change", SUBSYSTEM=="power_supply", KERNEL=="ACAD", RUN+="${pkgs.systemd}/bin/systemctl start --no-block oruc-low-battery.service"
   '';

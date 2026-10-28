@@ -28,7 +28,6 @@ in
     after = [ "systemd-modules-load.service" ];
     wants = [ "systemd-modules-load.service" ];
     wantedBy = [ "multi-user.target" ];
-    # OpenRGB reads its configuration from $HOME/.config/OpenRGB.
     environment.HOME = "/var/lib/openrgb-boot";
     serviceConfig = {
       Type = "oneshot";
@@ -44,8 +43,6 @@ in
     };
   };
 
-  # The window writes both files, so they are copies, not store links. Each
-  # switch puts back the repository's zone sizes and boot profile.
   home-manager.users.oruc =
     { config, lib, ... }:
     {

@@ -1,5 +1,3 @@
-# A netcup KVM guest with one virtio disk. nixpkgs' QEMU guest profile loads the
-# virtio modules; the file systems come from disk.nix.
 { lib, modulesPath, ... }:
 {
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];

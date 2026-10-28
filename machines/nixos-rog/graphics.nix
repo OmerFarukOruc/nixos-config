@@ -1,7 +1,3 @@
-# Hybrid graphics: the Radeon 890M renders the desktop and the RTX 4070 sleeps
-# until a program is offloaded to it. The firmware must be in Hybrid mode
-# (asus-armoury dgpu_disable=0, gpu_mux_mode=1); in Integrated mode the RTX 4070
-# is not on the PCI bus at all.
 {
   config,
   lib,
@@ -13,12 +9,9 @@ let
   nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (
     import ../../kernel-cache/nvidia-driver.nix
   );
-  # The patchelf of the package set that builds the driver.
   driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
-  # The NVIDIA driver below builds with patchelf 0.15.2 while its package
-  # set's patchelf is 0.19.2. The locked nixpkgs already does that for CUDA.
   nixpkgs.overlays = [ (import ../../overlays/nvidia-patchelf.nix) ];
 
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
@@ -54,8 +47,6 @@ in
     KWIN_ALLOW_VULKAN_MGPU_COPIES = "1";
   };
 
-  # The NixOS NVIDIA module turns on only when "nvidia" is listed here, also on
-  # Wayland. The iGPU driver comes first so nothing keeps the dGPU awake.
   services.xserver.videoDrivers = [
     "amdgpu"
     "nvidia"
@@ -86,27 +77,16 @@ in
         enable = true;
         enableOffloadCmd = true;
       };
-      # lspci 0000:66:00.0 and 0000:65:00.0, in decimal.
       amdgpuBusId = "PCI:102@0:0:0";
       nvidiaBusId = "PCI:101@0:0:0";
     };
 
-    # Saves video memory across suspend. With the open module at 595 or newer,
-    # NixOS uses the kernel's suspend notifiers instead of nvidia-suspend units.
     powerManagement.enable = true;
-    # Runtime D3 powers off the dGPU when nothing uses it.
     powerManagement.finegrained = true;
-    # nvidia-powerd is NVIDIA's Dynamic Boost daemon. docs/nixos-rog.md (Power
-    # and heat) has the measured GPU draw per profile.
     dynamicBoost.enable = true;
   };
-  # asusd starts nvidia-powerd when AC is plugged in and stops it when AC is
-  # unplugged, but never at its own start, so a boot on battery skips it here.
   systemd.services.nvidia-powerd.unitConfig.ConditionACPower = true;
 
-  # The binary cache holds the NVIDIA module only for the selected kernel, so
-  # the recovery kernel would compile it on the machine; the recovery entry
-  # drops the driver instead. Without it, NixOS no longer blacklists nouveau.
   specialisation.recovery.configuration = {
     services.xserver.videoDrivers = lib.mkForce (
       lib.remove "nvidia" config.services.xserver.videoDrivers
@@ -116,10 +96,7 @@ in
   };
 
   boot.kernelParams = [
-    # The video memory saved at suspend goes to disk, never to a RAM-backed /tmp.
     "nvidia.NVreg_TemporaryFilePath=/var/tmp"
-    # s2idle is this laptop's only sleep state. CachyOS set this. The --suspend
-    # check of scripts/verify-nixos-rog.sh decides whether it stays.
     "nvidia.NVreg_EnableS0ixPowerManagement=1"
   ];
 }

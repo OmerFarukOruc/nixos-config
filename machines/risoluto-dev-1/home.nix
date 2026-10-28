@@ -1,7 +1,3 @@
-# Home Manager layer of risoluto-dev-1, on top of the layer that every host
-# gets (home-manager/common.nix): the hourly sync that links Omer's agent config
-# from the dotfiles checkout. The agents' Playwright runs the nixpkgs browsers,
-# as on the desktops.
 {
   agents,
   config,
@@ -24,8 +20,6 @@ in
     ../../home-manager/modules/playwright.nix
   ];
 
-  # The CLIs that only the agents on the box call. Project shells bring the
-  # runtimes (Node, Bun, Go and the rest), as on the workstations.
   home.packages = [
     agents.amp
     pkgs.aws-signing-helper
@@ -34,8 +28,6 @@ in
     pkgs.defuddle
     pkgs.glow
     (pkgs.callPackage ../../pkgs/impeccable.nix { })
-    # dotfiles' desktop-sync checks the Roles Anywhere certificate in ~/.aws
-    # with it, and renewing the certificate needs it.
     pkgs.openssl
     stayGreen
     pkgs.wrangler
@@ -45,16 +37,11 @@ in
   # mise's default on NixOS compiles it, which fails.
   home.sessionVariables.MISE_NODE_COMPILE = "false";
 
-  # OpenChamber on loopback; tailnet-web.nix serves it as a tailnet name. It
-  # shares ~/.config/opencode and the projects with Omer's shell and starts
-  # OpenCode itself, which reads the server password.
   systemd.user.services.openchamber = {
     Unit = {
       Description = "OpenChamber web UI for OpenCode (loopback only)";
       After = [ "network-online.target" ];
       Wants = [ "network-online.target" ];
-      # A deploy leaves the running OpenChamber and the agents it started
-      # alone; the new version starts at the next restart or boot.
       X-SwitchMethod = "keep-old";
     };
     Service = {
@@ -68,10 +55,6 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
-  # herdr's web UI for the default session on loopback; tailnet-web.nix serves
-  # it as a tailnet name. HERDR_WEB_TOKEN gates every request. The token
-  # changes only with a deploy, and the unit reads it at start, so restart the
-  # unit after the token changes.
   systemd.user.services.herdr-web-ui = {
     Unit = {
       Description = "herdr web UI for the default session (loopback only)";
@@ -103,14 +86,7 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
-  # The agent services of Omer's own logins. Each starts `zsh -c`, so the work
-  # it runs gets the PATH of Omer's non-interactive shell. A deploy leaves the
-  # running ones alone (keep-old), so it ends no agent's work.
   systemd.user.services = {
-    # herdr's default session, where Omer's own agents run, at boot and after
-    # a crash. claude-limit-switch.timer starts it when no server runs. The
-    # default KillMode ends the panes with the server, so no Claude outlives it
-    # and runs twice after a restore.
     herdr-default = {
       Unit = {
         Description = "herdr default session, where Omer's own agents run";
@@ -118,7 +94,6 @@ in
       };
       Service = {
         UMask = "0022";
-        # Panes start $SHELL, and the user manager sets it to bash.
         Environment = [ "SHELL=${lib.getExe pkgs.zsh}" ];
         WorkingDirectory = home;
         ExecStart = "${lib.getExe pkgs.zsh} -c 'exec herdr server'";
@@ -127,9 +102,6 @@ in
       };
       Install.WantedBy = [ "default.target" ];
     };
-    # The Amp runner for threads Omer starts at ampcode.com, named after the
-    # host. --discover-dirs serves every git checkout up to two levels under
-    # ~/Desktop/workspace, including later clones.
     amp-runner = {
       Unit = {
         Description = "Amp runner for Omer's threads (outbound connection only)";
@@ -145,10 +117,6 @@ in
       };
       Install.WantedBy = [ "default.target" ];
     };
-    # The Cursor Cloud Agent worker under Omer's My Machines, named after the
-    # host, with computer use on its own XFCE desktop. Each --worker-dir must
-    # be a checkout with a GitHub remote. cursor-agent, because the name agent
-    # is Grok's launcher here.
     cursor-worker = {
       Unit = {
         Description = "Cursor Cloud Agent worker for Omer's My Machines (outbound connection only)";
@@ -166,10 +134,6 @@ in
     };
   };
 
-  # CLIProxyAPI, which serves the Claude, Codex, Gemini and Grok CLI logins as
-  # one OpenAI-compatible API, on rootless Podman through the docker compose
-  # CLI (cliproxy/compose.yml). The unit owns the stack, so no container starts
-  # before its config exists. docs/risoluto-dev-1.md describes the share node.
   systemd.user.services.cliproxy =
     let
       up = "${./cliproxy}/cliproxy-up.sh";
@@ -205,13 +169,10 @@ in
         EnvironmentFile = osConfig.sops.templates."cliproxy.env".path;
         Restart = "on-failure";
         RestartSec = 5;
-        # A first start builds the tls-proxy image.
         TimeoutStartSec = "15min";
       };
       Install.WantedBy = [ "default.target" ];
     };
-  # Pulls new cliproxy and Tailscale images daily and recreates the containers
-  # whose image changed. It fails when cliproxy.service is not active.
   systemd.user.services.cliproxy-update = {
     Unit = {
       Description = "CLIProxyAPI image update";
@@ -232,13 +193,6 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
-  # Every minute, claude-limit-switch (pkgs/claude-tools) starts herdr's
-  # default session through herdr-default.service when no server runs, starts
-  # the recorded Claude agents again after a server restart, and moves each
-  # named agent whose screen ends in a usage limit message to another account.
-  # A failed run means one agent could not move; the log names it and the
-  # reason: journalctl --user -u claude-limit-switch.service and
-  # ~/.local/state/claude-limit-switch/events.log.
   systemd.user.services.claude-limit-switch = {
     Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit";
     Service = {
@@ -251,17 +205,11 @@ in
     Timer = {
       OnCalendar = "*:*:00";
       AccuracySec = "10s";
-      # A run missed while the box was down is of no use later.
       Persistent = false;
     };
     Install.WantedBy = [ "timers.target" ];
   };
 
-  # Keeps Omer's Teams status Available in working hours, with the sign-in in
-  # ~/.local/state/stay-green. A failed run means the sign-in expired or was
-  # revoked; sign in again from a workstation with
-  # `stay-green login risoluto-dev-1`. The timer starts a run every 4 minutes
-  # around the clock, and a run outside the schedule does nothing.
   systemd.user.services.stay-green = {
     Unit.Description = "Mark Omer's Teams status Available";
     Service = {
@@ -272,7 +220,6 @@ in
         "STAY_GREEN_TIME_ZONE=Europe/Istanbul"
       ];
       ExecStart = "${lib.getExe stayGreen} run";
-      # A stuck run would hold back the next ones.
       TimeoutStartSec = "2min";
       NoNewPrivileges = true;
       MemoryMax = "64M";
@@ -283,7 +230,6 @@ in
     Timer = {
       OnCalendar = "*-*-* *:00/4:00";
       AccuracySec = "10s";
-      # A run missed while the box was down is of no use later.
       Persistent = false;
     };
     Install.WantedBy = [ "timers.target" ];

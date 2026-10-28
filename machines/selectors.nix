@@ -1,6 +1,4 @@
 let
-  # The desktops a session may name. shellSpecs and launcherSpecs list which
-  # of these each shell and launcher supports.
   desktopSpecs = {
     niri = { };
     plasma = { };
@@ -17,9 +15,6 @@ let
     walker.desktops = [ "niri" ];
   };
 
-  # package is the attribute path in pkgs of the kernel package set.
-  # requiresModule is a kernel module that the hardware scan lists only on a CPU
-  # that can run the build.
   kernelSpecs = {
     nixos = {
       package = [ "linuxPackages" ];
@@ -43,8 +38,6 @@ let
     };
   };
 
-  # A shell owns the bar, notifications, wallpaper, and the compositor binds
-  # that call into it.
   shellSpecs = {
     dms.desktops = [ "niri" ];
     noctalia.desktops = [ "niri" ];
@@ -52,8 +45,6 @@ let
     waybar.desktops = [ "niri" ];
   };
 
-  # Each Plasma look is a file of the same name in
-  # home-manager/modules/plasma-looks/.
   plasmaLookNames = [
     "glass"
     "klassy"

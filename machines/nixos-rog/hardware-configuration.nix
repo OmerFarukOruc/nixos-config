@@ -1,6 +1,3 @@
-# ASUS ROG Zephyrus G16 GA605WI. Written by hand from the CachyOS install it
-# replaced on the same btrfs file system. The NixOS subvolumes sit at the top
-# level of that file system.
 { lib, modulesPath, ... }:
 let
   btrfs = "/dev/disk/by-uuid/6a77e7a8-4ab9-42be-985f-eeecb7ade813";
@@ -35,7 +32,6 @@ in
     neededForBoot = true;
   };
 
-  # Shared with Windows Boot Manager.
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/0D35-447F";
     fsType = "vfat";

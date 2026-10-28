@@ -2,9 +2,7 @@
 let
   inherit (inputs.nixpkgs) lib;
 
-  # The attribute name is the machine name.
   rawMachines = {
-    # Home lab box, half headless.
     nixos-latitude = {
       system = "x86_64-linux";
       kind = "workstation";
@@ -36,7 +34,6 @@ let
       };
     };
 
-    # Daily driver.
     nixos-rog = {
       system = "x86_64-linux";
       kind = "workstation";
@@ -115,9 +112,6 @@ let
       };
     };
 
-    # Omer's dev box: a netcup KVM guest that runs his coding agents. It boots
-    # through BIOS. Limine also installs its EFI binary, but no test boots
-    # the disk under UEFI (docs/risoluto-dev-1.md, Install).
     risoluto-dev-1 = {
       system = "x86_64-linux";
       kind = "server";
@@ -162,7 +156,6 @@ let
       ++ hostModules;
     };
 in
-# Validates every record, also one without a nixosConfiguration.
 assert builtins.deepSeq machines true;
 {
   nixosConfigurations.nixos-latitude = mkMachine {

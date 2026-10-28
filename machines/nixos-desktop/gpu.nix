@@ -1,5 +1,3 @@
-# Radeon RX 7900 XTX (Navi 31): display features, overclocking access and
-# the fan curve. nixosModules/amd-graphics.nix sets up the drivers.
 _: {
   # 0x400 turns on HDMI 2.1 FRL, which the 4K 160 Hz monitor on HDMI-A-1
   # needs; mainline 7.3 still leaves it off (DC_FRL_MASK in amd_shared.h).

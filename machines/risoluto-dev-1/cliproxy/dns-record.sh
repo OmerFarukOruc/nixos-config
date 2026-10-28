@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Points CLIPROXY_PUBLIC_HOST at the cliproxy tailnet node with a DNS-only A record at Cloudflare.
-#
-#   usage: dns-record.sh plan|apply
-#
-# cliproxy-up.sh runs `apply` after every start and update. The node's address comes from the
-# running cliproxy-share sidecar, and the token from the file cliproxy-up.sh renders from
-# the cloudflare-dns-token of secrets/risoluto-dev-1-cliproxy.yaml. The script changes only a single DNS-only A record,
-# and moves it only from one tailnet address to another.
 
 set -euo pipefail
 umask 077
@@ -40,7 +32,6 @@ trap 'rm -rf "$work"' EXIT
   printf '\nContent-Type: application/json\n'
 } >"$work/headers"
 
-# api METHOD PATH [JSON]: prints .result, fails on success=false.
 api() {
   local out="$work/out" args=(-sS -X "$1" "https://api.cloudflare.com/client/v4$2" -H "@$work/headers")
   [ -z "${3:-}" ] || {
@@ -54,7 +45,6 @@ api() {
 
 in_tailnet_range() { [[ "$1" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+$ ]]; }
 
-# The sidecar needs a few seconds after a start before it has its address.
 addr=
 for _ in $(seq 60); do
   addr=$(docker exec cliproxy-share tailscale ip -4 2>/dev/null | head -n1) || true

@@ -1,9 +1,5 @@
-# EasyEffects removes noise from the internal microphone with DeepFilterNet.
-# The preset loads whenever the microphone's route is active.
 _:
 let
-  # EasyEffects names an autoload file after the PipeWire node and the
-  # description of its active route.
   autoload = pipeline: node: route: preset: {
     "easyeffects/autoload/${pipeline}/${node}:${route}.json".text = builtins.toJSON {
       device = node;
@@ -20,8 +16,6 @@ in
       input = {
         blocklist = [ ];
         plugins_order = [ "deepfilternet#0" ];
-        # EasyEffects 8.3 defaults. An attenuation limit of 100 dB does not
-        # limit the suppression.
         "deepfilternet#0" = {
           bypass = false;
           input-gain = 0.0;

@@ -1,7 +1,3 @@
-# The Phanteks D30 case fans on the motherboard's nct6687 channels 3, 5 and 7
-# run at one low fixed speed from boot. The BIOS keeps every other fan.
-# `case-fans off` hands the three channels back to the BIOS until the next
-# boot or `case-fans on`; `fan-status` lists every fan.
 { config, pkgs, ... }:
 let
   findHwmon = ''
@@ -117,7 +113,6 @@ let
         n=$(basename "$f" _input)
         idx=''${n#fan}
         rpm=$(<"$f")
-        # An empty header reads 0.
         ((rpm == 0)) && continue
         label=$(cat "$hw/''${n}_label" 2>/dev/null || echo "$n")
         pwm=$(cat "$hw/pwm$idx" 2>/dev/null || echo -)

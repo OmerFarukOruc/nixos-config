@@ -1,17 +1,9 @@
-# ASUS platform control. power-profiles-daemon owns the platform profile, EPP
-# and boost; asusd keeps the fans, the charge limit, Aura and the armoury
-# settings. Only one of them may switch profiles, so asusd's automatic profile
-# switching and its EPP link are off. ROG Control Center and
-# `asusctl profile set` still switch through asusd, and oruc-profile-sync
-# (profile-sync.nix) hands that switch to power-profiles-daemon.
 {
   config,
   lib,
   ...
 }:
 let
-  # base09, the orange or nearest warm slot of the machine record's scheme.
-  # asusd's config is a system file, so it follows the record, not `theme`.
   auraColour = {
     r = lib.toInt config.scheme."base09-rgb-r";
     g = lib.toInt config.scheme."base09-rgb-g";
@@ -33,16 +25,6 @@ let
         '') profiles
       )
     }}";
-  # asusd writes these limits on every platform profile change, also one that
-  # power-profiles-daemon makes. Each value stays inside the GA605W range of the
-  # kernel's asus-armoury table; on battery the only GPU limit is the
-  # temperature target. Quiet takes each range's minimum and performance each
-  # GPU range's maximum; the other values trade speed for heat and fan noise.
-  # In a 4-minute all-thread stress-ng run on AC, the CPU peaked at 62 °C in
-  # quiet (boost off), 75 °C in balanced and 81 °C in performance. The fan
-  # curves' first points changed after that run. Rerun it with
-  # scripts/thermal-test-rog.sh (docs/nixos-rog.md, Power and heat).
-  # cpu-limits.nix caps each profile's CPU temperature.
   acTunings = {
     Quiet = {
       PptPl1Spl = 15;
@@ -89,7 +71,6 @@ let
       NvTempTarget = 87;
     };
   };
-  # The asus-armoury attribute that asusd writes each tuning to.
   armouryAttribute = {
     PptPl1Spl = "ppt_pl1_spl";
     PptPl2Sppt = "ppt_pl2_sppt";
@@ -98,18 +79,6 @@ let
     NvDynamicBoost = "nv_dynamic_boost";
     NvTempTarget = "nv_temp_target";
   };
-  # The firmware takes the power limits above only while every fan follows a
-  # custom curve. fan-curves.json maps each profile (quiet, balanced,
-  # performance) and each fan (CPU, GPU, MID) to 8 points of (°C, PWM 0-255);
-  # neither value falls from left to right. The kernel sends each point as
-  # 100 * PWM / 255 percent, rounded down, and in a sweep on 2026-10-13 every
-  # fan started from stop at 1 % (PWM 3); PWM 0-2 send 0 %, which stops the
-  # fan. The firmware also runs each fan at its first point's speed below that
-  # point's temperature. So the CPU and GPU fans start at PWM 3 and never stop.
-  # The MID fan starts at 0 and stops when cool, because at 1 % it turns at
-  # 3400-4300 rpm, against about 2200 for the others.
-  # The CPU curve ends at 82 °C with PWM 104 in quiet, at 94 °C with 165 in
-  # balanced and at 86 °C with 200 in performance.
   profiles = import ./power-profiles.nix;
   sameNames = left: right: lib.sort builtins.lessThan left == lib.sort builtins.lessThan right;
   fanNames = [
@@ -198,8 +167,6 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
     lib.concatStringsSep ", " (badCurves ++ fanSetBad)
   }";
 {
-  # verify-nixos-rog.sh compares the live armoury limits and fan curves of each
-  # platform profile with these.
   oruc.verifyFacts =
     let
       armouryFacts =
@@ -233,11 +200,6 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
 
   services.asusd = {
     enable = true;
-    # asusd reads every field here; a missing one makes it start from its
-    # own defaults, which switch profiles. It copies this file into /etc and
-    # may rewrite it at runtime; the next activation restores it.
-    # The 80% charge limit is ASUS's Balanced mode; `asusctl battery oneshot`
-    # charges to 100% once, such as before a trip.
     asusdConfig.text = ''
       (
           charge_control_end_threshold: 80,
@@ -269,8 +231,6 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
           ),
       )
     '';
-    # The keyboard is one RGB zone. It takes auraColour in every
-    # mode the Aura key cycles through, and stays dark while asleep and off.
     auraConfigs."19b6".text = ''
       (
           config_name: "aura_19b6.ron",
@@ -294,15 +254,10 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
       )
     '';
   };
-  # asusd reads most of its files only when it starts. It reloads a changed
-  # asusd.ron, but kept applying the old power limits after that, so every
-  # change restarts it.
   systemd.services.asusd.restartTriggers = lib.mapAttrsToList (_: file: file.source) (
     lib.filterAttrs (name: _: lib.hasPrefix "asusd/" name) config.environment.etc
   );
 
-  # The Slash LED bar on the lid stays dark on battery. The asusd module has no
-  # option for this file.
   environment.etc."asusd/slash.ron" = {
     mode = "0644";
     text = ''
@@ -321,10 +276,6 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
     '';
   };
 
-  # The Aura key sends XF86Launch3; asusctl 6.5.0 has no `aura -n`. The laptop
-  # has no Print key; Fn+F6 sends Mod+Shift+S. These binds append to
-  # /etc/niri/host.kdl, which nixosModules/desktop.nix and graphics.nix also
-  # write; config.kdl includes the merged text.
   environment.etc."niri/host.kdl".text = ''
     binds {
         XF86Launch3 { spawn "${lib.getExe' config.services.asusd.package "asusctl"}" "aura" "effect" "--next-mode"; }

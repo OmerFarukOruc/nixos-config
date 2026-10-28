@@ -1,15 +1,8 @@
-# The secrets of Omer's own user services on the box (home.nix), from
-# secrets/risoluto-dev-1-services.yaml and, for CLIProxyAPI,
-# secrets/risoluto-dev-1-cliproxy.yaml. oruc owns the rendered files, because
-# the services run in oruc's user manager. sops-nix restarts only system
-# units, so restart the user service after its secret changes.
 { config, ... }:
 let
   secrets = ../../secrets/risoluto-dev-1-services.yaml;
   cliproxy = ../../secrets/risoluto-dev-1-cliproxy.yaml;
   inherit (config.sops) placeholder;
-  # A cliproxy secret, named after its key in the file, read only by oruc's
-  # cliproxy.service.
   cliproxySecret = key: {
     sopsFile = cliproxy;
     inherit key;
@@ -32,7 +25,6 @@ in
       cliproxy-ts-authkey = cliproxySecret "ts-authkey";
       cliproxy-share-host = cliproxySecret "share-host";
     };
-    # The app's config; cliproxy-up.sh gives the app a writable copy.
     templates."cliproxy-config.yaml" = {
       owner = "oruc";
       content = builtins.toJSON {
@@ -55,8 +47,6 @@ in
         };
       };
     };
-    # The share node's ts.net name is the tailnet name, which this public
-    # repository keeps out of git.
     templates."cliproxy.env" = {
       owner = "oruc";
       content = ''

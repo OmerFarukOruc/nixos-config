@@ -1,6 +1,3 @@
-# The file of every base16 scheme, by name: the pinned tinted-theming schemes
-# input and this repository's own schemes in assets/schemes. A name in both
-# takes this repository's file.
 { inputs, lib }:
 let
   schemesIn =

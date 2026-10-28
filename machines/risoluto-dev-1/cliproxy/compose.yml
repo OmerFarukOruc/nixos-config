@@ -1,20 +1,9 @@
-# CLIProxyAPI on risoluto-dev-1, run by user oruc with rootless Podman
-# through the docker compose CLI. Loopback publish only.
-#
-# Do not start this file by itself. cliproxy-up.sh copies the config that
-# sops-nix renders first. A bare `up` with an empty config file would start an
-# unauthenticated proxy.
-#
-# Image updates come from cliproxy-update.timer (docs/risoluto-dev-1.md). A restart uses
-# the local image, so a registry outage cannot stop it.
 
 services:
   cliproxy:
     image: ${CLIPROXY_IMAGE:?set CLIPROXY_IMAGE}
     pull_policy: missing
     container_name: cliproxy
-    # systemd renders the tmpfs config before it starts this container.
-    # Podman must not start it independently after a reboot.
     restart: "no"
     environment:
       TZ: Europe/Istanbul
@@ -58,10 +47,8 @@ services:
     depends_on:
       - cliproxy
 
-  # TLS for both names of the node (tls-proxy/Caddyfile). No host port.
   tls-proxy:
     profiles: ["share"]
-    # cliproxy-up.sh builds this image from tls-proxy/Dockerfile.
     image: ${CLIPROXY_TLS_IMAGE:?set CLIPROXY_TLS_IMAGE}
     pull_policy: never
     container_name: cliproxy-tls-proxy
