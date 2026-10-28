@@ -5,10 +5,9 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-# Some task stalled on memory for 300 ms (15%) within a 2 s window. The
-# threshold is a guess, not measured. An unprivileged trigger needs a window
-# that is a multiple of 2 s (psi.rst).
-TRIGGER = b"some 300000 2000000\0"
+GUESSED_STALL_US = 300_000
+UNPRIVILEGED_WINDOW_US = 2_000_000
+TRIGGER = f"some {GUESSED_STALL_US} {UNPRIVILEGED_WINDOW_US}\0".encode()
 MIN_GAP = 60
 KEEP = 100
 TOP_GROUPS = 20
