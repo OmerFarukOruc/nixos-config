@@ -130,10 +130,9 @@ server_boot() {
 }
 
 # With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
-# and only warns, so the input follows its upstream unpinned. nix fmt writes
-# the lock file, so the lock check runs first.
+# and only warns, so the input follows its upstream unpinned.
 check "lock files" lock_files
-check formatting nix fmt "${nix_opts[@]}" -- --ci
+check formatting nix fmt "${nix_opts[@]}" --no-update-lock-file -- --ci
 check "flake outputs" flake_outputs
 check "host systems" host_systems
 check "kernel-cache packages" nix eval "${nix_opts[@]}" --json --no-write-lock-file \
