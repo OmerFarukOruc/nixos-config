@@ -35,6 +35,9 @@ in
     pkgs.defuddle
     pkgs.glow
     (pkgs.callPackage ../../pkgs/impeccable.nix { })
+    # dotfiles' desktop-sync checks the Roles Anywhere certificate in ~/.aws
+    # with it, and renewing the certificate needs it.
+    pkgs.openssl
     stayGreen
     pkgs.wrangler
   ];
