@@ -6,6 +6,7 @@
 - [Boot the recovery entry](#boot-the-recovery-entry)
 - [Repair the bootloader](#repair-the-bootloader)
 - [Swap on nixos-latitude](#swap-on-nixos-latitude)
+- [Out of memory](#out-of-memory)
 - [nixos-rog](#nixos-rog)
 - [nixos-desktop](#nixos-desktop)
 
@@ -124,6 +125,34 @@ offline repartition plan is chosen.
 
 Zswap waits for the same storage decision, because NixOS needs a physical swap
 device and rejects zswap with zram.
+
+## Out of memory
+
+`nixosModules/memory.nix` sets the limits below. On 2026-10-24 a Ghostty tab
+with about 6400 small python3 processes filled RAM and swap twice.
+systemd-oomd did not act on memory pressure, and the kernel OOM killer picked
+the biggest single process, Ghostty's main process, which closed every tab.
+Since then, with swap and memory both above 90%, systemd-oomd kills the leaf
+cgroup with the most swap (`ManagedOOMSwap=kill` on the user slice), such as
+that one tab.
+
+Each Ghostty tab is a transient scope with `TasksMax=4096`, `MemoryMax=20G`
+and `MemorySwapMax=6G`. On 2026-10-24 the busiest normal tab peaked at 2494
+tasks, 16.2 GiB of RAM and 1.7 GiB of swap, and the runaway tab at 18.9 GiB of
+RAM and 23.8 GiB of swap, so `MemoryMax` alone would have missed it. The values
+sit above the normal peaks; they are not measured limits. The busiest normal
+tab runs herdr and its agents, so it is the one closest to the limits; above
+20G the kernel kills its largest process.
+
+`memory-pressure-snapshot.service` writes every process with its parent and
+command line, and each user cgroup's memory, to
+`~/.local/state/oom-snapshots/` when memory pressure rises, at most once a
+minute. The last snapshot before an OOM kill shows what held the memory. Its
+trigger (300 ms of stall in a 2 s window) is a guess. A process line is at
+most about 230 bytes, so a snapshot of 6000 processes is about 1.4 MB, and the
+100 kept files take at most about 140 MB and cover the last 100 minutes under
+steady pressure. The service's own 128M memory cap is a guess from a synthetic
+snapshot of 6888 processes that peaked at 24 MiB RSS.
 
 ## nixos-rog
 

@@ -107,7 +107,10 @@ to 10 minutes of random delay. On battery the service skips the run. Each run:
 2. stops when the deploy of this `main` failed before, and prints when it
    failed, its exit status and the first `error:` line of that run;
 3. stops when nixos-rog runs `main`, or when `main` builds the system it runs,
-   such as after a docs change;
+   such as after a docs change. The second case writes `<commit> <system>` to
+   `same-system` in the state directory, so the next run on that commit and
+   system skips the evaluation, which took 58 s and 6.9 GiB instead of about
+   10 s (journal, 2026-10-23);
 4. otherwise deploys `main` with `./deploy.sh nixos-rog switch`.
 
 A desktop notification reports each deploy or failure. A switch leaves the

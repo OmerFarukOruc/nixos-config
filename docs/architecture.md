@@ -115,11 +115,11 @@ These rules follow from the list:
   display manager session per shell, named `<desktop>-<shell>`, in place of its
   own. The session's launcher sets `ORUC_SHELL`, and each shell's services
   start only when it matches. Every niri shell's launcher sets `NIRI_CONFIG` to
-  `/etc/niri/session-<shell>.kdl`, a file that adds the shell's binds after
-  `/etc/niri/config.kdl` (`niri/config.kdl`, the system-wide niri config). With
-  one niri shell there is no such file, and niri uses `/etc/niri/config.kdl`
-  when `~/.config/niri/config.kdl` is absent. With several, niri does not read
-  `~/.config/niri/config.kdl`.
+  `/etc/niri/<session>.kdl`, which includes `/etc/niri/config.kdl`
+  (`niri/config.kdl`, the system-wide niri config) and then the shell's binds.
+  The file is `niri-<shell>.kdl` when the machine has several niri shells and
+  `niri.kdl` when it has one (`sessionName` in `machines/sessions.nix`). Because
+  `NIRI_CONFIG` is set, niri does not read `~/.config/niri/config.kdl`.
   A niri session that is already open misses a deploy that changes the
   launcher. [Deploy](deploy.md#deploy) says how to tell and what to do.
 - **Plasma owns the shared look.** With Plasma present, Plasma owns
