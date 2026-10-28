@@ -108,19 +108,19 @@ let
     lib.concatMap (
       fan:
       let
-        points = fanCurveTable.${profile.json}.${fan} or null;
+        points = fanCurveTable.${profile.fanCurveKey}.${fan} or null;
       in
-      lib.optional (points == null || !curveOk points) "${profile.json}.${fan}"
+      lib.optional (points == null || !curveOk points) "${profile.fanCurveKey}.${fan}"
     ) fanNames
   ) profiles;
   fanSetBad = lib.concatMap (
     profile:
     let
-      names = lib.attrNames (fanCurveTable.${profile.json} or { });
+      names = lib.attrNames (fanCurveTable.${profile.fanCurveKey} or { });
     in
     lib.optional (
-      fanCurveTable ? ${profile.json} && !sameNames names fanNames
-    ) "${profile.json} fans ${toString names}"
+      fanCurveTable ? ${profile.fanCurveKey} && !sameNames names fanNames
+    ) "${profile.fanCurveKey} fans ${toString names}"
   ) profiles;
   fanCurveTable = lib.importJSON ./fan-curves.json;
   fanCurves =
@@ -154,13 +154,13 @@ let
   '';
 in
 assert lib.assertMsg (sameNames (lib.attrNames acTunings) (
-  map (profile: profile.asusd) profiles
+  map (profile: profile.asusdTuningName) profiles
 )) "AC tunings must use the asusd names in power-profiles.nix.";
 assert lib.assertMsg (sameNames (lib.attrNames dcTunings) (
-  map (profile: profile.asusd) profiles
+  map (profile: profile.asusdTuningName) profiles
 )) "DC tunings must use the asusd names in power-profiles.nix.";
 assert lib.assertMsg (sameNames (lib.attrNames fanCurveTable) (
-  map (profile: profile.json) profiles
+  map (profile: profile.fanCurveKey) profiles
 )) "fan-curves.json profiles must match power-profiles.nix.";
 assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
   "fan-curves.json needs the fans CPU, GPU and MID, eight non-decreasing points, and PWM from 0 to 255: ${

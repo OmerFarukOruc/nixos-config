@@ -26,7 +26,7 @@ let
 in
 assert lib.assertMsg (
   lib.sort builtins.lessThan (lib.attrNames limits)
-  == lib.sort builtins.lessThan (map (profile: profile.ppd) profiles)
+  == lib.sort builtins.lessThan (map (profile: profile.ppdName) profiles)
 ) "CPU limits must use the power-profiles-daemon names in power-profiles.nix.";
 {
   oruc.verifyFacts = lib.concatMapAttrs (

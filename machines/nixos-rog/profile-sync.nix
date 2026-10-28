@@ -6,7 +6,9 @@
 }:
 let
   profiles = import ./power-profiles.nix;
-  ppdNames = lib.concatMapStringsSep " " (profile: "[${profile.json}]=${profile.ppd}") profiles;
+  ppdNames = lib.concatMapStringsSep " " (
+    profile: "[${profile.fanCurveKey}]=${profile.ppdName}"
+  ) profiles;
   file = "/sys/firmware/acpi/platform_profile";
 in
 {
