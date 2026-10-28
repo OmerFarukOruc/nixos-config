@@ -6,9 +6,11 @@ This flake builds the CachyOS kernels `linux-cachyos-latest-lto-x86_64-v3` and
 open kernel module for each, and the packages that hosts build against the
 kernel. GitHub Actions pushes them to a public Cachix cache, so the NixOS hosts
 that use them do not compile them. `hostPackages` in `flake.nix` lists the
-extra packages each variant builds besides the kernel and its NVIDIA module. A failed build of any output stops the run before it
+extra packages each variant builds besides the kernel and its NVIDIA module,
+by output name. Out-of-tree modules and kernel tools come from the same kernel
+package set as the kernel. A failed build of any output stops the run before it
 records the new revision, so no host moves to that kernel until the next run
-succeeds.
+succeeds; list only what the hosts of a variant use.
 
 The kernel's store path depends only on the nix-cachyos-kernel revision in
 `flake.lock`, because the input's `pinned` overlay builds with the input's own

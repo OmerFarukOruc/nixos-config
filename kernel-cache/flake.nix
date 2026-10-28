@@ -24,11 +24,6 @@
         );
       nvidiaOpen =
         variant: ((kernelPackages variant).nvidiaPackages.mkDriver (import ./nvidia-driver.nix)).open;
-      # What a variant builds besides the kernel and the NVIDIA open module,
-      # which every variant builds, by output name. Out-of-tree modules and
-      # kernel tools must come from the same kernel package set. List only what
-      # the hosts of that variant use, because one failed build keeps the record
-      # job from moving every host to the new kernel.
       hostPackages = {
         x86_64-v3 = [ ];
         zen4 = [
