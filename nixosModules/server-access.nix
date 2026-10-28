@@ -24,10 +24,7 @@ lib.mkIf (cfg.kind == "server") {
         "oruc"
       ];
     };
-    # oruc also reads ~/.ssh/authorized_keys, where Omer adds the Grok bots'
-    # key by hand.
-    # root reads only the keys declared here; the Match block must stay last.
-    extraConfig = ''
+    extraConfig = lib.mkAfter ''
       Match User root
         AuthorizedKeysFile /etc/ssh/authorized_keys.d/%u
     '';
