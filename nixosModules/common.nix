@@ -158,6 +158,17 @@ in
     # Prebuilt Linux binaries find their loader and common libraries.
     programs.nix-ld.enable = true;
 
+    # uv's standalone Pythons look for the system CA bundle at this path.
+    environment.etc =
+      lib.mkIf
+        (builtins.elem cfg.name [
+          "nixos-desktop"
+          "nixos-rog"
+        ])
+        {
+          "ssl/cert.pem".source = config.security.pki.caBundle;
+        };
+
     security.sudo.execWheelOnly = true;
 
     # Wi-Fi and other cards, such as the MT7925 in nixos-rog, need linux-firmware.

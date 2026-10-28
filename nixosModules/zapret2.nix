@@ -1,7 +1,7 @@
 # zapret2 rewrites the first packets of outgoing HTTP, TLS and QUIC
 # connections, so DPI on the line cannot block them (Discord on the home line).
-# Discord starts on the list; any other host joins it after zapret2 sees a
-# connection to it fail three times. Each host names its uplink in
+# Discord starts on the list; other non-excluded hosts join after zapret2 sees a
+# connection to one of them fail three times. Each host names its uplink in
 # services.zapret2.firewall.interfaces.
 { config, pkgs, ... }:
 let
@@ -11,6 +11,12 @@ let
     enable = true;
     file = autoHosts;
   };
+  # Microsoft's servers accept the TCP MD5 fake, which breaks TLS.
+  # Their early RSTs also make autodetection add Microsoft hosts.
+  microsoft = [
+    "microsoftonline.com"
+    "microsoft.com"
+  ];
   # Discord's domains start on the list, so the first visits do not have to
   # fail before zapret2 learns them. Subdomains match too.
   discord = [
@@ -53,6 +59,7 @@ in
         priority = 1;
         hosts.autodetect = autodetect;
         hosts.include = discord;
+        hosts.exclude = microsoft;
         parameters = [
           "--filter-tcp=80"
           "--filter-l7=http"
@@ -65,6 +72,7 @@ in
         priority = 2;
         hosts.autodetect = autodetect;
         hosts.include = discord;
+        hosts.exclude = microsoft;
         parameters = [
           "--filter-tcp=443"
           "--filter-l7=tls"
@@ -75,6 +83,7 @@ in
       quic = {
         priority = 3;
         hosts.include = discord;
+        hosts.exclude = microsoft;
         parameters = [
           "--filter-udp=443"
           "--filter-l7=quic"

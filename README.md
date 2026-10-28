@@ -116,7 +116,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 ## Layout
 
 ```text
-flake.nix              inputs; machines/inventory.nix builds the two nixosConfigurations
+flake.nix              inputs; machines/inventory.nix builds the host configurations
 machines/              the typed machine inventory and one folder per host
 nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme, ...
 home-manager/          the user layer, with one module per shell and app
