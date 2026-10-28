@@ -1,26 +1,4 @@
 #!/usr/bin/env bash
-# usage: scripts/prepare-update.sh apps|inputs HOST CHANGES
-# Runs in a clean checkout of main from .github/workflows/update.yml, which
-# commits each mode's moves as its own commit, so a failing input move never
-# holds back an app. It writes the commit body that lists the moves to CHANGES,
-# and nothing when nothing moved.
-# apps: each app in pkgs/ moves with update-app.sh against main's flake.lock and
-#   stays only when it builds on its own, so one broken release never holds
-#   back the rest.
-# inputs:
-# - Every input except the two below moves with move-inputs.sh, and those
-#   moves stay only while every host's system evaluates; otherwise nixpkgs
-#   stays where it is, and when that is not enough every input does.
-# - The kernel moves only once the kernel cache holds its build
-#   (update-kernel.sh).
-# - llm-agents moves only while cache.numtide.com holds every coding agent that
-#   HOST's system uses.
-# - An app with a passthru.depsBun line, whose locked dependencies follow
-#   nixpkgs' bun, moves again against the moved inputs.
-# - devenv.lock moves only with another move and only while the dev shell of
-#   devenv.nix builds.
-# A move that stays out prints a GitHub warning annotation and the run goes on.
-# Needs nix, gh with GH_TOKEN, curl, jq and python3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -41,6 +19,15 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 # shellcheck source=/dev/null
 . scripts/lib/build-error.sh
+
+app_files_with_npm_wrapper_dir() {
+  local app
+  app=$(basename "$1" .nix)
+  echo "$1"
+  if grep -q '^  passthru.npmPackage = ' "$1" && [[ -d pkgs/$app ]]; then
+    echo "pkgs/$app"
+  fi
+}
 
 # move_apps [FILE...]: moves each app, or every app in pkgs/ without an
 # argument, with update-app.sh and keeps each move only when the app builds on
@@ -65,9 +52,7 @@ move_apps() {
       continue
     fi
     cat "$work/build.log" >&2
-    # An npm wrapper project keeps its package.json and lockfile in pkgs/NAME/.
-    restore=("$file")
-    grep -q '^  passthru.npmPackage = ' "$file" && [[ -d pkgs/$app ]] && restore+=("pkgs/$app")
+    mapfile -t restore < <(app_files_with_npm_wrapper_dir "$file")
     git checkout -- "${restore[@]}"
     reason=$(build_error "$work/build.log")
     warn "$app $version does not build: ${reason:-no error line}. It stays where it is."
@@ -86,8 +71,6 @@ cp flake.nix flake.lock "$work/"
 
 cached_devenv_of_main=$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#devenv)/bin/devenv
 
-# eval_error: prints "HOST does not evaluate: LINE" for the first host whose system does not
-# evaluate, with the first error line of that evaluation, or nothing.
 eval_error() {
   local h hosts
   hosts=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames 2>"$work/eval.log") || {
