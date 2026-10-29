@@ -52,6 +52,7 @@ in
         address = [ "${config.networking.primaryIPAddress}/24" ];
       };
       environment.systemPackages = [ pkgs.openssl ];
+      oruc.tailnetWeb.sites."race-test.risoluto.dev" = "127.0.0.1:3000";
       systemd.services = lib.listToAttrs (
         lib.imap1 (
           i: name:

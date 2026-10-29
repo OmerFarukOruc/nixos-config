@@ -76,7 +76,7 @@ machine.succeed("test $(stat -c '%a' /run/secrets/cloudflare-acme-dns-token) = 4
 machine.succeed(
     "grep -Fx test-token-not-for-cloudflare /run/secrets/cloudflare-acme-dns-token"
 )
-for svc_site in ["openchamber", "herdr", "herdr-fleet"]:
+for svc_site in ["openchamber", "herdr"]:
     svc_unit = f"acme-order-renew-{svc_site}.risoluto.dev.service"
     svc_cat = machine.succeed(f"systemctl cat {svc_unit}")
     assert "LoadCredential=CLOUDFLARE_DNS_API_TOKEN_FILE:" in svc_cat, (
@@ -92,7 +92,7 @@ for svc_site in ["openchamber", "herdr", "herdr-fleet"]:
 
 machine.wait_for_unit("caddy.service")
 machine.succeed("ss -Htln | grep -E ':443 '")
-for svc_port in [3000, 7317, 7318]:
+for svc_port in [3000, 7317]:
     machine.wait_for_open_port(svc_port)
 
 
@@ -104,7 +104,7 @@ def svc_site_headers(name):
     ).lower()
 
 
-svc_backends = {"openchamber": 3000, "herdr": 7317, "herdr-fleet": 7318}
+svc_backends = {"openchamber": 3000, "herdr": 7317}
 for svc_site in list(svc_backends) * 15:
     svc_headers = svc_site_headers(svc_site)
     assert f"x-backend-port: {svc_backends[svc_site]}\n" in svc_headers, (
@@ -116,7 +116,7 @@ for svc_site in list(svc_backends) * 15:
     assert "tailscale-user-login" not in svc_headers, (
         f"{svc_site} passes a forged Tailscale-User-Login on"
     )
-for svc_site in ["openchamber", "herdr", "herdr-fleet"]:
+for svc_site in ["openchamber", "herdr"]:
     machine.succeed(
         f"echo | openssl s_client -connect 127.0.0.1:443 -servername {svc_site}.risoluto.dev 2>/dev/null"
         f" | openssl x509 -noout -subject | grep -F {svc_site}.risoluto.dev"

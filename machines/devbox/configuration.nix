@@ -164,7 +164,6 @@ in
     sites = {
       "openchamber.risoluto.dev" = "127.0.0.1:3000";
       "herdr.risoluto.dev" = "127.0.0.1:7317";
-      "herdr-fleet.risoluto.dev" = "127.0.0.1:7318";
     };
   };
 

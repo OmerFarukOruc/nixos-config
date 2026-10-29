@@ -270,9 +270,8 @@ services.
 ## Web names
 
 `nixosModules/tailnet-web.nix` serves the names of `oruc.tailnetWeb.sites` with
-Caddy, for the tailnet. The host lists three: OpenChamber on
-127.0.0.1:3000 and the herdr web UIs on 127.0.0.1:7317 (default session) and
-127.0.0.1:7318 (the bots' fleet session). Each name has a public, DNS-only A
+Caddy, for the tailnet. The host lists two: OpenChamber on 127.0.0.1:3000
+and the herdr web UI on 127.0.0.1:7317. Each name has a public, DNS-only A
 record to the tailnet address, kept outside this repository, so it resolves
 everywhere and connects from the tailnet only.
 
@@ -291,7 +290,7 @@ everywhere and connects from the tailnet only.
 - Every site removes the `Tailscale-User-Login` header. The herdr web UI trusts
   it on a request from loopback as the identity that `tailscale serve` sets,
   and every request Caddy forwards comes from loopback, so a client could
-  forge it. The Debian Caddyfile strips it on the two herdr sites only;
+  forge it. The Debian Caddyfile strips it on the herdr site only;
   nothing behind the openchamber site reads it, so stripping it there changes
   no behaviour. Responses stream (`flush_interval -1`), and `grace_period 10s`
   (the Debian Caddyfile's value) keeps open event streams from holding a
@@ -299,7 +298,7 @@ everywhere and connects from the tailnet only.
   journal, which reaches SigNoz without an alert; a config error exits with
   status 1, which the NixOS module never restarts.
 - The admin API is off, so a change restarts Caddy and does not reload it.
-- Caddy is ordered after the three order units (`acme-order-renew-*`). Every
+- Caddy is ordered after the order units (`acme-order-renew-*`). Every
   order that installs a new certificate restarts Caddy (the module sets
   `reloadServices`), and the orders after the first run at the same time. An
   order that has copied its files but not yet run its `chmod` leaves a
@@ -568,7 +567,7 @@ the box's 2 TiB, and the root partition takes the rest.
 
 `ci/server-boot/modules/services.nix` and `ci/server-boot/checks/20-services.py`
 cover the web names, the containers and the agent runtime. Caddy starts with
-its config and answers the three names with test certificates, and the
+its config and answers the host's names with test certificates, and the
 firewall drops a connection to port 443 from outside. A forged
 `Tailscale-User-Login` does not reach any backend. Docker and Podman answer as
 omer through their user sockets, a port that Docker publishes lies outside the
@@ -588,7 +587,7 @@ own host key opens the real secrets files, that the netcup network works, that
 Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI and
 stay-green start (they need a registry and a Teams sign-in, so the test turns
 them off and checks their secrets only; the unit check below checks their
-settings), that Let's Encrypt issues the three certificates with the real
+settings), that Let's Encrypt issues the host's certificates with the real
 Cloudflare token, or that the BIOS stage installs from the kexec installer. The
 cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no
@@ -617,7 +616,7 @@ false`.
 
 The test also starts a test ACME server (pebble) and a DNS server for the
 challenge (`ci/server-units/acme.nix`), and swaps lego's DNS provider for its
-`exec` provider, so the three certificate orders of the host succeed. The
+`exec` provider, so the certificate orders of the host succeed. The
 Cloudflare provider wiring is not covered; a real order at the cutover proves
 it. A failed order is not in `systemctl --failed`: the order unit has
 `Restart=on-failure` with a 15 minute delay, so it shows as `activating`. The
@@ -626,9 +625,10 @@ that Caddy serves a certificate from the test CA. A failed order on the box
 leaves the self-signed certificate in place and shows only in the journal,
 which reaches SigNoz without an alert.
 
-The test also holds the `chmod` of each order's output for 10, 20 and 30
-seconds (`ci/server-units/acme.nix`), so the orders of the first issuance
-overlap on purpose. Each order copies its files into `out/`, then runs `chmod`
+The test adds a third name, `race-test.risoluto.dev`, and holds the `chmod`
+of each order's output for 10, 20 and 30 seconds (`ci/server-units/acme.nix`),
+so the orders of the first issuance overlap on purpose. With the host's two
+names alone, one order would follow the first and none would overlap it. Each order copies its files into `out/`, then runs `chmod`
 and `chown` for the web server's group, and until that `chmod` the files are
 0600, so Caddy cannot read them. Orders that share an account run at the same
 time, except the first, which runs alone, and an order that is done restarts

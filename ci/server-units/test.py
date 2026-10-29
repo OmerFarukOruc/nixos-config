@@ -16,7 +16,7 @@ dp_restarting = machine.succeed("systemctl list-units --state=activating --no-le
 for dp_unit in dp_restarting:
     print(f"journal of {dp_unit}:\n" + machine.succeed(f"journalctl -u {dp_unit} -b -o cat --no-pager | tail -n 40"))
 assert dp_restarting == [], f"units still starting or restarting after boot: {dp_restarting}"
-for dp_name in ["openchamber", "herdr", "herdr-fleet"]:
+for dp_name in ["openchamber", "herdr", "race-test"]:
     machine.succeed(f"journalctl -b -u acme-order-renew-{dp_name}.risoluto.dev -o cat | grep -q 'test: chmod of out waited'")
     machine.succeed(f"openssl x509 -noout -issuer -in /var/lib/acme/{dp_name}.risoluto.dev/cert.pem | grep -i pebble")
     machine.wait_until_succeeds(f"openssl s_client -connect 127.0.0.1:443 -servername {dp_name}.risoluto.dev < /dev/null 2> /dev/null | openssl x509 -noout -issuer | grep -i pebble")
