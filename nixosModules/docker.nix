@@ -11,6 +11,10 @@ lib.mkIf config.oruc.machine.features.docker {
       enable = true;
       dates = "weekly";
     };
+    daemon.settings.builder.gc = {
+      enabled = true;
+      defaultMaxUsedSpace = "80GB";
+    };
   };
   # Interfaces made after boot, such as Docker's veths and bridges, get no IPv6
   # link-local address. Each such address that appears or goes makes Brave and
