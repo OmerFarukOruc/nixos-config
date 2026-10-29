@@ -79,6 +79,7 @@ case $(jq length <<<"$records") in
       change="set the comment of A $name to: $want_comment"
     else
       change="move A $name from $have to $addr"
+      [ "$have_comment" = "$want_comment" ] || change+=" and set its comment to: $want_comment"
     fi
     ;;
   *)
