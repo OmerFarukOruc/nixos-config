@@ -147,9 +147,15 @@ ssh -t nixos-rog upgrade
 
 To test a change to `scripts/prepare-update.sh` or `update.yml`, land it and
 run `gh workflow run update.yml`; add `-f always=true` when nothing upstream
-moved. To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
-`nixosModules/deploy-unit.nix`, deploy it to nixos-rog and
-run `upgrade`.
+moved. Until the run ends, push nothing to `main`, because the place jobs drop
+a commit whose files `main` changed meanwhile, and a merge job pushes nothing
+when `main` moved after its place job. The `update` concurrency group keeps
+one run waiting, and a newer run, such as the 6-hourly schedule, cancels it;
+after the dispatch, check `gh run list -w update.yml` and follow the run that
+is left. A merge shows on `main` as a commit by `github-actions[bot]`.
+
+To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
+`nixosModules/deploy-unit.nix`, deploy it to nixos-rog and run `upgrade`.
 
 A manual deploy exits 77 while the unit holds the deploy lock, and the unit
 deploys `main` again on top of a generation you restored. To pause the unit on
