@@ -14,8 +14,9 @@
 # name, and tells the agent to continue. ~/.config/claude-limit-switch/resume/NAME replaces that message for
 # agent NAME. `--resume` brings back a fixed-interval /loop but not a self-paced one or a Monitor, so an agent that
 # runs them needs a message that checks CronList first (the dotfiles checkout's desktop/reference/unattended-agents.md).
-# The new account is the first of `claude-usage --order` (see its order function). Each candidate
-# is measured with `claude-usage --account NAME`, which reads the usage endpoint or runs a one-turn `claude -p`.
+# scan holds the account back in claude-usage's hold file until the reset that the limit message names, and moves the
+# agent to the account that claude-usage's next_account picks after it reads the usage of each account not held
+# back. When that is the agent's own account, because its limit has reset, scan only sends the resume message.
 # herdr itself resumes Claude as plain `claude --resume`, without the flag and the account (see
 # the dotfiles checkout's desktop/reference/headless-clis/herdr.md), so its own restore is off. Instead each scan records the named Claude
 # agents and the server process in agents.json. When the next scan finds a different server process, it starts each
@@ -24,36 +25,33 @@
 # purpose; the record keeps it under "ended" with its last session for ENDED_KEEP, and only `resume NAME` starts it
 # again, the same way. A start that fails closes the workspace it made, and the next try waits COOLDOWN. When no
 # server runs, scan starts it (herdr-default.service for the default session).
-# State is in ~/.local/state/claude-limit-switch: limits.json (account: limited until, reason), agents.json,
-# switched.json and restore-failed.json (name: time of the last try), and events.log with the one before it in
-# events.log.1. CLAUDE_LIMIT_SWITCH_STATE and CLAUDE_LIMIT_SWITCH_SESSION (a herdr session name) point a test
-# elsewhere.
+# State is in ~/.local/state/claude-limit-switch: agents.json, switched.json and restore-failed.json (name: time of the
+# last try), and events.log with the one before it in events.log.1. The holds after a limit are in
+# ~/.local/state/claude-accounts/limits.json, which claude-rotate shares. CLAUDE_LIMIT_SWITCH_STATE,
+# CLAUDE_ACCOUNTS_STATE and CLAUDE_LIMIT_SWITCH_SESSION (a herdr session name) point a test elsewhere.
 from __future__ import annotations
 
 import argparse
 import fcntl
 import json
 import os
-import re
 import shlex
 import shutil
 import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 HOME = Path.home()
 BIN = Path(__file__).resolve().parent
-PROFILES = BIN / "claude-accounts"
 STATE = Path(os.environ.get("CLAUDE_LIMIT_SWITCH_STATE") or HOME / ".local/state/claude-limit-switch")
 SESSION = os.environ.get("CLAUDE_LIMIT_SWITCH_SESSION", "")
 RESUME = HOME / ".config/claude-limit-switch/resume"
 USAGE = BIN / "claude-usage"
-USAGE_CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage/usage.json")
-NO_RESET_WAIT = 3600
 # scan skips an agent this long after a move it tried, and restore waits this long after a failed start. After a
 # switch the screen keeps the old limit message until the agent answers; after a move with no room or a failed
 # start, scan runs every minute and would otherwise try again on each run.
@@ -64,15 +62,19 @@ SKIP_PERMISSIONS = "--dangerously-skip-permissions"
 READY_WAIT_S = 180
 TAIL = 6
 
-LIMIT = re.compile(r"You've hit your (session|weekly) limit · resets (.+?\))")
-MODEL_LIMIT = re.compile(r"You've reached your \S+ limit")
-MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-RESET = re.compile(
-    r"(?:(?P<mon>[A-Z][a-z]{2}) (?P<day>\d{1,2}), )?(?P<h>\d{1,2})(?::(?P<m>\d{2}))?(?P<ap>am|pm) \((?P<tz>[^)]+)\)"
-)
+
+def load_tool(name: str):
+    loader = SourceFileLoader(name.replace("-", "_"), str(BIN / name))
+    mod = module_from_spec(spec_from_loader(loader.name, loader))
+    loader.exec_module(mod)
+    return mod
 
 
-def find_limit(screen: str) -> dict | None:
+cu = load_tool("claude-usage")
+
+
+def find_limit(screen: str) -> str | None:
+    """The limit message among the last lines above Claude's input box, or None."""
     lines = screen.splitlines()
     end = len(lines)
     for i in range(len(lines) - 1, 0, -1):
@@ -80,46 +82,9 @@ def find_limit(screen: str) -> dict | None:
             end = i - 1
             break
     for line in reversed([x for x in lines[:end] if x.strip()][-TAIL:]):
-        if m := LIMIT.search(line):
-            return {"kind": m[1], "reset": m[2]}
-        if MODEL_LIMIT.search(line):
-            return {"kind": "model", "reset": None}
+        if cu.parse_limit(line, cu.now()):
+            return line.strip()
     return None
-
-
-def parse_reset(text: str, now: datetime) -> float | None:
-    m = RESET.fullmatch(text.strip())
-    if not m:
-        return None
-    try:
-        local = now.astimezone(ZoneInfo(m["tz"]))
-    except (ZoneInfoNotFoundError, ValueError):
-        return None
-    hour = int(m["h"]) % 12 + (12 if m["ap"] == "pm" else 0)
-    at = {"hour": hour, "minute": int(m["m"] or 0), "second": 0, "microsecond": 0}
-    try:
-        if m["mon"]:
-            t = local.replace(month=MONTHS.index(m["mon"]) + 1, day=int(m["day"]), **at)
-            if t < local - timedelta(days=180):
-                t = t.replace(year=t.year + 1)
-        else:
-            t = local.replace(**at)
-            if t <= local:
-                t += timedelta(days=1)
-    except ValueError:
-        return None
-    return t.timestamp()
-
-
-def pick_account(names: list[str], current: str, limits: dict, now: float) -> str | None:
-    """The first account of `claude-usage --order` other than current, or None when every other one is limited."""
-    held = [x for n in names if limits.get(n, {}).get("until", 0) > now for x in ("--held", n)]
-    p = subprocess.run([str(USAGE), "--order", "--skip", current, *held], capture_output=True, text=True,
-                       check=False, stdin=subprocess.DEVNULL)
-    if p.returncode:
-        raise Failed(f"claude-usage --order exited {p.returncode}: {p.stderr.strip()[-200:]}")
-    out = p.stdout.split()
-    return out[0] if out else None
 
 
 def resume_args(argv: list[str], session: str) -> list[str]:
@@ -193,14 +158,6 @@ def screen_of(name: str, source: str = "visible", lines: int = 0) -> str:
         return subprocess.run(args, capture_output=True, text=True, timeout=60, check=False).stdout
     except subprocess.TimeoutExpired:
         return ""
-
-
-def accounts() -> dict[str, str]:
-    """Account name to its CLAUDE_CONFIG_DIR; empty for the ~/.claude account."""
-    def run(*a: str) -> str:
-        return subprocess.run([str(PROFILES), *a], capture_output=True, text=True, check=True).stdout.strip()
-
-    return {n: run("dir", n) for n in run("names").split()}
 
 
 def account_of(config_dir: str, dirs: dict[str, str]) -> str:
@@ -358,7 +315,7 @@ def read_usage(names: list[str]) -> dict[str, dict | None]:
     args = [x for n in names for x in ("--account", n)]
     try:
         subprocess.run([str(USAGE), "--quiet", *args], timeout=300, check=False, stdin=subprocess.DEVNULL)
-        entries = {a["name"]: a for a in json.loads(USAGE_CACHE.read_text()).get("accounts", [])}
+        entries = cu.entries_of(json.loads(cu.CACHE.read_text()))
     except (OSError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
         log(f"claude-usage failed: {e}")
         return dict.fromkeys(names)
@@ -396,18 +353,14 @@ def log(msg: str) -> None:
         f.write(line + "\n")
 
 
-def mark(limits: dict, account: str, until: float | None, reason: str) -> None:
-    limits[account] = {"until": until or time.time() + NO_RESET_WAIT, "reason": reason}
+def at(t: float | None) -> str:
+    return datetime.fromtimestamp(t).astimezone().strftime("%a %H:%M") if t else "unknown"
 
 
-def note_usage(limits: dict, usage: dict) -> None:
-    for n, u in usage.items():
-        for meter in ("session", "week"):
-            if u and (u[meter] or 0) >= 100:
-                mark(limits, n, u[meter + "_reset"], f"{meter} meter at 100%")
-
-
-def switch(name: str, to: str | None, limits: dict) -> bool:
+def switch(name: str, to: str | None, stay: bool = False) -> bool:
+    """Moves the agent to account `to`, else to claude-usage's next account. With stay, as after a limit, that may be
+    the agent's own account once its limit has reset, and then the agent only gets the resume message."""
+    chosen = to is None
     agent = herdr("agent", "get", name)["result"]["agent"]
     if agent.get("agent") != "claude" or agent.get("agent_status") == "working":
         what = f"{agent['agent']} and {agent.get('agent_status')}" if agent.get("agent") else "no running agent"
@@ -417,19 +370,22 @@ def switch(name: str, to: str | None, limits: dict) -> bool:
         raise Failed(f"herdr knows no session id for {name}; is the claude integration installed?")
     pane = agent["pane_id"]
     pid, argv, config_dir = claude_process(pane)
-    dirs = accounts()
+    dirs = cu.accounts()
     current = account_of(config_dir, dirs)
     if to is None:
-        now = time.time()
-        candidates = [n for n in dirs if n != current and limits.get(n, {}).get("until", 0) <= now]
-        usage = read_usage(candidates)
-        note_usage(limits, usage)
-        to = pick_account(list(dirs), current, limits, now)
+        to = cu.next_account(None if stay else current)
         if to is None:
             log(f"{name}: every other account is limited or unreadable; {name} stays on {current}")
             return False
     elif to not in dirs:
         raise Failed(f"unknown account {to}")
+    msg_file = RESUME / name
+    if chosen and to == current:
+        herdr("agent", "prompt", name, msg_file.read_text().strip() if msg_file.is_file() else (
+            f"The usage limit of your Claude account {current} has reset. Continue where you stopped."
+        ))
+        log(f"{name}: the limit of {current} has reset; told it to continue, session {session}")
+        return True
     exit_claude(name, pid)
     try:
         start_claude(pane, name, dirs[to], resume_args(argv[1:], session))
@@ -437,7 +393,6 @@ def switch(name: str, to: str | None, limits: dict) -> bool:
         log(f"{name}: start on {to} failed ({e}); starting it on {current} again")
         start_claude(pane, name, dirs[current], resume_args(argv[1:], session))
         raise
-    msg_file = RESUME / name
     msg = msg_file.read_text().strip() if msg_file.is_file() else (
         f"Your Claude account {current} hit its usage limit, so this session now runs on the {to} account. "
         "Continue where you stopped."
@@ -538,7 +493,7 @@ def scan() -> int:
     server = ensure_server()
     record = load("agents.json")
     lost = restore(record, server)
-    limits, switched = load("limits.json"), load("switched.json")
+    switched = load("switched.json")
     dirs, failed = None, len(lost)
     for a in herdr("agent", "list")["result"]["agents"]:
         name = a.get("name")
@@ -550,18 +505,16 @@ def scan() -> int:
         if not hit:
             continue
         try:
-            dirs = dirs or accounts()
+            dirs = dirs or cu.accounts()
             current = account_of(claude_process(a["pane_id"])[2], dirs)
-            until = hit["reset"] and parse_reset(hit["reset"], datetime.now().astimezone())
-            mark(limits, current, until, f"{hit['kind']} limit")
-            save("limits.json", limits)
-            log(f"{name}: {current} hit its {hit['kind']} limit (resets {hit['reset'] or 'unknown'})")
-            switch(name, None, limits)
-        except Failed as e:
+            held = cu.hold_limit(current, hit)
+            what = f"held until {at(held[0])} after a {held[1]}" if held else "not held, its limit has reset"
+            log(f"{name}: {current} shows {hit!r}; {what}")
+            switch(name, None, stay=True)
+        except (Failed, OSError, subprocess.SubprocessError, ValueError) as e:
             failed += 1
-            log(f"{name}: switch failed: {e}")
+            log(f"{name}: switch failed: {e!r}")
         switched[name] = time.time()
-        save("limits.json", limits)
         save("switched.json", switched)
     snapshot(server, record, lost)
     return 1 if failed else 0
@@ -596,19 +549,13 @@ def main() -> int:
                     snapshot(server, record, lost)
                 return 1 if lost else 0
             if a.cmd == "switch":
-                limits = load("limits.json")
-                ok = switch(a.name, a.to, limits)
-                save("limits.json", limits)
+                ok = switch(a.name, a.to)
                 if ok:
                     switched = load("switched.json")
                     switched[a.name] = time.time()
                     save("switched.json", switched)
                 return 0 if ok else 1
-            usage = read_usage(a.accounts or list(accounts()))
-
-            def at(t: float | None) -> str:
-                return datetime.fromtimestamp(t).astimezone().strftime("%a %H:%M") if t else "unknown"
-
+            usage = read_usage(a.accounts or list(cu.accounts()))
             for n, u in usage.items():
                 print(f"{n:12} " + (f"session {u['session']}% (resets {at(u['session_reset'])})  week {u['week']}% "
                                     f"(resets {at(u['week_reset'])})" if u else "no reading"))

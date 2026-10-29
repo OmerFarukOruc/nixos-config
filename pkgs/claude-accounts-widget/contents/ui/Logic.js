@@ -41,23 +41,21 @@ function listedNames(data) {
     return names
 }
 
+// The account claude-rotate would start on: the first of claude-usage's order that nothing blocks.
 function bestAccount(data) {
-    var best = null, bestUsed = 0
     var listed = listedNames(data)
+    var order = (data && data.order) || []
     var list = (data && data.accounts) || []
-    for (var i = 0; i < list.length; i++) {
-        var a = list[i]
-        if (!listed[a.name] || (a.state !== "ok" && a.state !== "expiring"))
+    for (var i = 0; i < order.length; i++) {
+        if (order[i].group === "blocked" || !listed[order[i].name])
             continue
-        var u = maxUsed(a)
-        if (u === null)
-            continue
-        if (best === null || u < bestUsed) {
-            best = a
-            bestUsed = u
+        for (var j = 0; j < list.length; j++) {
+            var u = list[j].name === order[i].name ? maxUsed(list[j]) : null
+            if (u !== null)
+                return { account: list[j], used: u }
         }
     }
-    return best === null ? null : { account: best, used: bestUsed }
+    return null
 }
 
 function needsLogin(a) {

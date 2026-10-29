@@ -17,8 +17,9 @@ import termios
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 HOME = Path.home()
 BIN = Path(__file__).resolve().parent
@@ -32,6 +33,16 @@ EXPIRING = 5 * 86400
 PROBE_TIMEOUT = 90
 SSH_TIMEOUT = 20
 READ_KEY = HOME / ".ssh/id_ed25519_claude_usage"
+STATE = Path(os.environ.get("CLAUDE_ACCOUNTS_STATE") or HOME / ".local/state/claude-accounts")
+HOLDS = STATE / "limits.json"
+NO_RESET_WAIT = 3600
+REFRESH_BUDGET = 120
+RECENT = 60
+
+# plasmashell, which runs the widget's commands, and the systemd user units have no ~/.local/bin on PATH, where claude
+# lives on two hosts; claude-rotate and claude-limit-switch load this file as a module, so this runs for them too.
+if str(HOME / ".local/bin") not in os.environ.get("PATH", "").split(":"):
+    os.environ["PATH"] = f"{HOME / '.local/bin'}:{os.environ.get('PATH', '')}"
 
 
 def now() -> int:
@@ -228,16 +239,18 @@ def load_cache() -> dict:
     return read_json(CACHE) or {"version": 1, "host": socket.gethostname(), "updated": 0, "accounts": [], "hosts": []}
 
 
-def write_cache(data: dict) -> None:
-    CACHE.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=CACHE.parent, prefix=CACHE.name + ".")
+def write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".")
     with os.fdopen(fd, "w") as f:
         json.dump(data, f, indent=1)
         f.write("\n")
-    os.replace(tmp, CACHE)
+    os.replace(tmp, path)
 
 
-def refresh(only: list[str]) -> dict:
+def refresh(only: list[str], deadline: float | None = None) -> dict:
+    """Checks the accounts in only, or every account and the remote hosts without it. After `deadline` the accounts
+    not yet checked keep their cached reading."""
     data = load_cache()
     dirs = accounts()
     unknown = [n for n in only if n not in dirs]
@@ -247,7 +260,7 @@ def refresh(only: list[str]) -> dict:
     version = claude_version() if shutil.which("claude") else "2"
     result = []
     for n, d in dirs.items():
-        if only and n not in only and n in old:
+        if (only and n not in only or deadline and time.time() > deadline) and n in old:
             result.append(old[n])
             continue
         try:
@@ -262,7 +275,7 @@ def refresh(only: list[str]) -> dict:
     old_hosts = {h["host"]: h for h in data.get("hosts", [])}
     data = {"version": 1, "host": me, "updated": now(), "accounts": result,
             "hosts": [remote(h, old_hosts.get(h)) for h in hosts if h != me] if not only else data.get("hosts", [])}
-    write_cache(data)
+    write_json(CACHE, data)
     return data
 
 
@@ -329,6 +342,7 @@ SESSION_MAX, WEEK_MAX = 90, 95
 EVEN_BURN = 20
 MIN_ELAPSED = 900
 FIRST, TEAM, RESERVE, BLOCKED = range(4)
+GROUPS = ("first", "team", "reserve", "blocked")
 
 
 def size(plan: str | None) -> float:
@@ -377,10 +391,12 @@ def blocked(e: dict, held: bool, at: int) -> str | None:
 
 def order(entries: dict[str, dict], names: list[str], held: set[str], at: int) -> list[tuple[str, int, str]]:
     """Each name with its group and the reason for its place, the account to start on first. Team plans have no
-    weekly limit, so they go before the weekly-limited reserve. A team account whose room lasts to its 5 h reset at
-    our burn rate goes before one that would hit the limit first, and among those the soonest reset first, so the
-    room that comes back soonest is spent first. A reserve account goes before the team accounts when our burn rate
-    could not spend its weekly room before the weekly reset, so that room would otherwise go unused."""
+    weekly limit, so they go before the weekly-limited reserve. A reserve account goes before the team accounts when
+    our burn rate could not spend its weekly room before the weekly reset, so that room would otherwise go unused.
+    Inside each group, an account whose 5 h room lasts to its 5 h reset at our burn rate goes before one that would
+    hit the 5 h limit first, so a move does not land next to a 5 h limit. Among team accounts that last, the soonest
+    reset goes first, so the room that comes back soonest is spent first; among those that do not, the most room in
+    5x units. Reserve accounts go by weekly reset."""
     rate = burn(list(entries.values()), at)
     ranked = []
     for i, n in enumerate(names):
@@ -388,25 +404,158 @@ def order(entries: dict[str, dict], names: list[str], held: set[str], at: int) -
         if why := blocked(e, n in held, at):
             ranked.append(((BLOCKED, i), n, BLOCKED, why))
             continue
-        units = size(e.get("plan"))
         five, five_reset = window_now(e.get("five_hour"), at)
         five_left = (five_reset or at + WINDOWS["five_hour"]) - at
-        lasts = not five_reset or (SESSION_MAX - five) * units / rate * 3600 >= five_left
+        room = (SESSION_MAX - five) * size(e.get("plan"))
+        lasts = not five_reset or room / rate * 3600 >= five_left
+        short = f"{SESSION_MAX - five:.0f}% left in 5h"
         if (e.get("plan") or "").startswith("team"):
             if lasts:
                 why = f"lasts to its 5h reset in {span(five_left)}" if five_reset else "5h window not started"
                 ranked.append(((TEAM, 0, five_left), n, TEAM, why))
             else:
-                ranked.append(((TEAM, 1, five), n, TEAM, f"{SESSION_MAX - five:.0f}% left in 5h"))
+                ranked.append(((TEAM, 1, -room), n, TEAM, short))
             continue
+        tail = "" if lasts else f" · {short}"
         week, week_reset = window_now(e.get("seven_day"), at)
-        if week_reset and (WEEK_MAX - week) * units / rate * 3600 >= week_reset - at:
-            ranked.append(((FIRST, week_reset), n, FIRST,
-                           f"{WEEK_MAX - week:.0f}% of the week unused, resets in {span(week_reset - at)}"))
+        if week_reset and (WEEK_MAX - week) * size(e.get("plan")) / rate * 3600 >= week_reset - at:
+            ranked.append(((FIRST, not lasts, week_reset), n, FIRST,
+                           f"{WEEK_MAX - week:.0f}% of the week unused, resets in {span(week_reset - at)}{tail}"))
         else:
             left = f"week resets in {span(week_reset - at)}" if week_reset else "week not started"
-            ranked.append(((RESERVE, week_reset or at + WINDOWS["seven_day"]), n, RESERVE, f"reserve · {left}"))
+            ranked.append(((RESERVE, not lasts, week_reset or at + WINDOWS["seven_day"]), n, RESERVE,
+                           f"reserve · {left}{tail}"))
     return [(n, g, why) for _, n, g, why in sorted(ranked)]
+
+
+def entries_of(data: dict) -> dict[str, dict]:
+    return {a["name"]: a for a in data.get("accounts", [])}
+
+
+def holds(at: int) -> dict[str, dict]:
+    """The accounts held back after a usage limit at `at`: name to {"until", "reason"}."""
+    data = read_json(HOLDS)
+    if not isinstance(data, dict):
+        return {}
+    return {n: v for n, v in data.items()
+            if isinstance(v, dict) and isinstance(v.get("until"), (int, float)) and v["until"] > at}
+
+
+def hold(name: str, until: int, reason: str) -> None:
+    """Holds name back until `until`, in place of its earlier hold, because the newest limit message is the latest
+    word on that account, and drops the holds that have ended."""
+    STATE.mkdir(parents=True, exist_ok=True)
+    with (STATE / "lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        write_json(HOLDS, {**holds(now()), name: {"until": until, "reason": reason}})
+
+
+LIMIT = re.compile(r"You've hit your (session|weekly) limit · resets (.+?\))")
+MODEL_LIMIT = re.compile(r"You've reached your \S+ limit")
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+RESET = re.compile(
+    r"(?:(?P<mon>[A-Z][a-z]{2}) (?P<day>\d{1,2}), )?(?P<h>\d{1,2})(?::(?P<m>\d{2}))?(?P<ap>am|pm) \((?P<tz>[^)]+)\)"
+)
+
+
+def parse_reset(text: str, at: int, window: int) -> int | None:
+    """The time that the reset text of a limit message names, such as "4:40pm (Europe/Istanbul)" or
+    "Nov 3, 5pm (UTC)": the next such time after `at`, unless that lies more than one window ahead, because then the
+    window already reset at the one before."""
+    m = RESET.fullmatch(text.strip())
+    if not m:
+        return None
+    try:
+        local = datetime.fromtimestamp(at, ZoneInfo(m["tz"]))
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+    clock = {"hour": int(m["h"]) % 12 + (12 if m["ap"] == "pm" else 0), "minute": int(m["m"] or 0), "second": 0,
+             "microsecond": 0}
+    try:
+        if m["mon"]:
+            t = local.replace(month=MONTHS.index(m["mon"]) + 1, day=int(m["day"]), **clock)
+            if t.timestamp() <= at:
+                t = t.replace(year=t.year + 1)
+            if t.timestamp() - at > window:
+                t = t.replace(year=t.year - 1)
+        else:
+            t = local.replace(**clock)
+            if t.timestamp() <= at:
+                t = (t + timedelta(days=1)).replace(**clock)
+            if t.timestamp() - at > window:
+                t = (t - timedelta(days=1)).replace(**clock)
+    except ValueError:
+        return None
+    return int(t.timestamp())
+
+
+def parse_limit(text: str, at: int) -> tuple[int | None, str] | None:
+    """The end and reason of the usage limit that text reports, or None when it reports none. The end is None when
+    the text names no reset time, and not after `at` when the limit has already reset."""
+    if m := LIMIT.search(text):
+        window = WINDOWS["five_hour" if m[1] == "session" else "seven_day"]
+        return parse_reset(m[2], at, window), f"{m[1]} limit"
+    if MODEL_LIMIT.search(text):
+        return None, "model limit"
+    return None
+
+
+def full_window(e: dict, at: int) -> tuple[int, str] | None:
+    """The reset and name of a window at 100% in the account's reading, or None when no window is full."""
+    windows = [(e.get("seven_day"), "weekly limit"), (e.get("five_hour"), "session limit"),
+               *((x, f"{x['label']} limit") for x in e.get("scoped") or [])]
+    return next(((w["resets_at"], reason) for w, reason in windows
+                 if w and w["used"] >= 100 and (w.get("resets_at") or 0) > at), None)
+
+
+def hold_limit(name: str, text: str) -> tuple[int, str] | None:
+    """Holds name back after the usage limit that text reports: until the reset the text names, else until the reset
+    of a full window in a reading taken now, else for NO_RESET_WAIT. Returns the hold, or None when the limit has
+    already reset."""
+    at = now()
+    until, reason = parse_limit(text, at) or (None, "limit")
+    if until is None:
+        entry = entries_of(locked_refresh([name], None)).get(name) or {}
+        until, reason = full_window(entry, at) or (at + NO_RESET_WAIT, f"{reason} with no full window")
+    if until <= at:
+        return None
+    hold(name, until, reason)
+    return until, reason
+
+
+def best(entries: dict[str, dict], names: list[str], at: int) -> str | None:
+    """The account to start on: the first of order() that nothing blocks, or None."""
+    return next((n for n, g, _ in order(entries, names, set(holds(at)), at) if g != BLOCKED), None)
+
+
+def next_account(skip: str | None) -> str | None:
+    """The account to move a session to, other than skip, after a usage reading of each account that is not held
+    back and was not read in the last RECENT seconds; None when every one is blocked. The reading stops after
+    REFRESH_BUDGET seconds and keeps the cached reading of the accounts it did not reach."""
+    names = [n for n in accounts() if n != skip]
+    at, entries = now(), entries_of(load_cache())
+    fresh = [n for n in names if n not in holds(at) and at - ((entries.get(n) or {}).get("checked") or 0) > RECENT]
+    if fresh:
+        entries = entries_of(locked_refresh(fresh, None, at + REFRESH_BUDGET))
+    return best(entries, names, now())
+
+
+def free_at(names: list[str], at: int) -> int | None:
+    """The earliest time one of names leaves blocked(): once its hold has ended and each window that blocks it has
+    reset. None when no account has a reading that gives such a time."""
+    entries, held = entries_of(load_cache()), holds(at)
+    times = []
+    for n in names:
+        e = entries.get(n) or {}
+        if e.get("state") not in ("ok", "expiring") or not (e.get("five_hour") or e.get("seven_day")):
+            continue
+        t = held.get(n, {}).get("until", at)
+        for key, cap in (("five_hour", SESSION_MAX), ("seven_day", WEEK_MAX)):
+            used, reset = window_now(e.get(key), at)
+            if used >= cap:
+                t = max(t, reset)
+        times.append(t)
+    return min(times, default=None)
 
 
 def sessions() -> dict[str, int]:
@@ -579,13 +728,13 @@ class Picker:
 
     KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
 
-    def __init__(self, held: list[str], cursor: str | None):
+    def __init__(self, cursor: str | None):
         self.dirs = accounts()
         self.data = load_cache()
-        self.entries = {a["name"]: a for a in self.data.get("accounts", [])}
+        self.entries = entries_of(self.data)
         by_dir = sessions()
         self.live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
-        self.ranked = order(self.entries, list(self.dirs), set(held), now())
+        self.ranked = order(self.entries, list(self.dirs), set(holds(now())), now())
         self.rows = [n for n, _, _ in self.ranked]
         self.group = {n: g for n, g, _ in self.ranked}
         self.why = {n: why for n, _, why in self.ranked}
@@ -729,22 +878,18 @@ class Picker:
             os.close(fd)
 
 
-def locked_refresh(only: list[str], max_age: int | None) -> dict:
+def locked_refresh(only: list[str], max_age: int | None, deadline: float | None = None) -> dict:
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     with (CACHE.parent / "lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         data = load_cache()
         if (max_age is None or only or now() - data.get("updated", 0) > max_age
                 or sorted(x["name"] for x in data.get("accounts", [])) != sorted(accounts())):
-            data = refresh(only)
+            data = refresh(only, deadline)
     return data
 
 
 def main() -> int:
-    # plasmashell, which runs the widget's commands, has no ~/.local/bin on PATH, where claude lives on two hosts.
-    local_bin = str(HOME / ".local/bin")
-    if local_bin not in os.environ.get("PATH", "").split(":"):
-        os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
     ap = argparse.ArgumentParser(prog="claude-accounts", description="Usage limits and login state of every Claude Code account.")
     ap.add_argument("--json", action="store_true", help="print the cache as JSON")
     ap.add_argument("--cached", action="store_true", help="print the cache; check nothing")
@@ -756,20 +901,18 @@ def main() -> int:
     ap.add_argument("--pick", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--order", action="store_true",
                     help="print the accounts to start on, best first, from the cache; check nothing")
-    ap.add_argument("--held", action="append", default=[], metavar="NAME", help="with --pick or --order: an account to hold back")
     ap.add_argument("--skip", action="append", default=[], metavar="NAME", help="with --order: an account to leave out")
     ap.add_argument("--cursor", metavar="NAME", help=argparse.SUPPRESS)
     a = ap.parse_args()
     if a.pick:
         try:
-            return Picker(a.held, a.cursor).run()
+            return Picker(a.cursor).run()
         except Exception as e:  # noqa: BLE001 - an uncaught error exits 1, which claude-rotate reads as quit
             print(f"claude-usage --pick: {e!r}", file=sys.stderr)
             return FAILED
     if a.order:
-        entries = {x["name"]: x for x in load_cache().get("accounts", [])}
-        names = [n for n in accounts() if n not in a.skip]
-        for n, g, _ in order(entries, names, set(a.held), now()):
+        at = now()
+        for n, g, _ in order(entries_of(load_cache()), [n for n in accounts() if n not in a.skip], set(holds(at)), at):
             if g != BLOCKED:
                 print(n)
         return 0
@@ -777,7 +920,10 @@ def main() -> int:
         return watch(30, 300 if a.max_age is None else a.max_age)
     data = load_cache() if a.cached else locked_refresh(a.account, a.max_age)
     if a.json:
-        print(json.dumps({**data, "combined": combined(data)}, indent=1))
+        at = now()
+        ranked = order(entries_of(data), list(entries_of(data)), set(holds(at)), at)
+        print(json.dumps({**data, "combined": combined(data),
+                          "order": [{"name": n, "group": GROUPS[g], "why": why} for n, g, why in ranked]}, indent=1))
     elif not a.quiet:
         print(show(data))
     return 0

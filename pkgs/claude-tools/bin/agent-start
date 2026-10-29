@@ -91,7 +91,7 @@ def start(args: argparse.Namespace) -> None:
             cls.wait_freed(args.name)
         else:
             raise cls.Failed(f"{args.name} is already running; `agent-stop {args.name}` ends it")
-    config_dir = resolve_account(args.account, cls.accounts() if args.account else {}, os.environ.get("CLAUDE_CONFIG_DIR", ""))
+    config_dir = resolve_account(args.account, cls.cu.accounts() if args.account else {}, os.environ.get("CLAUDE_CONFIG_DIR", ""))
     where = caller()
     created = cls.herdr("tab", "create", "--label", args.name, "--cwd", str(args.cwd), "--no-focus",
                         *(["--workspace", where["workspace_id"]] if where else []))["result"]
