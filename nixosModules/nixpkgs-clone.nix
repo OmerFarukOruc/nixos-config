@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   systemd.services.nixpkgs-clone = {
     description = "Fetch the nixpkgs clone in /var/cache/nixpkgs";
@@ -18,7 +18,7 @@
     '';
     serviceConfig = {
       Type = "oneshot";
-      User = "oruc";
+      User = config.oruc.machine.user;
       CacheDirectory = "nixpkgs";
       WorkingDirectory = "/var/cache/nixpkgs";
       Nice = 19;

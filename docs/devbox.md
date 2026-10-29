@@ -1,4 +1,4 @@
-# risoluto-dev-1
+# devbox
 
 - [What it is](#what-it-is)
 - [Disk and boot](#disk-and-boot)
@@ -20,10 +20,10 @@
 
 ## What it is
 
-risoluto-dev-1 is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
+devbox is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
 It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
-`machines/risoluto-dev-1/` (`configuration.nix`, `disk.nix`,
+`machines/devbox/` (`configuration.nix`, `disk.nix`,
 `hardware-configuration.nix`, `home.nix`) and `nixosModules/server-access.nix`.
 The host imports four more modules for its services: `tailnet-web.nix`,
 `rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
@@ -68,26 +68,26 @@ drops ping.
   on the public interface and accepts everything on tailscale0, so only the
   tailnet reaches sshd. Port 22 on the tailnet address belongs to Tailscale SSH.
 - Root logs in by key, and only with the three keys in the module (Omer's shared
-  key, the box's own key and the co-admin's). oruc keeps `~/.ssh/authorized_keys`
+  key, the box's own key and the co-admin's). omer keeps `~/.ssh/authorized_keys`
   on top of the declared key. Omer adds the Grok bots' key there by hand.
-  `AllowUsers` lists root and oruc.
+  `AllowUsers` lists root and omer.
 
 ## Install
 
-sops-nix decrypts `secrets/risoluto-dev-1.yaml`,
-`secrets/risoluto-dev-1-acme.yaml`, `secrets/risoluto-dev-1-github.yaml`,
-`secrets/risoluto-dev-1-services.yaml` and
-`secrets/risoluto-dev-1-cliproxy.yaml` while the system activates, with the
+sops-nix decrypts `secrets/devbox.yaml`,
+`secrets/devbox-acme.yaml`, `secrets/devbox-github.yaml`,
+`secrets/devbox-services.yaml` and
+`secrets/devbox-cliproxy.yaml` while the system activates, with the
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
 file, the Cloudflare token for the certificates from the second, the deploy
 unit's GitHub token from the third, and OpenChamber's passwords and the
 herdr web UI's token from the fourth, and CLIProxyAPI's keys from the fifth
-(`machines/risoluto-dev-1/services.nix`).
+(`machines/devbox/services.nix`).
 An install that makes new host keys boots with no address, no password, no
 certificates and no deploy token. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
-`ssh-to-age < ssh_host_ed25519_key.pub` prints the `risoluto-dev-1` recipient of
+`ssh-to-age < ssh_host_ed25519_key.pub` prints the `devbox` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
 it waits for the move. `scripts/check-secrets.sh` without an argument checks
@@ -95,10 +95,10 @@ the sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
 
-`secrets/risoluto-dev-1.yaml` has two recipients, Omer's shared key and the age
+`secrets/devbox.yaml` has two recipients, Omer's shared key and the age
 key of the box's SSH host key, as for the other hosts (`.sops.yaml`). Edit it
 with `sops` as [Secrets](nixos-rog.md#secrets) describes. It holds the password
-hashes of root and oruc (`neededForUsers`, so they exist before the users do)
+hashes of root and omer (`neededForUsers`, so they exist before the users do)
 and the public network: the IPv4 address with its prefix, the IPv4 gateway, the
 IPv6 address with its prefix, and three resolvers. Passwords change only in
 this file, because `users.mutableUsers` is false and a `passwd` on the box is
@@ -116,9 +116,10 @@ advertisements are off.
 The deploy unit ([Deploys](#deploys)) reads a fine-grained GitHub token,
 `github-update-token`, so that Nix's GitHub fetches stay within the API limit
 and `deploy.sh` can ask `gh` which pull request merged a running release. The
-token has its own file, `secrets/risoluto-dev-1-github.yaml`, encrypted for the
-same two recipients as the file above (`.sops.yaml`). GitHub lists the token as
-"risoluto-dev-1 self-deploy". It does not expire. Rotate it when it may have
+token has its own file, `secrets/devbox-github.yaml`, encrypted for the
+same two recipients as the file above (`.sops.yaml`). GitHub lists the token under the name it got
+before the host was renamed, "risoluto-dev-1 self-deploy"; GitHub cannot rename a
+token. It does not expire. Rotate it when it may have
 leaked, in this order, so the box keeps a working token until the new one runs.
 The steps apply after the move to NixOS:
 
@@ -132,10 +133,10 @@ The steps apply after the move to NixOS:
    asked:
 
    ```sh
-   read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/risoluto-dev-1-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/risoluto-dev-1-github.yaml.new && mv secrets/risoluto-dev-1-github.yaml.new secrets/risoluto-dev-1-github.yaml; unset token
+   read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/devbox-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/devbox-github.yaml.new && mv secrets/devbox-github.yaml.new secrets/devbox-github.yaml; unset token
    ```
 
-3. Land the file, then deploy it with `./deploy.sh risoluto-dev-1 switch`, or
+3. Land the file, then deploy it with `./deploy.sh devbox switch`, or
    wait for the timer. [deploy.md](deploy.md) has the rules.
 4. On the box, run `sudo systemctl start self-deploy.service` and read
    `journalctl -u self-deploy`. The new token works when the run ends without a
@@ -237,11 +238,11 @@ timer, adds noise. Add a filter when SigNoz shows it.
 
 The boot test covers it in `ci/server-boot/checks/10-telemetry.py`. Its module
 `ci/server-boot/modules/telemetry.nix` points the collector at a second
-collector on loopback (a sink that writes files). The check logs in as oruc
+collector on loopback (a sink that writes files). The check logs in as omer
 over SSH, runs `sudo` to change a file under `/etc`, reads a secret as
 `nobody`, which the `credstore` rule logs although the read fails, stops the
 collector for a second login, and checks that the sink got each record after
-the restart, the unit journal line, the info line of a user unit of oruc and
+the restart, the unit journal line, the info line of a user unit of omer and
 the manager's line about it (not its debug line), and the host metrics. It proves that the
 collector loads its config, that auditd loads the rules, and that the audit and
 sshd records travel through the journal into the collector's pipeline and out
@@ -251,19 +252,19 @@ delivery to SigNoz, which the cutover proves.
 ## Deploys
 
 After the move, the box keeps itself on `main`. `self-deploy.timer` runs
-`./deploy.sh risoluto-dev-1 switch` on the box every 2 hours, as root, with
+`./deploy.sh devbox switch` on the box every 2 hours, as root, with
 deploy.sh's lock and rollback, and `self-deploy-reboot.timer` reboots at 02:10
 UTC when the kernel or the initrd changed. The files are
 `nixosModules/deploy-host.nix`, `nixosModules/deploy-unit.nix`, `scripts/self-deploy.sh` and
 `scripts/self-deploy-reboot.sh`; [Self-deploy of a server](deploy.md#self-deploy-of-a-server)
 has the details, the failure signal and how to pause the timer.
 
-A deploy from nixos-desktop or nixos-rog logs in as root, not as oruc, because
-oruc's sudo asks for a password (`deployLogin` in the machine record). The release
+A deploy from nixos-desktop or nixos-rog logs in as root, not as omer, because
+omer's sudo asks for a password (`deployLogin` in the machine record). The release
 records of both kinds of deploy are in `/root/.local/state/nixos-config-deploy/`.
-The long-running agent units of oruc are in `oruc.deploy.sessionIgnore` in
+The long-running agent units of omer are in `oruc.deploy.sessionIgnore` in
 `configuration.nix`. deploy.sh's session check leaves them out of a deploy as
-oruc. A deploy as root, which is every deploy above, checks only root's own
+omer. A deploy as root, which is every deploy above, checks only root's own
 services.
 
 ## Web names
@@ -277,7 +278,7 @@ everywhere and connects from the tailnet only.
 
 - `security.acme` issues one Let's Encrypt certificate per name with the
   Cloudflare DNS-01 challenge. The token is `cloudflare-acme-dns-token` in
-  `secrets/risoluto-dev-1-acme.yaml`, a second sops file with the same two
+  `secrets/devbox-acme.yaml`, a second sops file with the same two
   recipients as the main one, because adding a value to the main file needs the
   shared key's passphrase. lego skips the check against the host's recursive
   resolvers (`--dns.propagation.disable-rns`), since the resolvers can keep
@@ -317,12 +318,12 @@ everywhere and connects from the tailnet only.
 
 ## Containers
 
-`nixosModules/rootless-containers.nix` gives oruc rootless Docker and rootless
-Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
+`nixosModules/rootless-containers.nix` gives omer rootless Docker and rootless
+Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 `/etc/subgid` come from the host record.
 
 - Docker is the NixOS `virtualisation.docker.rootless` unit. The socket is
-  `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in oruc's
+  `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in omer's
   shells. The daemon settings are the builder's garbage collection at 80 GB.
   `overlays/rootlesskit.nix` moves RootlessKit from 2.x to 3.3.0, the version
   Docker 29.9.1 ships, until nixpkgs has 3.0.0 or later. With 2.x, a
@@ -338,7 +339,7 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   peers reach it, and the firewall blocks the public interface. If
   `docker.service` (a user unit) fails three times in 60 s it stays failed.
   `journalUserUnits` ships its journal lines at priority info and above to
-  SigNoz, including the line of oruc's systemd about the failure
+  SigNoz, including the line of omer's systemd about the failure
   ([Telemetry](#telemetry)). The failure line is the signal an alert rule can
   use. The SigNoz alert rules live in statuslantern-scraper's
   `deploy/signoz/alerts/`, and none reads these lines yet. The rule waits for
@@ -361,7 +362,7 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
 
 - Playwright runs the nixpkgs browsers. `home-manager/modules/playwright.nix`
   sets `PLAYWRIGHT_BROWSERS_PATH` and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS`
-  for oruc, and the desktops import it too, so the browsers follow nixpkgs and
+  for omer, and the desktops import it too, so the browsers follow nixpkgs and
   nothing is pinned. A project's npm Playwright version must match
   `playwright-driver` in nixpkgs, as the
   [NixOS wiki](https://wiki.nixos.org/wiki/Playwright) says. A Chromium that
@@ -379,7 +380,7 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
 - The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
   drives labwc. The module installs both desktops with their NixOS modules, and
   the tools they call (tigervnc, xdotool, X utilities, ffmpeg, ImageMagick,
-  wlr-randr, Chromium; Home Manager gives oruc bubblewrap). Those two sessions
+  wlr-randr, Chromium; Home Manager gives omer bubblewrap). Those two sessions
   start on demand, and the box has no login manager; xrdp starts a desktop for
   each RDP login ([Streamed desktop](#streamed-desktop)). The XFCE module
   also turns on udisks2, accounts-daemon, gvfs, tumbler, colord, polkit and
@@ -389,7 +390,7 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   test shows that these tools exist, not that an XFCE or labwc session starts.
 - `features.boxBrowser` is on in the host record, so `box-browser` and its two
   user units exist ([box-browser.md](box-browser.md)).
-- Home Manager gives oruc the common layer and `home.nix`, which adds the
+- Home Manager gives omer the common layer and `home.nix`, which adds the
   hourly `desktop-sync.sh --config`, the Claude account tools of
   `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`
   (next bullet).
@@ -403,7 +404,7 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   `~/.local/state/claude-limit-switch/events.log`.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
   and the box's own list) and runs Omer's agent services as user services of
-  oruc: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
+  omer: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
   UI (`pkgs/herdr-web-ui.nix`, 127.0.0.1:7317), herdr's default session, the
   Amp runner and the Cursor worker. The update workflow moves those packages
   like the others ([updates.md](updates.md#apps)). A deploy leaves a running
@@ -416,20 +417,20 @@ Podman. oruc is in no docker group, and the ranges in `/etc/subuid` and
   with `pkgs/stay-green.nix`, built from the `stay-green` flake input, and does
   nothing outside that schedule. The sign-in is in `~/.local/state/stay-green`. A
   failed run usually means the sign-in expired or was revoked; sign in again
-  from a workstation with `stay-green login risoluto-dev-1`. Read a run with
+  from a workstation with `stay-green login devbox`. Read a run with
   `journalctl --user -u stay-green.service -n 20`.
 
 ## CLIProxyAPI
 
-`cliproxy.service`, a user unit of oruc in `home.nix`, serves the Claude,
+`cliproxy.service`, a user unit of omer in `home.nix`, serves the Claude,
 Codex, Gemini and Grok CLI logins as one OpenAI-compatible API on 127.0.0.1:8317.
-It runs `machines/risoluto-dev-1/cliproxy/cliproxy-up.sh`, which starts the
+It runs `machines/devbox/cliproxy/cliproxy-up.sh`, which starts the
 compose stack of that folder on rootless Podman through the docker CLI
 ([Containers](#containers)). The unit owns the stack, so no container starts
 before its config exists.
 
 - The keys, the management key, the share node's `ts.net` name, its Tailscale
-  auth key and the Cloudflare token are in `secrets/risoluto-dev-1-cliproxy.yaml`.
+  auth key and the Cloudflare token are in `secrets/devbox-cliproxy.yaml`.
   sops-nix renders the app's config and an environment file from them
   (`services.nix`). `cliproxy.service` sets `CLIPROXY_RENDERED_CONFIG` and
   `CLIPROXY_DNS_TOKEN_FILE` to the rendered config and the Cloudflare token
@@ -464,18 +465,18 @@ before its config exists.
 - A provider's OAuth login in the panel redirects to a callback port on
   127.0.0.1 of the box (8085, 1455, 54545, 51121 or 11451, by provider).
   Forward that port from a workstation before the login, for example
-  `ssh -N -L 1455:127.0.0.1:1455 oruc@risoluto-dev-1`.
+  `ssh -N -L 1455:127.0.0.1:1455 omer@devbox`.
 
 ## Streamed desktop
 
 `features.streamedDesktop` of the record turns on
-`nixosModules/streamed-desktop.nix`: a light XFCE desktop for oruc, which Omer
+`nixosModules/streamed-desktop.nix`: a light XFCE desktop for omer, which Omer
 reaches from another machine over the tailnet through xrdp. A server with this
 feature has no login session in its record; `sessions.hasGraphicalUser` (`machines/sessions.nix`) tells the modules
 that give a graphical user fonts, a browser and the keyboard layout to apply
 ([Inventory](architecture.md#inventory)).
 
-- **xrdp.** Each RDP login of oruc starts a desktop of its own on an X server
+- **xrdp.** Each RDP login of omer starts a desktop of its own on an X server
   with the xorgxrdp driver, and a reconnect finds the same session again
   (sesman keeps a disconnected session). Nothing runs before the first login:
   the box has no display manager, and the netcup console keeps its login on
@@ -487,9 +488,9 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   `overlays/xrdp.nix` adds the two patches from xrdp's v0.10 branch that map
   it to X's `tr`.
 - **Session bus.** The session runs under `dbus-run-session`. sesman starts a
-  second session for oruc when a client asks for another color depth
+  second session for omer when a client asks for another color depth
   (`Policy=Default` in its `sesman.ini`), and a second `xfce4-session` on
-  oruc's systemd user bus ends at once. The Cursor worker and the Amp runner
+  omer's systemd user bus ends at once. The Cursor worker and the Amp runner
   start their own XFCE and labwc sessions, each on a session bus of its own
   (`dbus-launch` and `dbus-run-session`, read from the Debian box on
   2026-10-27).
@@ -499,8 +500,8 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   xrdp listens on every address, as sshd does, so the firewall is the only
   guard.
 - **First use.** The workstations have Remmina
-  (`home-manager/profiles/workstation.nix`): connect to `risoluto-dev-1` as
-  oruc with oruc's password (the hash is in `secrets/risoluto-dev-1.yaml`). A
+  (`home-manager/profiles/workstation.nix`): connect to `devbox` as
+  omer with omer's password (the hash is in `secrets/devbox.yaml`). A
   Home Manager step sets Remmina's RDP keyboard layout to Turkish Q, and its
   default colour depth ("Automatic") gets H.264 from xrdp. A one-off run of the
   desktop test on 2026-10-28 with Remmina 1.4.43 as the client showed the `tr`
@@ -518,7 +519,7 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   that measured both, on 4 cores of nixos-desktop, the whole VM used 0.99
   cores on an idle desktop with Moonlight connected and 0.08 with an RDP
   client, and 1.62 and 0.84 while playing a 1080p video. Sunshine also needs an
-  X session logged in as oruc from boot, with no screen lock.
+  X session logged in as omer from boot, with no screen lock.
 
 ## Memory and logs
 
@@ -530,14 +531,14 @@ keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
 
 ## Boot test in a VM
 
-The flake check `risoluto-dev-1-boot-bios` boots the host's own configuration
+The flake check `devbox-boot-bios` boots the host's own configuration
 with NixOS's VM test driver (`ci/server-boot.nix`, disko's `makeDiskoTest`)
 under SeaBIOS, the firmware the netcup box boots with (it has no
 `/sys/firmware/efi`). It needs KVM, so it builds on the host that runs
 `scripts/build.sh`:
 
 ```sh
-scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-boot-bios
+scripts/build.sh .#checks.x86_64-linux.devbox-boot-bios
 ```
 
 The test installs the host's disk layout (`disk.nix`) and system from an
@@ -570,14 +571,14 @@ cover the web names, the containers and the agent runtime. Caddy starts with
 its config and answers the three names with test certificates, and the
 firewall drops a connection to port 443 from outside. A forged
 `Tailscale-User-Login` does not reach any backend. Docker and Podman answer as
-oruc through their user sockets, a port that Docker publishes lies outside the
+omer through their user sockets, a port that Docker publishes lies outside the
 host's outbound range and answers, to a client on loopback and to a client at
 the host's own global address, and a busybox image that the build puts on
 the disk runs under both. The second client stands for a tailnet peer. RootlessKit 3
 tries to keep the source address of a client that is not on loopback
 (`--source-ip-transparent`, on by default), and never tries it for a loopback
 client. `box-browser status` passes, and the Chromium of
-nixpkgs' Playwright, found through oruc's session variables, loads a local page
+nixpkgs' Playwright, found through omer's session variables, loads a local page
 headless.
 
 The test shows that the layout installs, that Limine boots from it under BIOS,
@@ -596,13 +597,13 @@ and a 9p `/nix/store`, which is disko's test wrapper.
 
 ## Unit check in a VM
 
-The flake check `risoluto-dev-1-units` (`ci/server-units.nix`) boots the host's
+The flake check `devbox-units` (`ci/server-units.nix`) boots the host's
 own modules in a plain NixOS test and fails when any unit has failed after boot,
-Home Manager's included. It also reads the environment of oruc's stay-green and
+Home Manager's included. It also reads the environment of omer's stay-green and
 cliproxy units, because systemd splits an unquoted value at a space. A unit
 that fails during a switch makes `switch-to-configuration` exit 4, which `deploy.sh` rolls back, so one failed
 unit would roll back every deploy. Run it with
-`scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-units`. It is separate from
+`scripts/build.sh .#checks.x86_64-linux.devbox-units`. It is separate from
 the boot test because disko's booted machine has a read-only `/nix/store` and no
 database of its closure, which fails the Home Manager units there for reasons
 the box does not have. This test uses qemu-vm's standard store, which is
@@ -640,14 +641,14 @@ after the orders, Caddy exited with status 1.
 
 ## Deploy test in a VM
 
-The flake check `risoluto-dev-1-self-deploy` (`ci/self-deploy.nix`) is a NixOS
+The flake check `devbox-self-deploy` (`ci/self-deploy.nix`) is a NixOS
 test of the deploy path of [Deploys](#deploys), and it needs KVM like the boot
 tests. Run it with
-`scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-self-deploy`. It
+`scripts/build.sh .#checks.x86_64-linux.devbox-self-deploy`. It
 is not part of the boot test, because disko's test machine mounts a read-only
 `/nix/store` that a deploy cannot write to.
 
-The node is named risoluto-dev-1 and loads `nixosModules/upgrade.nix`,
+The node is named devbox and loads `nixosModules/upgrade.nix`,
 `nixosModules/deploy-host.nix` and `nixosModules/telemetry.nix` (whose option the
 second one sets), not the host's whole configuration. Its ESP is
 a 4 GiB second disk with Limine, because `deploy.sh` wants 1 GiB of free space
@@ -662,7 +663,7 @@ the next run waits for main to move) and a main with another initrd (the reboot
 unit schedules a reboot, and waits while a deploy holds the lock) and a main
 whose evaluation cannot download an input (the unit fails, records no failed
 main, and the next main deploys). They also check the timer calendars, the
-ignore list of the session check, oruc's sudo password, the boot entries on the
+ignore list of the session check, omer's sudo password, the boot entries on the
 ESP and the private Nix config that a test token becomes.
 
 The test does not show that a deploy over SSH as root reaches the box, that the
@@ -671,9 +672,9 @@ tests and `ci/checks.sh` do), or that a deployed system boots; it never reboots.
 
 ## Desktop test in a VM
 
-The flake check `risoluto-dev-1-desktop` (`ci/server-desktop.nix`) is a NixOS
+The flake check `devbox-desktop` (`ci/server-desktop.nix`) is a NixOS
 test of the [streamed desktop](#streamed-desktop), and it needs KVM. Run it
-with `scripts/build.sh .#checks.x86_64-linux.risoluto-dev-1-desktop`; its
+with `scripts/build.sh .#checks.x86_64-linux.devbox-desktop`; its
 script takes about 5 minutes once everything is built (285.67 s in the passing
 run on nixos-desktop). `machine` runs the host's own modules, as the
 [unit check](#unit-check-in-a-vm) does, with 6 GiB of RAM and 4 cores. A second
@@ -695,7 +696,7 @@ measurements.
    alone causes the drop. The rules of the firewall accept nothing but
    tailscale0, loopback, replies and Tailscale's own UDP port (and, on IPv6,
    ICMPv6 and the DHCPv6 client port).
-3. FreeRDP, asking for H.264, logs in as oruc and gets a 1920x1080 XFCE, and
+3. FreeRDP, asking for H.264, logs in as omer and gets a 1920x1080 XFCE, and
    xrdp's log says it matched H.264 and used x264. After a disconnect the
    session keeps running, and sesman logs a reconnect to the same XFCE and its
    windows.
@@ -717,7 +718,7 @@ connection, or the netcup CPU. The cutover proves the first two.
 These are VM numbers: `machine` has 4 cores of nixos-desktop's CPU, not the
 netcup box's. Each cell is the average busy cores over 30 seconds, from
 `/proc/stat` (`ci/server-desktop/cpu.py`). The load runs on `machine` itself as
-oruc, in the RDP session: Chromium on a 20000-line text page that a script scrolls,
+omer, in the RDP session: Chromium on a 20000-line text page that a script scrolls,
 and Chromium on a 20 s looping 1080p VP9 video, a synthetic test pattern that
 Chromium decodes in software on a host with no GPU (`workload` in
 `ci/server-desktop/machine.nix`). The client asks for H.264 at

@@ -6,8 +6,8 @@ let
   nixpkgsTests = "${inputs.nixpkgs}/nixos/tests/common";
 in
 {
-  risoluto-dev-1-desktop = pkgs.testers.runNixOSTest {
-    name = "risoluto-dev-1-desktop";
+  devbox-desktop = pkgs.testers.runNixOSTest {
+    name = "devbox-desktop";
     node = {
       pkgsReadOnly = false;
       specialArgs = { inherit inputs; };
@@ -29,7 +29,8 @@ in
     };
     testScript =
       { nodes, ... }:
-      ''
+      import ./box-names.nix host
+      + ''
         SD_PUBLIC_ADDRESS = "${nodes.machine.networking.primaryIPAddress}"
         SD_TAILNET_ADDRESS = "${(lib.head nodes.machine.networking.interfaces.eth2.ipv4.addresses).address}"
       ''

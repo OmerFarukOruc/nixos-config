@@ -53,7 +53,7 @@ in
       services.displayManager = {
         autoLogin = {
           enable = cfg.autoLogin;
-          user = lib.mkIf cfg.autoLogin "oruc";
+          user = lib.mkIf cfg.autoLogin cfg.user;
         };
         defaultSession = sessions.defaultSession cfg;
         sddm = {
@@ -67,7 +67,7 @@ in
       qt.enable = true;
       services.orca.enable = false;
       hardware.graphics.enable = true;
-      users.users.oruc.extraGroups = [ "video" ];
+      users.users.${cfg.user}.extraGroups = [ "video" ];
       console.colors = map (slot: config.scheme.${slot}) theme.ansi;
     })
 

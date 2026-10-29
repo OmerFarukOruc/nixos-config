@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   pkgs,
   ...
@@ -64,7 +65,7 @@ in
       ]
   );
 
-  home-manager.users.oruc.systemd.user = {
+  home-manager.users.${config.oruc.machine.user}.systemd.user = {
     services =
       lib.genAttrs
         [

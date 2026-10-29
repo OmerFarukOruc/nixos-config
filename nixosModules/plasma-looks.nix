@@ -7,7 +7,7 @@
 let
   cfg = config.oruc.machine;
   hasPlasma = sessions.hasDesktop cfg "plasma";
-  hm = config.home-manager.users.oruc;
+  hm = config.home-manager.users.${cfg.user};
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
   variantRow =
     look: scheme:

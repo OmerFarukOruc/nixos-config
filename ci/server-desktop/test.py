@@ -2,7 +2,7 @@ import json
 import re
 from datetime import timedelta
 
-SD_ENV = "XDG_RUNTIME_DIR=/run/user/1003 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1003/bus XAUTHORITY=/home/oruc/.Xauthority"
+SD_ENV = f"XDG_RUNTIME_DIR=/run/user/1003 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1003/bus XAUTHORITY=/home/{BOX_USER}/.Xauthority"
 SD_PORT = 3389
 
 dnsserver.start()
@@ -18,9 +18,9 @@ client.wait_for_x()
 client.succeed("xauth merge /home/alice/.Xauthority")
 
 
-def sd_oruc(command, display=":10", background=False):
-    """Runs a command as oruc, in the X session of this display."""
-    full = f"runuser -u oruc -- env DISPLAY={display} {SD_ENV} {command}"
+def sd_user(command, display=":10", background=False):
+    """Runs a command as the box user, in the X session of this display."""
+    full = f"runuser -u {BOX_USER} -- env DISPLAY={display} {SD_ENV} {command}"
     if background:
         machine.execute(f"setsid {full} > /dev/null 2>&1 &")
         return ""
@@ -28,9 +28,9 @@ def sd_oruc(command, display=":10", background=False):
 
 
 def sd_session_pids(program):
-    """Maps the X display of each oruc process of this program to its pid."""
+    """Maps the X display of each process of this program that the box user runs to its pid."""
     out = machine.succeed(
-        f"for p in $(pgrep -u oruc -f {program}); do echo $p $(tr '\\0' '\\n' < /proc/$p/environ | grep '^DISPLAY='); done"
+        f"for p in $(pgrep -u {BOX_USER} -f {program}); do echo $p $(tr '\\0' '\\n' < /proc/$p/environ | grep '^DISPLAY='); done"
     )
     return dict((line.split("=", 1)[1].split(".")[0], line.split()[0]) for line in out.splitlines() if "DISPLAY=" in line)
 
@@ -86,7 +86,7 @@ assert [line for line in sd_rules6.splitlines() if line.endswith("-j nixos-fw-ac
 
 
 def sd_wait_session(display):
-    """Waits until oruc runs xfce4-session on this X display."""
+    """Waits until the box user runs xfce4-session on this X display."""
     for _ in range(60):
         if display in sd_session_pids("xfce4-session"):
             return
@@ -103,9 +103,9 @@ SD_RESULTS = {}
 
 
 def sd_start_unit(name, display, command):
-    """Starts a command as a transient user unit of oruc in this X display. The units share one slice, so that stopping the slice ends every process of the workload."""
-    sd_oruc(
-        f"systemd-run --user --collect --quiet --slice=sd-workload --unit={name} --setenv=DISPLAY={display} --setenv=XAUTHORITY=/home/oruc/.Xauthority {command}"
+    """Starts a command as a transient user unit of the box user in this X display. The units share one slice, so that stopping the slice ends every process of the workload."""
+    sd_user(
+        f"systemd-run --user --collect --quiet --slice=sd-workload --unit={name} --setenv=DISPLAY={display} --setenv=XAUTHORITY=/home/{BOX_USER}/.Xauthority {command}"
     )
 
 
@@ -114,11 +114,11 @@ def sd_workload(display, page, scrolling):
     title = "SDPAGE" if page == "page.html" else "SDVIDEO"
     try:
         machine.wait_until_succeeds(
-            f"runuser -u oruc -- env DISPLAY={display} {SD_ENV} xdotool search --onlyvisible --name {title}",
+            f"runuser -u {BOX_USER} -- env DISPLAY={display} {SD_ENV} xdotool search --onlyvisible --name {title}",
             timeout=timedelta(seconds=120),
         )
     except Exception:
-        print(sd_oruc("xwininfo -root -tree", display=display))
+        print(sd_user("xwininfo -root -tree", display=display))
         print(machine.execute("ps -eo user,pid,args | grep chromium | grep -v grep | cut -c1-200")[1])
         raise
     machine.sleep(15)
@@ -128,20 +128,20 @@ def sd_workload(display, page, scrolling):
 
 
 def sd_workload_stop():
-    print(machine.execute(f"runuser -u oruc -- env {SD_ENV} systemctl --user stop sd-workload.slice 2>&1")[1])
+    print(machine.execute(f"runuser -u {BOX_USER} -- env {SD_ENV} systemctl --user stop sd-workload.slice 2>&1")[1])
     try:
-        machine.wait_until_fails("pgrep -u oruc -f 'sd-chromium|streamed-desktop/scroll'", timeout=timedelta(seconds=30))
+        machine.wait_until_fails(f"pgrep -u {BOX_USER} -f 'sd-chromium|streamed-desktop/scroll'", timeout=timedelta(seconds=30))
     except Exception:
-        print(machine.execute("ps -u oruc -o pid,ppid,etimes,args --forest | cut -c1-170")[1])
+        print(machine.execute(f"ps -u {BOX_USER} -o pid,ppid,etimes,args --forest | cut -c1-170")[1])
         raise
     machine.sleep(3)
 
 
 def sd_screen_changes(display, name):
     """Counts the pixels that differ between two screenshots of the display one second apart, and keeps the second."""
-    sd_oruc(f"import -window root /tmp/{name}-a.png", display=display)
+    sd_user(f"import -window root /tmp/{name}-a.png", display=display)
     machine.sleep(1)
-    sd_oruc(f"import -window root /tmp/{name}-b.png", display=display)
+    sd_user(f"import -window root /tmp/{name}-b.png", display=display)
     machine.copy_from_machine(f"/tmp/{name}-b.png")
     return round(float(machine.execute(f"compare -metric AE /tmp/{name}-a.png /tmp/{name}-b.png null: 2>&1")[1].split()[0]))
 
@@ -153,10 +153,10 @@ def sd_measure(route, load, display, page=None, scrolling=False):
         shot = f"{route}-{load}".replace(" ", "-")
         changed = sd_screen_changes(display, shot)
         if changed <= 10000:
-            print(sd_oruc("xwininfo -root -tree", display=display))
-            print(sd_oruc("xdotool getmouselocation", display=display))
-            print(sd_oruc("xdotool search --onlyvisible --name SD getwindowgeometry %@", display=display))
-            print(machine.execute("pgrep -u oruc -a -f streamed-desktop/scroll; ps -eo user,pid,args | grep -c '[x]dotool click'")[1])
+            print(sd_user("xwininfo -root -tree", display=display))
+            print(sd_user("xdotool getmouselocation", display=display))
+            print(sd_user("xdotool search --onlyvisible --name SD getwindowgeometry %@", display=display))
+            print(machine.execute(f"pgrep -u {BOX_USER} -a -f streamed-desktop/scroll; ps -eo user,pid,args | grep -c '[x]dotool click'")[1])
             print(machine.execute(f"identify -format '%k colors, mean %[fx:mean]\\n' /tmp/{shot}-b.png")[1])
         assert changed > 10000, f"{load} on {display} does not move: {changed} pixels changed"
     result = json.loads(machine.succeed("python3 /etc/streamed-desktop/cpu.py 30"))
@@ -175,7 +175,7 @@ def sd_conditions(route, display):
     sd_measure(route, "video 1080p", display, "video.html")
 
 
-SD_RDP = f"xfreerdp /v:{SD_TAILNET_ADDRESS} /u:oruc /p:test /cert:ignore /size:1920x1080 /gfx:AVC420 /wm-class:sdrdp /log-level:INFO"
+SD_RDP = f"xfreerdp /v:{SD_TAILNET_ADDRESS} /u:{BOX_USER} /p:test /cert:ignore /size:1920x1080 /gfx:AVC420 /wm-class:sdrdp /log-level:INFO"
 client.execute(f"setsid {SD_RDP} > /tmp/rdp-1.log 2>&1 &")
 sd_wait_session(":10")
 machine.sleep(10)
@@ -183,11 +183,11 @@ client.screenshot("rdp-xfce-first")
 sd_first = sd_session_pids("xfce4-session")
 print("xfce4-session by display after the first login:", sd_first)
 assert set(sd_first) == {":10"}, sd_first
-sd_xrandr = sd_oruc("xrandr --current")
+sd_xrandr = sd_user("xrandr --current")
 print(sd_xrandr)
 assert "current 1920 x 1080" in sd_xrandr, "the RDP session is not 1920x1080"
-sd_oruc("xterm -title SDMARKER -e sleep 3600", display=":10", background=True)
-machine.wait_until_succeeds(f"runuser -u oruc -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDMARKER", timeout=timedelta(seconds=30))
+sd_user("xterm -title SDMARKER -e sleep 3600", display=":10", background=True)
+machine.wait_until_succeeds(f"runuser -u {BOX_USER} -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDMARKER", timeout=timedelta(seconds=30))
 sd_log = sd_xrdp_log()
 assert "Matched H264 mode" in sd_log and "using x264 for software encoder" in sd_log, "xrdp did not use H.264"
 client.succeed("pkill -f '[x]freerdp /v:'")
@@ -199,7 +199,7 @@ client.screenshot("rdp-xfce-reconnected")
 sd_second = sd_session_pids("xfce4-session")
 assert sd_second == sd_first, (sd_first, sd_second)
 assert "reconnected session" in sd_xrdp_log(), "sesman did not reconnect the session"
-machine.succeed(f"runuser -u oruc -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDMARKER")
+machine.succeed(f"runuser -u {BOX_USER} -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDMARKER")
 print(machine.succeed("ps -eo pid,lstart,args | grep -E 'Xorg :10' | grep -v grep | cut -c1-120"))
 print(sd_xrdp_log()[-3000:])
 
@@ -221,7 +221,7 @@ def sd_client_point(x, y):
 # reach the desktop. A click carries its own position.
 client.succeed(f"DISPLAY=:0 xdotool mousemove {sd_client_point(900, 700)} click 1")
 machine.sleep(2)
-sd_mouse = sd_oruc("xdotool getmouselocation")
+sd_mouse = sd_user("xdotool getmouselocation")
 print("pointer of the desktop:", sd_mouse)
 sd_pointer = dict(item.split(":") for item in sd_mouse.split())
 assert (sd_pointer["x"], sd_pointer["y"]) == ("900", "700"), sd_mouse
@@ -229,8 +229,8 @@ assert (sd_pointer["x"], sd_pointer["y"]) == ("900", "700"), sd_mouse
 # shows the layout without a terminal's locale in the way. A click focuses it.
 # The client sends the Turkish letters by keycode, as a keyboard does: keycodes
 # 31, 47 and 34 are ı, ş and ğ on the Turkish layout and i, ; and [ on us.
-sd_oruc("sh -c 'stdbuf -oL xev -name SDTYPE -geometry 600x300+200+200 -event keyboard > /tmp/sd-xev.txt'", background=True)
-machine.wait_until_succeeds(f"runuser -u oruc -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDTYPE", timeout=timedelta(seconds=30))
+sd_user("sh -c 'stdbuf -oL xev -name SDTYPE -geometry 600x300+200+200 -event keyboard > /tmp/sd-xev.txt'", background=True)
+machine.wait_until_succeeds(f"runuser -u {BOX_USER} -- env DISPLAY=:10 {SD_ENV} xwininfo -root -tree | grep -q SDTYPE", timeout=timedelta(seconds=30))
 machine.sleep(3)
 client.succeed(f"DISPLAY=:0 xdotool mousemove {sd_client_point(400, 300)} click 1")
 client.sleep(1)
@@ -240,7 +240,7 @@ try:
     machine.wait_until_succeeds("grep -q 'keysym 0xff0d, Return' /tmp/sd-xev.txt", timeout=timedelta(seconds=30))
 except Exception:
     print("client focus:", client.execute("DISPLAY=:0 xdotool getwindowfocus getwindowname")[1])
-    print("desktop focus:", sd_oruc("xdotool getwindowfocus getwindowname"))
+    print("desktop focus:", sd_user("xdotool getwindowfocus getwindowname"))
     print(client.execute("tail -n 30 /tmp/rdp-2.log")[1])
     client.screenshot("rdp-typing-failed")
     raise

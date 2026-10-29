@@ -6,7 +6,7 @@ nixos-rog access: SSH alias `nixos-rog`, key `~/.ssh/id_ed25519_omer`.
 
 nixos-desktop access: SSH alias `nixos-desktop`, key `~/.ssh/id_ed25519_omer`.
 
-risoluto-dev-1 access: `ssh root@risoluto-dev-1` over Tailscale SSH.
+devbox access: `ssh root@devbox` over Tailscale SSH; Omer and his agents work there as `omer` (`ssh omer@devbox`).
 
 Omer uses one SSH key, `~/.ssh/id_ed25519_omer`, on every device he works from. Each host's `authorizedKeys`, GitHub and `.sops.yaml` name its public key. The key has a password. On nixos-desktop and nixos-rog the gcr ssh-agent loads it with the password from KWallet, and an SSH command reaches that agent because `home-manager/modules/oruc-shell.nix` sets `SSH_AUTH_SOCK`. sops reads the key file and asks for the password on a terminal.
 

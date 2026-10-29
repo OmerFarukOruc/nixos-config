@@ -108,6 +108,7 @@
     let
       inventory = import ./machines/inventory.nix { inherit inputs; };
       tooling = import ./tooling.nix { inherit inputs; };
+      box = inventory.nixosConfigurations.devbox;
     in
     {
       inherit (inventory) nixosConfigurations;
@@ -115,16 +116,19 @@
       checks.x86_64-linux =
         import ./ci/server-boot.nix {
           inherit inputs;
-          host = inventory.nixosConfigurations.risoluto-dev-1;
+          host = box;
         }
         // import ./ci/server-units.nix {
           inherit inputs;
-          host = inventory.nixosConfigurations.risoluto-dev-1;
+          host = box;
         }
         // import ./ci/server-desktop.nix {
           inherit inputs;
-          host = inventory.nixosConfigurations.risoluto-dev-1;
+          host = box;
         }
-        // import ./ci/self-deploy.nix { inherit inputs; };
+        // import ./ci/self-deploy.nix {
+          inherit inputs;
+          host = box;
+        };
     };
 }

@@ -16,7 +16,7 @@
     ./mpv.nix
     ./oled-care.nix
     ../../home-manager/modules/box-view.nix
-    ../../home-manager/modules/sshfs-risoluto-dev-1.nix
+    ../../home-manager/modules/sshfs-devbox.nix
     ../../home-manager/modules/warp-launchers.nix
   ];
 

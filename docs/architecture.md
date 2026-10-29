@@ -9,7 +9,7 @@
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
 - [kernel-cache](#kernel-cache)
 
-The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `risoluto-dev-1`.
+The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `devbox`.
 
 ## Inventory
 
@@ -33,7 +33,7 @@ machine with no session, and the fonts skip one with no graphical user.
 it rejects `theme.schemes`, because only a workstation gets the `theme` command.
 `nixosModules/tailscale.nix` and `nixosModules/ssh.nix` (the settings every
 sshd shares) serve every host, and `nixosModules/server-access.nix` adds a
-server's Tailscale flags and SSH ([risoluto-dev-1](risoluto-dev-1.md#access)). `ci/server.nix` evaluates a
+server's Tailscale flags and SSH ([devbox](devbox.md#access)). `ci/server.nix` evaluates a
 server record with no sessions, and `ci/checks.sh` fails when one of the pieces
 it lists comes in or when the schema stops rejecting one of the four records it
 rejects: `theme.schemes` or `features.remoteAccess` on a server, `biosDevice`
@@ -41,7 +41,7 @@ with systemd-boot, and `features.streamedDesktop` on a workstation.
 
 A server has a desktop through `features.streamedDesktop`, not through a login
 session: `nixosModules/streamed-desktop.nix` starts XFCE for each RDP login of
-oruc over the tailnet ([Streamed desktop](risoluto-dev-1.md#streamed-desktop)).
+omer over the tailnet ([Streamed desktop](devbox.md#streamed-desktop)).
 `features.remoteDesktop` stays the workstation's switch for Sunshine on its own
 screen, and it still requires `remoteAccess`. The session list of such a server
 stays empty, so the modules that ask `sessions.hasAnyDesktop` (the login screen,
@@ -55,12 +55,12 @@ as a default. A machine that boots through BIOS sets it to false, because its
 firmware keeps no boot entries to write. Limine then installs its EFI binary at
 the firmware fallback path only. With `biosDevice` in the record, Limine also
 installs its BIOS stage on that disk, so one disk is laid out for either
-firmware; risoluto-dev-1's VM test boots it through BIOS only.
+firmware; devbox's VM test boots it through BIOS only.
 
 `machines/inventory.nix` holds one value per machine for the typed
 `oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:
 
-- the host name, system, kind, form factor, GPU class and battery flag
+- the host name, the login user, system, kind, form factor, GPU class and battery flag
 - the boot loader, and for Limine the disk that also gets its BIOS stage
 - the kernel profile and the Base16 scheme
 - the login sessions, described in [Login sessions](#login-sessions)

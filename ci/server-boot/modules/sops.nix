@@ -15,7 +15,7 @@ let
         ssh-keygen -q -t ed25519 -N "" -f $out/ssh_host_ed25519_key
         hash=$(mkpasswd -m sha-512 test)
         {
-          echo "oruc-password-hash: '$hash'"
+          echo "omer-password-hash: '$hash'"
           echo "root-password-hash: '$hash'"
           cat ${../secrets.yaml}
         } > plain.yaml

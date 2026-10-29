@@ -81,7 +81,7 @@ let
 in
 {
   config = lib.mkIf config.oruc.machine.features.boxBrowser {
-    users.users.oruc.linger = true;
+    users.users.${config.oruc.machine.user}.linger = true;
 
     fonts.enableDefaultPackages = lib.mkDefault true;
 
@@ -91,7 +91,7 @@ in
       description = "Box browser display: Xvnc ${display}, localhost only, no password";
       wantedBy = [ "default.target" ];
       unitConfig = {
-        ConditionUser = "oruc";
+        ConditionUser = config.oruc.machine.user;
         StartLimitIntervalSec = 0;
       };
       serviceConfig = {
@@ -120,7 +120,7 @@ in
       wantedBy = [ "default.target" ];
       environment.DISPLAY = display;
       unitConfig = {
-        ConditionUser = "oruc";
+        ConditionUser = config.oruc.machine.user;
         StartLimitIntervalSec = 0;
       };
       serviceConfig = {

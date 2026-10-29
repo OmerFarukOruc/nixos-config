@@ -44,7 +44,7 @@ in
     ExecStart = "${pkgs.coreutils}/bin/echo telemetry-unit-probe-line";
   };
 
-  # A user unit of oruc, started by the check. The prefix of each line sets its
+  # A user unit of the box user, started by the check. The prefix of each line sets its
   # journal priority: 6 is info and ships, 7 is debug and does not.
   systemd.user.services.telemetry-user-probe.serviceConfig = {
     Type = "oneshot";

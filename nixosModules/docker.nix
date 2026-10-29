@@ -19,5 +19,5 @@ lib.mkIf config.oruc.machine.features.docker {
   # keep their link-local address.
   boot.kernel.sysctl."net.ipv6.conf.default.addr_gen_mode" = 1;
   environment.systemPackages = [ pkgs.docker-compose ];
-  users.users.oruc.extraGroups = [ "docker" ];
+  users.users.${config.oruc.machine.user}.extraGroups = [ "docker" ];
 }

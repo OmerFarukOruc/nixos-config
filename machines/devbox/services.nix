@@ -1,12 +1,12 @@
 { config, ... }:
 let
-  secrets = ../../secrets/risoluto-dev-1-services.yaml;
-  cliproxy = ../../secrets/risoluto-dev-1-cliproxy.yaml;
+  secrets = ../../secrets/devbox-services.yaml;
+  cliproxy = ../../secrets/devbox-cliproxy.yaml;
   inherit (config.sops) placeholder;
   cliproxySecret = key: {
     sopsFile = cliproxy;
     inherit key;
-    owner = "oruc";
+    owner = config.oruc.machine.user;
   };
 in
 {
@@ -16,7 +16,7 @@ in
       opencode-server-password.sopsFile = secrets;
       herdr-web-token = {
         sopsFile = secrets;
-        owner = "oruc";
+        owner = config.oruc.machine.user;
       };
       cliproxy-api-key-omer = cliproxySecret "api-key-omer";
       cliproxy-api-key-friend = cliproxySecret "api-key-friend";
@@ -26,7 +26,7 @@ in
       cliproxy-share-host = cliproxySecret "share-host";
     };
     templates."cliproxy-config.yaml" = {
-      owner = "oruc";
+      owner = config.oruc.machine.user;
       content = builtins.toJSON {
         host = "";
         port = 8317;
@@ -48,14 +48,14 @@ in
       };
     };
     templates."cliproxy.env" = {
-      owner = "oruc";
+      owner = config.oruc.machine.user;
       content = ''
         CLIPROXY_SHARE_HOST=${placeholder.cliproxy-share-host}
         CLIPROXY_TS_AUTHKEY=${placeholder.cliproxy-ts-authkey}
       '';
     };
     templates."openchamber.env" = {
-      owner = "oruc";
+      owner = config.oruc.machine.user;
       content = ''
         OPENCHAMBER_UI_PASSWORD=${placeholder.openchamber-ui-password}
         OPENCODE_SERVER_PASSWORD=${placeholder.opencode-server-password}

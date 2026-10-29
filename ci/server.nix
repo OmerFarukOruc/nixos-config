@@ -66,7 +66,7 @@ let
     system:
     let
       inherit (system) config;
-      home = config.home-manager.users.oruc;
+      home = config.home-manager.users.${config.oruc.machine.user};
     in
     {
       networkManager = config.networking.networkmanager.enable;

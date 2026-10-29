@@ -29,7 +29,7 @@ for tel_key in [
 assert "path=/run/wrappers/bin/sudo" in tel_rules, "the sudo rule does not watch the wrapper"
 assert tel_rules.count("always,exclude") == 3, "auditctl does not list 3 excludes"
 
-machine.succeed("sshd -T -C user=oruc,host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
+machine.succeed(f"sshd -T -C user={BOX_USER},host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
 
 machine.wait_until_succeeds("curl -sf http://127.0.0.1:13133", timeout=60)
 tel_log = "journalctl -u opentelemetry-collector.service -b --no-pager -o cat"
@@ -76,16 +76,16 @@ def tel_records(file):
     return records
 
 
-machine.succeed("install -d -m 0755 -o oruc -g oruc /home/oruc")
-machine.succeed("install -d -m 0700 -o oruc -g oruc /home/oruc/.ssh")
+machine.succeed(f"install -d -m 0755 -o {BOX_USER} -g {BOX_USER} /home/{BOX_USER}")
+machine.succeed(f"install -d -m 0700 -o {BOX_USER} -g {BOX_USER} /home/{BOX_USER}/.ssh")
 machine.succeed("ssh-keygen -q -t ed25519 -N '' -f /tmp/probe_key")
-machine.succeed("install -m 0600 -o oruc -g oruc /tmp/probe_key.pub /home/oruc/.ssh/authorized_keys")
+machine.succeed(f"install -m 0600 -o {BOX_USER} -g {BOX_USER} /tmp/probe_key.pub /home/{BOX_USER}/.ssh/authorized_keys")
 
 
 def tel_probe(name):
     machine.succeed(
         "printf test | ssh -p 2222 -i /tmp/probe_key -o StrictHostKeyChecking=no "
-        "-o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR oruc@127.0.0.1 "
+        f"-o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR {BOX_USER}@127.0.0.1 "
         f"'/run/wrappers/bin/sudo -S -p sudo: touch /etc/{name}'"
     )
     machine.succeed(f"rm -f /etc/{name}")
@@ -107,9 +107,9 @@ machine.succeed("systemctl start telemetry-unit-probe.service")
 tel_wait("logs.json", "telemetry-unit-probe-line")
 tel_wait("metrics.json", "system.memory.usage")
 
-tel_uid = machine.succeed("id -u oruc").strip()
+tel_uid = machine.succeed(f"id -u {BOX_USER}").strip()
 machine.succeed(f"systemctl start user@{tel_uid}.service")
-machine.succeed("systemctl --user -M oruc@ start telemetry-user-probe.service")
+machine.succeed(f"systemctl --user -M {BOX_USER}@ start telemetry-user-probe.service")
 machine.wait_until_succeeds(
     "journalctl -b _SYSTEMD_USER_UNIT=telemetry-user-probe.service PRIORITY=7 -o cat | grep -Fx telemetry-user-probe-debug"
 )
@@ -125,7 +125,7 @@ tel_own = [
     if r[1]["MESSAGE"] == "telemetry-user-probe-info" and r[1].get("_SYSTEMD_USER_UNIT") == "telemetry-user-probe.service"
 ]
 assert len(tel_own) == 1, f"the sink did not get exactly the info line of the user unit: {tel_user_records}"
-assert tel_own[0][1].get("_UID") == tel_uid, f"the user unit line is not from oruc: {tel_own[0][1]}"
+assert tel_own[0][1].get("_UID") == tel_uid, f"the user unit line is not from {BOX_USER}: {tel_own[0][1]}"
 assert tel_own[0][0].get("service.name") == "infra-units", "the user unit line lacks service.name infra-units"
 tel_manager = [
     r for r in tel_user_records
@@ -134,7 +134,7 @@ tel_manager = [
 assert len(tel_manager) == 1, f"the sink did not get exactly the Finished line of the user manager: {tel_user_records}"
 assert not any(b["MESSAGE"] == "telemetry-user-probe-debug" for _, b in tel_user_records), "the debug line of the user unit shipped"
 
-assert tel_count("logs.json", "Accepted publickey for oruc") == 2, "the sink did not get exactly the 2 sshd login lines"
+assert tel_count("logs.json", f"Accepted publickey for {BOX_USER}") == 2, "the sink did not get exactly the 2 sshd login lines"
 
 for tel_key in ["sudo-exec", "etc-change"]:
     tel_wait("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}")
@@ -144,7 +144,7 @@ assert tel_attr("logs.json", "service.name", "host-audit") > 0, "the sink has no
 assert tel_attr("logs.json", "service.name", "infra-units") > 0, "the sink has no infra-units logs"
 for tel_file in ["logs.json", "metrics.json"]:
     for tel_attribute in ["host.name", "host.id"]:
-        assert tel_attr(tel_file, tel_attribute, "risoluto-dev-1") > 0, f"the sink lacks {tel_attribute} in {tel_file}"
+        assert tel_attr(tel_file, tel_attribute, BOX_HOST) > 0, f"the sink lacks {tel_attribute} in {tel_file}"
 assert tel_attr("metrics.json", "deployment.environment.name", "development") > 0, "the sink lacks the environment on metrics"
 
 tel_run = "journalctl _SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value opentelemetry-collector.service) --no-pager -o cat"

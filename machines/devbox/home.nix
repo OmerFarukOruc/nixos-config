@@ -76,7 +76,7 @@ in
         "HERDR_SOCKET=${home}/.config/herdr/herdr.sock"
         "HERDR_WEB_TELEMETRY=0"
         "HERDR_WEB_AUTO_UPDATE=0"
-        "HERDR_WEB_APP_NAME=risoluto-dev-1"
+        "HERDR_WEB_APP_NAME=devbox"
         "HERDR_WEB_STATE_DIR=${home}/.local/state/herdr-web-ui"
         "HERDR_WEB_PASTE_DIR=${home}/.local/state/herdr-web-ui/paste"
       ];

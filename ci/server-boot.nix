@@ -7,12 +7,12 @@ let
   filesIn = suffix: dir: lib.filter (lib.hasSuffix suffix) (lib.filesystem.listFilesRecursive dir);
 in
 {
-  risoluto-dev-1-boot-bios = makeDiskoTest {
-    name = "risoluto-dev-1-bios";
+  devbox-boot-bios = makeDiskoTest {
+    name = "devbox-bios";
     inherit pkgs;
     efi = false;
     inherit (host) extendModules;
-    disko-config = ../machines/risoluto-dev-1/disk.nix;
+    disko-config = ../machines/devbox/disk.nix;
     # The disks of the installer VM hold 4 GiB each, and the host's ESP alone
     # is 4 GiB. The image is sparse.
     extraInstallerConfig.virtualisation.emptyDiskImages = lib.mkForce [ 16384 ];
@@ -25,7 +25,7 @@ in
         boot.loader.limine.biosDevice = lib.mkOverride 70 (lib.head config.boot.loader.grub.devices);
       };
     extraTestScript = lib.concatStringsSep "\n" (
-      map builtins.readFile (filesIn ".py" ./server-boot/checks)
+      [ (import ./box-names.nix host) ] ++ map builtins.readFile (filesIn ".py" ./server-boot/checks)
     );
   };
 }

@@ -27,7 +27,7 @@ usage: $(basename "$0") [command]
   delete NAME       log out and remove the account's folder (asks first; --yes skips the question)
   login NAME [--on HOST]
                     log in to NAME in its Brave profile (claude-code/accounts.json), creating its folder when this
-                    device has none; --on logs in on HOST, such as risoluto-dev-1, through this device's browser
+                    device has none; --on logs in on HOST, such as devbox, through this device's browser
   login-window NAME [--on HOST]
                     run login in a new terminal window (the Claude accounts widget's Log in button)
   login-all [--list] [--on HOST]

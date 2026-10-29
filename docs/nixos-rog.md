@@ -333,7 +333,7 @@ them) and the `claude` shell function. Its `claude-usage.timer` runs
 `claude-usage` every 10 minutes while the checkout's
 `desktop/claude-code/accounts.json` exists. It writes each Claude Code
 account's usage limits and login state to `~/.cache/claude-usage/usage.json`,
-and reads the files of risoluto-dev-1 and nixos-desktop over SSH. nixos-desktop's
+and reads the files of devbox and nixos-desktop over SSH. nixos-desktop's
 everyday SSH key has a passphrase that no timer can type, so it reads this
 host's file with a key of its own. `machines/nixos-rog/claude-usage-read.nix`
 allows that key only to print the file: its entry in `authorized_keys` forces
@@ -363,7 +363,7 @@ build of the system and the checks of the git hooks (`devenv.nix`) use it too.
 The deploy unit runs outside heavy; its `MemoryHigh` slows it above 12 GiB
 (`machines/nixos-rog/auto-update.nix`) but never stops it.
 
-`heavy` follows the contract of infra's `heavy` on risoluto-dev-1. It exports
+`heavy` follows the contract of infra's `heavy` on devbox. It exports
 `HEAVY_ACTIVE=1`, and a repository script that finds `heavy` on PATH while
 `HEAVY_ACTIVE` and `CI` are unset runs its suite through it, such as
 gastrodili's `scripts/heavy.ts`. Run any other Nix evaluation of this flake as `heavy nix ...` on the host you work on, never over

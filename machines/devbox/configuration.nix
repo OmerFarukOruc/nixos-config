@@ -44,9 +44,9 @@ in
   };
 
   sops = {
-    defaultSopsFile = ../../secrets/risoluto-dev-1.yaml;
+    defaultSopsFile = ../../secrets/devbox.yaml;
     secrets = {
-      oruc-password-hash.neededForUsers = true;
+      omer-password-hash.neededForUsers = true;
       root-password-hash.neededForUsers = true;
       network-ipv4-address = { };
       network-ipv4-gateway = { };
@@ -54,8 +54,8 @@ in
       network-dns-1 = { };
       network-dns-2 = { };
       network-dns-3 = { };
-      cloudflare-acme-dns-token.sopsFile = ../../secrets/risoluto-dev-1-acme.yaml;
-      github-update-token.sopsFile = ../../secrets/risoluto-dev-1-github.yaml;
+      cloudflare-acme-dns-token.sopsFile = ../../secrets/devbox-acme.yaml;
+      github-update-token.sopsFile = ../../secrets/devbox-github.yaml;
     };
     templates."10-public.network" = {
       group = "systemd-network";
@@ -108,10 +108,10 @@ in
     config.sops.templates."10-public.network".path;
 
   users.mutableUsers = false;
-  users.groups.oruc.gid = 1003;
-  users.users.oruc = {
+  users.groups.${config.oruc.machine.user}.gid = 1003;
+  users.users.${config.oruc.machine.user} = {
     uid = 1003;
-    group = "oruc";
+    group = config.oruc.machine.user;
     autoSubUidGidRange = false;
     subUidRanges = [
       {
@@ -126,7 +126,7 @@ in
       }
     ];
     linger = true;
-    hashedPasswordFile = config.sops.secrets.oruc-password-hash.path;
+    hashedPasswordFile = config.sops.secrets.omer-password-hash.path;
   };
   users.users.root.hashedPasswordFile = config.sops.secrets.root-password-hash.path;
 
@@ -145,7 +145,7 @@ in
   # /tmp stays on the disk and loses files nobody touched for 7 days, except
   # the sockets of tmux and the X servers, which stay while their owners run.
   # The file sorts before systemd's tmp.conf, so its age wins.
-  systemd.tmpfiles.settings.oruc-tmp = {
+  systemd.tmpfiles.settings.omer-tmp = {
     "/tmp".q = {
       mode = "1777";
       user = "root";
@@ -157,7 +157,7 @@ in
     "/tmp/.ICE-unix".x = { };
   };
 
-  home-manager.users.oruc.imports = [ ./home.nix ];
+  home-manager.users.${config.oruc.machine.user}.imports = [ ./home.nix ];
 
   oruc.tailnetWeb = {
     dnsTokenFile = config.sops.secrets.cloudflare-acme-dns-token.path;

@@ -6,7 +6,7 @@ _: {
   '';
 
   # browser-lend runs `tailscale serve` as oruc to lend Brave's debugging port
-  # to risoluto-dev-1, and only the operator may change serve without sudo.
+  # to devbox, and only the operator may change serve without sudo.
   # The list adds to the shared flags in nixosModules/connectivity.nix.
   services.tailscale.extraSetFlags = [ "--operator=oruc" ];
 

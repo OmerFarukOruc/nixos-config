@@ -25,25 +25,25 @@ def sshd_settings(user):
     return set(out.lower().splitlines())
 
 
-oruc = sshd_settings("oruc")
-assert "permitrootlogin prohibit-password" in oruc, "root may log in other than by key"
-assert "port 2222" in oruc, "sshd does not listen on port 2222"
-assert "passwordauthentication no" in oruc, "password logins are on"
-assert "allowusers root" in oruc and "allowusers oruc" in oruc, "AllowUsers is not root and oruc"
+box_sshd = sshd_settings(BOX_USER)
+assert "permitrootlogin prohibit-password" in box_sshd, "root may log in other than by key"
+assert "port 2222" in box_sshd, "sshd does not listen on port 2222"
+assert "passwordauthentication no" in box_sshd, "password logins are on"
+assert "allowusers root" in box_sshd and f"allowusers {BOX_USER}" in box_sshd, f"AllowUsers is not root and {BOX_USER}"
 assert (
-    "authorizedkeysfile %h/.ssh/authorized_keys /etc/ssh/authorized_keys.d/%u" in oruc
-), "oruc does not read ~/.ssh/authorized_keys"
+    "authorizedkeysfile %h/.ssh/authorized_keys /etc/ssh/authorized_keys.d/%u" in box_sshd
+), f"{BOX_USER} does not read ~/.ssh/authorized_keys"
 assert (
     "authorizedkeysfile /etc/ssh/authorized_keys.d/%u" in sshd_settings("root")
 ), "root reads more than the declared keys"
 machine.succeed("test $(grep -c ssh-ed25519 /etc/ssh/authorized_keys.d/root) = 3")
 
-machine.succeed("passwd -S oruc | grep -E '^oruc P '")
+machine.succeed(f"passwd -S {BOX_USER} | grep -E '^{BOX_USER} P '")
 machine.succeed("passwd -S root | grep -E '^root P '")
-machine.succeed("id oruc | grep -Fx 'uid=1003(oruc) gid=1003(oruc) groups=1003(oruc),1(wheel)'")
-machine.succeed("grep -Fx oruc:100000:65536 /etc/subuid")
-machine.succeed("grep -Fx oruc:100000:65536 /etc/subgid")
-machine.succeed("test -e /var/lib/systemd/linger/oruc")
+machine.succeed(f"id {BOX_USER} | grep -Fx 'uid=1003({BOX_USER}) gid=1003({BOX_USER}) groups=1003({BOX_USER}),1(wheel)'")
+machine.succeed(f"grep -Fx {BOX_USER}:100000:65536 /etc/subuid")
+machine.succeed(f"grep -Fx {BOX_USER}:100000:65536 /etc/subgid")
+machine.succeed(f"test -e /var/lib/systemd/linger/{BOX_USER}")
 
 machine.succeed("test $(sysctl -n net.ipv4.ip_forward) = 1")
 machine.succeed("test $(sysctl -n net.ipv6.conf.all.forwarding) = 1")

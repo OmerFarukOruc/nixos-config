@@ -19,7 +19,7 @@ set -a
 set +a
 export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
 token_file=${CLIPROXY_CLOUDFLARE_TOKEN_PATH:-$XDG_RUNTIME_DIR/cliproxy/cloudflare-dns-token}
-[ -s "$token_file" ] || die "$token_file is missing or empty; run this on risoluto-dev-1, where cliproxy.service runs"
+[ -s "$token_file" ] || die "$token_file is missing or empty; run this on devbox, where cliproxy.service runs"
 name=$CLIPROXY_PUBLIC_HOST
 zone=${name#*.}
 
@@ -57,7 +57,7 @@ zone_id=$(api GET "/zones?name=$zone" | jq -r '.[0].id // empty')
 [ -n "$zone_id" ] || die "zone $zone not found, or the token cannot read it"
 
 body=$(jq -nc --arg n "$name" --arg a "$addr" \
-  '{type: "A", name: $n, content: $a, proxied: false, ttl: 300, comment: "cliproxy tailnet node; nixos-config machines/risoluto-dev-1/cliproxy/dns-record.sh"}')
+  '{type: "A", name: $n, content: $a, proxied: false, ttl: 300, comment: "cliproxy tailnet node; nixos-config machines/devbox/cliproxy/dns-record.sh"}')
 records=$(api GET "/zones/$zone_id/dns_records?name.exact=$name")
 case $(jq length <<<"$records") in
   0)

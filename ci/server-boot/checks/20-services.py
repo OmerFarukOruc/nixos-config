@@ -6,15 +6,15 @@ import shlex as svc_shlex
 import socket as svc_socket
 import ssl as svc_ssl
 
-svc_uid = machine.succeed("id -u oruc").strip()
+svc_uid = machine.succeed(f"id -u {BOX_USER}").strip()
 svc_rt = f"/run/user/{svc_uid}"
 
 
-def svc_oruc(command, timeout=120):
-    """Run a shell command as oruc with the user manager's environment."""
-    env = f"XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus HOME=/home/oruc"
+def svc_user(command, timeout=120):
+    """Run a shell command as the box user with the user manager's environment."""
+    env = f"XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus HOME=/home/{BOX_USER}"
     return machine.succeed(
-        f"runuser -u oruc -- env {env} timeout {timeout} bash -c {svc_shlex.quote(command)}"
+        f"runuser -u {BOX_USER} -- env {env} timeout {timeout} bash -c {svc_shlex.quote(command)}"
     )
 
 
@@ -51,26 +51,26 @@ for svc_tool in [
     "podman",
     "docker",
 ]:
-    machine.succeed(f"PATH=/etc/profiles/per-user/oruc/bin:$PATH command -v {svc_tool}")
+    machine.succeed(f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:$PATH command -v {svc_tool}")
 machine.succeed("docker compose version")
 svc_unit_path = (
-    "/home/oruc/.local/bin:/etc/profiles/per-user/oruc/bin:/usr/local/bin:/usr/bin:/bin"
+    f"/home/{BOX_USER}/.local/bin:/etc/profiles/per-user/{BOX_USER}/bin:/usr/local/bin:/usr/bin:/bin"
 )
-svc_found = svc_oruc(
+svc_found = svc_user(
     f"systemd-run --user --quiet --wait --pipe --collect -p Environment=PATH={svc_unit_path} "
     "/usr/bin/zsh -c 'command -v herdr claude'"
 )
 assert svc_found.split() == [
-    "/etc/profiles/per-user/oruc/bin/herdr",
-    "/etc/profiles/per-user/oruc/bin/claude",
+    f"/etc/profiles/per-user/{BOX_USER}/bin/herdr",
+    f"/etc/profiles/per-user/{BOX_USER}/bin/claude",
 ], f"herdr and claude are not in the profile: {svc_found!r}"
 svc_usr_path = "env -i PATH=/usr/local/bin:/usr/bin:/bin"
 for svc_name in ["zsh", "bash"]:
     machine.succeed(
-        f"runuser -u oruc -- {svc_usr_path} /usr/bin/{svc_name} -c 'exit 0'"
+        f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/{svc_name} -c 'exit 0'"
     )
-machine.succeed(f"runuser -u oruc -- {svc_usr_path} /usr/bin/systemctl --version")
-machine.succeed(f"runuser -u oruc -- {svc_usr_path} /usr/bin/podman --version")
+machine.succeed(f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/systemctl --version")
+machine.succeed(f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/podman --version")
 
 machine.succeed("test $(stat -c '%a' /run/secrets/cloudflare-acme-dns-token) = 400")
 machine.succeed(
@@ -156,26 +156,26 @@ machine.succeed(
     f"curl -s --max-time 10 --unix-socket {svc_rt}/docker.sock http://d/_ping | grep -Fx OK"
 )
 machine.succeed(
-    f"stat -c '%U' {svc_rt}/docker.sock {svc_rt}/podman/podman.sock | sort -u | grep -Fx oruc"
+    f"stat -c '%U' {svc_rt}/docker.sock {svc_rt}/podman/podman.sock | sort -u | grep -Fx {BOX_USER}"
 )
 svc_docker = f"docker --host unix://{svc_rt}/docker.sock"
-svc_info = svc_oruc(f"{svc_docker} info --format '{{{{json .SecurityOptions}}}}'")
+svc_info = svc_user(f"{svc_docker} info --format '{{{{json .SecurityOptions}}}}'")
 assert "rootless" in svc_info, "dockerd does not run rootless"
-svc_oruc(
+svc_user(
     f"podman --url unix://{svc_rt}/podman/podman.sock info --format '{{{{.Host.Security.Rootless}}}}' | grep -Fx true"
 )
-svc_oruc(
+svc_user(
     "grep -F defaultMaxUsedSpace $(systemctl --user show docker.service -p ExecStart"
     " | grep -oE -- '--config-file=[^ ;]+' | head -n 1 | cut -d= -f2)"
 )
 
 machine.succeed("sysctl -n net.ipv4.ip_local_port_range | grep -E '^61000\\s+65535$'")
-svc_oruc(f"{svc_docker} load -i /etc/server-boot/probe-image.tar")
-svc_cid = svc_oruc(
+svc_user(f"{svc_docker} load -i /etc/server-boot/probe-image.tar")
+svc_cid = svc_user(
     f"{svc_docker} run -d --rm -p 127.0.0.1::8080 probe:1 httpd -f -p 8080 -h /bin"
 ).strip()
 svc_port = int(
-    svc_oruc(
+    svc_user(
         f"{svc_docker} port {svc_cid} 8080/tcp | head -n 1 | sed 's/.*://'"
     ).strip()
 )
@@ -183,47 +183,47 @@ assert svc_port < 61000, f"docker published port {svc_port}, inside the host's r
 machine.wait_until_succeeds(
     f"curl -s --max-time 5 -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{svc_port}/busybox | grep -Fx 200"
 )
-svc_oruc(f"{svc_docker} rm -f {svc_cid}")
+svc_user(f"{svc_docker} rm -f {svc_cid}")
 svc_addr = machine.succeed(
     "ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n 1"
 ).strip()
-svc_cid = svc_oruc(
+svc_cid = svc_user(
     f"{svc_docker} run -d --rm -p 8080 probe:1 httpd -f -p 8080 -h /bin"
 ).strip()
 svc_port = int(
-    svc_oruc(
+    svc_user(
         f"{svc_docker} port {svc_cid} 8080/tcp | head -n 1 | sed 's/.*://'"
     ).strip()
 )
 machine.wait_until_succeeds(
     f"curl -s --max-time 5 -o /dev/null -w '%{{http_code}}' http://{svc_addr}:{svc_port}/busybox | grep -Fx 200"
 )
-svc_oruc(f"{svc_docker} rm -f {svc_cid}")
+svc_user(f"{svc_docker} rm -f {svc_cid}")
 svc_podman_docker = f"env DOCKER_HOST=unix://{svc_rt}/podman/podman.sock docker"
-svc_oruc(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
-svc_oruc(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")
+svc_user(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
+svc_user(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")
 machine.succeed(
-    f"runuser -u oruc -- {svc_usr_path} HOME=/home/oruc XDG_RUNTIME_DIR={svc_rt} "
+    f"runuser -u {BOX_USER} -- {svc_usr_path} HOME=/home/{BOX_USER} XDG_RUNTIME_DIR={svc_rt} "
     "timeout 120 /usr/bin/podman run --rm probe:1 echo podman-direct-ok | grep -Fx podman-direct-ok"
 )
 
 machine.wait_until_succeeds(
-    f"runuser -u oruc -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status",
+    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status",
     timeout=180,
 )
 machine.succeed(r"ss -Htln | grep -E '127\.0\.0\.1:5920 '")
 machine.fail(r"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):5920 '")
 
-svc_hm_vars = "/etc/profiles/per-user/oruc/etc/profile.d/hm-session-vars.sh"
-svc_oruc(
+svc_hm_vars = f"/etc/profiles/per-user/{BOX_USER}/etc/profile.d/hm-session-vars.sh"
+svc_user(
     f'. {svc_hm_vars} && test -n "$PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS" && '
     "$PLAYWRIGHT_BROWSERS_PATH/chromium-*/chrome-linux64/chrome --headless --disable-gpu --no-sandbox "
     "--dump-dom 'data:text/html,<p>playwright-ok</p>' 2>/dev/null | grep -F '<p>playwright-ok</p>'"
 )
 
 for svc_file in ["cliproxy-config.yaml", "cliproxy.env"]:
-    machine.succeed(f"test \"$(stat -c '%U %a' /run/secrets/rendered/{svc_file})\" = 'oruc 400'")
-svc_cliproxy = svc_json.loads(svc_oruc("cat /run/secrets/rendered/cliproxy-config.yaml"))
+    machine.succeed(f"test \"$(stat -c '%U %a' /run/secrets/rendered/{svc_file})\" = '{BOX_USER} 400'")
+svc_cliproxy = svc_json.loads(svc_user("cat /run/secrets/rendered/cliproxy-config.yaml"))
 assert svc_cliproxy["api-keys"] == ["test-api-key-omer", "test-api-key-friend"], svc_cliproxy["api-keys"]
 assert svc_cliproxy["remote-management"]["secret-key"] == "test-management-key"
-svc_oruc("grep -Fx CLIPROXY_SHARE_HOST=cliproxy.example.ts.net /run/secrets/rendered/cliproxy.env")
+svc_user("grep -Fx CLIPROXY_SHARE_HOST=cliproxy.example.ts.net /run/secrets/rendered/cliproxy.env")

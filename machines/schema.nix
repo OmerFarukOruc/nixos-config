@@ -28,6 +28,12 @@ let
       description = "Stable name of this machine in the flake inventory.";
     };
 
+    user = mkOption {
+      type = types.strMatching "[a-z_][a-z0-9_-]*";
+      default = "oruc";
+      description = "Login user that Omer and his agents work as on this machine.";
+    };
+
     system = mkOption {
       type = types.str;
       description = "Nix system used to construct this machine.";
@@ -160,7 +166,7 @@ let
     autoLogin = mkOption {
       type = types.bool;
       default = false;
-      description = "Whether the display manager logs oruc in at boot, into a locked Plasma session.";
+      description = "Whether the display manager logs the machine's user in at boot, into a locked Plasma session.";
     };
 
     idle = {

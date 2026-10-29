@@ -112,7 +112,8 @@ let
       };
     };
 
-    risoluto-dev-1 = {
+    devbox = {
+      user = "omer";
       system = "x86_64-linux";
       kind = "server";
       formFactor = "desktop";
@@ -182,11 +183,11 @@ assert builtins.deepSeq machines true;
     ];
   };
 
-  nixosConfigurations.risoluto-dev-1 = mkMachine {
-    machine = machines.risoluto-dev-1;
+  nixosConfigurations.devbox = mkMachine {
+    machine = machines.devbox;
     hostModules = [
-      ./risoluto-dev-1/configuration.nix
-      ./risoluto-dev-1/hardware-configuration.nix
+      ./devbox/configuration.nix
+      ./devbox/hardware-configuration.nix
     ];
   };
 }

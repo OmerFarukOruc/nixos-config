@@ -17,21 +17,21 @@ assert machine.succeed("systemctl show self-deploy.service -p User --value").str
 assert "DEPLOY_REPOSITORY=https://github.com/OmerFarukOruc/nixos-config.git" in machine.succeed(
     "systemctl show self-deploy.service -p Environment --value"
 )
-assert "password is required" in machine.execute("runuser -u oruc -- sudo -n true 2>&1")[1], "oruc's sudo asks for no password"
+assert "password is required" in machine.execute(f"runuser -u {BOX_USER} -- sudo -n true 2>&1")[1], f"{BOX_USER}'s sudo asks for no password"
 machine.succeed("sudo -n true")
 machine.succeed("systemd-ac-power")
 
 machine.copy_from_host(deploy_sh, "/tmp/deploy.sh")
 machine.wait_until_succeeds(
-    "runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet other-test.service"
-    " && runuser -u oruc -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet herdr-test.service"
+    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet other-test.service"
+    f" && runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR=/run/user/1003 systemctl --user is-active --quiet herdr-test.service"
 )
 dp_listed = machine.succeed(
     "fn=$(sed -n '/^session_services() {/,/^}/p' /tmp/deploy.sh);"
-    " runuser -u oruc -- bash -c 'on_target() { bash -s; }; eval \"$1\"; session_services' _ \"$fn\" 2>&1"
+    f" runuser -u {BOX_USER} -- bash -c 'on_target() {{ bash -s; }}; eval \"$1\"; session_services' _ \"$fn\" 2>&1"
 ).split()
 print(f"session services: {dp_listed}")
-assert "other-test.service" in dp_listed, "the session check lists no service of oruc"
+assert "other-test.service" in dp_listed, f"the session check lists no service of {BOX_USER}"
 assert "herdr-test.service" not in dp_listed, "the session check does not ignore herdr-*.service"
 
 machine.succeed("nix-env --profile /nix/var/nix/profiles/system --set /run/current-system")
@@ -57,7 +57,7 @@ for dp_name, dp_path in dp_out.items():
         f"""\
         {{
           outputs = _: {{
-            nixosConfigurations.risoluto-dev-1.config.system.build.toplevel =
+            nixosConfigurations.{BOX_HOST}.config.system.build.toplevel =
               builtins.appendContext "{dp_path}" {{ "{dp_path}" = {{ path = true; }}; }};
           }};
         }}
@@ -73,7 +73,7 @@ machine.succeed(
 
 machine.succeed(
     "cat > /var/lib/server-test/flakes/throw.nix <<'EOF'\n"
-    '{ outputs = _: { nixosConfigurations.risoluto-dev-1.config.system.build.toplevel = throw "main is broken"; }; }\n'
+    f'{{ outputs = _: {{ nixosConfigurations.{BOX_HOST}.config.system.build.toplevel = throw "main is broken"; }}; }}\n'
     "EOF"
 )
 

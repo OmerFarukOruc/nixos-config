@@ -1,9 +1,9 @@
-# Mounts the whole of risoluto-dev-1 read-only, as oruc over Tailscale SSH, so
-# local apps open its paths: /tmp/x on the box is ~/remote/risoluto-dev-1/tmp/x
-# here. Keep the unit name sshfs-risoluto-dev-1.service, because dotfiles'
+# Mounts the whole of devbox read-only, as omer over Tailscale SSH, so
+# local apps open its paths: /tmp/x on the box is ~/remote/devbox/tmp/x
+# here. Keep the unit name sshfs-devbox.service, because dotfiles'
 # `ropen` starts it when the mount is down.
 #
-# The mount point is under $XDG_RUNTIME_DIR and ~/remote/risoluto-dev-1 is a
+# The mount point is under $XDG_RUNTIME_DIR and ~/remote/devbox is a
 # symlink to it, because Baloo, find and rg walk the home folder without
 # following symlinks; a mount inside the home folder would have them crawl the
 # box's disk. After a suspend or a network drop, a read can wait up to 45
@@ -11,7 +11,7 @@
 # dead connection; `reconnect` then opens a new one on the next read.
 { lib, pkgs, ... }:
 let
-  mount = "%t/sshfs/risoluto-dev-1";
+  mount = "%t/sshfs/devbox";
   fusermount = "/run/wrappers/bin/fusermount3";
   coreutils = name: lib.getExe' pkgs.coreutils name;
   waitForMount = pkgs.writeShellScript "sshfs-wait-for-mount" ''
@@ -23,9 +23,9 @@ in
 {
   home.packages = [ pkgs.libnotify ];
 
-  systemd.user.services.sshfs-risoluto-dev-1 = {
+  systemd.user.services.sshfs-devbox = {
     Unit = {
-      Description = "sshfs mount of risoluto-dev-1 at ~/remote/risoluto-dev-1";
+      Description = "sshfs mount of devbox at ~/remote/devbox";
       StartLimitIntervalSec = 0;
       # A switch that changes NetworkManager stops it until activation ends,
       # so a restart then cannot reach the box: it held activation for the 30 s
@@ -40,9 +40,9 @@ in
       ExecStartPre = [
         "-${fusermount} -uz ${mount}"
         "${coreutils "mkdir"} -p ${mount} %h/remote"
-        "${coreutils "ln"} -sfn ${mount} %h/remote/risoluto-dev-1"
+        "${coreutils "ln"} -sfn ${mount} %h/remote/devbox"
       ];
-      ExecStart = "${lib.getExe' pkgs.sshfs "sshfs"} -f oruc@risoluto-dev-1:/ ${mount} -o ro,reconnect,idmap=user,BatchMode=yes,ConnectTimeout=10,ServerAliveInterval=15,ServerAliveCountMax=3";
+      ExecStart = "${lib.getExe' pkgs.sshfs "sshfs"} -f omer@devbox:/ ${mount} -o ro,reconnect,idmap=user,BatchMode=yes,ConnectTimeout=10,ServerAliveInterval=15,ServerAliveCountMax=3";
       ExecStartPost = "${coreutils "timeout"} 30 ${waitForMount} ${mount}";
       ExecStopPost = "-${fusermount} -uz ${mount}";
       Restart = "on-failure";

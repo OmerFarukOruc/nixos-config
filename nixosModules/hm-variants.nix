@@ -8,7 +8,7 @@
 let
   cfg = config.oruc.machine;
   hasPlasma = sessions.hasDesktop cfg "plasma";
-  hm = config.home-manager.users.oruc;
+  hm = config.home-manager.users.${cfg.user};
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
   driverVersion = if config.home-manager.enableLegacyProfileManagement then "0" else "1";
 
@@ -186,7 +186,7 @@ let
   };
 in
 {
-  config = lib.mkIf (cfg.kind == "workstation" && config.home-manager.users ? oruc) {
+  config = lib.mkIf (cfg.kind == "workstation" && config.home-manager.users ? ${cfg.user}) {
     assertions = [
       {
         assertion = packageDrift == { };
@@ -205,7 +205,7 @@ in
     # A failed reapply must not fail this unit, because a failed unit makes
     # deploy.sh roll back the whole system. The wrapper records the failure
     # where scripts/verify-nixos-rog.sh can see it.
-    systemd.services.home-manager-oruc.serviceConfig.ExecStartPost = lib.getExe (
+    systemd.services."home-manager-${cfg.user}".serviceConfig.ExecStartPost = lib.getExe (
       pkgs.writeShellApplication {
         name = "theme-reapply";
         text = ''

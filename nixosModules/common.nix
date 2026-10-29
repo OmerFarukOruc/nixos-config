@@ -54,7 +54,7 @@ in
         ];
         trusted-users = [
           "root"
-          "oruc"
+          cfg.user
         ];
         connect-timeout = 5;
         keep-outputs = true;
@@ -159,7 +159,7 @@ in
 
     environment.variables.DO_NOT_TRACK = "1";
 
-    users.users.oruc = {
+    users.users.${cfg.user} = {
       isNormalUser = true;
       extraGroups = [ "wheel" ];
       shell = pkgs.zsh;

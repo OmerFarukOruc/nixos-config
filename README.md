@@ -34,7 +34,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
-| `risoluto-dev-1` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS (UEFI unverified) |
+| `devbox` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS (UEFI unverified) |
 
 `machines/inventory.nix` is the source of truth for this table.
 
@@ -43,7 +43,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Part | Choice |
 | --- | --- |
 | Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built on GitHub |
-| Boot loader | Limine on nixos-rog, nixos-desktop and risoluto-dev-1, systemd-boot on nixos-latitude |
+| Boot loader | Limine on nixos-rog, nixos-desktop and devbox, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
 | Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |
@@ -52,10 +52,10 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Login shell | zsh with oh-my-zsh and Starship |
 | Editors | VS Code, and Neovim through nvf |
 | Theme | Base16 through base16.nix, `warm-burnout-dark` by default, switched with `theme` |
-| Secrets | sops-nix with age on nixos-desktop, nixos-rog and risoluto-dev-1 |
+| Secrets | sops-nix with age on nixos-desktop, nixos-rog and devbox |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
-| Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on risoluto-dev-1 an XFCE desktop through xrdp, which the workstations reach with Remmina |
+| Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
 | Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
 
 ## Highlights
@@ -166,7 +166,7 @@ checkout with Nix. The update workflow runs them.
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
-| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.risoluto-dev-1-boot-bios` runs risoluto-dev-1's [boot test](docs/risoluto-dev-1.md#boot-test-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-units` its [unit check](docs/risoluto-dev-1.md#unit-check-in-a-vm), `.#checks.x86_64-linux.risoluto-dev-1-self-deploy` its [deploy test](docs/risoluto-dev-1.md#deploy-test-in-a-vm), and `.#checks.x86_64-linux.risoluto-dev-1-desktop` its [desktop test](docs/risoluto-dev-1.md#desktop-test-in-a-vm) |
+| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.devbox-boot-bios` runs devbox's [boot test](docs/devbox.md#boot-test-in-a-vm), `.#checks.x86_64-linux.devbox-units` its [unit check](docs/devbox.md#unit-check-in-a-vm), `.#checks.x86_64-linux.devbox-self-deploy` its [deploy test](docs/devbox.md#deploy-test-in-a-vm), and `.#checks.x86_64-linux.devbox-desktop` its [desktop test](docs/devbox.md#desktop-test-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
@@ -183,7 +183,7 @@ checkout with Nix. The update workflow runs them.
 
 </details>
 
-`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop, nixos-latitude or risoluto-dev-1), `--allow-dirty` for a
+`deploy.sh` takes a `HOST` (nixos-rog, nixos-desktop, nixos-latitude or devbox), `--allow-dirty` for a
 dirty tree and `--replace` to drop a running release's files; [Deploy](docs/deploy.md)
 says when to use either flag. Every deploy command can change boot or running
 system state.
@@ -215,7 +215,7 @@ an update of the inputs and apps ([Updater](docs/nixos-rog.md#updater)).
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [nixos-rog](docs/nixos-rog.md) | the update workflow, the deploy unit and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
-| [risoluto-dev-1](docs/risoluto-dev-1.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
+| [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [kernel-cache](kernel-cache/README.md) | how GitHub builds the kernel and how hosts follow it |

@@ -31,5 +31,5 @@ lib.mkIf (cfg.kind == "workstation") {
     wants = [ "tailscaled.service" ];
   };
 
-  users.users.oruc.extraGroups = [ "networkmanager" ];
+  users.users.${cfg.user}.extraGroups = [ "networkmanager" ];
 }

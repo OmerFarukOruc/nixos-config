@@ -182,7 +182,7 @@ repository's package record names SpaceXAI as the vendor.
 The wrapper `package.json` of cf depends on cf, because cf has only beta releases
 and its own `package.json` pins dev dependencies that do not resolve. The wrapper
 of `openchamber-web` depends on `@openchamber/web`, the web server that
-risoluto-dev-1 runs. `pkgs/openchamber.nix` is the OpenChamber desktop app. The
+devbox runs. `pkgs/openchamber.nix` is the OpenChamber desktop app. The
 `workerd` binary that `cf dev` runs goes through nix-ld
 (`nixosModules/common.nix`).
 

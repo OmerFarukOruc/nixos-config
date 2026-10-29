@@ -21,7 +21,7 @@ lib.mkIf (cfg.kind == "server") {
       PermitRootLogin = "prohibit-password";
       AllowUsers = [
         "root"
-        "oruc"
+        cfg.user
       ];
     };
     extraConfig = lib.mkAfter ''
@@ -32,7 +32,7 @@ lib.mkIf (cfg.kind == "server") {
 
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMV6Kg6JIDEOFDbA5ezTsHnxFq2fXzB75x0+tybHlB/h omer-all-devices"
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPxGYj0ZCsUeUBn4HmOsV1yUoLPJrxPFWblNSK9P/bE omer@risoluto-dev-1"
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGPxGYj0ZCsUeUBn4HmOsV1yUoLPJrxPFWblNSK9P/bE omer@devbox"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJPOeV4rvCOb2SRldAvkVh6fyEb/p/c2rzoZkUroBYhr co-admin"
   ];
 }

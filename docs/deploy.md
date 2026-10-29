@@ -241,7 +241,7 @@ Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
 `machines/inventory.nix` sets `deployed = false`; no host sets it now.
 
-nixos-rog and risoluto-dev-1 deploy `main` themselves every 2 hours, through
+nixos-rog and devbox deploy `main` themselves every 2 hours, through
 the [deploy unit](nixos-rog.md#deploy-unit) and
 [self-deploy](#self-deploy-of-a-server). Leave an affected one to its timer,
 and deploy it by hand only when the change needs proof on that host now, such
@@ -382,8 +382,8 @@ clear the failed state by hand, run
 under the unit's runtime directory, as nixos-rog's unit does
 ([Deploy unit](nixos-rog.md#deploy-unit)). It points `NIX_CONFIG` and
 `GH_CONFIG_DIR` at them. Shell builtins write the files, so the token is never
-in a command line, and the exported variables carry paths only. risoluto-dev-1 sets it to its sops
-secret ([Rotate the box's token](risoluto-dev-1.md#rotate-the-boxs-token)).
+in a command line, and the exported variables carry paths only. devbox sets it to its sops
+secret ([Rotate the box's token](devbox.md#rotate-the-boxs-token)).
 Nix fetches the flake inputs through GitHub's API. Without a token it stays
 within the limit for a client without one, 60 requests an hour, which is too low
 for an evaluation, and `deploy.sh` cannot ask `gh` which pull request merged a
@@ -413,21 +413,21 @@ run above 12 GiB and never kills it, so the script's traps still report, which a
 peaked at 7.5 GiB (journal, 2026-10-26).
 
 **Why root.** A deploy from nixos-desktop or nixos-rog logs in as root over
-Tailscale SSH, because oruc's sudo needs a password on a server and a deploy
+Tailscale SSH, because omer's sudo needs a password on a server and a deploy
 cannot type it. Passwordless sudo comes only with the `remoteAccess` feature
 (`nixosModules/connectivity.nix`), which the schema allows on workstations only.
 The `deployLogin` field of the host's machine record (`machines/schema.nix`)
 names that user, and `deploy.sh` and `scripts/affected-hosts.sh` log in as it,
-since the `risoluto-dev-1` alias in `~/.ssh/config` logs in as oruc for the
+since the `devbox` alias in `~/.ssh/config` logs in as omer for the
 editors. The timer's deploys
 run as root with `HOME=/root` as well. So the lock, the release records and
 `scripts/affected-hosts.sh --running` use one set, under
 `/root/.local/state/nixos-config-deploy/`, for a timer deploy and a remote one.
-Run a deploy on the box itself as root too (`sudo -i`); one as oruc keeps its
-lock and records in oruc's home, where the timer's deploys and
+Run a deploy on the box itself as root too (`sudo -i`); one as omer keeps its
+lock and records in omer's home, where the timer's deploys and
 `scripts/affected-hosts.sh --running` do not look.
-`upgrade` on the host starts the unit, because a deploy as oruc would write its
-records to oruc's home.
+`upgrade` on the host starts the unit, because a deploy as omer would write its
+records to omer's home.
 
 **The reboot.** `self-deploy-reboot.timer` starts `self-deploy-reboot.service`
 at 02:10 UTC every day (`*-*-* 02:10:00 UTC`). The service schedules a reboot
@@ -454,9 +454,9 @@ services to leave out in `/etc/nixos-config-deploy/session-ignore`, one shell
 glob per line. They are long-running agents that a switch may restart and that
 no deploy should undo. A host sets
 the list with `oruc.deploy.sessionIgnore`; a host without the option has no
-file and leaves out nothing more. On risoluto-dev-1 the list holds the
-long-running agents of oruc. A deploy of that host runs as root, whose session
-has none of them, so the list matters only for a deploy as oruc.
+file and leaves out nothing more. On devbox the list holds the
+long-running agents of omer. A deploy of that host runs as root, whose session
+has none of them, so the list matters only for a deploy as omer.
 
 To pause the deploys on the host until the next reboot, run
 `sudo systemctl mask --runtime --now self-deploy.timer`, as for nixos-rog, and

@@ -25,7 +25,7 @@ services:
       - ${CLIPROXY_LOG_PATH:?set CLIPROXY_LOG_PATH}:/CLIProxyAPI/logs
       - ${CLIPROXY_PLUGIN_PATH:?set CLIPROXY_PLUGIN_PATH}:/CLIProxyAPI/plugins
 
-  # Separate tailnet node. Share this machine, not risoluto-dev-1.
+  # Separate tailnet node. Share this machine, not devbox.
   # Starts only with `--profile share` when CLIPROXY_TS_AUTHKEY is set.
   # Serve is tailnet-only. Do not add AllowFunnel.
   # Leave the container hostname unset.

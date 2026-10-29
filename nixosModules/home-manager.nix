@@ -1,4 +1,5 @@
 {
+  config,
   inputs,
   pkgs,
   sessions,
@@ -46,7 +47,7 @@ in
         xdg.enable = true;
       }
     ];
-    users.oruc.imports = [ ../home-manager/common.nix ];
+    users.${config.oruc.machine.user}.imports = [ ../home-manager/common.nix ];
     users.root.imports = [ ../home-manager/modules/shell.nix ];
   };
   users.users.root.shell = pkgs.zsh;

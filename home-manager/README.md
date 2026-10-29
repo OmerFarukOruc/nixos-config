@@ -1,7 +1,7 @@
 # Home Manager operator notes
 
 Home Manager is integrated into the NixOS configuration of every host through
-`nixosModules/home-manager.nix`. `oruc` gets `home-manager/common.nix` plus the
+`nixosModules/home-manager.nix`. The machine record's `user` (`oruc`, or `omer` on devbox) gets `home-manager/common.nix` plus the
 host layer in `machines/<host>/home.nix`. root gets only
 `home-manager/modules/shell.nix`, so `sudo -i` has the same shell and tools. A
 NixOS rebuild activates the matching user environment, and rolling back to a

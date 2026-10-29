@@ -1,6 +1,6 @@
 { lib, pkgs, ... }:
 let
-  defaultHost = "risoluto-dev-1";
+  defaultHost = "devbox";
   boxBrowserVncPort = 5920;
 
   boxView = pkgs.writeShellApplication {
@@ -48,7 +48,7 @@ let
 
       ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes -o ConnectTimeout=10 \
         -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-        -L "127.0.0.1:$port:127.0.0.1:${toString boxBrowserVncPort}" "oruc@$host" \
+        -L "127.0.0.1:$port:127.0.0.1:${toString boxBrowserVncPort}" "omer@$host" \
         </dev/null 2>"$log" &
       tunnel_pid=$!
 

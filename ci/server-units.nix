@@ -4,8 +4,8 @@ let
   acmeNodes = import ./server-units/acme.nix { inherit inputs; };
 in
 {
-  risoluto-dev-1-units = pkgs.testers.runNixOSTest {
-    name = "risoluto-dev-1-units";
+  devbox-units = pkgs.testers.runNixOSTest {
+    name = "devbox-units";
     node = {
       pkgsReadOnly = false;
       specialArgs = { inherit inputs; };
@@ -13,6 +13,6 @@ in
     nodes.acme = acmeNodes.acme;
     nodes.dnsserver = acmeNodes.dnsserver;
     nodes.machine = import ./server-units/machine.nix { inherit host acmeNodes; };
-    testScript = builtins.readFile ./server-units/test.py;
+    testScript = import ./box-names.nix host + builtins.readFile ./server-units/test.py;
   };
 }

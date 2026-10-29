@@ -1,11 +1,12 @@
-{ inputs }:
+{ inputs, host }:
 let
+  inherit (host.config.oruc.machine) name user;
   inherit (inputs.nixpkgs) lib;
   pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
 in
 {
-  risoluto-dev-1-self-deploy = pkgs.testers.runNixOSTest {
-    name = "risoluto-dev-1-self-deploy";
+  devbox-self-deploy = pkgs.testers.runNixOSTest {
+    name = "devbox-self-deploy";
 
     nodes.machine =
       { pkgs, ... }:
@@ -22,7 +23,7 @@ in
           ../nixosModules/telemetry.nix
         ];
 
-        networking.hostName = "risoluto-dev-1";
+        networking.hostName = name;
         nix = {
           enable = true;
           settings.experimental-features = [
@@ -62,7 +63,7 @@ in
         services.openssh.enable = true;
         services.tailscale.enable = true;
 
-        users.users.oruc = {
+        users.users.${user} = {
           isNormalUser = true;
           uid = 1003;
           extraGroups = [ "wheel" ];
@@ -87,7 +88,7 @@ in
         };
       };
 
-    testScript = ''
+    testScript = import ./box-names.nix host + ''
       deploy_sh = "${../deploy.sh}"
       running_revision_sh = "${../scripts/lib/running-revision.sh}"
       ${builtins.readFile ./self-deploy/test.py}
