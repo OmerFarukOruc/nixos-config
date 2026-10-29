@@ -69,11 +69,14 @@ holds back an app, and a broken app never holds back the inputs. Its jobs:
 5. **place-apps** and **place-inputs** put each commit on the current `main`
    with `ci/place-update.sh`. When `main` moved during the run, which takes
    up to a few hours, and the placed tree is not the checked one, both checks
-   run again. When the new `main` changed a file the commit changes, and
-   holds it otherwise than the commit does, it merges nothing, shows a warning on the run's page, and the next run starts from
-   that `main`. The inputs commit goes on top of the apps commit, so
-   place-inputs waits for merge-apps, and runs too when the apps path failed
-   or had nothing to merge.
+   run again. A file that the new `main` changed and holds otherwise than the
+   commit does is a conflict. The inputs commit then merges nothing. For the
+   apps commit, an app whose `pkgs/NAME.nix` or `pkgs/NAME/` has a conflict
+   stays out and the other apps merge; when every app stays out, or a file
+   outside `pkgs/` has a conflict, it merges nothing. Each such case shows a
+   warning on the run's page, and the next run starts from that `main`. The
+   inputs commit goes on top of the apps commit, so place-inputs waits for
+   merge-apps, and runs too when the apps path failed or had nothing to merge.
 6. **merge-apps** and **merge-inputs** push their commit to `main` with
    `ci/merge-update.sh`. `main` takes only a fast-forward, so when `main`
    moved again, it merges nothing, shows a warning, and the next run tries

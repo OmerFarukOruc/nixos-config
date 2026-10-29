@@ -315,7 +315,7 @@ jobs:
       - id: place
         env:
           BASE: ${{ needs.base.outputs.sha }}
-        run: ci/place-update.sh "$BASE" "$RUNNER_TEMP/apps.bundle" "$RUNNER_TEMP/merge.bundle" >>"$GITHUB_OUTPUT"
+        run: ci/place-update.sh --per-app "$BASE" "$RUNNER_TEMP/apps.bundle" "$RUNNER_TEMP/merge.bundle" >>"$GITHUB_OUTPUT"
       - if: steps.place.outputs.recheck == 'true'
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
         with:
