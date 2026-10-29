@@ -5,6 +5,9 @@ main="$HOME/.claude"
 marker=.claude-profile
 main_label="$main/.claude-profile-name"
 shared=(settings.json CLAUDE.md agents hooks rules shared infisical.md reference skills plugins projects plans file-history themes)
+# Claude Code creates these folders in ~/.claude only when the main account runs, and a profile cannot create one
+# through its link, so a profile's sessions on a fresh ~/.claude are never saved and `--resume` finds nothing.
+session_dirs=(projects plans file-history)
 self="$(readlink -f "${BASH_SOURCE[0]}")"
 # shellcheck disable=SC1091 # nix fmt checks claude-config-lock.sh on its own
 source "$(dirname "$self")/claude-config-lock.sh"
@@ -108,6 +111,7 @@ with_account() {
 
 link_shared() {
   local dir="$1" name bad=0
+  for name in "${session_dirs[@]}"; do mkdir -p "$main/$name" || bad=1; done
   for name in "${shared[@]}"; do
     if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
       ln -sfn "$main/$name" "$dir/$name"
@@ -198,7 +202,7 @@ row() {
   if [[ -n "$dir" ]]; then
     links=ok
     for f in "${shared[@]}"; do
-      [[ "$(readlink "$dir/$f")" == "$main/$f" ]] || links=broken
+      [[ "$(readlink "$dir/$f")" == "$main/$f" && -e "$dir/$f" ]] || links=broken
     done
   elif [[ -f "$main/.claude.json" ]]; then
     # A run with CLAUDE_CONFIG_DIR=~/.claude writes this second config, and a login there leaves
