@@ -67,12 +67,19 @@ case $(jq length <<<"$records") in
     [ "$(jq -r '.[0].type + " " + (.[0].proxied | tostring)' <<<"$records")" = "A false" ] ||
       die "$name has a record that is not a DNS-only A record; refusing to change it"
     have=$(jq -r '.[0].content' <<<"$records")
-    if [ "$have" = "$addr" ]; then
+    have_comment=$(jq -r '.[0].comment // ""' <<<"$records")
+    want_comment=$(jq -r '.comment' <<<"$body")
+    if [ "$have" = "$addr" ] && [ "$have_comment" = "$want_comment" ]; then
       echo "dns-record: A $name matches $addr"
       exit 0
     fi
     in_tailnet_range "$have" || die "$name points to $have, which is not a tailnet address; refusing to change it"
-    method=PUT path="/zones/$zone_id/dns_records/$(jq -r '.[0].id' <<<"$records")" change="move A $name from $have to $addr"
+    method=PUT path="/zones/$zone_id/dns_records/$(jq -r '.[0].id' <<<"$records")"
+    if [ "$have" = "$addr" ]; then
+      change="set the comment of A $name to: $want_comment"
+    else
+      change="move A $name from $have to $addr"
+    fi
     ;;
   *)
     die "$name has several records; refusing to change them"
