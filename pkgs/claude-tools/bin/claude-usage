@@ -267,7 +267,8 @@ def refresh(only: list[str]) -> dict:
 
 
 def combined(data: dict) -> list[dict]:
-    """One entry per account in accounts.json order, then any other name a host reported. The usage fields come from
+    """One entry per account in accounts.json order; a name a host reports that accounts.json does not list is left
+    out. Without a readable accounts.json the entries are the names the hosts report. The usage fields come from
     the newest reading on any host, a fresh one before a stale one; "read_on" names that host. "logins" holds one
     item per host: its state, login end and error, or state "missing" when a host that answered has no such account.
     A host whose cache could not be read and has no copy of it is left out."""
@@ -275,8 +276,8 @@ def combined(data: dict) -> list[dict]:
     hosts = [{"host": me, "local": True, "updated": data.get("updated"), "error": None,
               "accounts": data.get("accounts", [])}]
     hosts += [{**h, "local": False} for h in data.get("hosts", [])]
-    names = list((read_json(ACCOUNTS) or {}).get("accounts", {}))
-    names += [a["name"] for h in hosts for a in h["accounts"] if a["name"] not in names]
+    registry = (read_json(ACCOUNTS) or {}).get("accounts")
+    names = list(registry) if registry is not None else list(dict.fromkeys(a["name"] for h in hosts for a in h["accounts"]))
     result = []
     for n in names:
         logins, readings = [], []

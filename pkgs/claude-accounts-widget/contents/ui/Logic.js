@@ -34,12 +34,20 @@ function maxUsed(a) {
     return Math.max(f === null ? 0 : f, s === null ? 0 : s)
 }
 
+function listedNames(data) {
+    var names = {}, list = (data && data.combined) || []
+    for (var i = 0; i < list.length; i++)
+        names[list[i].name] = true
+    return names
+}
+
 function bestAccount(data) {
     var best = null, bestUsed = 0
+    var listed = listedNames(data)
     var list = (data && data.accounts) || []
     for (var i = 0; i < list.length; i++) {
         var a = list[i]
-        if (a.state !== "ok" && a.state !== "expiring")
+        if (!listed[a.name] || (a.state !== "ok" && a.state !== "expiring"))
             continue
         var u = maxUsed(a)
         if (u === null)
@@ -59,15 +67,15 @@ function needsLogin(a) {
 function anyNeedsLogin(data) {
     if (!data)
         return false
-    var i, j, list = data.accounts || []
+    var i, j, listed = listedNames(data), list = data.accounts || []
     for (i = 0; i < list.length; i++)
-        if (list[i].state !== "missing" && needsLogin(list[i]))
+        if (listed[list[i].name] && list[i].state !== "missing" && needsLogin(list[i]))
             return true
     var hosts = data.hosts || []
     for (j = 0; j < hosts.length; j++) {
         list = hosts[j].accounts || []
         for (i = 0; i < list.length; i++)
-            if (needsLogin(list[i]))
+            if (listed[list[i].name] && needsLogin(list[i]))
                 return true
     }
     return false
