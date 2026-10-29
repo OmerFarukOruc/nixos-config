@@ -273,6 +273,10 @@ let
       (colorizer dockStyle)
     ];
   };
+
+  claudeAccountsWidget = pkgs.callPackage ../../pkgs/claude-accounts-widget.nix {
+    claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
+  };
 in
 {
   options.oruc.plasma.claudeAccountsWidget = lib.mkEnableOption "the Claude accounts widget in the top bar";
@@ -284,10 +288,33 @@ in
       tahoe.task-manager
       tahoePlasmoids
     ]
-    ++ lib.optional config.oruc.plasma.claudeAccountsWidget (
-      pkgs.callPackage ../../pkgs/claude-accounts-widget.nix {
-        claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
-      }
+    ++ lib.optional config.oruc.plasma.claudeAccountsWidget claudeAccountsWidget;
+
+    # plasmashell loads a widget's QML once and keeps running it after a
+    # switch installs a new widget package, so a running plasmashell would
+    # call the tools of the old package. The stamp holds the widget path that
+    # the running plasmashell last loaded; a switch that changes it restarts
+    # plasmashell once, and a switch with no plasmashell running only records it.
+    home.activation.restartPlasmashellOnWidget = lib.mkIf config.oruc.plasma.claudeAccountsWidget (
+      let
+        systemctl = lib.getExe' pkgs.systemd "systemctl";
+      in
+      lib.hm.dag.entryAfter [ "reloadSystemd" ] ''
+        stamp="${config.xdg.stateHome}/plasmashell-widgets/claude-accounts-path"
+        if [[ "$(cat "$stamp" 2>/dev/null)" != "${claudeAccountsWidget}" && ! -v DRY_RUN ]]; then
+          runtime=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+          state=$(XDG_RUNTIME_DIR=$runtime ${systemctl} --user show -p ActiveState --value plasma-plasmashell.service 2>/dev/null || true)
+          if [[ $state == inactive || $state == failed ]] \
+            || { [[ $state == active ]] && XDG_RUNTIME_DIR=$runtime ${systemctl} --user restart plasma-plasmashell.service; }; then
+            { mkdir -p "''${stamp%/*}" && echo "${claudeAccountsWidget}" > "$stamp"; } \
+              || warnEcho "could not write $stamp; the next switch restarts plasmashell again."
+          else
+            warnEcho "plasmashell is ''${state:-unreachable} or did not restart; the Claude accounts widget runs its old code until the next switch or login."
+          fi
+          unset state runtime
+        fi
+        unset stamp
+      ''
     );
 
     # plasmashell caches compiled QML in qmlcache. A cache file is named after

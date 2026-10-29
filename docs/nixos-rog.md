@@ -343,7 +343,10 @@ the private checkout, because this repository is public.
 The Claude accounts widget in the top bar shows that file.
 `oruc.plasma.claudeAccountsWidget` installs it from
 `pkgs/claude-accounts-widget.nix` and puts it on the panel. Its Log in button
-opens a Ghostty window that runs `claude-accounts login`.
+opens a Ghostty window that runs `claude-accounts login`. plasmashell keeps the
+widget code it loaded, so a switch that installs a new widget package restarts
+`plasma-plasmashell` once (`restartPlasmashellOnWidget` in
+`home-manager/modules/plasma-panels.nix`), and the panels flicker.
 
 ## Heavy commands
 

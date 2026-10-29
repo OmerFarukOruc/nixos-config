@@ -46,7 +46,7 @@ Keep these true in every change:
 ## Changing the script
 
 1. Edit `bin/claude-accounts`. When the `claude` function needs new behaviour, add a subcommand to the script and call it from `claude-accounts.sh`; keep paths and names out of the shell config.
-2. Run `shellcheck -S warning bin/claude-accounts bin/claude-login-browser claude-accounts.sh` and `ruff check bin`; `nix fmt` checks only `*.sh` files. Both must print nothing.
+2. Run `nix fmt` from the repository root. It runs shellcheck on `bin/claude-accounts`, `bin/claude-login-browser` and `claude-accounts.sh`, and ruff with `ruff.toml` on the Python tools in `bin` (`tooling.nix`), and exits non-zero on a finding.
 3. Deploy, then run the script against the real accounts. The change is done when every one of these holds:
    - `claude-accounts list` shows every account with its email and `ok` links.
    - `claude-accounts update` prints `config: synced` for each profile with no running session and exits 0.
