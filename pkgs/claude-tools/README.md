@@ -18,7 +18,7 @@
 - `src/claude_tools`: the Python package, stdlib only. `cli.py` holds the argument parser. `commands/` holds one module per command with its workflow, and the modules beside it hold what several commands share: `settings.py` (paths and environment, read once per run), `accounts.py`, `usage.py` (reading and caching usage), `selection.py` (the account order), `terminal.py` and `picker.py` (cards and the account list), `herdr.py`, `agents.py` (Claude and codex processes in herdr panes), `transcripts.py`, `limits.py` and `inbox.py`.
 - `libexec/`: `claude-accounts`, which `claude-tools accounts` runs with the rest of its arguments; `login-browser`, the `BROWSER` of a login; `config-lock.sh`, the `.claude.json` lock that `claude-accounts` sources. They stay bash because the lock reads a file's birth time with `stat`, which Python 3.14 cannot read.
 - `share/claude-tools.sh`: the `claude` shell function and the completion of `claude-tools`, for zsh and bash. Home Manager's zsh sources it.
-- `pkgs/claude-tools.nix` builds the package with `buildPythonApplication` and writes the store paths into `settings.py`, `claude-accounts` and `claude-tools.sh` in place of `@bin@` and `@libexec@`.
+- `pkgs/claude-tools.nix` builds the package with `buildPythonApplication` and writes the store paths in place of `@libexec@` in `settings.py` and of `@bin@` in `claude-accounts` and `claude-tools.sh`.
 - The package holds no comments or docstrings: facts that are not usage live in this README, usage lives in `--help`, and lint settings live in `ruff.toml` and `.shellcheckrc`.
 
 ## Files and environment

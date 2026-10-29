@@ -8,10 +8,19 @@ from claude_tools.settings import ACCOUNTS_TOOL
 
 
 def accounts() -> dict[str, str]:
-    def run(*a: str) -> str:
-        return subprocess.run([str(ACCOUNTS_TOOL), *a], capture_output=True, text=True, check=True).stdout.strip()
+    try:
+        out = subprocess.run([str(ACCOUNTS_TOOL), "dirs"], capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise Failed(f"could not list the accounts: {e}") from e
+    return dict(line.split("\t", 1) for line in out.splitlines() if line)
 
-    return {n: run("dir", n) for n in run("names").split()}
+
+def env_for(base: dict, config_dir: str) -> dict:
+    env = dict(base)
+    env.pop("CLAUDE_CONFIG_DIR", None)
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    return env
 
 
 def folder(config_dir: str, home: Path) -> Path:

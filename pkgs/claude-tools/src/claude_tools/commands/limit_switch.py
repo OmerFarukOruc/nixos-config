@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import subprocess
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from datetime import datetime
 
 from claude_tools.accounts import account_of, accounts
@@ -14,13 +12,11 @@ from claude_tools.errors import Failed
 from claude_tools.limits import find_limit
 from claude_tools.selection import hold_limit, next_account
 from claude_tools.settings import Settings
-from claude_tools.store import read_json, write_json
+from claude_tools.store import locked, read_json, write_json
 from claude_tools.transcripts import session_of
-from claude_tools.usage import entries, run_refresh
 
 COOLDOWN = 300
 ENDED_KEEP = 30 * 86400
-REFRESH_TIMEOUT = 300
 
 
 def resume_args(argv: list[str], session: str) -> list[str]:
@@ -35,10 +31,11 @@ def resume_args(argv: list[str], session: str) -> list[str]:
     return [*out, "--resume", session]
 
 
-def to_restore(record: dict, live: set[str], server: str | None) -> list[str]:
+def to_restore(record: dict, live: Callable[[], set[str]], server: str | None) -> list[str]:
     if not server or not record or record.get("server") == server:
         return []
-    return [n for n in record.get("agents", {}) if n not in live]
+    running = live()
+    return [n for n in record.get("agents", {}) if n not in running]
 
 
 def next_record(record: dict, agents: dict, server: str, failed: list[str], now: float) -> dict:
@@ -63,14 +60,6 @@ def at(t: float | None) -> str:
     return datetime.fromtimestamp(t).astimezone().strftime("%a %H:%M") if t else "unknown"
 
 
-def meters(entry: dict) -> dict | None:
-    five, week = entry.get("five_hour"), entry.get("seven_day")
-    if entry.get("state") not in ("ok", "expiring") or not five:
-        return None
-    return {"session": round(five["used"]), "session_reset": five.get("resets_at"),
-            "week": round(week["used"]) if week else None, "week_reset": week.get("resets_at") if week else None}
-
-
 class Switcher:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -83,44 +72,14 @@ class Switcher:
         return read_json(self.state / name)
 
     def save(self, name: str, data: dict) -> None:
-        write_json(self.state / name, data)
-
-    @contextmanager
-    def locked(self) -> Iterator[None]:
-        self.state.mkdir(parents=True, exist_ok=True)
-        with (self.state / "lock").open("w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            yield
-
-    def accounts(self) -> dict[str, str]:
-        try:
-            return accounts()
-        except (OSError, subprocess.SubprocessError) as e:
-            raise Failed(f"could not list the accounts: {e}") from e
-
-    def read_usage(self, names: list[str]) -> dict[str, dict | None]:
-        if not names:
-            return {}
-        try:
-            run_refresh(names, None, REFRESH_TIMEOUT)
-        except (OSError, subprocess.TimeoutExpired) as e:
-            self.log(f"claude-tools usage failed: {e}")
-            return dict.fromkeys(names)
-        found = entries(self.settings)
-        out: dict[str, dict | None] = {}
-        for n in names:
-            e = found.get(n) or {}
-            out[n] = meters(e)
-            if out[n] is None:
-                self.log(f"usage of {n}: {e.get('state', 'no entry')}{': ' + e['error'] if e.get('error') else ''}")
-        return out
+        if data != self.load(name):
+            write_json(self.state / name, data)
 
     def resume_message(self, name: str, default: str) -> str:
         msg_file = self.settings.config / "resume" / name
         return msg_file.read_text().strip() if msg_file.is_file() else default
 
-    def switch(self, name: str, to: str | None, stay: bool = False) -> bool:
-        chosen = to is None
+    def switch(self, name: str, to: str | None, after_limit: bool = False) -> bool:
         agent = self.herdr("agent", "get", name)["result"]["agent"]
         if agent.get("agent") != "claude" or agent.get("agent_status") == "working":
             what = f"{agent['agent']} and {agent.get('agent_status')}" if agent.get("agent") else "no running agent"
@@ -130,23 +89,23 @@ class Switcher:
             raise Failed(f"herdr knows no session id for {name}; is the claude integration installed?")
         pane = agent["pane_id"]
         pid, argv, config_dir = self.agents.claude_process(pane)
-        dirs = self.accounts()
+        dirs = accounts()
         current = account_of(config_dir, dirs, self.settings.home)
         if to is None:
             try:
-                to = next_account(self.settings, None if stay else current)
+                to = next_account(self.settings, None if after_limit else current)
             except (OSError, subprocess.SubprocessError, ValueError) as e:
                 raise Failed(f"could not pick the next account: {e!r}") from e
             if to is None:
                 self.log(f"{name}: every other account is limited or unreadable; {name} stays on {current}")
                 return False
+            if to == current:
+                self.herdr("agent", "prompt", name, self.resume_message(name, (
+                    f"The usage limit of your Claude account {current} has reset. Continue where you stopped.")))
+                self.log(f"{name}: the limit of {current} has reset; told it to continue, session {session}")
+                return True
         elif to not in dirs:
             raise Failed(f"unknown account {to}")
-        if chosen and to == current:
-            self.herdr("agent", "prompt", name, self.resume_message(name, (
-                f"The usage limit of your Claude account {current} has reset. Continue where you stopped.")))
-            self.log(f"{name}: the limit of {current} has reset; told it to continue, session {session}")
-            return True
         self.agents.exit_claude(name, pid)
         try:
             self.agents.start_claude(pane, name, dirs[to], resume_args(argv[1:], session))
@@ -185,7 +144,7 @@ class Switcher:
 
     def restore(self, record: dict, server: str, wait: bool = True) -> list[str]:
         failed, tried = [], self.load("restore-failed.json")
-        for n in to_restore(record, self.live_names(), server):
+        for n in to_restore(record, self.live_names, server):
             r = record["agents"][n]
             if wait and tried.get(n, 0) > time.time() - COOLDOWN:
                 failed.append(n)
@@ -233,7 +192,7 @@ class Switcher:
             raise Failed(f"could not hold {current}: {e!r}") from e
         what = f"held until {at(held[0])} after a {held[1]}" if held else "not held, its limit has reset"
         self.log(f"{name}: {current} shows {hit!r}; {what}")
-        self.switch(name, None, stay=True)
+        self.switch(name, None, after_limit=True)
 
     def scan(self) -> int:
         server = self.herdr.ensure_server(self.log)
@@ -251,7 +210,7 @@ class Switcher:
             if not hit:
                 continue
             try:
-                dirs = dirs or self.accounts()
+                dirs = dirs or accounts()
                 self.move_limited(a, hit, dirs)
             except Failed as e:
                 failed += 1
@@ -280,16 +239,10 @@ class Switcher:
             self.save("switched.json", switched)
         return 0 if ok else 1
 
-    def print_usage(self, names: list[str]) -> int:
-        for n, u in self.read_usage(names or list(self.accounts())).items():
-            print(f"{n:12} " + (f"session {u['session']}% (resets {at(u['session_reset'])})  week {u['week']}% "
-                                f"(resets {at(u['week_reset'])})" if u else "no reading"))
-        return 0
-
 
 def run(settings: Settings, a: argparse.Namespace) -> int:
     s = Switcher(settings)
-    with s.locked():
+    with locked(s.state / "lock"):
         try:
             if a.cmd == "scan":
                 return s.scan()
@@ -297,9 +250,7 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
                 return s.restore_or_resume(None)
             if a.cmd == "resume":
                 return s.restore_or_resume(a.name)
-            if a.cmd == "switch":
-                return s.switch_now(a.name, a.to)
-            return s.print_usage(a.accounts)
+            return s.switch_now(a.name, a.to)
         except Failed as e:
             s.log(f"{a.cmd} failed: {e}")
             return 1
@@ -316,6 +267,4 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     sw.add_argument("name")
     sw.add_argument("--to", metavar="ACCOUNT")
     cmds.add_parser("resume", help="start a recorded agent that is not running").add_argument("name")
-    us = cmds.add_parser("usage", help="print the session and weekly meters of each account")
-    us.add_argument("accounts", nargs="*")
     ap.set_defaults(run=run)

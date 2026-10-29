@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import fcntl
 import http.client
 import json
 import os
-import shutil
 import socket
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import accounts, folder
-from claude_tools.settings import TOOL, Settings
-from claude_tools.store import read_json, write_json
+from claude_tools.accounts import accounts, env_for, folder
+from claude_tools.errors import Failed
+from claude_tools.settings import Settings
+from claude_tools.store import locked, now, read_json, write_json
 
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 FRESH = 300
@@ -24,10 +22,6 @@ EXPIRING = 5 * 86400
 PROBE_TIMEOUT = 90
 SSH_TIMEOUT = 20
 REMOTE_CACHE = ".cache/claude-tools/usage.json"
-
-
-def now() -> int:
-    return int(time.time())
 
 
 def oauth(config_dir: str, home: Path) -> dict:
@@ -119,9 +113,7 @@ def probe_windows(stdout: str) -> tuple[dict | None, str]:
 
 def probe(config_dir: str, probe_dir: Path) -> dict:
     probe_dir.mkdir(parents=True, exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CONFIG_DIR", "CLAUDE_TOOLS_ROTATE_ID")}
-    if config_dir:
-        env["CLAUDE_CONFIG_DIR"] = config_dir
+    env = env_for({k: v for k, v in os.environ.items() if k != "CLAUDE_TOOLS_ROTATE_ID"}, config_dir)
     cmd = ["claude", "-p", "--safe-mode", "--no-session-persistence", "--model", "haiku", "--max-turns", "1",
            "--output-format", "stream-json", "--verbose", "Reply with ok."]
     try:
@@ -214,14 +206,17 @@ def failed_entry(name: str, old: dict | None, error: Exception) -> dict:
             "source": "stale" if kept.get("five_hour") else None}
 
 
-def refresh(settings: Settings, only: list[str], deadline: float | None = None) -> dict:
+def by_name(data: dict) -> dict[str, dict]:
+    return {a["name"]: a for a in data.get("accounts", [])}
+
+
+def refresh(settings: Settings, dirs: dict[str, str], only: list[str], deadline: float | None) -> dict:
     data = load_cache(settings)
-    dirs = accounts()
     unknown = [n for n in only if n not in dirs]
     if unknown:
-        sys.exit(f"claude-tools usage: no account {', '.join(unknown)}; accounts: {', '.join(dirs)}")
-    old = {a["name"]: a for a in data.get("accounts", [])}
-    version = claude_version() if shutil.which("claude") else "2"
+        raise Failed(f"no account {', '.join(unknown)}; accounts: {', '.join(dirs)}")
+    old = by_name(data)
+    version = claude_version()
     result = []
     for n, d in dirs.items():
         if (only and n not in only or deadline and time.time() > deadline) and n in old:
@@ -242,24 +237,22 @@ def refresh(settings: Settings, only: list[str], deadline: float | None = None) 
 
 
 def locked_refresh(settings: Settings, only: list[str], max_age: int | None, deadline: float | None = None) -> dict:
-    settings.cache.mkdir(parents=True, exist_ok=True)
-    with (settings.cache / "lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    dirs = accounts()
+
+    def fresh(data: dict) -> bool:
+        return (max_age is not None and not only and now() - data.get("updated", 0) <= max_age
+                and sorted(by_name(data)) == sorted(dirs))
+
+    data = load_cache(settings)
+    if fresh(data):
+        return data
+    with locked(settings.cache / "lock"):
         data = load_cache(settings)
-        if (max_age is None or only or now() - data.get("updated", 0) > max_age
-                or sorted(x["name"] for x in data.get("accounts", [])) != sorted(accounts())):
-            data = refresh(settings, only, deadline)
-    return data
-
-
-def run_refresh(names: list[str], max_age: int | None, timeout: int) -> None:
-    cmd = [str(TOOL), "usage", "--quiet", *[x for n in names for x in ("--account", n)],
-           *(["--max-age", str(max_age)] if max_age is not None else [])]
-    subprocess.run(cmd, timeout=timeout, check=False, stdin=subprocess.DEVNULL)
+        return data if fresh(data) else refresh(settings, dirs, only, deadline)
 
 
 def entries(settings: Settings) -> dict[str, dict]:
-    return {a["name"]: a for a in load_cache(settings).get("accounts", [])}
+    return by_name(load_cache(settings))
 
 
 def combined(data: dict, accounts_file: Path) -> list[dict]:

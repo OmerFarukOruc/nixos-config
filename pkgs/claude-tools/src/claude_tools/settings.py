@@ -6,9 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-LIBEXEC = Path("@libexec@")
-TOOL = Path("@bin@") / "claude-tools"
-ACCOUNTS_TOOL = LIBEXEC / "claude-accounts"
+ACCOUNTS_TOOL = Path("@libexec@") / "claude-accounts"
 
 
 @dataclass(frozen=True)

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import fcntl
 import re
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from claude_tools.store import read_json, write_json
+from claude_tools.store import locked, now, read_json, write_json
 
 NO_RESET_WAIT = 3600
 TAIL = 6
@@ -27,10 +25,8 @@ def find_limit(screen: str) -> str | None:
         if lines[i].lstrip().startswith("❯") and lines[i - 1].lstrip().startswith("─"):
             end = i - 1
             break
-    for line in reversed([x for x in lines[:end] if x.strip()][-TAIL:]):
-        if parse_limit(line, int(time.time())):
-            return line.strip()
-    return None
+    return next((line.strip() for line in reversed([x for x in lines[:end] if x.strip()][-TAIL:])
+                 if LIMIT.search(line) or MODEL_LIMIT.search(line)), None)
 
 
 def parse_reset(text: str, at: int, window: int) -> int | None:
@@ -43,19 +39,16 @@ def parse_reset(text: str, at: int, window: int) -> int | None:
         return None
     clock = {"hour": int(m["h"]) % 12 + (12 if m["ap"] == "pm" else 0), "minute": int(m["m"] or 0), "second": 0,
              "microsecond": 0}
+
+    def step(t: datetime, n: int) -> datetime:
+        return t.replace(year=t.year + n) if m["mon"] else (t + timedelta(days=n)).replace(**clock)
+
     try:
-        if m["mon"]:
-            t = local.replace(month=MONTHS.index(m["mon"]) + 1, day=int(m["day"]), **clock)
-            if t.timestamp() <= at:
-                t = t.replace(year=t.year + 1)
-            if t.timestamp() - at > window:
-                t = t.replace(year=t.year - 1)
-        else:
-            t = local.replace(**clock)
-            if t.timestamp() <= at:
-                t = (t + timedelta(days=1)).replace(**clock)
-            if t.timestamp() - at > window:
-                t = (t - timedelta(days=1)).replace(**clock)
+        t = local.replace(**clock, **({"month": MONTHS.index(m["mon"]) + 1, "day": int(m["day"])} if m["mon"] else {}))
+        if t.timestamp() <= at:
+            t = step(t, 1)
+        if t.timestamp() - at > window:
+            t = step(t, -1)
     except ValueError:
         return None
     return int(t.timestamp())
@@ -84,7 +77,5 @@ def holds(path: Path, at: int) -> dict[str, dict]:
 
 
 def hold(path: Path, name: str, until: int, reason: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.with_suffix(".lock").open("w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        write_json(path, {**holds(path, int(time.time())), name: {"until": until, "reason": reason}})
+    with locked(path.with_suffix(".lock")):
+        write_json(path, {**holds(path, now()), name: {"until": until, "reason": reason}})

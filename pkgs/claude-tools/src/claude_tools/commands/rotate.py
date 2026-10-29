@@ -13,14 +13,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import accounts
+from claude_tools.accounts import account_of, accounts, env_for
 from claude_tools.agents import sessions
-from claude_tools.limits import NO_RESET_WAIT, holds
+from claude_tools.errors import Failed
+from claude_tools.limits import NO_RESET_WAIT
 from claude_tools.picker import CANCELLED, PICKED, Picker
-from claude_tools.selection import best, free_at, hold_limit, next_account
+from claude_tools.selection import best, free_at, held_names, hold_limit, next_account
 from claude_tools.settings import Settings
-from claude_tools.store import append_event
-from claude_tools.usage import load_cache, locked_refresh, now
+from claude_tools.store import append_event, now, read_json
+from claude_tools.usage import by_name, load_cache, locked_refresh
 
 CACHE_MAX_AGE = 900
 MIN_WAIT = 60
@@ -48,16 +49,14 @@ class Rotation:
         print(f"claude-tools rotate: {msg}", file=sys.stderr, flush=True)
         self.log(msg)
 
-    def held(self) -> set[str]:
-        return set(holds(self.settings.holds_file, now()))
-
     def choose(self, recommend: str | None) -> str | None:
         cursor = recommend
         while True:
             by_dir = sessions(self.settings.home)
             live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
             try:
-                picker = Picker(self.dirs, load_cache(self.settings), live, self.held(), cursor, self.settings.color)
+                picker = Picker(self.dirs, load_cache(self.settings), live, held_names(self.settings), cursor,
+                                self.settings.color)
                 outcome, name = picker.run()
             except Exception as e:
                 self.say(f"the account picker failed ({e!r})")
@@ -70,7 +69,7 @@ class Rotation:
             print("claude-tools rotate: checking every account's usage…", file=sys.stderr, flush=True)
             try:
                 locked_refresh(self.settings, self.names, None)
-            except (OSError, subprocess.SubprocessError, ValueError) as e:
+            except (OSError, ValueError, Failed) as e:
                 self.say(f"could not check the accounts' usage ({e})")
 
     def after_limit(self, current: str, hook: dict) -> str | None:
@@ -183,7 +182,7 @@ def option_values(args: list[str], i: int, kind: str) -> list[str]:
     return taken
 
 
-def resume_args(args: list[str], opts: dict[str, str], session: str, message: str) -> list[str]:
+def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
     out, i = [], 0
     while i < len(args):
         a = args[i]
@@ -197,15 +196,7 @@ def resume_args(args: list[str], opts: dict[str, str], session: str, message: st
         i += len(taken)
         if name not in SESSION_FLAGS:
             out += [a, *taken]
-    return [*out, "--resume", session, message]
-
-
-def env_for(base: dict, config_dir: str) -> dict:
-    env = dict(base)
-    env.pop("CLAUDE_CONFIG_DIR", None)
-    if config_dir:
-        env["CLAUDE_CONFIG_DIR"] = config_dir
-    return env
+    return out
 
 
 def exit_code(code: int) -> int:
@@ -236,10 +227,7 @@ class Runner:
     def limit_hit(self, flag: Path) -> dict | None:
         if self.quit or not flag.exists():
             return None
-        try:
-            data = json.loads(flag.read_text())
-        except (OSError, json.JSONDecodeError):
-            data = {}
+        data = read_json(flag)
         flag.unlink(missing_ok=True)
         return data if data.get("session_id") else None
 
@@ -282,8 +270,8 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
         if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
         data = locked_refresh(r.settings, [], CACHE_MAX_AGE)
-        current = best(r.settings, {a["name"]: a for a in data.get("accounts", [])}, r.names)
-    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as e:
+        current = best(r.settings, by_name(data), r.names)
+    except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
     if r.settings.pick:
@@ -292,7 +280,10 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
             raise SystemExit(0)
         current = chosen or current
     if current is None:
-        current = next((n for n, d in r.dirs.items() if d == r.settings.config_dir), r.names[0] if r.names else "")
+        try:
+            current = account_of(r.settings.config_dir, r.dirs, r.settings.home)
+        except Failed:
+            current = r.names[0] if r.names else ""
         r.say(f"every account is limited or unreadable; starting on {current}")
         time.sleep(1)
     return current
@@ -353,8 +344,8 @@ def run(settings: Settings, args: list[str]) -> int:
             message = (f"Your Claude account {current} hit its usage limit, so claude-tools rotate resumed this "
                        f"session on the {nxt} account. Continue where you stopped.")
         runner.stop()
-        argv = ["claude", *resume_args(args, opts, session, message)]
-        args = argv[1:-3]
+        args = carried_args(args, opts)
+        argv = ["claude", *args, "--resume", session, message]
         current = nxt
 
 

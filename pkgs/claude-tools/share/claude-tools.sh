@@ -46,13 +46,13 @@ _claude_tools_words() {
   case "$2" in
     accounts)
       if [ "$1" -eq 2 ]; then
-        echo list add rename update prefs delete login login-window login-all names dir --watch --json --cached
+        echo list add rename update prefs delete login login-window login-all names dir dirs --watch --json --cached
       else
         "@bin@/claude-tools" accounts names
       fi
       ;;
-    usage) echo --json --cached --max-age --account --quiet --watch --order --held --skip ;;
-    limit-switch) if [ "$1" -eq 2 ]; then echo scan restore switch resume usage; fi ;;
+    usage) echo --json --cached --max-age --account --quiet --watch --order --skip ;;
+    limit-switch) if [ "$1" -eq 2 ]; then echo scan restore switch resume; fi ;;
     agent) if [ "$1" -eq 2 ]; then echo start stop peek; fi ;;
     orch) if [ "$1" -eq 2 ]; then echo notify watch; fi ;;
   esac

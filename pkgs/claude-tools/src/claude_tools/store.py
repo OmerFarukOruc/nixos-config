@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import tempfile
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 EVENTS_MAX = 1 << 20
+
+
+def now() -> int:
+    return int(time.time())
+
+
+@contextmanager
+def locked(path: Path) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
 
 
 def read_json(path: Path) -> dict:

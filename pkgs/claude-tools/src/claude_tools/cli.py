@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from claude_tools.commands import agent, limit_switch, orch, rotate, usage
+from claude_tools.errors import Failed
 from claude_tools.settings import ACCOUNTS_TOOL, Settings
 
 
@@ -27,10 +28,14 @@ def main(argv: list[str] | None = None) -> int:
     local_bin = str(Path.home() / ".local/bin")
     if local_bin not in os.environ.get("PATH", "").split(":"):
         os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
-    settings = Settings.from_env(os.environ)
     if argv[:1] == ["accounts"]:
         os.execv(ACCOUNTS_TOOL, [str(ACCOUNTS_TOOL), *argv[1:]])
+    settings = Settings.from_env(os.environ)
     if argv[:1] == ["rotate"]:
         return rotate.run(settings, argv[1:])
     a = parser().parse_args(argv)
-    return a.run(settings, a)
+    try:
+        return a.run(settings, a)
+    except Failed as e:
+        print(f"claude-tools {a.command}: {e}", file=sys.stderr)
+        return 1

@@ -10,9 +10,7 @@ python3Packages.buildPythonApplication {
   build-system = [ python3Packages.setuptools ];
   buildInputs = [ bash ];
   postPatch = ''
-    substituteInPlace src/claude_tools/settings.py \
-      --replace-fail @libexec@ $out/libexec/claude-tools \
-      --replace-fail @bin@ $out/bin
+    substituteInPlace src/claude_tools/settings.py --replace-fail @libexec@ $out/libexec/claude-tools
     substituteInPlace libexec/claude-accounts share/claude-tools.sh --replace-fail @bin@ $out/bin
   '';
   postInstall = ''

@@ -5,7 +5,8 @@ import re
 from claude_tools.accounts import accounts
 from claude_tools.limits import NO_RESET_WAIT, WINDOWS, full_window, hold, holds, parse_limit
 from claude_tools.settings import Settings
-from claude_tools.usage import entries, locked_refresh, now
+from claude_tools.store import now
+from claude_tools.usage import by_name, entries, locked_refresh
 
 SESSION_MAX, WEEK_MAX = 90, 95
 EVEN_BURN = 20
@@ -14,6 +15,7 @@ REFRESH_BUDGET = 120
 RECENT = 60
 FIRST, TEAM, RESERVE, BLOCKED = range(4)
 GROUPS = ("first", "team", "reserve", "blocked")
+CAPS = (("five_hour", SESSION_MAX), ("seven_day", WEEK_MAX))
 
 
 def span(seconds: float) -> str:
@@ -45,6 +47,10 @@ def burn(readings: list[dict], at: int) -> float:
     return max(total, EVEN_BURN)
 
 
+def readable(e: dict) -> bool:
+    return e.get("state") in ("ok", "expiring") and bool(e.get("five_hour") or e.get("seven_day"))
+
+
 def blocked(e: dict, held: bool, at: int) -> str | None:
     if e.get("state") == "logged-out":
         return "logged out"
@@ -52,13 +58,12 @@ def blocked(e: dict, held: bool, at: int) -> str | None:
         return "held back after a limit"
     if not e.get("five_hour") and not e.get("seven_day"):
         return "no reading yet"
-    if e.get("state") not in ("ok", "expiring"):
+    if not readable(e):
         return "usage unreadable"
-    five, week = window_now(e.get("five_hour"), at)[0], window_now(e.get("seven_day"), at)[0]
-    if five >= SESSION_MAX:
-        return f"5h at {five:.0f}%"
-    if week >= WEEK_MAX:
-        return f"7d at {week:.0f}%"
+    for (key, cap), label in zip(CAPS, ("5h", "7d")):
+        used = window_now(e.get(key), at)[0]
+        if used >= cap:
+            return f"{label} at {used:.0f}%"
     return None
 
 
@@ -103,17 +108,20 @@ def order(readings: dict[str, dict], names: list[str], held: set[str], at: int) 
     return [(n, key[0], why) for key, n, why in sorted(ranked)]
 
 
+def held_names(settings: Settings) -> set[str]:
+    return set(holds(settings.holds_file, now()))
+
+
+def ranked(settings: Settings, readings: dict[str, dict], names: list[str]) -> list[tuple[str, int, str]]:
+    return order(readings, names, held_names(settings), now())
+
+
+def startable(settings: Settings, readings: dict[str, dict], names: list[str]) -> list[str]:
+    return [n for n, g, _ in ranked(settings, readings, names) if g != BLOCKED]
+
+
 def best(settings: Settings, readings: dict[str, dict], names: list[str]) -> str | None:
-    at = now()
-    return next((n for n, g, _ in order(readings, names, set(holds(settings.holds_file, at)), at) if g != BLOCKED),
-                None)
-
-
-def startable(settings: Settings, skip: set[str]) -> list[str]:
-    at = now()
-    names = [n for n in accounts() if n not in skip]
-    held = set(holds(settings.holds_file, at))
-    return [n for n, g, _ in order(entries(settings), names, held, at) if g != BLOCKED]
+    return next(iter(startable(settings, readings, names)), None)
 
 
 def next_account(settings: Settings, skip: str | None) -> str | None:
@@ -123,7 +131,7 @@ def next_account(settings: Settings, skip: str | None) -> str | None:
     fresh = [n for n in names if n not in held and at - ((readings.get(n) or {}).get("checked") or 0) > RECENT]
     if fresh:
         data = locked_refresh(settings, fresh, None, at + REFRESH_BUDGET)
-        readings = {a["name"]: a for a in data.get("accounts", [])}
+        readings = by_name(data)
     return best(settings, readings, names)
 
 
@@ -132,10 +140,10 @@ def free_at(settings: Settings, names: list[str], at: int) -> int | None:
     times = []
     for n in names:
         e = readings.get(n) or {}
-        if e.get("state") not in ("ok", "expiring") or not (e.get("five_hour") or e.get("seven_day")):
+        if not readable(e):
             continue
         t = held.get(n, {}).get("until", at)
-        for key, cap in (("five_hour", SESSION_MAX), ("seven_day", WEEK_MAX)):
+        for key, cap in CAPS:
             used, reset = window_now(e.get(key), at)
             if used >= cap:
                 t = max(t, reset)
@@ -147,8 +155,7 @@ def hold_limit(settings: Settings, name: str, text: str) -> tuple[int, str] | No
     at = now()
     until, reason = parse_limit(text, at) or (None, "limit")
     if until is None:
-        data = locked_refresh(settings, [name], None)
-        entry = next((a for a in data.get("accounts", []) if a["name"] == name), {})
+        entry = by_name(locked_refresh(settings, [name], None)).get(name, {})
         until, reason = full_window(entry, at) or (at + NO_RESET_WAIT, f"{reason} with no full window")
     if until <= at:
         return None

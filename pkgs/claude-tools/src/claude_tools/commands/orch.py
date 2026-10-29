@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import fcntl
-import json
 import os
 import re
 import signal
@@ -50,13 +49,12 @@ def say(msg: str) -> None:
     print(f"{datetime.now(UTC).strftime('%H:%M:%S')} {msg}", flush=True)
 
 
-def agent_of(herdr: str, pane: str) -> str | None:
+def agent_of(settings: Settings, pane: str) -> str | None:
     if not pane:
         return None
     try:
-        p = subprocess.run([herdr, "agent", "list"], capture_output=True, text=True, timeout=30, check=False)
-        agents = json.loads(p.stdout)["result"]["agents"]
-    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError):
+        agents = Herdr(settings).agents()
+    except (OSError, subprocess.TimeoutExpired, KeyError, Failed):
         return None
     return next((a["name"] for a in agents if a.get("pane_id") == pane), None)
 
@@ -65,7 +63,7 @@ def notify(settings: Settings, a: argparse.Namespace) -> int:
     text = " ".join(a.text)
     if not text.strip():
         a.parser.error("TEXT is empty")
-    agent = re.sub(r"\s+", "_", (a.agent or "").strip()) or agent_of(settings.herdr, settings.herdr_pane)
+    agent = re.sub(r"\s+", "_", (a.agent or "").strip()) or agent_of(settings, settings.herdr_pane)
     if not agent:
         print("claude-tools orch notify: no agent name found for this pane, sent as unknown; pass --from NAME",
               file=sys.stderr)

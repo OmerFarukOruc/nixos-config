@@ -36,6 +36,7 @@ usage: claude-tools accounts [command]
                     --list only prints them
   names             print every account name, sorted
   dir NAME          print the CLAUDE_CONFIG_DIR value for NAME; empty means unset it
+  dirs              print NAME, a tab and its CLAUDE_CONFIG_DIR value for every account, sorted
 NAME is lowercase letters, digits, and dashes. The ~/.claude account is called "main" until renamed.
 \`claude\` itself rotates between the accounts, and \`claude --account NAME\` runs one session on NAME
 (share/claude-tools/claude-tools.sh of nixos-config pkgs/claude-tools).
@@ -84,6 +85,14 @@ profile_folder() {
 }
 
 all_names() { { main_name; profile_names; } | sort; }
+
+all_dirs() {
+  local d
+  {
+    printf '%s\t\n' "$(main_name)"
+    while read -r d; do printf '%s\t%s\n' "$(folder_name "$d")" "$d"; done < <(profile_folders)
+  } | sort -t $'\t' -k1,1
+}
 
 taken() { is_main "$1" || profile_folder "$1" >/dev/null 2>&1; }
 
@@ -468,5 +477,6 @@ case "${1:-}" in
   login-all) cmd_login_all "${@:2}" ;;
   names) all_names ;;
   dir) config_dir "${2:-}" ;;
+  dirs) all_dirs ;;
   *) usage ;;
 esac

@@ -4,18 +4,17 @@ import argparse
 import json
 import shutil
 import socket
-import subprocess
 import sys
 import time
 from datetime import datetime
 
 from claude_tools.accounts import accounts
 from claude_tools.agents import sessions
-from claude_tools.limits import holds
-from claude_tools.selection import GROUPS, order, startable
+from claude_tools.errors import Failed
+from claude_tools.selection import GROUPS, ranked, startable
 from claude_tools.settings import Settings
 from claude_tools.terminal import Cards
-from claude_tools.usage import combined, load_cache, locked_refresh, now
+from claude_tools.usage import by_name, combined, entries, load_cache, locked_refresh
 
 WATCH_EVERY = 30
 WATCH_MAX_AGE = 300
@@ -25,7 +24,7 @@ def show(settings: Settings, data: dict) -> str:
     try:
         by_dir = sessions(settings.home)
         live = {n: by_dir[d] for n, d in accounts().items() if by_dir.get(d)}
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, Failed):
         live = {}
     color = sys.stdout.isatty() and settings.color
     host = data.get("host") or socket.gethostname()
@@ -54,17 +53,17 @@ def watch(settings: Settings, max_age: int) -> int:
 
 def run(settings: Settings, a: argparse.Namespace) -> int:
     if a.order:
-        for n in startable(settings, set(a.skip)):
+        for n in startable(settings, entries(settings), [n for n in accounts() if n not in a.skip]):
             print(n)
         return 0
     if a.watch:
         return watch(settings, WATCH_MAX_AGE if a.max_age is None else a.max_age)
     data = load_cache(settings) if a.cached else locked_refresh(settings, a.account, a.max_age)
     if a.json:
-        at, readings = now(), {x["name"]: x for x in data.get("accounts", [])}
-        ranked = order(readings, list(readings), set(holds(settings.holds_file, at)), at)
+        readings = by_name(data)
         print(json.dumps({**data, "combined": combined(data, settings.accounts_file),
-                          "order": [{"name": n, "group": GROUPS[g], "why": why} for n, g, why in ranked]}, indent=1))
+                          "order": [{"name": n, "group": GROUPS[g], "why": why}
+                                    for n, g, why in ranked(settings, readings, list(readings))]}, indent=1))
     elif not a.quiet:
         print(show(settings, data))
     return 0
