@@ -80,6 +80,19 @@ let
         --run 'if [ -z "''${SSH_CONNECTION:-}" ]; then export GROK_CLIPBOARD_NO_OSC52=1; fi'
     '';
   };
+  # Ghostty hands a clicked ~/ path to xdg-open as written, and xdg-utils does
+  # not expand the tilde: https://github.com/ghostty-org/ghostty/pull/5813
+  xdgOpen = pkgs.writeShellApplication {
+    name = "xdg-open";
+    text = ''
+      if [[ $# -eq 1 && ''${HOME:-} == /* ]]; then
+        case $1 in
+          \~ | \~/*) set -- "$HOME''${1#\~}" ;;
+        esac
+      fi
+      exec ${lib.getExe' pkgs.xdg-utils "xdg-open"} "$@"
+    '';
+  };
   # Skipped without a graphical user. They stay in the list below, and the list
   # is filtered, so that the order of the packages on a desktop stays as it is.
   desktopPackages = [
@@ -131,6 +144,7 @@ in
       grok
       opencode
     ]
+    ++ lib.optional hasDesktop xdgOpen
   );
 
   programs.mcp = {
