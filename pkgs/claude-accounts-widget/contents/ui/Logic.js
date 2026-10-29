@@ -1,11 +1,11 @@
 .pragma library
 
 var namePattern = /^[a-z0-9][a-z0-9.-]*$/
-var usageBin = "@claudeTools@/bin/claude-tools usage"
-var accountsBin = "@claudeTools@/bin/claude-tools accounts"
+var usageCommand = "@claudeTools@/bin/claude-tools usage"
+var accountsCommand = "@claudeTools@/bin/claude-tools accounts"
 
-var pollCommand = "sh -c '" + usageBin + " --json --cached'"
-var refreshCommand = "sh -c '" + usageBin + " --json --max-age 60'"
+var pollCommand = "sh -c '" + usageCommand + " --json --cached'"
+var refreshCommand = "sh -c '" + usageCommand + " --json --max-age 60'"
 
 // Returns null for a name or host that the shell could read as more than a word.
 function loginCommand(name, host) {
@@ -13,7 +13,7 @@ function loginCommand(name, host) {
         return null
     if (host && !namePattern.test(host))
         return null
-    return "sh -c '" + accountsBin + " login-window " + name + (host ? " --on " + host : "") + "'"
+    return "sh -c '" + accountsCommand + " login-window " + name + (host ? " --on " + host : "") + "'"
 }
 
 function parse(stdout) {

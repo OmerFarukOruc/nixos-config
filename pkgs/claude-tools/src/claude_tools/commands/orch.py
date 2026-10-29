@@ -19,7 +19,6 @@ from claude_tools.inbox import KINDS, Inbox, append, format_record, record
 from claude_tools.settings import Settings
 from claude_tools.transcripts import answer_of, status_line
 
-DEFAULT_NAMES = r"coolify-naming|infra-docs|scraper-ci|env-improve|followups-fix|rebase-two|gd-.*|gastro-thermo"
 POLL = 5
 TAKEOVER_WAIT_S = 10
 LOAD_PER_CORE = 2
@@ -49,12 +48,17 @@ def say(msg: str) -> None:
     print(f"{datetime.now(UTC).strftime('%H:%M:%S')} {msg}", flush=True)
 
 
+def say_each(lines: list[str]) -> None:
+    for line in lines:
+        say(line)
+
+
 def agent_of(settings: Settings, pane: str) -> str | None:
     if not pane:
         return None
     try:
         agents = Herdr(settings).agents()
-    except (OSError, subprocess.TimeoutExpired, KeyError, Failed):
+    except (KeyError, Failed):
         return None
     return next((a["name"] for a in agents if a.get("pane_id") == pane), None)
 
@@ -232,7 +236,7 @@ class Watcher:
 
 def watch(settings: Settings, a: argparse.Namespace) -> int:
     inbox = Inbox(settings.inbox)
-    watcher = Watcher(settings, re.compile(a.names or DEFAULT_NAMES))
+    watcher = Watcher(settings, re.compile(a.names))
     _lock, replaced = take_over(inbox.path.with_name(inbox.path.name + ".watcher"))
 
     def stopped(*_: object) -> None:
@@ -247,7 +251,7 @@ def watch(settings: Settings, a: argparse.Namespace) -> int:
     failing: dict[str, str] = {}
     while True:
         guarded("inbox", lambda: inbox.poll(lambda line: print(format_record(line), flush=True)), failing)
-        guarded("host meters", lambda: [say(line) for line in edges(over, meters())], failing)
+        guarded("host meters", lambda: say_each(edges(over, meters())), failing)
         guarded("agents", watcher.poll, failing)
         time.sleep(POLL)
 
@@ -265,7 +269,7 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                          description="Wake the orchestrator: print one line for each event in a herdr session, so a "
                                      "Monitor on it delivers them.",
                          epilog=WATCH_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
-    wt.add_argument("names", nargs="?", metavar="NAME-REGEX",
-                    help="must match a whole agent name; the default is a fixed list of agent names, so reviewer "
-                         "subagents do not wake the orchestrator")
+    wt.add_argument("names", metavar="NAME-REGEX",
+                    help="must match a whole agent name, so agents outside it, such as reviewer subagents, do not "
+                         "wake the orchestrator")
     wt.set_defaults(run=watch)

@@ -27,9 +27,10 @@ def locked(path: Path) -> Iterator[None]:
 
 def read_json(path: Path) -> dict:
     try:
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def write_json(path: Path, data: dict) -> None:

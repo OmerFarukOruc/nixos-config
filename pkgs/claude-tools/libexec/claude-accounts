@@ -360,11 +360,13 @@ login_remote() {
   return "$rc"
 }
 
+# shellcheck disable=SC2029
 cleanup_remote() {
   [[ -z "$tunnel" ]] || kill "$tunnel" 2>/dev/null || true
   ssh "${ssh_opts[@]}" "$login_host" "tmux kill-session -t $login_session 2>/dev/null; rm -f /tmp/$login_session.url /tmp/$login_session.rc" || true
 }
 
+# shellcheck disable=SC2029
 login_remote_run() {
   local name="$1" host="$2" brave s url port code rc="" remote_cmd deadline
   brave="$(account_field "$name" brave_profile)"

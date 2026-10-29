@@ -6,14 +6,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from claude_tools.errors import Failed
+from claude_tools.errors import Failed, HerdrError
 from claude_tools.settings import Settings
 
 SERVER_WAIT_S = 30
-
-
-def error_code(e: Failed) -> str:
-    return str(e).rsplit(": ", 1)[-1]
 
 
 class Herdr:
@@ -25,21 +21,24 @@ class Herdr:
         self.socket = str(base / "sessions" / self.session / "herdr.sock" if self.session else base / "herdr.sock")
 
     def __call__(self, *args: str, check: bool = True) -> dict:
-        p = subprocess.run([*self.cmd, *args], capture_output=True, text=True, timeout=300, check=False)
+        try:
+            p = subprocess.run([*self.cmd, *args], capture_output=True, text=True, timeout=300, check=False)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise HerdrError(f"herdr {' '.join(args[:2])}: {e}") from e
         try:
             data = json.loads(p.stdout or p.stderr or "{}")
         except json.JSONDecodeError:
             data = {}
         if check and p.returncode != 0:
-            err = data.get("error") or {}
-            raise Failed(f"herdr {args[0]} {args[1]}: {err.get('code') or p.stderr.strip()[:200]}")
+            code = (data.get("error") or {}).get("code")
+            raise HerdrError(f"herdr {args[0]} {args[1]}: {code or p.stderr.strip()[:200]}", code)
         return data
 
     def screen(self, name: str, source: str = "visible", lines: int = 0) -> str:
         args = [*self.cmd, "agent", "read", name, "--source", source, *(["--lines", str(lines)] if lines else [])]
         try:
             return subprocess.run(args, capture_output=True, text=True, timeout=60, check=False).stdout
-        except subprocess.TimeoutExpired:
+        except (OSError, subprocess.TimeoutExpired):
             return ""
 
     def agents(self) -> list[dict]:

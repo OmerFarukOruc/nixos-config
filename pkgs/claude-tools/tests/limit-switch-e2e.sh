@@ -33,7 +33,7 @@ claude_in() {
   for p in $(pgrep -x 'claude|\.claude-wrapped'); do
     env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
     if grep -qx "HERDR_PANE_ID=$1" <<<"$env" && grep -qx "HERDR_SOCKET_PATH=$sock" <<<"$env"; then
-      printf '%s\t%s\n' "$(sed -n 's/^CLAUDE_CONFIG_DIR=//p' <<<"$env")" "$(tr '\0' ' ' <"/proc/$p/cmdline")"
+      printf '%s\t%s\t%s\n' "$(sed -n 's/^CLAUDE_CONFIG_DIR=//p' <<<"$env")" "$(tr '\0' ' ' <"/proc/$p/cmdline")" "$p"
       return
     fi
   done
@@ -155,14 +155,22 @@ first=$(account "$pane")
 old=$(date -u -d '-1 hour' +%s)
 ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$old" +%-I:%M%P) (UTC)"
 rm -f "$state/switched.json"
+profiles names | jq -R . | jq -s --arg keep "$first" --argjson u "$(($(date +%s) + 3600))" \
+  'map(select(. != $keep) | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"
+pid=$(claude_in "$pane" | cut -f3)
+moves=$(grep -c "$name: moved from" "$state/events.log")
 cls scan || fail "scan after an old limit message exited $?"
 jq -e --arg a "$first" 'has($a) | not' "$dir/state/limits.json" >/dev/null ||
   fail "scan held $first after a limit message whose reset has passed: $(jq -c . "$dir/state/limits.json")"
 grep -q "$name: $first shows .*; not held, its limit has reset" "$state/events.log" ||
   fail "scan did not log the old limit message as reset"
+grep -q "$name: the limit of $first has reset; told it to continue" "$state/events.log" ||
+  fail "scan did not prompt the agent on its own account"
+[[ "$(grep -c "$name: moved from" "$state/events.log")" == "$moves" ]] || fail "scan moved the agent although $first was the only free account"
+[[ "$(claude_in "$pane" | cut -f3)" == "$pid" ]] || fail "scan restarted claude although it only had to prompt it"
+rm "$dir/state/limits.json"
 check_agent "scan after an old limit message"
-first=$(account "$pane")
-echo "old limit: scan held nothing and the agent runs on $first"
+echo "old limit: scan only prompted the agent, which stays on $first"
 
 h server stop >/dev/null
 for _ in $(seq 30); do

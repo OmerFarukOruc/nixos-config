@@ -8,7 +8,7 @@ from pathlib import Path
 
 from claude_tools.accounts import accounts, config_dir_of
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
-from claude_tools.errors import Failed
+from claude_tools.errors import Failed, NoProcess
 from claude_tools.settings import Settings
 from claude_tools.transcripts import answer_of, session_of, status_line
 
@@ -122,9 +122,7 @@ def stop(settings: Settings, a: argparse.Namespace) -> None:
     agent = data["result"]["agent"]
     try:
         ag.exit_claude(a.name, ag.claude_process(agent["pane_id"])[0])
-    except Failed as e:
-        if not str(e).startswith("no claude process"):
-            raise
+    except NoProcess:
         try:
             pid = ag.codex_process(agent["pane_id"])
         except Failed as e2:

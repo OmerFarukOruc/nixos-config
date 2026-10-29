@@ -8,6 +8,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +22,7 @@ FRESH = 300
 EXPIRING = 5 * 86400
 PROBE_TIMEOUT = 90
 SSH_TIMEOUT = 20
+CHECK_WORKERS = 4
 REMOTE_CACHE = ".cache/claude-tools/usage.json"
 
 
@@ -210,28 +212,37 @@ def by_name(data: dict) -> dict[str, dict]:
     return {a["name"]: a for a in data.get("accounts", [])}
 
 
-def refresh(settings: Settings, dirs: dict[str, str], only: list[str], deadline: float | None) -> dict:
+def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: int | None,
+            deadline: float | None) -> dict:
     data = load_cache(settings)
     unknown = [n for n in only if n not in dirs]
     if unknown:
         raise Failed(f"no account {', '.join(unknown)}; accounts: {', '.join(dirs)}")
-    old = by_name(data)
-    version = claude_version()
+    old, at = by_name(data), now()
+    keep = {n for n in dirs if n in old and (only and n not in only or max_age is not None
+                                             and at - (old[n].get("checked") or 0) <= max_age)}
+    me = socket.gethostname()
+    hosts = [] if only else [h for h in read_json(settings.accounts_file).get("remote_hosts", {}).get(me, []) if h != me]
+    old_hosts = {h["host"]: h for h in data.get("hosts", [])}
+    version = claude_version() if len(keep) < len(dirs) else ""
+    pool = ThreadPoolExecutor(CHECK_WORKERS)
+    checks = {n: pool.submit(check, settings, d, old.get(n), version) for n, d in dirs.items() if n not in keep}
+    reads = [pool.submit(remote, h, old_hosts.get(h), settings.read_key) for h in hosts]
+    wait([f for n, f in checks.items() if n in old], None if deadline is None else max(0.0, deadline - time.time()))
+    pool.shutdown(wait=False, cancel_futures=True)
     result = []
-    for n, d in dirs.items():
-        if (only and n not in only or deadline and time.time() > deadline) and n in old:
+    for n in dirs:
+        f = checks.get(n)
+        if f is None or n in old and not f.done():
             result.append(old[n])
             continue
         try:
-            result.append({"name": n, **check(settings, d, old.get(n), version)})
+            result.append({"name": n, **f.result()})
         except Exception as e:
             result.append(failed_entry(n, old.get(n), e))
-    me = socket.gethostname()
-    hosts = read_json(settings.accounts_file).get("remote_hosts", {}).get(me, [])
-    old_hosts = {h["host"]: h for h in data.get("hosts", [])}
-    data = {"version": 1, "host": me, "updated": now(), "accounts": result,
-            "hosts": [remote(h, old_hosts.get(h), settings.read_key) for h in hosts if h != me]
-            if not only else data.get("hosts", [])}
+    partial = any(n not in only for n in dirs) if only else False
+    data = {"version": 1, "host": me, "updated": data.get("updated", 0) if partial else now(), "accounts": result,
+            "hosts": [f.result() for f in reads] if not only else data.get("hosts", [])}
     write_json(settings.usage_cache, data)
     return data
 
@@ -248,7 +259,7 @@ def locked_refresh(settings: Settings, only: list[str], max_age: int | None, dea
         return data
     with locked(settings.cache / "lock"):
         data = load_cache(settings)
-        return data if fresh(data) else refresh(settings, dirs, only, deadline)
+        return data if fresh(data) else refresh(settings, dirs, only, max_age, deadline)
 
 
 def entries(settings: Settings) -> dict[str, dict]:

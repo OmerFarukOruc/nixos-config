@@ -23,6 +23,21 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
+def subcommands(ap: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser] | None:
+    return next((a.choices for a in ap._actions if isinstance(a, argparse._SubParsersAction)), None)
+
+
+def complete_words(words: list[str]) -> list[str]:
+    ap = parser()
+    for w in words:
+        sub = subcommands(ap)
+        if not sub or w not in sub:
+            break
+        ap = sub[w]
+    sub = subcommands(ap)
+    return list(sub) if sub else [o for a in ap._actions for o in a.option_strings if o not in ("-h", "--help")]
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     local_bin = str(Path.home() / ".local/bin")
@@ -30,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
     if argv[:1] == ["accounts"]:
         os.execv(ACCOUNTS_TOOL, [str(ACCOUNTS_TOOL), *argv[1:]])
+    if argv[:1] == ["--complete-words"]:
+        print(" ".join(complete_words(argv[1:])))
+        return 0
     settings = Settings.from_env(os.environ)
     if argv[:1] == ["rotate"]:
         return rotate.run(settings, argv[1:])

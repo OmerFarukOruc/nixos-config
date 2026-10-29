@@ -39,29 +39,20 @@ claude() {
 }
 
 _claude_tools_words() {
-  if [ "$1" -le 1 ]; then
-    echo accounts usage rotate limit-switch agent orch
-    return
+  if [ "${1:-}" != accounts ]; then
+    "@bin@/claude-tools" --complete-words "$@"
+  elif [ $# -eq 1 ]; then
+    echo list add rename update prefs delete login login-window login-all names dir dirs --watch --json --cached
+  else
+    "@bin@/claude-tools" accounts names
   fi
-  case "$2" in
-    accounts)
-      if [ "$1" -eq 2 ]; then
-        echo list add rename update prefs delete login login-window login-all names dir dirs --watch --json --cached
-      else
-        "@bin@/claude-tools" accounts names
-      fi
-      ;;
-    usage) echo --json --cached --max-age --account --quiet --watch --order --skip ;;
-    limit-switch) if [ "$1" -eq 2 ]; then echo scan restore switch resume; fi ;;
-    agent) if [ "$1" -eq 2 ]; then echo start stop peek; fi ;;
-    orch) if [ "$1" -eq 2 ]; then echo notify watch; fi ;;
-  esac
 }
 
 if [ -n "${ZSH_VERSION:-}" ] && type compdef >/dev/null 2>&1; then
-  _claude_tools() { compadd $(_claude_tools_words $((CURRENT - 1)) "${words[2]:-}"); }
+  # shellcheck disable=SC2046,SC2154
+  _claude_tools() { compadd $(_claude_tools_words "${words[@]:1:$((CURRENT - 2))}"); }
   compdef _claude_tools claude-tools
 elif [ -n "${BASH_VERSION:-}" ] && type complete >/dev/null 2>&1; then
-  _claude_tools() { mapfile -t COMPREPLY < <(compgen -W "$(_claude_tools_words "$COMP_CWORD" "${COMP_WORDS[1]}")" -- "${COMP_WORDS[COMP_CWORD]}"); }
+  _claude_tools() { mapfile -t COMPREPLY < <(compgen -W "$(_claude_tools_words "${COMP_WORDS[@]:1:$((COMP_CWORD - 1))}")" -- "${COMP_WORDS[COMP_CWORD]}"); }
   complete -F _claude_tools claude-tools
 fi

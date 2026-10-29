@@ -7,8 +7,8 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from claude_tools.accounts import normalize
-from claude_tools.errors import Failed
-from claude_tools.herdr import Herdr, error_code
+from claude_tools.errors import Failed, HerdrError, NoProcess
+from claude_tools.herdr import Herdr
 from claude_tools.settings import Settings
 from claude_tools.store import append_event
 
@@ -79,12 +79,12 @@ class Agents:
             except OSError:
                 continue
             return int(p.name), argv, env.get("CLAUDE_CONFIG_DIR", "")
-        raise Failed(f"no claude process in pane {pane}")
+        raise NoProcess(f"no claude process in pane {pane}")
 
     def codex_process(self, pane: str) -> int:
         for p, _ in self.in_pane(CODEX, pane):
             return int(p.name)
-        raise Failed(f"no claude or codex process in pane {pane}")
+        raise NoProcess(f"no claude or codex process in pane {pane}")
 
     def exit_claude(self, name: str, pid: int) -> None:
         h = self.herdr
@@ -156,12 +156,11 @@ class Agents:
             try:
                 h("agent", "start", name, "--kind", "claude", "--pane", pane, "--timeout", "120000", "--", *args)
                 return
-            except Failed as e:
-                code = error_code(e)
-                if code == "agent_pane_busy" and time.time() < deadline:
+            except HerdrError as e:
+                if e.code == "agent_pane_busy" and time.time() < deadline:
                     time.sleep(1)
                     continue
-                if code != "agent_not_ready":
+                if e.code != "agent_not_ready":
                     raise
             if "Yes, I trust this folder" not in h.screen(name):
                 raise Failed(f"{name} is blocked at startup by something other than the folder trust question")

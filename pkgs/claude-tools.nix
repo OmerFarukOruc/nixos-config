@@ -23,20 +23,15 @@ python3Packages.buildPythonApplication {
   installCheckPhase = ''
     runHook preInstallCheck
     export HOME=$TMPDIR
-    while read -r -a cmd; do
-      $out/bin/claude-tools "''${cmd[@]}" --help >/dev/null
-    done <<'EOF'
-
-    usage
-    limit-switch
-    limit-switch scan
-    limit-switch switch
-    agent start
-    agent stop
-    agent peek
-    orch notify
-    orch watch
-    EOF
+    tools=$out/bin/claude-tools
+    $tools --help >/dev/null
+    for c in $($tools --complete-words); do
+      case $c in accounts | rotate) continue ;; esac
+      $tools "$c" --help >/dev/null
+      for s in $($tools --complete-words "$c"); do
+        case $s in -*) ;; *) $tools "$c" "$s" --help >/dev/null ;; esac
+      done
+    done
     bash -n $out/libexec/claude-tools/claude-accounts $out/libexec/claude-tools/login-browser \
       $out/libexec/claude-tools/config-lock.sh $out/share/claude-tools/claude-tools.sh
     ! grep -rn '@bin@\|@libexec@' $out/libexec $out/share $out/lib

@@ -96,16 +96,16 @@ def weekly_place(e: dict, rate: float, at: int) -> tuple[tuple, str]:
 
 def order(readings: dict[str, dict], names: list[str], held: set[str], at: int) -> list[tuple[str, int, str]]:
     rate = burn(list(readings.values()), at)
-    ranked = []
+    places = []
     for i, n in enumerate(names):
         e = readings.get(n) or {}
         if why := blocked(e, n in held, at):
-            ranked.append(((BLOCKED, i), n, why))
+            places.append(((BLOCKED, i), n, why))
         else:
             place = team_place if (e.get("plan") or "").startswith("team") else weekly_place
             key, why = place(e, rate, at)
-            ranked.append((key, n, why))
-    return [(n, key[0], why) for key, n, why in sorted(ranked)]
+            places.append((key, n, why))
+    return [(n, key[0], why) for key, n, why in sorted(places)]
 
 
 def held_names(settings: Settings) -> set[str]:
@@ -130,7 +130,7 @@ def next_account(settings: Settings, skip: str | None) -> str | None:
     held = holds(settings.holds_file, at)
     fresh = [n for n in names if n not in held and at - ((readings.get(n) or {}).get("checked") or 0) > RECENT]
     if fresh:
-        data = locked_refresh(settings, fresh, None, at + REFRESH_BUDGET)
+        data = locked_refresh(settings, fresh, RECENT, at + REFRESH_BUDGET)
         readings = by_name(data)
     return best(settings, readings, names)
 
