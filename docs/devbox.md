@@ -117,9 +117,8 @@ The deploy unit ([Deploys](#deploys)) reads a fine-grained GitHub token,
 `github-update-token`, so that Nix's GitHub fetches stay within the API limit
 and `deploy.sh` can ask `gh` which pull request merged a running release. The
 token has its own file, `secrets/devbox-github.yaml`, encrypted for the
-same two recipients as the file above (`.sops.yaml`). GitHub lists the token under the name it got
-before the host was renamed, "risoluto-dev-1 self-deploy"; GitHub cannot rename a
-token. It does not expire. Rotate it when it may have
+same two recipients as the file above (`.sops.yaml`). GitHub lists the token as
+"devbox self-deploy". It does not expire. Rotate it when it may have
 leaked, in this order, so the box keeps a working token until the new one runs.
 The steps apply after the move to NixOS:
 
