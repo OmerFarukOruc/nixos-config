@@ -11,8 +11,8 @@ from datetime import datetime
 from claude_tools.accounts import account_of, accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
 from claude_tools.errors import Failed
-from claude_tools.limits import active, find_limit, mark, parse_reset
-from claude_tools.selection import startable
+from claude_tools.limits import find_limit
+from claude_tools.selection import hold_limit, next_account
 from claude_tools.settings import Settings
 from claude_tools.store import read_json, write_json
 from claude_tools.transcripts import session_of
@@ -57,6 +57,10 @@ def recorded(record: dict, name: str) -> dict:
         known = sorted({*record.get("agents", {}), *record.get("ended", {})})
         raise Failed(f"no record of {name}; recorded: {', '.join(known) or 'none'}")
     return found
+
+
+def at(t: float | None) -> str:
+    return datetime.fromtimestamp(t).astimezone().strftime("%a %H:%M") if t else "unknown"
 
 
 def meters(entry: dict) -> dict | None:
@@ -111,24 +115,12 @@ class Switcher:
                 self.log(f"usage of {n}: {e.get('state', 'no entry')}{': ' + e['error'] if e.get('error') else ''}")
         return out
 
-    def note_usage(self, limits: dict, usage: dict[str, dict | None]) -> None:
-        for n, u in usage.items():
-            for meter in ("session", "week"):
-                if u and (u[meter] or 0) >= 100:
-                    mark(limits, n, u[meter + "_reset"], f"{meter} meter at 100%", time.time())
-
-    def pick(self, current: str, limits: dict, now: float) -> str | None:
-        try:
-            found = startable(self.settings, set(active(limits, now)), {current})
-        except (OSError, subprocess.SubprocessError) as e:
-            raise Failed(f"could not rank the accounts: {e}") from e
-        return found[0] if found else None
-
     def resume_message(self, name: str, default: str) -> str:
         msg_file = self.settings.config / "resume" / name
         return msg_file.read_text().strip() if msg_file.is_file() else default
 
-    def switch(self, name: str, to: str | None, limits: dict) -> bool:
+    def switch(self, name: str, to: str | None, stay: bool = False) -> bool:
+        chosen = to is None
         agent = self.herdr("agent", "get", name)["result"]["agent"]
         if agent.get("agent") != "claude" or agent.get("agent_status") == "working":
             what = f"{agent['agent']} and {agent.get('agent_status')}" if agent.get("agent") else "no running agent"
@@ -141,14 +133,20 @@ class Switcher:
         dirs = self.accounts()
         current = account_of(config_dir, dirs, self.settings.home)
         if to is None:
-            now = time.time()
-            self.note_usage(limits, self.read_usage([n for n in dirs if n != current and n not in active(limits, now)]))
-            to = self.pick(current, limits, now)
+            try:
+                to = next_account(self.settings, None if stay else current)
+            except (OSError, subprocess.SubprocessError, ValueError) as e:
+                raise Failed(f"could not pick the next account: {e!r}") from e
             if to is None:
                 self.log(f"{name}: every other account is limited or unreadable; {name} stays on {current}")
                 return False
         elif to not in dirs:
             raise Failed(f"unknown account {to}")
+        if chosen and to == current:
+            self.herdr("agent", "prompt", name, self.resume_message(name, (
+                f"The usage limit of your Claude account {current} has reset. Continue where you stopped.")))
+            self.log(f"{name}: the limit of {current} has reset; told it to continue, session {session}")
+            return True
         self.agents.exit_claude(name, pid)
         try:
             self.agents.start_claude(pane, name, dirs[to], resume_args(argv[1:], session))
@@ -226,20 +224,22 @@ class Switcher:
                             "session": sid, "config_dir": config_dir, "args": argv[1:]}
         self.save("agents.json", next_record(record, agents, server, failed, time.time()))
 
-    def move_limited(self, a: dict, hit: dict, limits: dict, dirs: dict[str, str]) -> None:
+    def move_limited(self, a: dict, hit: str, dirs: dict[str, str]) -> None:
         name = a["name"]
         current = account_of(self.agents.claude_process(a["pane_id"])[2], dirs, self.settings.home)
-        until = hit["reset"] and parse_reset(hit["reset"], datetime.now().astimezone())
-        mark(limits, current, until, f"{hit['kind']} limit", time.time())
-        self.save("limits.json", limits)
-        self.log(f"{name}: {current} hit its {hit['kind']} limit (resets {hit['reset'] or 'unknown'})")
-        self.switch(name, None, limits)
+        try:
+            held = hold_limit(self.settings, current, hit)
+        except (OSError, subprocess.SubprocessError, ValueError) as e:
+            raise Failed(f"could not hold {current}: {e!r}") from e
+        what = f"held until {at(held[0])} after a {held[1]}" if held else "not held, its limit has reset"
+        self.log(f"{name}: {current} shows {hit!r}; {what}")
+        self.switch(name, None, stay=True)
 
     def scan(self) -> int:
         server = self.herdr.ensure_server(self.log)
         record = self.load("agents.json")
         lost = self.restore(record, server)
-        limits, switched = self.load("limits.json"), self.load("switched.json")
+        switched = self.load("switched.json")
         dirs, failed = None, len(lost)
         for a in self.herdr.agents():
             name = a.get("name")
@@ -252,12 +252,11 @@ class Switcher:
                 continue
             try:
                 dirs = dirs or self.accounts()
-                self.move_limited(a, hit, limits, dirs)
+                self.move_limited(a, hit, dirs)
             except Failed as e:
                 failed += 1
                 self.log(f"{name}: switch failed: {e}")
             switched[name] = time.time()
-            self.save("limits.json", limits)
             self.save("switched.json", switched)
         self.snapshot(server, record, lost)
         return 1 if failed else 0
@@ -274,9 +273,7 @@ class Switcher:
         return 1 if lost else 0
 
     def switch_now(self, name: str, to: str | None) -> int:
-        limits = self.load("limits.json")
-        ok = self.switch(name, to, limits)
-        self.save("limits.json", limits)
+        ok = self.switch(name, to)
         if ok:
             switched = self.load("switched.json")
             switched[name] = time.time()
@@ -284,9 +281,6 @@ class Switcher:
         return 0 if ok else 1
 
     def print_usage(self, names: list[str]) -> int:
-        def at(t: float | None) -> str:
-            return datetime.fromtimestamp(t).astimezone().strftime("%a %H:%M") if t else "unknown"
-
         for n, u in self.read_usage(names or list(self.accounts())).items():
             print(f"{n:12} " + (f"session {u['session']}% (resets {at(u['session_reset'])})  week {u['week']}% "
                                 f"(resets {at(u['week_reset'])})" if u else "no reading"))

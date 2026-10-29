@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from claude_tools.commands import agent, limit_switch, orch, rotate, usage
 from claude_tools.settings import ACCOUNTS_TOOL, Settings
@@ -23,6 +24,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    local_bin = str(Path.home() / ".local/bin")
+    if local_bin not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
     settings = Settings.from_env(os.environ)
     if argv[:1] == ["accounts"]:
         os.execv(ACCOUNTS_TOOL, [str(ACCOUNTS_TOOL), *argv[1:]])

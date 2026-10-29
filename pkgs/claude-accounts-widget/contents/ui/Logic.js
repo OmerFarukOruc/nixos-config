@@ -41,7 +41,7 @@ function listedNames(data) {
     return names
 }
 
-// The account claude-rotate would start on: the first of claude-usage's order that nothing blocks.
+// The account claude-tools rotate would start on: the first of claude-tools usage's order that nothing blocks.
 function bestAccount(data) {
     var listed = listedNames(data)
     var order = (data && data.order) || []

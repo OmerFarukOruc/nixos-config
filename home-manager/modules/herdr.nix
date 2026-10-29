@@ -14,7 +14,7 @@ let
     ui.toast.delivery = "system";
     ui.agent_panel_sort = "spaces";
     update.version_check = false;
-    session.resume_agents_on_restore = !(config.systemd.user.services ? claude-limit-switch);
+    session.resume_agents_on_restore = !(config.systemd.user.services ? claude-tools-limit-switch);
   };
   setSettings = pkgs.writers.writePython3 "herdr-set-settings" {
     libraries = [ pkgs.python3Packages.tomlkit ];

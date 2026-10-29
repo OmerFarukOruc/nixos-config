@@ -214,7 +214,7 @@ def failed_entry(name: str, old: dict | None, error: Exception) -> dict:
             "source": "stale" if kept.get("five_hour") else None}
 
 
-def refresh(settings: Settings, only: list[str]) -> dict:
+def refresh(settings: Settings, only: list[str], deadline: float | None = None) -> dict:
     data = load_cache(settings)
     dirs = accounts()
     unknown = [n for n in only if n not in dirs]
@@ -224,7 +224,7 @@ def refresh(settings: Settings, only: list[str]) -> dict:
     version = claude_version() if shutil.which("claude") else "2"
     result = []
     for n, d in dirs.items():
-        if only and n not in only and n in old:
+        if (only and n not in only or deadline and time.time() > deadline) and n in old:
             result.append(old[n])
             continue
         try:
@@ -241,14 +241,14 @@ def refresh(settings: Settings, only: list[str]) -> dict:
     return data
 
 
-def locked_refresh(settings: Settings, only: list[str], max_age: int | None) -> dict:
+def locked_refresh(settings: Settings, only: list[str], max_age: int | None, deadline: float | None = None) -> dict:
     settings.cache.mkdir(parents=True, exist_ok=True)
     with (settings.cache / "lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         data = load_cache(settings)
         if (max_age is None or only or now() - data.get("updated", 0) > max_age
                 or sorted(x["name"] for x in data.get("accounts", [])) != sorted(accounts())):
-            data = refresh(settings, only)
+            data = refresh(settings, only, deadline)
     return data
 
 

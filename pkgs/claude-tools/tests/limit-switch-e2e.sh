@@ -75,7 +75,7 @@ check_loop() {
 check_move() {
   local now
   now=$(account "$pane")
-  [[ "$now" != "$2" && "$now" != work2 ]] || fail "$1 left the agent on $now"
+  [[ "$now" != "$2" && "$now" != "$3" ]] || fail "$1 left the agent on $now"
   check_agent "$1"
   echo "$1: moved from $2 to $now"
 }
@@ -112,11 +112,20 @@ h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null ||
 sid=$(session)
 [[ -n "$sid" && "$sid" != null ]] || fail "herdr reports no session id"
 
-jq -n --argjson u "$(($(date +%s) + 3600))" '{work2: {until: $u, reason: "e2e seed"}}' >"$state/limits.json"
+mkdir -p "$dir/state"
+profiles names | jq -R . | jq -s --argjson u "$(($(date +%s) + 3600))" \
+  'map(select(. != "work1-team") | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"
+cls switch "$name" && fail "switch moved the agent while the hold file held every other account"
+[[ "$(account "$pane")" == work1-team ]] || fail "switch left work1-team while every other account was held"
+grep -q "$name: every other account is limited or unreadable; $name stays on work1-team" \
+  "$state/events.log" || fail "switch did not log that it stays"
+rm "$dir/state/limits.json"
+echo "held: switch kept the agent on work1-team while the hold file held every other account"
+h agent wait "$name" --until idle --timeout 120000 >/dev/null || fail "the agent did not go idle after the held switch"
 
 cls switch "$name" || fail "switch exited $?"
 first=$(account "$pane")
-check_move switch work1-team
+check_move switch work1-team work1-team
 grep -q "answered the background-work dialog of $name" "$state/events.log" ||
   fail "switch did not answer the background-work dialog"
 answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$state/events.log" | cut -d' ' -f1)" +%s)
@@ -128,6 +137,28 @@ rm -f "$state/switched.json"
 cls scan || fail "scan exited $?"
 [[ "$(account "$pane")" == "$first" ]] || fail "scan moved an agent whose screen shows no limit to $(account "$pane")"
 jq -e --arg n "$name" '.agents[$n].session' "$state/agents.json" >/dev/null || fail "scan did not record $name"
+
+reset=$(date -u -d '+2 hours' +%s)
+reset=$((reset - reset % 60))
+ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$reset" +%-I:%M%P) (UTC)"
+rm -f "$state/switched.json"
+cls scan || fail "scan after a limit message exited $?"
+jq -e --arg a "$first" --argjson u "$reset" '.[$a].until == $u' "$dir/state/limits.json" >/dev/null ||
+  fail "scan did not hold $first until $(date -d "@$reset" -Iseconds): $(jq -c . "$dir/state/limits.json")"
+check_move "scan after a limit" "$first" "$first"
+first=$(account "$pane")
+
+old=$(date -u -d '-1 hour' +%s)
+ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$old" +%-I:%M%P) (UTC)"
+rm -f "$state/switched.json"
+cls scan || fail "scan after an old limit message exited $?"
+jq -e --arg a "$first" 'has($a) | not' "$dir/state/limits.json" >/dev/null ||
+  fail "scan held $first after a limit message whose reset has passed: $(jq -c . "$dir/state/limits.json")"
+grep -q "$name: $first shows .*; not held, its limit has reset" "$state/events.log" ||
+  fail "scan did not log the old limit message as reset"
+check_agent "scan after an old limit message"
+first=$(account "$pane")
+echo "old limit: scan held nothing and the agent runs on $first"
 
 h server stop >/dev/null
 for _ in $(seq 30); do

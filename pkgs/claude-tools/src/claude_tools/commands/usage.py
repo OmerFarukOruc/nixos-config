@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import socket
 import subprocess
@@ -12,10 +11,11 @@ from datetime import datetime
 
 from claude_tools.accounts import accounts
 from claude_tools.agents import sessions
-from claude_tools.selection import startable
+from claude_tools.limits import holds
+from claude_tools.selection import GROUPS, order, startable
 from claude_tools.settings import Settings
 from claude_tools.terminal import Cards
-from claude_tools.usage import combined, load_cache, locked_refresh
+from claude_tools.usage import combined, load_cache, locked_refresh, now
 
 WATCH_EVERY = 30
 WATCH_MAX_AGE = 300
@@ -53,18 +53,18 @@ def watch(settings: Settings, max_age: int) -> int:
 
 
 def run(settings: Settings, a: argparse.Namespace) -> int:
-    local_bin = str(settings.home / ".local/bin")
-    if local_bin not in os.environ.get("PATH", "").split(":"):
-        os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
     if a.order:
-        for n in startable(settings, set(a.held), set(a.skip)):
+        for n in startable(settings, set(a.skip)):
             print(n)
         return 0
     if a.watch:
         return watch(settings, WATCH_MAX_AGE if a.max_age is None else a.max_age)
     data = load_cache(settings) if a.cached else locked_refresh(settings, a.account, a.max_age)
     if a.json:
-        print(json.dumps({**data, "combined": combined(data, settings.accounts_file)}, indent=1))
+        at, readings = now(), {x["name"]: x for x in data.get("accounts", [])}
+        ranked = order(readings, list(readings), set(holds(settings.holds_file, at)), at)
+        print(json.dumps({**data, "combined": combined(data, settings.accounts_file),
+                          "order": [{"name": n, "group": GROUPS[g], "why": why} for n, g, why in ranked]}, indent=1))
     elif not a.quiet:
         print(show(settings, data))
     return 0
@@ -83,6 +83,5 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                          f"--max-age ({WATCH_MAX_AGE})")
     ap.add_argument("--order", action="store_true",
                     help="print the accounts to start on, best first, from the cache; check nothing")
-    ap.add_argument("--held", action="append", default=[], metavar="NAME", help="with --order: an account to hold back")
     ap.add_argument("--skip", action="append", default=[], metavar="NAME", help="with --order: an account to leave out")
     ap.set_defaults(run=run)

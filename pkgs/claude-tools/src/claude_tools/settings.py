@@ -52,6 +52,10 @@ class Settings:
         return self.data / "accounts.json"
 
     @property
+    def holds_file(self) -> Path:
+        return self.state / "limits.json"
+
+    @property
     def usage_cache(self) -> Path:
         return self.cache / "usage.json"
 

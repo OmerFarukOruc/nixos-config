@@ -9,20 +9,21 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from claude_tools.accounts import accounts
 from claude_tools.agents import sessions
-from claude_tools.limits import active, limited_until
+from claude_tools.limits import NO_RESET_WAIT, holds
 from claude_tools.picker import CANCELLED, PICKED, Picker
-from claude_tools.selection import startable
+from claude_tools.selection import best, free_at, hold_limit, next_account
 from claude_tools.settings import Settings
-from claude_tools.store import append_event, read_json, write_json
-from claude_tools.usage import entries, load_cache, run_refresh
+from claude_tools.store import append_event
+from claude_tools.usage import load_cache, locked_refresh, now
 
 CACHE_MAX_AGE = 900
-REFRESH_TIMEOUT = 120
+MIN_WAIT = 60
 STOP_WAIT_S = 15
 NON_INTERACTIVE = {"-p", "--print", "-v", "--version", "-h", "--help"}
 SESSION_FLAGS = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "--from-pr"}
@@ -47,31 +48,16 @@ class Rotation:
         print(f"claude-tools rotate: {msg}", file=sys.stderr, flush=True)
         self.log(msg)
 
-    def limits(self, now: float | None = None) -> dict:
-        limits = read_json(self.state / "limits.json")
-        return limits if now is None else active(limits, now)
+    def held(self) -> set[str]:
+        return set(holds(self.settings.holds_file, now()))
 
-    def usage(self, refresh: list[str] | None = None) -> dict[str, dict]:
-        if not refresh and time.time() - load_cache(self.settings).get("updated", 0) > CACHE_MAX_AGE:
-            print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
-        try:
-            run_refresh(refresh or [], None if refresh else CACHE_MAX_AGE, REFRESH_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            self.log(f"the usage refresh took longer than {REFRESH_TIMEOUT} s; using the cache as it is")
-        return entries(self.settings)
-
-    def pick(self, skip: str | None, limits: dict, now: float) -> str | None:
-        found = startable(self.settings, set(active(limits, now)), {skip} if skip else set())
-        return found[0] if found else None
-
-    def choose(self, recommend: str | None, limits: dict) -> str | None:
+    def choose(self, recommend: str | None) -> str | None:
         cursor = recommend
         while True:
             by_dir = sessions(self.settings.home)
             live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
             try:
-                picker = Picker(self.dirs, load_cache(self.settings), live, set(active(limits, time.time())), cursor,
-                                self.settings.color)
+                picker = Picker(self.dirs, load_cache(self.settings), live, self.held(), cursor, self.settings.color)
                 outcome, name = picker.run()
             except Exception as e:
                 self.say(f"the account picker failed ({e!r})")
@@ -82,32 +68,66 @@ class Rotation:
                 return ""
             cursor = name or cursor
             print("claude-tools rotate: checking every account's usage…", file=sys.stderr, flush=True)
-            self.usage(self.names)
+            try:
+                locked_refresh(self.settings, self.names, None)
+            except (OSError, subprocess.SubprocessError, ValueError) as e:
+                self.say(f"could not check the accounts' usage ({e})")
 
-    def next_account(self, current: str) -> str | None:
-        now = time.time()
-        until, reason = limited_until(self.usage([current]).get(current), now)
-        limits = self.limits(now)
-        limits[current] = {"until": until, "reason": reason}
-        write_json(self.state / "limits.json", limits)
-        self.usage()
-        nxt = self.pick(current, limits, now)
-        self.log(f"{current} hit a {reason}; next account: {nxt or 'none'}")
+    def after_limit(self, current: str, hook: dict) -> str | None:
+        held = hold_limit(self.settings, current, hook.get("last_assistant_message") or "")
+        nxt = next_account(self.settings, None)
+        what = f"a {held[1]} until {when(held[0])}" if held else "a limit that has already reset"
+        self.log(f"{current} hit {what}; next account: {nxt or 'none'}")
         return nxt
 
-    def next_free(self, current: str, session: str) -> str | None:
-        now = time.time()
-        limits = self.limits(now)
-        self.usage(self.names)
-        nxt = self.pick(current, limits, now)
-        self.log(f"session {session}: an account's limit ended; next account: {nxt or 'none'}")
-        return nxt
+    def wake_time(self, session: str) -> float:
+        at = time.time()
+        try:
+            free = free_at(self.settings, self.names, int(at))
+        except Exception as e:
+            self.log(f"session {session}: reading when an account is free failed: {e!r}")
+            free = None
+        until = max(free or at + NO_RESET_WAIT, at + MIN_WAIT)
+        self.log(f"session {session}: no account is free; picking again at {when(until)}")
+        return until
 
-    def next_reset(self, current: str, now: float) -> float | None:
-        limits = self.limits()
-        own = limits.get(current, {}).get("until", 0)
-        ends = [v["until"] for n, v in limits.items() if n != current and n in self.dirs and now < v.get("until", 0) < own]
-        return min(ends) if ends else None
+
+@dataclass
+class Stop:
+    session: str
+    transcript: Path | None
+    seen: int
+
+    @classmethod
+    def at_limit(cls, hook: dict) -> Stop:
+        transcript = Path(hook["transcript_path"]) if hook.get("transcript_path") else None
+        try:
+            seen = transcript.stat().st_size if transcript else 0
+        except OSError:
+            seen = 0
+        return cls(hook["session_id"], transcript, seen)
+
+    def continued(self) -> bool:
+        if not self.transcript:
+            return False
+        try:
+            with self.transcript.open("rb") as f:
+                f.seek(self.seen)
+                lines = f.read().splitlines()
+        except OSError:
+            return False
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(entry, dict) and entry.get("type") == "user" and not entry.get("isMeta"):
+                return True
+        return False
+
+
+def when(t: float) -> str:
+    return datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
 
 
 def claude_help(cache: Path) -> str:
@@ -115,14 +135,15 @@ def claude_help(cache: Path) -> str:
     key = re.sub(r"[^\w.-]", "_", f"{real}-{int(real.stat().st_mtime)}")
     f = cache / f"help-{key}.txt"
     if not f.exists():
-        text = subprocess.run(["claude", "--help"], capture_output=True, text=True, check=False).stdout
-        if "Commands:" not in text:
-            raise OSError("claude --help printed no command list")
         cache.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(f".{os.getpid()}")
+        with tmp.open("w") as out:
+            subprocess.run(["claude", "--help"], stdout=out, stderr=subprocess.DEVNULL, check=False)
+        if "Commands:" not in tmp.read_text():
+            tmp.unlink(missing_ok=True)
+            raise OSError("claude --help printed no command list")
         for old in cache.glob("help-*.txt"):
             old.unlink(missing_ok=True)
-        tmp = f.with_suffix(f".{os.getpid()}")
-        tmp.write_text(text)
         tmp.replace(f)
     return f.read_text()
 
@@ -258,14 +279,15 @@ def plain(args: list[str]) -> None:
 def first_account(r: Rotation, args: list[str]) -> str | None:
     try:
         r.dirs = accounts()
-        limits = r.limits()
-        r.usage()
-        current = r.pick(None, limits, time.time())
+        if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
+            print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
+        data = locked_refresh(r.settings, [], CACHE_MAX_AGE)
+        current = best(r.settings, {a["name"]: a for a in data.get("accounts", [])}, r.names)
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
     if r.settings.pick:
-        chosen = r.choose(current, limits)
+        chosen = r.choose(current)
         if chosen == "":
             raise SystemExit(0)
         current = chosen or current
@@ -277,28 +299,28 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
 
 
 def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[str, str] | int:
-    waiting: tuple[str, float] | None = None
+    stop: Stop | None = None
+    wake: float | None = None
     while True:
-        got = runner.wait(flag, waiting[1] if waiting else None)
+        got = runner.wait(flag, wake)
         if isinstance(got, int):
             return got
-        session = waiting[0] if got is None else got["session_id"]
+        if got is not None:
+            stop = Stop.at_limit(got)
         try:
-            nxt = r.next_free(current, session) if got is None else r.next_account(current)
+            nxt = r.after_limit(current, got) if got else next_account(r.settings, None)
         except Exception as e:
-            r.log(f"session {session}: no move, picking the next account failed: {e!r}")
+            r.log(f"session {stop.session}: no move, picking the next account failed: {e!r}")
             nxt = None
+        if runner.child.poll() is not None:
+            continue
+        if stop.continued():
+            r.log(f"session {stop.session}: a prompt went in after the limit; no move")
+            stop = wake = None
+            continue
         if nxt and not runner.quit:
-            return session, nxt
-        try:
-            wake = r.next_reset(current, time.time())
-        except Exception as e:
-            r.log(f"session {session}: no wait for another account, reading limits.json failed: {e!r}")
-            wake = None
-        waiting = (session, wake) if wake else None
-        if wake:
-            r.log(f"session {session}: no account is free; picking again at "
-                  f"{datetime.fromtimestamp(wake).astimezone().isoformat(timespec='seconds')}")
+            return stop.session, nxt
+        wake = r.wake_time(stop.session)
 
 
 def run(settings: Settings, args: list[str]) -> int:
@@ -322,10 +344,15 @@ def run(settings: Settings, args: list[str]) -> int:
         if isinstance(moved, int):
             return moved
         session, nxt = moved
-        r.say(f"{current} hit its usage limit; resuming session {session} on {nxt}")
+        if nxt == current:
+            r.say(f"the usage limit of {current} has reset; resuming session {session} on it")
+            message = (f"The usage limit of your Claude account {current} has reset, so claude-tools rotate resumed "
+                       "this session on it. Continue where you stopped.")
+        else:
+            r.say(f"{current} hit its usage limit; resuming session {session} on {nxt}")
+            message = (f"Your Claude account {current} hit its usage limit, so claude-tools rotate resumed this "
+                       f"session on the {nxt} account. Continue where you stopped.")
         runner.stop()
-        message = (f"Your Claude account {current} hit its usage limit, so claude-tools rotate resumed this session "
-                   f"on the {nxt} account. Continue where you stopped.")
         argv = ["claude", *resume_args(args, opts, session, message)]
         args = argv[1:-3]
         current = nxt
