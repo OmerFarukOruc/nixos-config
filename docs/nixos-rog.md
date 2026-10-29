@@ -348,6 +348,20 @@ widget code it loaded, so a switch that installs a new widget package restarts
 `plasma-plasmashell` once (`restartPlasmashellOnWidget` in
 `home-manager/modules/plasma-panels.nix`), and the panels flicker.
 
+`home-manager/modules/agent-cli.nix` installs worktrunk (`wt`) on nixos-desktop,
+nixos-rog and devbox, with the worktree layout that the dotfiles `worktrees`
+skill gives every agent: `~/Desktop/workspace/worktrees/<repo>/<branch>`, with
+each `/` in the branch name turned into `-`. A new worktree runs
+`direnv allow` and loads its devenv shell, so the devenv git hooks exist before
+the first commit. Removing one stops its `devenv up`. Its
+`worktree-sweep.timer` runs `wt step prune` once a day in each repository under
+`~/Desktop/workspace`. The prune removes each worktree and branch that is
+merged into the default branch, has no uncommitted changes and is older than a
+day. The sweep lists the worktrees it kept in
+`/tmp/agents/worktree-sweep/report.md` and in its log. A failed prune fails the
+unit, so `systemctl --user --failed` shows it; read
+`journalctl --user -u worktree-sweep`.
+
 ## Heavy commands
 
 `heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog

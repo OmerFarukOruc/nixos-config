@@ -400,7 +400,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   not move. The log names the agent and the reason:
   `journalctl --user -u claude-limit-switch.service` and
   `~/.local/state/claude-limit-switch/events.log`.
-- `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`
+- `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`,
+  which brings worktrunk and the daily `worktree-sweep.timer` of
+  [Claude Code and Codex setup](nixos-rog.md#claude-code-and-codex-setup),
   and the box's own list) and runs Omer's agent services as user services of
   omer: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
   UI (`pkgs/herdr-web-ui.nix`, 127.0.0.1:7317), herdr's default session, the

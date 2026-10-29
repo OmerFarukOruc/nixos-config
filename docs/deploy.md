@@ -256,7 +256,7 @@ exists, prints the path of a new log as its only output, and deploys with its
 output in that log:
 
 ```sh
-d=../nixos-config.worktrees/deploy-<short-sha>
+d=$HOME/Desktop/workspace/worktrees/nixos-config/deploy-<short-sha>
 [ -d "$d" ] || git worktree add -q --detach "$d" <sha>
 log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "deploy exit $rc" >> "$log"; exit $rc; }
 ```
