@@ -17,6 +17,7 @@ in
     in
     pkgs.nixfmt-tree.override {
       runtimeInputs = with pkgs; [
+        actionlint
         deadnix
         keep-sorted
         lychee
@@ -56,6 +57,10 @@ in
           ];
           includes = [ "*.sh" ];
           priority = 1;
+        };
+        actionlint = {
+          command = "actionlint";
+          includes = [ ".github/workflows/*.yml" ];
         };
         shellcheck = {
           command = "shellcheck";
