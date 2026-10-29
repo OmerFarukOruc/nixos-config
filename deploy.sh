@@ -456,9 +456,9 @@ new=$("${nix[@]}" build --no-link --print-out-paths \
   "$release_dir#nixosConfigurations.$host.config.system.build.toplevel")
 
 if command -v dix >/dev/null; then
-  if diff=$(dix --color never "$(readlink -f /run/current-system)" "$new" 2>&1); then
+  if diff=$(dix --color never diff "$(readlink -f /run/current-system)" "$new" 2>&1); then
     printf '%s\n' "$diff" >&2
-    removed=$(awk '/^REMOVED$/ { r = 1; next } r && /^\[R/ { print $2; next } { r = 0 }' <<<"$diff" |
+    removed=$(awk '/^REMOVED( \(|$)/ { r = 1; next } r && /^\[R/ { print $2; next } { r = 0 }' <<<"$diff" |
       paste -sd ' ') || removed=
     [[ -z $removed ]] || printf 'removed=%s\n' "$removed"
   else
