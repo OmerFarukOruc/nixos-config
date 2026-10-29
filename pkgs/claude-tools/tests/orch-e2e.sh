@@ -30,6 +30,11 @@ cleanup() {
 trap cleanup EXIT
 fail() {
   echo "FAIL: $*"
+  pane=$(h agent get "$name" 2>/dev/null | jq -r '.result.agent.pane_id // empty') || true
+  [[ -n "$pane" ]] && {
+    echo "--- pane $pane"
+    h pane read "$pane" 2>&1 | tail -n 40
+  }
   [[ -f "$dir/watch.log" ]] && {
     echo "--- orch watch output"
     cat "$dir/watch.log"
@@ -61,6 +66,8 @@ start_watch() {
 
 "$tools" limit-switch restore || fail "restore could not start the $run server"
 h workspace create --cwd "$dir" --label "$run" --no-focus >/dev/null
+account=$("$tools" usage --order | head -n 1)
+[[ -n "$account" ]] || fail "claude-tools usage --order names no account to start the agent on"
 
 step 1 "a notice waits in the inbox before any watcher"
 "$tools" orch notify INFO "sent before the watcher" --from earlier
@@ -71,7 +78,7 @@ Run this one shell command with the Bash tool, exactly as written:
 $tools orch notify NEED "e2e question"
 Then reply with one line only: STATUS: brief done
 EOF
-(cd "$dir" && "$tools" agent start "$name" --cwd work --model sonnet --brief "$dir/brief.md") || fail "agent start exited $?"
+(cd "$dir" && "$tools" agent start "$name" --account "$account" --cwd work --model sonnet --brief "$dir/brief.md") || fail "agent start exited $?"
 [[ "$(tab_count "$name")" == 1 ]] || fail "wanted one tab named $name"
 pane_cwd=$(h pane get "$(h agent get "$name" | jq -r '.result.agent.pane_id')" | jq -r '.result.pane.cwd')
 [[ "$pane_cwd" == "$(readlink -f "$work")" ]] || fail "the relative --cwd started the pane in $pane_cwd, wanted $work"
@@ -105,7 +112,7 @@ stop_watch
 
 step 6 "a running name is refused and adds no tab"
 rc=0
-err=$("$tools" agent start "$name" --cwd "$work" 2>&1) || rc=$?
+err=$("$tools" agent start "$name" --account "$account" --cwd "$work" 2>&1) || rc=$?
 [[ "$rc" == 1 ]] || fail "the second agent start exited $rc, wanted 1"
 grep -q "already running" <<<"$err" || fail "no 'already running' in: $err"
 [[ "$(tab_count "$name")" == 1 ]] || fail "the refused start changed the tabs"
@@ -114,12 +121,12 @@ step 7 "agent stop removes the agent and its tab; the name starts and stops agai
 "$tools" agent stop "$name" || fail "agent stop exited $?"
 agent_listed "$name" && fail "the agent is still listed after agent stop"
 tab_labelled "$name" && fail "the tab is still open after agent stop"
-"$tools" agent start "$name" --cwd "$work" --model sonnet || fail "the name could not start again"
+"$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet || fail "the name could not start again"
 "$tools" agent stop "$name" || fail "the second agent stop exited $?"
 tab_labelled "$name" && fail "the second tab is still open"
 
 step 8 "an agent whose claude exited on its own: agent stop still closes its tab"
-"$tools" agent start "$name" --cwd "$work" --model sonnet || fail "the name could not start a third time"
+"$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet || fail "the name could not start a third time"
 pane=$(h agent get "$name" | jq -r '.result.agent.pane_id')
 h agent prompt "$name" "/exit" >/dev/null
 wait_for 60 pane_has_no_agent "$pane" || fail "claude did not exit after /exit"
