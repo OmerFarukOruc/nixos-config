@@ -362,6 +362,13 @@ day. The sweep lists the worktrees it kept in
 unit, so `systemctl --user --failed` shows it; read
 `journalctl --user -u worktree-sweep`.
 
+`nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system
+hook layer. Codex runs a system hook without the trust prompt that a hook in
+`~/.codex/hooks.json` needs. The hook sends each `apply_patch` to the dotfiles
+`guard-main-edit.py`, which refuses an edit in a repository's main checkout, as
+it does for Claude Code. A user without that file in `~/.claude/hooks` edits
+freely.
+
 ## Heavy commands
 
 `heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog

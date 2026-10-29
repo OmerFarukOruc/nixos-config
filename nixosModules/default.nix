@@ -6,6 +6,7 @@
     ./kernel.nix
     ./bootloader.nix
     ./recovery.nix
+    ./codex-hooks.nix
     ./common.nix
     ./tools.nix
     ./upgrade.nix

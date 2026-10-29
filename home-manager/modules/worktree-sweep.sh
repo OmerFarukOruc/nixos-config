@@ -1,4 +1,4 @@
-# shellcheck shell=bash
+#!/usr/bin/env bash
 workspace=$HOME/Desktop/workspace
 report_dir=/tmp/agents/worktree-sweep
 mkdir -p "$report_dir"
