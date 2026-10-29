@@ -66,7 +66,7 @@ PlasmoidItem {
         if (result["exit code"] !== 0 && String(result.stdout).trim() === "") {
             usage = null
             var lines = String(result.stderr).trim().split("\n")
-            errorText = lines[lines.length - 1] || "claude-usage exited with code " + result["exit code"]
+            errorText = lines[lines.length - 1] || "claude-tools usage exited with code " + result["exit code"]
             return
         }
         try {
@@ -74,7 +74,7 @@ PlasmoidItem {
             errorText = ""
         } catch (e) {
             usage = null
-            errorText = "claude-usage printed unusable data: " + e.message
+            errorText = "claude-tools usage printed unusable data: " + e.message
         }
     }
 

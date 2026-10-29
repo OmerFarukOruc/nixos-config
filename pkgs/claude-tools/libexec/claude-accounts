@@ -5,20 +5,18 @@ main="$HOME/.claude"
 marker=.claude-profile
 main_label="$main/.claude-profile-name"
 shared=(settings.json CLAUDE.md agents hooks rules shared infisical.md reference skills plugins projects plans file-history themes)
-# Claude Code creates these folders in ~/.claude only when the main account runs, and a profile cannot create one
-# through its link, so a profile's sessions on a fresh ~/.claude are never saved and `--resume` finds nothing.
 session_dirs=(projects plans file-history)
-self="$(readlink -f "${BASH_SOURCE[0]}")"
-# shellcheck disable=SC1091 # nix fmt checks claude-config-lock.sh on its own
-source "$(dirname "$self")/claude-config-lock.sh"
-data="${CLAUDE_ACCOUNTS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}"
+libexec="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+tools="@bin@/claude-tools"
+source "$libexec/config-lock.sh"
+data="${CLAUDE_TOOLS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}"
 accounts_file="$data/accounts.json"
 accent=212
 
 usage() {
   cat >&2 <<EOF
-usage: $(basename "$0") [command]
-  (none) [OPTIONS]  one card per account: usage limits, pace, resets and the login on each host (claude-usage;
+usage: claude-tools accounts [command]
+  (none) [OPTIONS]  one card per account: usage limits, pace, resets and the login on each host (claude-tools usage;
                     --watch redraws every 30 s, --json prints the data, --help lists the card options)
   list              show every account on this device: login, email, organization, plan and tier, link health, MCP
                     servers
@@ -40,14 +38,11 @@ usage: $(basename "$0") [command]
   dir NAME          print the CLAUDE_CONFIG_DIR value for NAME; empty means unset it
 NAME is lowercase letters, digits, and dashes. The ~/.claude account is called "main" until renamed.
 \`claude\` itself rotates between the accounts, and \`claude --account NAME\` runs one session on NAME
-(claude-accounts.sh of nixos-config pkgs/claude-tools).
+(share/claude-tools/claude-tools.sh of nixos-config pkgs/claude-tools).
 EOF
   exit 2
 }
 
-# The ~/.claude account's name is in its name file, which rename writes. A device without one takes the accounts.json
-# name whose email and organization match the ~/.claude login and writes it, so a new device does not show that
-# account as a second one called "main"; with no single match the name is "main".
 main_name() {
   local n
   if n="$(cat "$main_label" 2>/dev/null)" && [[ -n "$n" ]]; then echo "$n"; return; fi
@@ -99,7 +94,6 @@ new_folder() {
   echo "$d"
 }
 
-# CLAUDE_CONFIG_DIR for an account: empty for the ~/.claude account, which Claude Code finds only unset.
 config_dir() { if is_main "$1"; then echo; else profile_folder "$1"; fi; }
 
 with_account() {
@@ -138,10 +132,6 @@ fold_dir() {
   echo "  $2: moved into $dst$( ((kept)) && echo "; $kept files ~/.claude already has went to $src.unmerged")"
 }
 
-# Preferences that Claude Code saves per account in .claude.json and settings.json has no key for. The repo file
-# holds one value for every account on both hosts; `prefs` merges it with each account, so a /config change in any
-# account goes to the repo and to the other accounts (json-config.py sync_prefs). A running session keeps a key
-# written to its file from outside (checked on 10-10-2026 with Claude Code 2.1.296), so this does not wait for idle.
 prefs="$data/account-prefs.json"
 cmd_prefs() {
   local d f rc=0 configs=("$HOME/.claude.json") locked=()
@@ -205,14 +195,11 @@ row() {
       [[ "$(readlink "$dir/$f")" == "$main/$f" && -e "$dir/$f" ]] || links=broken
     done
   elif [[ -f "$main/.claude.json" ]]; then
-    # A run with CLAUDE_CONFIG_DIR=~/.claude writes this second config, and a login there leaves
-    # ~/.claude.json, which this row and the main account read, naming the old account.
     links="split"
   fi
   login="$(jq -r 'if .loggedIn then .email // "?" else "not logged in" end' <<<"$status" 2>/dev/null || echo unknown)"
   org="$(jq -r 'if .loggedIn then (.orgName // "?") as $o | if $o == (.email + "\u0027s Organization") then "personal" else $o end else "-" end' <<<"$status" 2>/dev/null || echo -)"
   plan="$(jq -r 'if .loggedIn then .subscriptionType // "?" else "-" end' <<<"$status" 2>/dev/null || echo -)"
-  # The usage tier (5x, 20x) is only in the credentials file, as rateLimitTier "default_claude_max_20x".
   [[ "$plan" != - ]] && plan+="$(jq -r '.claudeAiOauth.rateLimitTier // "" | capture("_(?<t>[0-9]+x)$").t | " " + .' \
     "${dir:-$main}/.credentials.json" 2>/dev/null || true)"
   mcp="$( [[ -f "$cfg" ]] && jq -r '.mcpServers // {} | keys | join(" ")' "$cfg" || true)"
@@ -309,9 +296,6 @@ cmd_delete() {
   echo "deleted $dir"
 }
 
-# Every device keeps its own browser login for every account in claude-code/accounts.json; never copy a
-# .credentials.json between devices, because Claude Code rotates the refresh token on use.
-bin_dir="$(dirname "$self")"
 login_soon=$((5 * 86400))
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
 login_wait=900
@@ -340,20 +324,20 @@ cmd_login() {
   dir="$(config_dir "$name")"
   echo "logging in to $name${email:+ ($email, $org)}${brave:+ in the Brave profile \"$brave\"}"
   [[ "$org" != personal && -n "$org" ]] && echo "pick the organization $org on the authorize page"
-  CLAUDE_LOGIN_BRAVE_PROFILE="$brave" BROWSER="$bin_dir/claude-login-browser" \
+  CLAUDE_TOOLS_LOGIN_BRAVE_PROFILE="$brave" BROWSER="$libexec/login-browser" \
     with_account "$name" claude auth login --claudeai ${email:+--email "$email"}
   got="$(with_account "$name" claude auth status --json 2>/dev/null | status_label)"
   want="$email $org"
   if [[ -n "$email" && "$got" != "$want" ]]; then
     with_account "$name" claude auth logout >/dev/null 2>&1 || true
-    "$bin_dir/claude-usage" --account "$name" --quiet || true
+    "$tools" usage --account "$name" --quiet || true
     echo "✗ $name got \"$got\", but accounts.json expects \"$want\", so it is logged out again; run login $name" \
       "and pick ${org:-the right organization} on the authorize page" >&2
     return 1
   fi
   echo "✓ $name: $got"
   [[ -z "$dir" ]] || sync_config "$dir"
-  "$bin_dir/claude-usage" --account "$name" --quiet || true
+  "$tools" usage --account "$name" --quiet || true
 }
 
 login_remote() {
@@ -367,21 +351,17 @@ login_remote() {
   return "$rc"
 }
 
-# shellcheck disable=SC2029 # each remote command is built here, with values this script checked
 cleanup_remote() {
   [[ -z "$tunnel" ]] || kill "$tunnel" 2>/dev/null || true
   ssh "${ssh_opts[@]}" "$login_host" "tmux kill-session -t $login_session 2>/dev/null; rm -f /tmp/$login_session.url /tmp/$login_session.rc" || true
 }
 
-# shellcheck disable=SC2029 # each remote command is built here, with values this script checked
 login_remote_run() {
   local name="$1" host="$2" brave s url port code rc="" remote_cmd deadline
   brave="$(account_field "$name" brave_profile)"
   s="claude-login-$name"
-  # --foreground keeps claude in the terminal's foreground process group; without it claude stops on its first
-  # terminal read (state T), before it prints the URL.
   remote_cmd="rm -f /tmp/$s.url /tmp/$s.rc; tmux kill-session -t $s 2>/dev/null; tmux new-session -d -s $s -x 200 -y 50 \
-'CLAUDE_LOGIN_URL_FILE=/tmp/$s.url timeout --foreground $((login_wait + 60)) claude-accounts login $name; echo \$? > /tmp/$s.rc; sleep 600'"
+'CLAUDE_TOOLS_LOGIN_URL_FILE=/tmp/$s.url timeout --foreground $((login_wait + 60)) claude-tools accounts login $name; echo \$? > /tmp/$s.rc; sleep 600'"
   ssh "${ssh_opts[@]}" "$host" "$remote_cmd" || { echo "✗ could not start the login on $host" >&2; return 1; }
   for _ in $(seq 60); do
     url="$(ssh "${ssh_opts[@]}" "$host" "cat /tmp/$s.url 2>/dev/null" || true)"
@@ -401,7 +381,7 @@ login_remote_run() {
     tunnel=$!
   fi
   echo "opening the $name login for $host${brave:+ in the Brave profile \"$brave\"}"
-  CLAUDE_LOGIN_BRAVE_PROFILE="$brave" "$bin_dir/claude-login-browser" "$url" ||
+  CLAUDE_TOOLS_LOGIN_BRAVE_PROFILE="$brave" "$libexec/login-browser" "$url" ||
     echo "open this URL in the browser: $url"
   echo "finish the login in the browser; if the page shows a code, paste it here and press Enter"
   rc="" deadline=$((SECONDS + login_wait))
@@ -423,8 +403,7 @@ login_remote_run() {
 
 cmd_login_window() {
   local run term a
-  # plasmashell, which starts this for the widget, has no ~/.local/bin on PATH, where claude lives on two hosts.
-  run="export PATH=$(printf %q "$HOME/.local/bin"):\$PATH; $(printf %q "$self") login"
+  run="export PATH=$(printf %q "$HOME/.local/bin"):\$PATH; $(printf %q "$tools") accounts login"
   for a in "$@"; do run+=" $(printf %q "$a")"; done
   run+="; echo; read -rsn1 -p 'Press any key to close this window'"
   for term in ghostty konsole; do
@@ -440,10 +419,10 @@ cmd_login_window() {
 due_accounts() {
   local host="${1:-}" usage
   if [[ -n "$host" ]]; then
-    usage="$(ssh "${ssh_opts[@]}" "$host" 'claude-usage --json --max-age 600')" ||
+    usage="$(ssh "${ssh_opts[@]}" "$host" 'claude-tools usage --json --max-age 600')" ||
       { echo "✗ could not read the accounts on $host" >&2; return 1; }
   else
-    usage="$("$bin_dir/claude-usage" --json --max-age 600)" || return 1
+    usage="$("$tools" usage --json --max-age 600)" || return 1
   fi
   jq -r --slurpfile a "$accounts_file" --argjson soon "$login_soon" '
     (.accounts | map({(.name): .}) | add // {}) as $have
@@ -477,7 +456,7 @@ cmd_login_all() {
 }
 
 case "${1:-}" in
-  "" | -*) exec "$bin_dir/claude-usage" "$@" ;;
+  "" | -*) exec "$tools" usage "$@" ;;
   list | ls) cmd_list ;;
   add) cmd_add "${2:-}" ;;
   rename | mv) cmd_rename "${2:-}" "${3:-}" ;;

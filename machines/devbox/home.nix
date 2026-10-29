@@ -8,6 +8,7 @@
   ...
 }:
 let
+  claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
   herdrWebUi = pkgs.callPackage ../../pkgs/herdr-web-ui.nix { };
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
@@ -193,14 +194,14 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
-  systemd.user.services.claude-limit-switch = {
+  systemd.user.services.claude-tools-limit-switch = {
     Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit";
     Service = {
       Type = "oneshot";
-      ExecStart = "${pkgs.callPackage ../../pkgs/claude-tools.nix { }}/bin/claude-limit-switch scan";
+      ExecStart = "${claudeTools}/bin/claude-tools limit-switch scan";
     };
   };
-  systemd.user.timers.claude-limit-switch = {
+  systemd.user.timers.claude-tools-limit-switch = {
     Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit, every minute";
     Timer = {
       OnCalendar = "*:*:00";

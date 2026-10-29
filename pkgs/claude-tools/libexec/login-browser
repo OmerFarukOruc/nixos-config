@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+url="${1:?usage: login-browser URL}"
+
+if [[ -n "${CLAUDE_TOOLS_LOGIN_URL_FILE:-}" ]]; then
+  printf '%s\n' "$url" > "$CLAUDE_TOOLS_LOGIN_URL_FILE"
+  exit 0
+fi
+
+bin="" state=""
+for pair in "brave-origin:Brave-Origin" "brave-browser:Brave-Browser" "brave:Brave-Browser"; do
+  if command -v "${pair%%:*}" >/dev/null; then
+    bin="${pair%%:*}" state="$HOME/.config/BraveSoftware/${pair#*:}/Local State"
+    break
+  fi
+done
+if [[ -z "$bin" ]]; then
+  echo "claude-tools accounts login: no Brave on this host; open this URL yourself: $url" >&2
+  exit 1
+fi
+
+args=()
+want="${CLAUDE_TOOLS_LOGIN_BRAVE_PROFILE:-}"
+if [[ -n "$want" ]]; then
+  dir=$(jq -r --arg n "$want" '.profile.info_cache // {} | to_entries[] | select(.value.name == $n) | .key' "$state" 2>/dev/null | head -1) || dir=""
+  if [[ -z "$dir" ]]; then
+    slug=$(tr '[:upper:]' '[:lower:]' <<<"$want" | tr -cs 'a-z0-9' '-' | sed 's/^-*//; s/-*$//')
+    dir="Claude $slug"
+    data="$(dirname "$state")"
+    if [[ ! -e "$data/$dir" ]]; then
+      mkdir -p "$data/$dir"
+      jq -n --arg n "$want" '{profile: {name: $n}}' > "$data/$dir/Preferences"
+      echo "claude-tools accounts login: created the Brave profile \"$want\" in $data/$dir" >&2
+    fi
+  fi
+  args=(--profile-directory="$dir")
+fi
+setsid -f "$bin" "${args[@]}" "$url" >/dev/null 2>&1 </dev/null

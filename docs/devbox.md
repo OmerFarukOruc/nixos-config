@@ -390,16 +390,16 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
   hourly `desktop-sync.sh --config`, the Claude account tools of
-  `pkgs/claude-tools` with their usage timer, and `claude-limit-switch.timer`
-  (next bullet).
-- `claude-limit-switch.timer` runs `claude-limit-switch scan` of
+  `pkgs/claude-tools` with their usage timer, and
+  `claude-tools-limit-switch.timer` (next bullet).
+- `claude-tools-limit-switch.timer` runs `claude-tools limit-switch scan` of
   `pkgs/claude-tools` every minute. A run starts herdr's default session through
   `herdr-default.service` when no server runs, starts the recorded Claude agents
   again after a server restart, and moves each named agent whose screen ends in
   a usage limit message to another account. A failed run means one agent could
   not move. The log names the agent and the reason:
-  `journalctl --user -u claude-limit-switch.service` and
-  `~/.local/state/claude-limit-switch/events.log`.
+  `journalctl --user -u claude-tools-limit-switch.service` and
+  `~/.local/state/claude-tools/limit-switch/events.log`.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`,
   which brings worktrunk and the daily `worktree-sweep.timer` of
   [Claude Code and Codex setup](nixos-rog.md#claude-code-and-codex-setup),

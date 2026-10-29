@@ -1,5 +1,6 @@
 required-version = ">=0.16.2"
 target-version = "py313"
+line-length = 120
 
 [lint]
 select = [
@@ -32,3 +33,7 @@ select = [
     "UP040", "UP041", "UP043", "UP044", "UP045", "UP046", "UP047", "UP049", "UP05",
     "W6", "YTT",
 ]
+
+[lint.per-file-ignores]
+"**/claude_tools/usage.py" = ["BLE001"]
+"**/claude_tools/commands/rotate.py" = ["BLE001", "PLW1509"]

@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-tools"
+version = "0"
+requires-python = ">=3.13"
+
+[project.scripts]
+claude-tools = "claude_tools.cli:main"

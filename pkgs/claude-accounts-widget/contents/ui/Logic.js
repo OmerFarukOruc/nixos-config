@@ -1,8 +1,8 @@
 .pragma library
 
 var namePattern = /^[a-z0-9][a-z0-9.-]*$/
-var usageBin = "@claudeTools@/bin/claude-usage"
-var accountsBin = "@claudeTools@/bin/claude-accounts"
+var usageBin = "@claudeTools@/bin/claude-tools usage"
+var accountsBin = "@claudeTools@/bin/claude-tools accounts"
 
 var pollCommand = "sh -c '" + usageBin + " --json --cached'"
 var refreshCommand = "sh -c '" + usageBin + " --json --max-age 60'"
@@ -94,7 +94,7 @@ function duration(secs) {
     return Math.max(m, 1) + "m"
 }
 
-// Used percent minus the elapsed percent of the window at the reading time, as claude-usage and the status line
+// Used percent minus the elapsed percent of the window at the reading time, as claude-tools usage and the status line
 // compute it; null when the reset time does not fall inside the window.
 function pace(win, length, at) {
     var u = usedOf(win)

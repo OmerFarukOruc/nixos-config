@@ -61,8 +61,8 @@ in
           command = "shellcheck";
           includes = [
             "*.sh"
-            "pkgs/claude-tools/bin/claude-accounts"
-            "pkgs/claude-tools/bin/claude-login-browser"
+            "pkgs/claude-tools/libexec/claude-accounts"
+            "pkgs/claude-tools/libexec/login-browser"
           ];
           priority = 2;
         };
@@ -74,16 +74,7 @@ in
             "--config"
             "pkgs/claude-tools/ruff.toml"
           ];
-          includes = [
-            "pkgs/claude-tools/bin/agent-peek"
-            "pkgs/claude-tools/bin/agent-start"
-            "pkgs/claude-tools/bin/agent-stop"
-            "pkgs/claude-tools/bin/claude-limit-switch"
-            "pkgs/claude-tools/bin/claude-rotate"
-            "pkgs/claude-tools/bin/claude-usage"
-            "pkgs/claude-tools/bin/orch-notify"
-            "pkgs/claude-tools/bin/orch-watch"
-          ];
+          includes = [ "pkgs/claude-tools/src/**/*.py" ];
         };
         lychee = {
           command = "lychee";

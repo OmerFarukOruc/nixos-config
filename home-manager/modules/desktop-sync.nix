@@ -8,7 +8,7 @@ let
   dotfiles = "${config.home.homeDirectory}/Desktop/workspace/dotfiles";
 in
 {
-  imports = [ ./claude-accounts.nix ];
+  imports = [ ./claude-tools.nix ];
 
   home.packages = [
     pkgs.bubblewrap

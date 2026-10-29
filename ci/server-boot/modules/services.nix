@@ -80,7 +80,7 @@ in
     timers =
       lib.genAttrs
         [
-          "claude-limit-switch"
+          "claude-tools-limit-switch"
           "cliproxy-update"
           "stay-green"
         ]
