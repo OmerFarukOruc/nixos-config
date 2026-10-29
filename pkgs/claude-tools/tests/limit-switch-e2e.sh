@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 tools="$(readlink -f "${1:?usage: $0 BIN-DIR}")/claude-tools"
+grep -qx 'resume_agents_on_restore = false' "${HERDR_CONFIG_PATH:-$HOME/.config/herdr/config.toml}" || {
+  echo "FAIL: herdr restores Claude panes itself on this host, so the restore step cannot pass; run this where claude-tools-limit-switch runs (devbox)"
+  exit 1
+}
 dir=$(mktemp -d /tmp/cls-e2e.XXXXXX)
 run="cls-e2e-$(basename "$dir" | cut -d. -f2 | tr '[:upper:]' '[:lower:]')"
 export CLAUDE_TOOLS_HERDR_SESSION="$run" CLAUDE_TOOLS_STATE="$dir/state"
