@@ -2,7 +2,7 @@
   lib,
   buildNpmPackage,
   makeWrapper,
-  nodejs_24,
+  nodejs_26,
 }:
 buildNpmPackage {
   pname = "openchamber-web";
@@ -16,14 +16,14 @@ buildNpmPackage {
     ];
   };
 
-  nodejs = nodejs_24;
+  nodejs = nodejs_26;
   npmDepsHash = "sha256-RXBe1A2nQUDYFtVo1uvJ3LMDOqdVZLtHUtO8E1LYaQ8=";
   dontNpmBuild = true;
 
   nativeBuildInputs = [ makeWrapper ];
 
   postInstall = ''
-    makeWrapper ${lib.getExe nodejs_24} $out/bin/openchamber \
+    makeWrapper ${lib.getExe nodejs_26} $out/bin/openchamber \
       --add-flags $out/lib/node_modules/openchamber-web-cli/node_modules/@openchamber/web/bin/cli.js
   '';
 
@@ -31,7 +31,7 @@ buildNpmPackage {
   installCheckPhase = ''
     runHook preInstallCheck
     $out/bin/openchamber --version
-    ${lib.getExe nodejs_24} -e "require('$out/lib/node_modules/openchamber-web-cli/node_modules/node-pty')"
+    ${lib.getExe nodejs_26} -e "require('$out/lib/node_modules/openchamber-web-cli/node_modules/node-pty')"
     runHook postInstallCheck
   '';
 

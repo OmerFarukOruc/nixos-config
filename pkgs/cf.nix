@@ -2,7 +2,7 @@
   lib,
   buildNpmPackage,
   makeWrapper,
-  nodejs_24,
+  nodejs_26,
 }:
 buildNpmPackage {
   pname = "cf";
@@ -16,14 +16,14 @@ buildNpmPackage {
     ];
   };
 
-  nodejs = nodejs_24;
+  nodejs = nodejs_26;
   npmDepsHash = "sha256-7CzLjZ5/RpPdp3nsHzlMHvdMmcit/LjkoBVstELh1tI=";
   dontNpmBuild = true;
 
   nativeBuildInputs = [ makeWrapper ];
 
   postInstall = ''
-    makeWrapper ${lib.getExe nodejs_24} $out/bin/cf \
+    makeWrapper ${lib.getExe nodejs_26} $out/bin/cf \
       --add-flags $out/lib/node_modules/cf-cli/node_modules/cf/bin/cf
   '';
 

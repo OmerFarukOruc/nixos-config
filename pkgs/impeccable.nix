@@ -7,7 +7,7 @@
   stdenvNoCC,
   fetchurl,
   makeWrapper,
-  nodejs_24,
+  nodejs_26,
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "impeccable";
@@ -26,7 +26,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
     mkdir -p $out/lib/impeccable
     cp -r . $out/lib/impeccable
-    makeWrapper ${lib.getExe nodejs_24} $out/bin/impeccable \
+    makeWrapper ${lib.getExe nodejs_26} $out/bin/impeccable \
       --add-flags $out/lib/impeccable/cli/bin/cli.js
     runHook postInstall
   '';

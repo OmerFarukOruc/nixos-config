@@ -6,7 +6,7 @@
   autoPatchelfHook,
   bun,
   makeWrapper,
-  nodejs_24,
+  nodejs_26,
 }:
 let
   version = "0.4.19";
@@ -56,7 +56,7 @@ stdenv.mkDerivation {
     cp -a . $out/lib/herdr-web-ui
     makeWrapper ${lib.getExe bun} $out/bin/herdr-web-ui \
       --chdir $out/lib/herdr-web-ui \
-      --prefix PATH : ${lib.makeBinPath [ nodejs_24 ]} \
+      --prefix PATH : ${lib.makeBinPath [ nodejs_26 ]} \
       --add-flags "run server/managed.ts"
   '';
   # Only node-pty's Linux x64 module needs its loader set; the other

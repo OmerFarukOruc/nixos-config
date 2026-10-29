@@ -123,7 +123,7 @@ if [[ -n $npm && -d $wrapper ]]; then
   scratch=$(mktemp -d)
   trap 'rm -f -- "$edited"; rm -rf -- "$scratch"' EXIT
   jq --arg v "$latest" --arg p "$npm" '.version = $v | .dependencies[$p] = $v' "$wrapper/package.json" >"$scratch/package.json"
-  (cd "$scratch" && nix shell --inputs-from "$root" nixpkgs#nodejs_24 -c npm install --package-lock-only --ignore-scripts --min-release-age=0 >&2) ||
+  (cd "$scratch" && nix shell --inputs-from "$root" nixpkgs#nodejs_26 -c npm install --package-lock-only --ignore-scripts --min-release-age=0 >&2) ||
     {
       echo "npm could not lock $npm $latest" >&2
       exit 1
