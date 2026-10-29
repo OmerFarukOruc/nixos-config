@@ -14,6 +14,12 @@ in
 {
   home.packages = [ sweep ];
 
+  programs.zsh.initContent = ''
+    if [[ -r ''${XDG_STATE_HOME:-$HOME/.local/state}/worktree-sweep/failed ]]; then
+      print -r -- "worktree-sweep: $(<''${XDG_STATE_HOME:-$HOME/.local/state}/worktree-sweep/failed)"
+    fi
+  '';
+
   systemd.user.services.worktree-sweep = {
     Unit.Description = "Remove merged, clean worktrees under ~/Desktop/workspace";
     Service = {
