@@ -228,12 +228,13 @@ def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: 
     pool = ThreadPoolExecutor(CHECK_WORKERS)
     checks = {n: pool.submit(check, settings, d, old.get(n), version) for n, d in dirs.items() if n not in keep}
     reads = [pool.submit(remote, h, old_hosts.get(h), settings.read_key) for h in hosts]
+    wait([*reads, *(f for n, f in checks.items() if n not in old)])
     wait([f for n, f in checks.items() if n in old], None if deadline is None else max(0.0, deadline - time.time()))
     pool.shutdown(wait=False, cancel_futures=True)
     result = []
     for n in dirs:
         f = checks.get(n)
-        if f is None or n in old and not f.done():
+        if f is None or n in old and (f.cancelled() or not f.done()):
             result.append(old[n])
             continue
         try:
