@@ -14,7 +14,7 @@
 # name, and tells the agent to continue. ~/.config/claude-limit-switch/resume/NAME replaces that message for
 # agent NAME. `--resume` brings back a fixed-interval /loop but not a self-paced one or a Monitor, so an agent that
 # runs them needs a message that checks CronList first (the dotfiles checkout's desktop/reference/unattended-agents.md).
-# The new account is the one with the lowest weekly use among those under both limits below. Each candidate
+# The new account is the first of `claude-usage --order` (see its order function). Each candidate
 # is measured with `claude-usage --account NAME`, which reads the usage endpoint or runs a one-turn `claude -p`.
 # herdr itself resumes Claude as plain `claude --resume`, without the flag and the account (see
 # the dotfiles checkout's desktop/reference/headless-clis/herdr.md), so its own restore is off. Instead each scan records the named Claude
@@ -53,8 +53,6 @@ SESSION = os.environ.get("CLAUDE_LIMIT_SWITCH_SESSION", "")
 RESUME = HOME / ".config/claude-limit-switch/resume"
 USAGE = BIN / "claude-usage"
 USAGE_CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage/usage.json")
-SESSION_MAX = 90
-WEEK_MAX = 95
 NO_RESET_WAIT = 3600
 # scan skips an agent this long after a move it tried, and restore waits this long after a failed start. After a
 # switch the screen keeps the old limit message until the agent answers; after a move with no room or a failed
@@ -113,18 +111,15 @@ def parse_reset(text: str, now: datetime) -> float | None:
     return t.timestamp()
 
 
-def pick_account(names: list[str], current: str, limits: dict, usage: dict, now: float) -> str | None:
-    best = None
-    for n in names:
-        if n == current or limits.get(n, {}).get("until", 0) > now:
-            continue
-        u = usage.get(n)
-        if not u or u["session"] >= SESSION_MAX or (u["week"] or 0) >= WEEK_MAX:
-            continue
-        key = (u["week"] or 0, u["session"])
-        if best is None or key < best[0]:
-            best = (key, n)
-    return best[1] if best else None
+def pick_account(names: list[str], current: str, limits: dict, now: float) -> str | None:
+    """The first account of `claude-usage --order` other than current, or None when every other one is limited."""
+    held = [x for n in names if limits.get(n, {}).get("until", 0) > now for x in ("--held", n)]
+    p = subprocess.run([str(USAGE), "--order", "--skip", current, *held], capture_output=True, text=True,
+                       check=False, stdin=subprocess.DEVNULL)
+    if p.returncode:
+        raise Failed(f"claude-usage --order exited {p.returncode}: {p.stderr.strip()[-200:]}")
+    out = p.stdout.split()
+    return out[0] if out else None
 
 
 def resume_args(argv: list[str], session: str) -> list[str]:
@@ -429,9 +424,9 @@ def switch(name: str, to: str | None, limits: dict) -> bool:
         candidates = [n for n in dirs if n != current and limits.get(n, {}).get("until", 0) <= now]
         usage = read_usage(candidates)
         note_usage(limits, usage)
-        to = pick_account(list(dirs), current, limits, usage, now)
+        to = pick_account(list(dirs), current, limits, now)
         if to is None:
-            log(f"{name}: no account is under {SESSION_MAX}% session and {WEEK_MAX}% weekly use; {name} stays on {current}")
+            log(f"{name}: every other account is limited or unreadable; {name} stays on {current}")
             return False
     elif to not in dirs:
         raise Failed(f"unknown account {to}")

@@ -20,7 +20,6 @@ CACHE = Path(os.environ.get("CLAUDE_USAGE_CACHE") or HOME / ".cache/claude-usage
 STATE = Path(os.environ.get("CLAUDE_ROTATE_STATE") or HOME / ".local/state/claude-rotate")
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/claude-rotate-{os.getuid()}") / "claude-rotate"
 HELP_CACHE = HOME / ".cache/claude-rotate"
-MAX_USED = 90
 CACHE_MAX_AGE = 900
 NO_RESET_WAIT = 3600
 PICKED, CANCELLED, REFRESH = 0, 1, 3
@@ -142,19 +141,15 @@ def usage(refresh: list[str] | None = None) -> dict[str, dict]:
     return {a["name"]: a for a in load_json(CACHE).get("accounts", [])}
 
 
-def pick(names: list[str], skip: str | None, entries: dict[str, dict], limits: dict, now: float) -> str | None:
-    best = None
-    for n in names:
-        e = entries.get(n)
-        if (n == skip or limits.get(n, {}).get("until", 0) > now or not e or e["state"] not in ("ok", "expiring")
-                or not e.get("five_hour")):
-            continue
-        five, week = e["five_hour"]["used"], (e.get("seven_day") or {}).get("used", 0)
-        if five >= MAX_USED or week >= MAX_USED:
-            continue
-        if best is None or (week, five) < best[0]:
-            best = ((week, five), n)
-    return best[1] if best else None
+def pick(names: list[str], skip: str | None, limits: dict, now: float) -> str | None:
+    """The first account of `claude-usage --order` from the cache, or None when every account is limited."""
+    held = [x for n in names if limits.get(n, {}).get("until", 0) > now for x in ("--held", n)]
+    p = subprocess.run([str(USAGE), "--order", *held, *(["--skip", skip] if skip else [])],
+                       capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL)
+    if p.returncode:
+        raise subprocess.SubprocessError(f"claude-usage --order exited {p.returncode}: {p.stderr.strip()[-200:]}")
+    out = p.stdout.split()
+    return out[0] if out else None
 
 
 def choose(names: list[str], recommend: str | None, limits: dict) -> str | None:
@@ -163,8 +158,8 @@ def choose(names: list[str], recommend: str | None, limits: dict) -> str | None:
     cursor = recommend
     while True:
         held = [n for n in names if limits.get(n, {}).get("until", 0) > time.time()]
-        cmd = [str(USAGE), "--pick", *(["--recommend", recommend] if recommend else []),
-               *[x for n in held for x in ("--held", n)], *(["--cursor", cursor] if cursor else [])]
+        cmd = [str(USAGE), "--pick", *[x for n in held for x in ("--held", n)],
+               *(["--cursor", cursor] if cursor else [])]
         try:
             p = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=False)
         except OSError as e:
@@ -179,7 +174,7 @@ def choose(names: list[str], recommend: str | None, limits: dict) -> str | None:
             return None
         cursor = p.stdout.strip() or cursor
         print("claude-rotate: checking every account's usage…", file=sys.stderr, flush=True)
-        recommend = pick(names, None, usage(names), limits, time.time())
+        usage(names)
 
 
 def limited_until(entry: dict | None, now: float) -> tuple[float, str]:
@@ -266,7 +261,8 @@ def next_account(current: str, names: list[str]) -> str | None:
     limits = {n: v for n, v in load_json(STATE / "limits.json").items() if v.get("until", 0) > now}
     limits[current] = {"until": until, "reason": reason}
     save_limits(limits)
-    nxt = pick(names, current, usage(), limits, now)
+    usage()
+    nxt = pick(names, current, limits, now)
     log(f"{current} hit a {reason}; next account: {nxt or 'none'}")
     return nxt
 
@@ -295,7 +291,8 @@ def main() -> int:
         dirs = accounts()
         names = list(dirs)
         limits = load_json(STATE / "limits.json")
-        current = pick(names, None, usage(), limits, time.time())
+        usage()
+        current = pick(names, None, limits, time.time())
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as e:
         say(f"could not pick an account ({e}); running plain claude")
         os.execvp("claude", ["claude", *args])
@@ -307,7 +304,7 @@ def main() -> int:
     if current is None:
         configured = os.environ.get("CLAUDE_CONFIG_DIR", "")
         current = next((n for n, d in dirs.items() if d == configured), names[0] if names else "")
-        say(f"no account is under {MAX_USED}% in both windows; starting on {current}")
+        say(f"every account is limited or unreadable; starting on {current}")
         time.sleep(1)
     RUNTIME.mkdir(parents=True, exist_ok=True)
     runner = Runner()
@@ -325,7 +322,8 @@ def main() -> int:
                     session = waiting[0]
                     now = time.time()
                     limits = {n: v for n, v in load_json(STATE / "limits.json").items() if v.get("until", 0) > now}
-                    nxt = pick(names, current, usage(names), limits, now)
+                    usage(names)
+                    nxt = pick(names, current, limits, now)
                     log(f"session {session}: an account's limit ended; next account: {nxt or 'none'}")
                 else:
                     session = got["session_id"]

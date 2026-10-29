@@ -324,6 +324,90 @@ def pace(used: float, resets_at: int | None, window: int, at: int) -> float | No
     return used - (1 - (resets_at - at) / window) * 100
 
 
+SESSION_MAX, WEEK_MAX = 90, 95
+EVEN_BURN = 20
+MIN_ELAPSED = 900
+FIRST, TEAM, RESERVE, BLOCKED = range(4)
+
+
+def size(plan: str | None) -> float:
+    """The plan's usage multiple in 5x units: a 20x window holds four times what a 5x window holds."""
+    m = re.search(r"(\d+)x", plan or "")
+    return int(m[1]) / 5 if m else 1
+
+
+def window_now(w: dict | None, at: int) -> tuple[float, int | None]:
+    """Used percent and reset time of a window at `at`. A window whose reset has passed counts as not started."""
+    if not w or not w.get("resets_at") or w["resets_at"] <= at:
+        return 0.0, None
+    return w["used"], w["resets_at"]
+
+
+def burn(entries: list[dict], at: int) -> float:
+    """Our burn rate in 5x percent per hour: the sum over every running 5 h window of its use so far divided by its
+    elapsed time, and never below an even spread of one 5x window."""
+    total = 0.0
+    for e in entries:
+        w, checked = e.get("five_hour"), e.get("checked")
+        if not w or not checked or not w.get("resets_at") or w["resets_at"] <= at:
+            continue
+        elapsed = WINDOWS["five_hour"] - (w["resets_at"] - checked)
+        if elapsed >= MIN_ELAPSED:
+            total += w["used"] * size(e.get("plan")) / (elapsed / 3600)
+    return max(total, EVEN_BURN)
+
+
+def blocked(e: dict, held: bool, at: int) -> str | None:
+    if e.get("state") == "logged-out":
+        return "logged out"
+    if held:
+        return "held back after a limit"
+    if not e.get("five_hour") and not e.get("seven_day"):
+        return "no reading yet"
+    if e.get("state") not in ("ok", "expiring"):
+        return "usage unreadable"
+    five, week = window_now(e.get("five_hour"), at)[0], window_now(e.get("seven_day"), at)[0]
+    if five >= SESSION_MAX:
+        return f"5h at {five:.0f}%"
+    if week >= WEEK_MAX:
+        return f"7d at {week:.0f}%"
+    return None
+
+
+def order(entries: dict[str, dict], names: list[str], held: set[str], at: int) -> list[tuple[str, int, str]]:
+    """Each name with its group and the reason for its place, the account to start on first. Team plans have no
+    weekly limit, so they go before the weekly-limited reserve. A team account whose room lasts to its 5 h reset at
+    our burn rate goes before one that would hit the limit first, and among those the soonest reset first, so the
+    room that comes back soonest is spent first. A reserve account goes before the team accounts when our burn rate
+    could not spend its weekly room before the weekly reset, so that room would otherwise go unused."""
+    rate = burn(list(entries.values()), at)
+    ranked = []
+    for i, n in enumerate(names):
+        e = entries.get(n) or {}
+        if why := blocked(e, n in held, at):
+            ranked.append(((BLOCKED, i), n, BLOCKED, why))
+            continue
+        units = size(e.get("plan"))
+        five, five_reset = window_now(e.get("five_hour"), at)
+        five_left = (five_reset or at + WINDOWS["five_hour"]) - at
+        lasts = not five_reset or (SESSION_MAX - five) * units / rate * 3600 >= five_left
+        if (e.get("plan") or "").startswith("team"):
+            if lasts:
+                why = f"lasts to its 5h reset in {span(five_left)}" if five_reset else "5h window not started"
+                ranked.append(((TEAM, 0, five_left), n, TEAM, why))
+            else:
+                ranked.append(((TEAM, 1, five), n, TEAM, f"{SESSION_MAX - five:.0f}% left in 5h"))
+            continue
+        week, week_reset = window_now(e.get("seven_day"), at)
+        if week_reset and (WEEK_MAX - week) * units / rate * 3600 >= week_reset - at:
+            ranked.append(((FIRST, week_reset), n, FIRST,
+                           f"{WEEK_MAX - week:.0f}% of the week unused, resets in {span(week_reset - at)}"))
+        else:
+            left = f"week resets in {span(week_reset - at)}" if week_reset else "week not started"
+            ranked.append(((RESERVE, week_reset or at + WINDOWS["seven_day"]), n, RESERVE, f"reserve · {left}"))
+    return [(n, g, why) for _, n, g, why in sorted(ranked)]
+
+
 def sessions() -> dict[str, int]:
     """Interactive Claude sessions on this host per CLAUDE_CONFIG_DIR ("" for ~/.claude): a process named claude
     whose stdin is a terminal."""
@@ -479,7 +563,7 @@ def watch(every: int, max_age: int) -> int:
 
 ANSI = re.compile(r"\033\[[0-9;]*m")
 ROW_BG = "48;2;48;44;42"
-PICKED, CANCELLED, REFRESH = 0, 1, 3
+PICKED, CANCELLED, FAILED, REFRESH = 0, 1, 2, 3
 
 
 def visible(text: str) -> int:
@@ -494,15 +578,20 @@ class Picker:
 
     KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
 
-    def __init__(self, recommend: str | None, held: list[str], cursor: str | None):
+    def __init__(self, held: list[str], cursor: str | None):
         self.dirs = accounts()
         self.data = load_cache()
         self.entries = {a["name"]: a for a in self.data.get("accounts", [])}
         by_dir = sessions()
         self.live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
-        self.recommend, self.held = recommend, set(held)
-        self.choices = [n for n in self.dirs if (self.entries.get(n) or {}).get("state") != "logged-out"]
-        first = next((x for x in (cursor, recommend) if x in self.choices), self.choices[0] if self.choices else None)
+        self.ranked = order(self.entries, list(self.dirs), set(held), now())
+        self.rows = [n for n, _, _ in self.ranked]
+        self.group = {n: g for n, g, _ in self.ranked}
+        self.why = {n: why for n, _, why in self.ranked}
+        self.recommend = next((n for n, g, _ in self.ranked if g != BLOCKED), None)
+        self.choices = [n for n in self.rows if (self.entries.get(n) or {}).get("state") != "logged-out"]
+        first = next((x for x in (cursor, self.recommend) if x in self.choices),
+                     self.choices[0] if self.choices else None)
         self.i = self.choices.index(first) if first else 0
         self.color = not os.environ.get("NO_COLOR")
 
@@ -538,10 +627,10 @@ class Picker:
             at, stale = e.get("checked") or now(), e.get("source") == "stale"
             head += "  " + self.mini(cards, "5h", e.get("five_hour"), WINDOWS["five_hour"], at, stale)
             head += "   " + self.mini(cards, "7d", e.get("seven_day"), WINDOWS["seven_day"], at, stale)
-        if name == self.recommend:
-            tags.append(cards.c("★ most room", ACCENT))
-        if name in self.held:
-            tags.append(cards.c("held back after a limit", AMBER))
+            if name == self.recommend:
+                tags.append(cards.c(f"★ {self.why[name]}", ACCENT))
+            else:
+                tags.append(cards.c(self.why[name], AMBER if self.group[name] == BLOCKED else DIM))
         if e.get("state") == "expiring":
             tags.append(cards.c("login ends soon", AMBER))
         if self.live.get(name):
@@ -583,7 +672,10 @@ class Picker:
         title = " " + cards.c("✻ Claude Code", ACCENT, BOLD) + cards.c("   choose the account for this session", DIM)
         lines = [title + " " * max(1, width - visible(title) - len(checked) - 1) + cards.c(checked, DIM), ""]
         wname = max((len(n) for n in self.dirs), default=8)
-        lines += [self.row(k, n, width, wname) for k, n in enumerate(self.dirs)]
+        for k, n in enumerate(self.rows):
+            if self.group[n] == RESERVE and (k == 0 or self.group[self.rows[k - 1]] != RESERVE):
+                lines.append(" " + cards.c("── reserve: weekly limit ", TRACK))
+            lines.append(self.row(k, n, width, wname))
         if self.choices:
             lines += ["", " " + cards.c("─" * max(10, width - 2), TRACK), *self.detail(self.choices[self.i], width)]
         else:
@@ -661,12 +753,25 @@ def main() -> int:
     ap.add_argument("--watch", action="store_true",
                     help="redraw every 30 s and check the accounts when the cache is older than --max-age (300)")
     ap.add_argument("--pick", action="store_true", help=argparse.SUPPRESS)
-    ap.add_argument("--recommend", metavar="NAME", help=argparse.SUPPRESS)
-    ap.add_argument("--held", action="append", default=[], metavar="NAME", help=argparse.SUPPRESS)
+    ap.add_argument("--order", action="store_true",
+                    help="print the accounts to start on, best first, from the cache; check nothing")
+    ap.add_argument("--held", action="append", default=[], metavar="NAME", help="with --pick or --order: an account to hold back")
+    ap.add_argument("--skip", action="append", default=[], metavar="NAME", help="with --order: an account to leave out")
     ap.add_argument("--cursor", metavar="NAME", help=argparse.SUPPRESS)
     a = ap.parse_args()
     if a.pick:
-        return Picker(a.recommend, a.held, a.cursor).run()
+        try:
+            return Picker(a.held, a.cursor).run()
+        except Exception as e:  # noqa: BLE001 - an uncaught error exits 1, which claude-rotate reads as quit
+            print(f"claude-usage --pick: {e!r}", file=sys.stderr)
+            return FAILED
+    if a.order:
+        entries = {x["name"]: x for x in load_cache().get("accounts", [])}
+        names = [n for n in accounts() if n not in a.skip]
+        for n, g, _ in order(entries, names, set(a.held), now()):
+            if g != BLOCKED:
+                print(n)
+        return 0
     if a.watch:
         return watch(30, 300 if a.max_age is None else a.max_age)
     data = load_cache() if a.cached else locked_refresh(a.account, a.max_age)

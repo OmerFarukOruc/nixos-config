@@ -3,7 +3,7 @@ set -euo pipefail
 rotate="$(readlink -f "${1:-$(dirname "$0")/../bin/claude-rotate}")"
 profiles="$(dirname "$rotate")/claude-accounts"
 usage_bin="$(dirname "$rotate")/claude-usage"
-A="${CR_E2E_A:-work1-team}" C="${CR_E2E_C:-dopamine}"
+A="${CR_E2E_A:-work1-team}" C="${CR_E2E_C:-work2}" R="${CR_E2E_R:-work1}"
 dir=$(mktemp -d /tmp/cr-e2e.XXXXXX)
 run="cr-e2e-$(basename "$dir" | cut -d. -f2 | tr '[:upper:]' '[:lower:]')"
 t() { tmux -L "$run" "$@"; }
@@ -21,17 +21,18 @@ fail() {
   exit 1
 }
 
-for n in "$A" "$C"; do
+for n in "$A" "$C" "$R"; do
   "$profiles" names | grep -qx "$n" || fail "no account $n here"
 done
 
 "$usage_bin" --json --max-age 600 >"$dir/real-usage.json"
-jq --arg a "$A" --arg c "$C" --argjson now "$(date +%s)" '
+jq --arg a "$A" --arg c "$C" --arg r "$R" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};
   .updated = $now | .hosts = []
   | .accounts |= map(.state = "ok" | .five_hour = w(95) | .seven_day = w(95)
       | if .name == $a then .five_hour = w(1) | .seven_day = w(1)
-        elif .name == $c then .five_hour = w(0) | .seven_day = w(0) else . end)' \
+        elif .name == $c then .five_hour = w(0) | .seven_day = w(0)
+        elif .name == $r then .five_hour = w(1) | .seven_day = {used: 1, resets_at: ($now + 6 * 86400)} else . end)' \
   "$dir/real-usage.json" >"$dir/usage.json"
 mkdir -p "$dir/state"
 jq -n --arg c "$C" --argjson u "$(($(date +%s) + 3600))" '{($c): {until: $u, reason: "e2e seed"}}' >"$dir/state/limits.json"
@@ -56,7 +57,9 @@ picker() {
   fail "the account picker did not open in 30 s"
 }
 screen=$(picker "$run")
-grep -q "^ ❯ [0-9]  $A .*★ most room" <<<"$screen" || fail "the picker does not hold $A as the most room under the cursor"
+grep -q "^ ❯ 1  $A .*★ " <<<"$screen" || fail "the picker does not hold $A first under the cursor"
+grep -A1 -- "── reserve: weekly limit" <<<"$screen" | grep -q "^   2  $R .*reserve · week resets in" ||
+  fail "the picker does not put the weekly-limited $R after the team account $A, under the reserve line"
 grep -q "^   [0-9]  $C .*held back after a limit" <<<"$screen" || fail "the picker does not show $C as held back"
 t send-keys -t "$run" Down
 sleep 1
