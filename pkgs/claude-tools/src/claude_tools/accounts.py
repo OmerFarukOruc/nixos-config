@@ -1,18 +1,43 @@
 from __future__ import annotations
 
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from claude_tools.errors import Failed
 from claude_tools.settings import ACCOUNTS_TOOL
+from claude_tools.store import read_json
 
 
-def accounts() -> dict[str, str]:
+def registry(accounts_file: Path) -> list[str] | None:
+    names = read_json(accounts_file).get("accounts")
+    return list(names) if isinstance(names, dict) else None
+
+
+@dataclass(frozen=True)
+class Accounts:
+    local: dict[str, str]
+    listed: list[str] | None
+
+    @property
+    def usable(self) -> dict[str, str]:
+        return self.local if self.listed is None else {n: d for n, d in self.local.items() if n in self.listed}
+
+    @property
+    def names(self) -> list[str]:
+        return list(self.local) if self.listed is None else self.listed
+
+
+def read_accounts(accounts_file: Path) -> Accounts:
     try:
         out = subprocess.run([str(ACCOUNTS_TOOL), "dirs"], capture_output=True, text=True, check=True).stdout
     except (OSError, subprocess.CalledProcessError) as e:
         raise Failed(f"could not list the accounts: {e}") from e
-    return dict(line.split("\t", 1) for line in out.splitlines() if line)
+    return Accounts(dict(line.split("\t", 1) for line in out.splitlines() if line), registry(accounts_file))
+
+
+def accounts(accounts_file: Path) -> dict[str, str]:
+    return read_accounts(accounts_file).usable
 
 
 def env_for(base: dict, config_dir: str) -> dict:
@@ -46,4 +71,4 @@ def config_dir_of(account: str, dirs: dict[str, str]) -> str:
     d = account.rstrip("/")
     if d in dirs.values():
         return d
-    raise Failed(f"{account!r} is no claude-tools account; accounts: {', '.join(dirs)}")
+    raise Failed(f"{account!r} is no account in accounts.json with a folder here; accounts: {', '.join(dirs)}")

@@ -16,18 +16,20 @@ MOVES = {b"\x1b[A": -1, b"\x1bOA": -1, b"k": -1, b"\x1b[B": 1, b"\x1bOB": 1, b"j
 
 
 class Picker:
-    def __init__(self, dirs: dict[str, str], data: dict, live: dict[str, int], held: set[str], cursor: str | None,
-                 color: bool):
+    def __init__(self, names: list[str], dirs: dict[str, str], data: dict, live: dict[str, int], held: set[str],
+                 cursor: str | None, color: bool):
+        self.names = names
         self.dirs = dirs
         self.data = data
         self.entries = {a["name"]: a for a in data.get("accounts", [])}
         self.live = live
-        self.ranked = order(self.entries, list(dirs), held, now())
+        self.ranked = order(self.entries, names, held, now())
         self.rows = [n for n, _, _ in self.ranked]
         self.group = {n: g for n, g, _ in self.ranked}
         self.why = {n: why for n, _, why in self.ranked}
         self.recommend = next((n for n, g, _ in self.ranked if g != BLOCKED), None)
-        self.choices = [n for n in self.rows if (self.entries.get(n) or {}).get("state") != "logged-out"]
+        self.choices = [n for n in self.rows if n in dirs and (self.entries.get(n) or {}).get("state") != "logged-out"]
+        self.pickable = set(self.choices)
         first = next((x for x in (cursor, self.recommend) if x in self.choices),
                      self.choices[0] if self.choices else None)
         self.i = self.choices.index(first) if first else 0
@@ -41,7 +43,9 @@ class Picker:
 
     def tags(self, cards: Cards, name: str, e: dict) -> list[str]:
         tags = []
-        if e.get("state") == "logged-out":
+        if name not in self.dirs:
+            tags.append(cards.c(f"no login here · claude-tools accounts login {name}", RED))
+        elif e.get("state") == "logged-out":
             tags.append(cards.c(f"logged out · claude-tools accounts login {name}", RED))
         elif not e:
             tags.append(cards.c("no reading yet", DIM))
@@ -60,13 +64,13 @@ class Picker:
         sel = self.choices and name == self.choices[self.i]
         cards = Cards(self.color, width)
         cards.bar = max(6, min(14, (width - wname - 58) // 2))
-        pick = name in self.choices
+        pick = name in self.pickable
         num = str(self.choices.index(name) + 1) if pick and self.choices.index(name) < 9 else " "
         head = (cards.c("❯", ACCENT, BOLD) if sel else " ") + " " + cards.c(num, DIM) + "  "
         head += cards.c(f"{name:<{wname}}", BOLD) if sel else (cards.c(f"{name:<{wname}}", DIM) if not pick else
                                                               f"{name:<{wname}}")
         head += "  " + cards.c(f"{e.get('plan') or '':<8}", DIM)
-        if e and e.get("state") != "logged-out":
+        if e and name in self.pickable:
             at, stale = e.get("checked") or now(), e.get("source") == "stale"
             head += "  " + self.mini(cards, "5h", e.get("five_hour"), WINDOWS["five_hour"], at, stale)
             head += "   " + self.mini(cards, "7d", e.get("seven_day"), WINDOWS["seven_day"], at, stale)
@@ -102,7 +106,7 @@ class Picker:
         checked = "checked just now" if age < 60 else f"checked {span(age)} ago"
         title = " " + cards.c("✻ Claude Code", ACCENT, BOLD) + cards.c("   choose the account for this session", DIM)
         lines = [title + " " * max(1, width - visible(title) - len(checked) - 1) + cards.c(checked, DIM), ""]
-        wname = max((len(n) for n in self.dirs), default=8)
+        wname = max((len(n) for n in self.names), default=8)
         for k, n in enumerate(self.rows):
             if self.group[n] == RESERVE and (k == 0 or self.group[self.rows[k - 1]] != RESERVE):
                 lines.append(" " + cards.c("── reserve: weekly limit ", TRACK))

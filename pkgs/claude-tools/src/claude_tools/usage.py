@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import accounts, env_for, folder
+from claude_tools.accounts import accounts, env_for, folder, registry
 from claude_tools.errors import Failed
 from claude_tools.settings import Settings
 from claude_tools.store import locked, now, read_json, write_json
@@ -217,7 +217,8 @@ def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: 
     data = load_cache(settings)
     unknown = [n for n in only if n not in dirs]
     if unknown:
-        raise Failed(f"no account {', '.join(unknown)}; accounts: {', '.join(dirs)}")
+        raise Failed(f"no account {', '.join(unknown)} in accounts.json with a folder here; "
+                     f"accounts: {', '.join(dirs)}")
     old, at = by_name(data), now()
     keep = {n for n in dirs if n in old and (only and n not in only or max_age is not None
                                              and at - (old[n].get("checked") or 0) <= max_age)}
@@ -249,7 +250,7 @@ def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: 
 
 
 def locked_refresh(settings: Settings, only: list[str], max_age: int | None, deadline: float | None = None) -> dict:
-    dirs = accounts()
+    dirs = accounts(settings.accounts_file)
 
     def fresh(data: dict) -> bool:
         return (max_age is not None and not only and now() - data.get("updated", 0) <= max_age
@@ -272,8 +273,9 @@ def combined(data: dict, accounts_file: Path) -> list[dict]:
     hosts = [{"host": me, "local": True, "updated": data.get("updated"), "error": None,
               "accounts": data.get("accounts", [])}]
     hosts += [{**h, "local": False} for h in data.get("hosts", [])]
-    registry = read_json(accounts_file).get("accounts")
-    names = list(registry) if registry is not None else list(dict.fromkeys(a["name"] for h in hosts for a in h["accounts"]))
+    names = registry(accounts_file)
+    if names is None:
+        names = list(dict.fromkeys(a["name"] for h in hosts for a in h["accounts"]))
     return [combined_entry(n, hosts) for n in names]
 
 

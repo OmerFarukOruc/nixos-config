@@ -28,12 +28,17 @@ fail() {
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
 done
+D=$(profiles names | grep -vxF -e "$A" -e "$C" -e "$R" | head -n 1) M=e2e-no-folder
+[[ -n "$D" ]] || fail "no fourth account here to leave out of accounts.json"
+mkdir -p "$dir/data"
+jq --arg d "$D" --arg m "$M" 'del(.accounts[$d]) | .accounts[$m] = {email: "e2e@example.invalid", org: "personal"}' \
+  "${CLAUDE_TOOLS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}/accounts.json" >"$dir/data/accounts.json"
 
 "$tools" usage --json --max-age 600 >"$dir/real-usage.json"
-jq --arg a "$A" --arg c "$C" --arg r "$R" --argjson now "$(date +%s)" '
+jq --arg a "$A" --arg c "$C" --arg r "$R" --arg d "$D" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};
   .updated = $now | .hosts = []
-  | .accounts |= map(.state = "ok" | .five_hour = w(95) | .seven_day = w(95)
+  | .accounts |= map(select(.name != $d) | .state = "ok" | .five_hour = w(95) | .seven_day = w(95)
       | if .name == $a then .five_hour = w(1) | .seven_day = w(1)
         elif .name == $c then .five_hour = w(0) | .seven_day = w(0)
         elif .name == $r then .five_hour = w(1) | .seven_day = {used: 1, resets_at: ($now + 6 * 86400)} else . end)' \
@@ -43,7 +48,7 @@ jq -n --arg c "$C" --argjson u "$(($(date +%s) + 3600))" '{($c): {until: $u, rea
 
 t new-session -d -s "$run" -x 200 -y 50 \
   "cd $dir && exec env -u CLAUDE_CONFIG_DIR -u CLAUDE_TOOLS_ROTATE_ID CLAUDE_TOOLS_CACHE=$dir/cache \
-CLAUDE_TOOLS_STATE=$dir/state $tools rotate --model haiku \
+CLAUDE_TOOLS_STATE=$dir/state CLAUDE_TOOLS_DATA=$dir/data $tools rotate --model haiku \
 --dangerously-skip-permissions"
 t set-option -t "$run" remain-on-exit on
 wrapper=$(t display -p -t "$run" '#{pane_pid}')
@@ -61,6 +66,9 @@ picker() {
   fail "the account picker did not open in 30 s"
 }
 screen=$(picker "$run")
+! grep -q "^.\{6\}$D " <<<"$screen" || fail "the picker lists $D, which accounts.json does not list"
+grep -q "^      $M .*no login here · claude-tools accounts login $M" <<<"$screen" ||
+  fail "the picker does not show $M, which accounts.json lists and this host has no folder for, as unpickable"
 grep -q "^ ❯ 1  $A .*★ " <<<"$screen" || fail "the picker does not hold $A first under the cursor"
 grep -A1 -- "── reserve: weekly limit" <<<"$screen" | grep -q "^   2  $R .*reserve · week resets in" ||
   fail "the picker does not put the weekly-limited $R after the team account $A, under the reserve line"
@@ -131,7 +139,7 @@ echo "exit: /exit ended claude-tools rotate with exit code 0"
 
 t new-session -d -s "$run-q" -x 200 -y 50 \
   "cd $dir && exec env -u CLAUDE_CONFIG_DIR -u CLAUDE_TOOLS_ROTATE_ID CLAUDE_TOOLS_CACHE=$dir/cache \
-CLAUDE_TOOLS_STATE=$dir/state $tools rotate --model haiku"
+CLAUDE_TOOLS_STATE=$dir/state CLAUDE_TOOLS_DATA=$dir/data $tools rotate --model haiku"
 t set-option -t "$run-q" remain-on-exit on
 picker "$run-q" >/dev/null
 t send-keys -t "$run-q" q

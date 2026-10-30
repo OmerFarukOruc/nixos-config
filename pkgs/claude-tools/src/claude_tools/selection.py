@@ -125,7 +125,7 @@ def best(settings: Settings, readings: dict[str, dict], names: list[str]) -> str
 
 
 def next_account(settings: Settings, skip: str | None) -> str | None:
-    names = [n for n in accounts() if n != skip]
+    names = [n for n in accounts(settings.accounts_file) if n != skip]
     at, readings = now(), entries(settings)
     held = holds(settings.holds_file, at)
     fresh = [n for n in names if n not in held and at - ((readings.get(n) or {}).get("checked") or 0) > RECENT]

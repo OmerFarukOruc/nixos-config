@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import account_of, accounts, env_for
+from claude_tools.accounts import Accounts, account_of, env_for, read_accounts
 from claude_tools.agents import sessions
 from claude_tools.errors import Failed
 from claude_tools.limits import NO_RESET_WAIT
@@ -36,6 +36,7 @@ class Rotation:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.state = settings.state / "rotate"
+        self.accounts = Accounts({}, None)
         self.dirs: dict[str, str] = {}
 
     @property
@@ -55,8 +56,8 @@ class Rotation:
             by_dir = sessions(self.settings.home)
             live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
             try:
-                picker = Picker(self.dirs, load_cache(self.settings), live, held_names(self.settings), cursor,
-                                self.settings.color)
+                picker = Picker(self.accounts.names, self.dirs, load_cache(self.settings), live,
+                                held_names(self.settings), cursor, self.settings.color)
                 outcome, name = picker.run()
             except Exception as e:
                 self.say(f"the account picker failed ({e!r})")
@@ -266,7 +267,8 @@ def plain(args: list[str]) -> None:
 
 def first_account(r: Rotation, args: list[str]) -> str | None:
     try:
-        r.dirs = accounts()
+        r.accounts = read_accounts(r.settings.accounts_file)
+        r.dirs = r.accounts.usable
         if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
         data = locked_refresh(r.settings, [], CACHE_MAX_AGE)

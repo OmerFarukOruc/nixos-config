@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from datetime import datetime
 
-from claude_tools.accounts import account_of, accounts
+from claude_tools.accounts import account_of, read_accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
 from claude_tools.errors import Failed
 from claude_tools.limits import find_limit
@@ -89,8 +89,9 @@ class Switcher:
             raise Failed(f"herdr knows no session id for {name}; is the claude integration installed?")
         pane = agent["pane_id"]
         pid, argv, config_dir = self.agents.claude_process(pane)
-        dirs = accounts()
-        current = account_of(config_dir, dirs, self.settings.home)
+        found = read_accounts(self.settings.accounts_file)
+        dirs = found.usable
+        current = account_of(config_dir, found.local, self.settings.home)
         if to is None:
             try:
                 to = next_account(self.settings, None if after_limit else current)
@@ -111,7 +112,7 @@ class Switcher:
             self.agents.start_claude(pane, name, dirs[to], resume_args(argv[1:], session))
         except Failed as e:
             self.log(f"{name}: start on {to} failed ({e}); starting it on {current} again")
-            self.agents.start_claude(pane, name, dirs[current], resume_args(argv[1:], session))
+            self.agents.start_claude(pane, name, found.local[current], resume_args(argv[1:], session))
             raise
         self.herdr("agent", "prompt", name, self.resume_message(name, (
             f"Your Claude account {current} hit its usage limit, so this session now runs on the {to} account. "
@@ -183,9 +184,9 @@ class Switcher:
                             "session": sid, "config_dir": config_dir, "args": argv[1:]}
         self.save("agents.json", next_record(record, agents, server, failed, time.time()))
 
-    def move_limited(self, a: dict, hit: str, dirs: dict[str, str]) -> None:
+    def move_limited(self, a: dict, hit: str, local: dict[str, str]) -> None:
         name = a["name"]
-        current = account_of(self.agents.claude_process(a["pane_id"])[2], dirs, self.settings.home)
+        current = account_of(self.agents.claude_process(a["pane_id"])[2], local, self.settings.home)
         try:
             held = hold_limit(self.settings, current, hit)
         except (OSError, subprocess.SubprocessError, ValueError) as e:
@@ -199,7 +200,7 @@ class Switcher:
         record = self.load("agents.json")
         lost = self.restore(record, server)
         switched = self.load("switched.json")
-        dirs, failed = None, len(lost)
+        local, failed = None, len(lost)
         for a in self.herdr.agents():
             name = a.get("name")
             if a.get("agent") != "claude" or a.get("agent_status") == "working" or name is None:
@@ -210,8 +211,8 @@ class Switcher:
             if not hit:
                 continue
             try:
-                dirs = dirs or accounts()
-                self.move_limited(a, hit, dirs)
+                local = local or read_accounts(self.settings.accounts_file).local
+                self.move_limited(a, hit, local)
             except Failed as e:
                 failed += 1
                 self.log(f"{name}: switch failed: {e}")

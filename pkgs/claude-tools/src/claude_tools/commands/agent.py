@@ -79,7 +79,7 @@ def start(settings: Settings, a: argparse.Namespace) -> None:
     ag = Agents(settings)
     if ag.running(a.name):
         raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it")
-    config_dir = config_dir_of(a.account, accounts()) if a.account else settings.config_dir
+    config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
     where = caller(settings, ag)
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
                        *(["--workspace", where["workspace_id"]] if where else []))["result"]

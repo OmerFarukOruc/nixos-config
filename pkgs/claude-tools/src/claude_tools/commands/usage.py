@@ -23,7 +23,7 @@ WATCH_MAX_AGE = 300
 def show(settings: Settings, data: dict) -> str:
     try:
         by_dir = sessions(settings.home)
-        live = {n: by_dir[d] for n, d in accounts().items() if by_dir.get(d)}
+        live = {n: by_dir[d] for n, d in accounts(settings.accounts_file).items() if by_dir.get(d)}
     except (OSError, Failed):
         live = {}
     color = sys.stdout.isatty() and settings.color
@@ -53,7 +53,8 @@ def watch(settings: Settings, max_age: int) -> int:
 
 def run(settings: Settings, a: argparse.Namespace) -> int:
     if a.order:
-        for n in startable(settings, entries(settings), [n for n in accounts() if n not in a.skip]):
+        names = [n for n in accounts(settings.accounts_file) if n not in a.skip]
+        for n in startable(settings, entries(settings), names):
             print(n)
         return 0
     if a.watch:
