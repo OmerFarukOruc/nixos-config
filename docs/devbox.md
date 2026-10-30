@@ -500,10 +500,17 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   xrdp listens on every address, as sshd does, so the firewall is the only
   guard.
 - **First use.** The workstations have Remmina
-  (`home-manager/profiles/workstation.nix`): connect to `devbox` as
-  omer with omer's password (the hash is in `secrets/devbox.yaml`). A
-  Home Manager step sets Remmina's RDP keyboard layout to Turkish Q, and its
-  default colour depth ("Automatic") gets H.264 from xrdp. A one-off run of the
+  (`home-manager/profiles/workstation.nix`): open its `devbox` profile and log
+  in as omer with omer's password (the hash is in `secrets/devbox.yaml`).
+  A Home Manager step writes that profile with dynamic resolution, so the
+  desktop follows the window size. Without it, a quick connect from
+  nixos-desktop on 2026-10-30 kept the size Remmina read from its window
+  before the window mapped, 644x480. The step also sets Remmina's RDP keyboard layout to
+  Turkish Q. Remmina's default colour depth ("Automatic") gets H.264 from
+  xrdp. The tailnet policy, in the Tailscale admin console, grants TCP 3389 on
+  devbox to nixos-desktop (`tag:desktop-relay`); nixos-rog and nixos-latitude
+  reach it as Omer's own devices, through the grant that lets members reach
+  every device. A one-off run of the
   desktop test on 2026-10-28 with Remmina 1.4.43 as the client showed the `tr`
   layout, H.264, ı, ş and ğ, and pointer moves that reach the desktop at once.
   sesman refuses root logins, which it allows by default. The XFCE screensaver is off, because the login and every
