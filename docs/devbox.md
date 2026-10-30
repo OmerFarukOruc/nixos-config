@@ -284,9 +284,10 @@ during the run, it rebases and runs the checks again; a rebase conflict or a
 push race leaves `main` alone until the next night. The module is
 `nixosModules/nightly-update.nix`.
 
-The unit runs as the system user `nightly-update` with a 4h30min limit. A run
-that would start within 4h40min of the 02:10 UTC reboot
-([Deploys](#deploys)) exits at once, so no run crosses the reboot. The timer
+The unit runs as the system user `nightly-update` with a 4h30min limit. It
+has no start window, and while it runs the 02:10 UTC reboot
+([Deploys](#deploys)) waits for the next night. A run started in the minute
+after the reboot unit scheduled a reboot is still stopped by that reboot. The timer
 is not `Persistent`, because the box stays on and a missed night waits for the
 next one.
 
@@ -762,7 +763,8 @@ the store path of one specialisation. `ci/self-deploy/test.py` holds the
 checks. They start `self-deploy.service` against a good main, the same main
 again, a main that breaks sshd (the previous system returns, the unit fails and
 the next run waits for main to move) and a main with another initrd (the reboot
-unit schedules a reboot, and waits while a deploy holds the lock) and a main
+unit schedules a reboot, and waits while a deploy holds the lock or a nightly
+update runs) and a main
 whose evaluation cannot download an input (the unit fails, records no failed
 main, and the next main deploys). They also check the timer calendars, the
 ignore list of the session check, omer's sudo password, the boot entries on the

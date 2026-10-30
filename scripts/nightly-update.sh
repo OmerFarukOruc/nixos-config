@@ -87,15 +87,6 @@ on_exit() {
 trap on_exit EXIT
 trap 'fail "systemd stopped the run at its time limit or for a shutdown. See: journalctl -u $unit_name"; exit 143' TERM
 
-now=$(date -u +%s)
-reboot=$(date -u -d 'today 02:10' +%s)
-((reboot > now)) || reboot=$(date -u -d 'tomorrow 02:10' +%s)
-if ((reboot - now < 4 * 3600 + 40 * 60)); then
-  result=skip
-  echo "Too close to the 02:10 UTC reboot; the next run tries again."
-  exit 0
-fi
-
 github_config
 sync_main "$repo" "$dir"
 if [[ $branch != main ]]; then

@@ -444,12 +444,13 @@ deploy since the boot changed them. The test is the one that NixOS's own upgrade
 reboot uses. It compares the kernel modules too, which hold the modules the
 running kernel loads. It skips the night, with a warning at priority warning,
 when the boot default is not the running system (a `test` deploy leaves the boot
-default behind, and a reboot would drop what runs now), or when a deploy runs,
-holds the lock or has armed a rollback timer. A skip exits 0, and the next night
-tries again. It never starts a deploy. A deploy
-that starts within that one minute can still be cut short by the reboot, and
-the host then boots the previous system, the boot default that the deploy had
-not yet replaced. Limine counts no boot attempts, so a new kernel that does not
+default behind, and a reboot would drop what runs now), or when a deploy or
+devbox's nightly update runs, a deploy holds the lock or has armed a rollback
+timer. A skip exits 0, and the next night
+tries again. It never starts a deploy. A deploy or a nightly update
+that starts within that one minute can still be cut short by the reboot. After
+a deploy cut short, the host boots the previous system, the boot default that
+the deploy had not yet replaced. Limine counts no boot attempts, so a new kernel that does not
 boot leaves the host down until someone opens the provider's console and picks
 the previous entry from Limine's menu; nothing reports it. The telemetry work
 that ships the journal is where an alert on a missing host belongs.
