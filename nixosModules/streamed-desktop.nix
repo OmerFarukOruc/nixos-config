@@ -12,6 +12,10 @@ lib.mkIf config.oruc.machine.features.streamedDesktop {
     enableScreensaver = false;
   };
 
+  environment.etc."xdg/autostart/pipewire-xrdp.desktop".source = "${
+    pkgs.callPackage ../pkgs/pipewire-module-xrdp.nix { }
+  }/etc/xdg/autostart/pipewire-xrdp.desktop";
+
   services.xrdp = {
     enable = true;
     defaultWindowManager = "${pkgs.dbus}/bin/dbus-run-session xfce4-session";

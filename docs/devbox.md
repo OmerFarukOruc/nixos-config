@@ -582,9 +582,21 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
 - **Logs.** xrdp's logs go to the journal, where the NixOS module sends them to
   `/dev/null`, and `journalUnits` lists `xrdp.service` and
   `xrdp-sesman.service`.
-- **Audio** is not set up or tested. PipeWire runs on the box already, because
-  `programs.labwc` of the agent runtime turns on nixpkgs'
-  `services.graphical-desktop`, which turns PipeWire on.
+- **Audio.** PipeWire runs on the box, because `programs.labwc` of the agent
+  runtime turns on nixpkgs' `services.graphical-desktop`, which turns PipeWire
+  on. nixpkgs' `services.xrdp.audio` loads only a PulseAudio module, so
+  `pkgs/pipewire-module-xrdp.nix` packages xrdp's PipeWire module, and
+  `/etc/xdg/autostart/pipewire-xrdp.desktop` runs its `load_pw_modules.sh`
+  when XFCE starts in an xrdp session. The script ends the `pw-cli` process
+  that held the module for the previous login, starts a new one that adds the
+  `xrdp-sink` and `xrdp-source` nodes, and makes them the defaults. It also
+  forces a PipeWire quantum of 2048 samples. That `pw-cli`, the default nodes
+  and the quantum stay after a logout until the next login or a PipeWire
+  restart, and they apply to every PipeWire client of omer. A client hears the
+  sound when it asks for it, as Remmina's `devbox` profile does
+  (`sound=local`). During a session,
+  `wpctl inspect @DEFAULT_AUDIO_SINK@ | grep node.name` on the box prints
+  `xrdp-sink`.
 - **Why not Sunshine.** Sunshine with Moonlight was the other route. In the
   last passing [desktop test](#desktop-test-in-a-vm)
   that measured both, on 4 cores of nixos-desktop, the whole VM used 0.99
