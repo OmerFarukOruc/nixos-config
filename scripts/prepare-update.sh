@@ -113,8 +113,6 @@ if [[ -n $failed ]]; then
     tags=
   fi
 fi
-scripts/update-kernel.sh || warn "The kernel input stays where it is."
-
 # Prints the coding agents that HOST's system would compile because
 # cache.numtide.com does not hold their new build yet, or "unknown" when it
 # cannot tell.

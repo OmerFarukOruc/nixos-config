@@ -13,18 +13,12 @@ in
 {
   nixpkgs.overlays = [ inputs.nix-cachyos-kernel.overlays.pinned ];
   nix.settings = {
-    extra-substituters = [
-      "https://omerfarukoruc.cachix.org"
-      "https://cache.lantian.pub/lantian"
-    ];
-    extra-trusted-public-keys = [
-      "omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c="
-      "lantian:WVGO7vsRMSEN+h7Lp7kv6SAmrkEXgUGbbXm7jMDjBuQ="
-    ];
+    extra-substituters = [ "https://cache.lantian.pub/lantian" ];
+    extra-trusted-public-keys = [ "lantian:WVGO7vsRMSEN+h7Lp7kv6SAmrkEXgUGbbXm7jMDjBuQ=" ];
   };
 
   boot.kernelPackages = (lib.getAttrFromPath spec.package pkgs).extend (
-    import ../kernel-cache/kernel-module-certs.nix lib
+    import ./kernel-module-certs.nix lib
   );
 
   assertions = [

@@ -92,8 +92,8 @@ what you keep first. Before you start, have these ready:
 
    ```
    export NIX_CONFIG='experimental-features = nix-command flakes
-   extra-substituters = https://omerfarukoruc.cachix.org https://cache.numtide.com
-   extra-trusted-public-keys = omerfarukoruc.cachix.org-1:6OxbnSmF+Agsn0w9aya633NTlxjxXAtsETYNcImB87c= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
+   extra-substituters = https://cache.lantian.pub/lantian https://cache.numtide.com
+   extra-trusted-public-keys = lantian:WVGO7vsRMSEN+h7Lp7kv6SAmrkEXgUGbbXm7jMDjBuQ= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g='
    curl -L https://github.com/OmerFarukOruc/nixos-config/archive/<commit>.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
    nixos-generate-config --root /mnt --show-hardware-config > /tmp/generated.nix
    grep -A8 availableKernelModules /tmp/generated.nix

@@ -17,13 +17,10 @@ check() {
 }
 
 lock_files() {
-  local flake
-  for flake in . ./kernel-cache; do
-    nix flake metadata "${nix_opts[@]}" --no-update-lock-file "$flake" >/dev/null || {
-      echo "flake.lock of $flake does not match its flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check.sh --fix relocks" >&2
-      return 1
-    }
-  done
+  nix flake metadata "${nix_opts[@]}" --no-update-lock-file . >/dev/null || {
+    echo "flake.lock does not match flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check.sh --fix relocks" >&2
+    return 1
+  }
 }
 
 flake_outputs() {
@@ -135,8 +132,6 @@ check "lock files" lock_files
 check formatting nix fmt "${nix_opts[@]}" --no-update-lock-file -- --ci
 check "flake outputs" flake_outputs
 check "host systems" host_systems
-check "kernel-cache packages" nix eval "${nix_opts[@]}" --json --no-write-lock-file \
-  ./kernel-cache#packages.x86_64-linux --apply 'builtins.mapAttrs (_: p: p.drvPath)'
 echo
 check "box browser feature" box_browser
 echo

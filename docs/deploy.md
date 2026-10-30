@@ -57,8 +57,7 @@ This guide uses these terms:
 
 A change reaches `main` only through the git hooks of `devenv.nix`, which
 direnv installs when it loads the devenv shell. GitHub runs no check of a
-commit that a person pushes. It only builds the kernel
-([kernel-cache](../kernel-cache/README.md)).
+commit that a person pushes.
 
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |

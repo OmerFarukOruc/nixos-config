@@ -7,7 +7,6 @@
 - [Spotify and Spicetify](#spotify-and-spicetify)
 - [Apps](#apps)
 
-`update-kernel.sh` needs no Nix.
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Grok Bot package, npm and
 `prefetch-npm-deps` through Nix for cf and openchamber-web, and a build for the
@@ -15,7 +14,7 @@ apps with a GitHub release source. Run those scripts in a
 checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
 `update-app.sh antigravity-hub`, `update-app.sh openchamber` and
 `update-app.sh impeccable` need no Nix. `scripts/prepare-update.sh` runs all
-four scripts, and `devenv update` for `devenv.lock`
+three scripts, and `devenv update` for `devenv.lock`
 ([Update by hand](#update-by-hand)).
 
 Each script changes files in that checkout and commits nothing. Commit the
@@ -81,7 +80,6 @@ build of that package.
 
 | Input | When it moves |
 | --- | --- |
-| kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
 | kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
@@ -92,84 +90,29 @@ update tries again.
 
 ## The kernel
 
-To update the CachyOS kernel, move its input to the revision that the
-[kernel-cache](../kernel-cache/README.md) workflow last built:
+The hosts run the CachyOS kernel of
+[nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) from its
+`release` branch. Upstream moves that branch only to a kernel its Hydra has
+built and pushed to its cache, cache.lantian.pub (upstream's README, "How to use
+kernels"). `nixosModules/kernel.nix` adds that cache as a substituter, so the
+kernel moves with the other inputs, through `prepare-update.sh inputs` or
+`nix flake update nix-cachyos-kernel`, and a host downloads it.
 
-```sh
-scripts/update-kernel.sh
-```
+The cache holds a host's kernel only while the host builds it as upstream does:
 
-The script first checks that every path the builder recorded for that revision
-is in the `omerfarukoruc` Cachix cache, which `nixosModules/kernel.nix` adds as a
-substituter. The kernel-cache workflow builds the cache's contents. Those paths are
-the kernels, the NVIDIA open modules, and ryzen-smu, turbostat and nct6687d for
-zen4. When one is missing, the script leaves `flake.lock` unchanged. So a host
-never compiles the kernel itself. A plain `nix flake update` does not check the
-cache.
+- `nixosModules/kernel.nix` uses the input's `pinned` overlay, which builds the
+  kernel with the input's own nixpkgs.
+- `flake.nix` does not let the input follow our nixpkgs.
 
-The script changes `flake.lock` and does not commit it. Commit the lock, then
-deploy as [deploy.md](deploy.md#deploy) describes. The script prints a reminder
-to do so only when its output is a terminal.
+Each host compiles the modules it builds against the kernel: the NVIDIA open
+module (`machines/nixos-rog/nvidia-driver.nix`), ryzen-smu, turbostat and
+v4l2loopback on nixos-rog, and nct6687d on nixos-desktop. On 2026-10-30,
+`scripts/build.sh` on nixos-desktop built the NVIDIA open module, ryzen-smu,
+turbostat and nct6687d for kernel 7.3.0 in 155 s together.
 
-### Move the kernel pin
-
-`kernel-cache/flake.nix` pins nix-cachyos-kernel to a commit on upstream's
-default branch, and nothing moves that pin on its own. No upstream build tests
-those commits, so read what changed upstream since the pin before you move it:
-
-```sh
-gh api 'repos/xddxdd/nix-cachyos-kernel/compare/<old sha>...<new sha>' --jq '.files[] | "\(.status) +\(.additions) -\(.deletions) \(.filename)"'
-```
-
-A commit from upstream's update workflow changes only `flake.lock` and
-`kernel-cachyos/version.json`. Check that each new URL in `version.json` points
-at a CachyOS repository and each new input in `flake.lock` at its usual owner.
-Read every other changed file in full.
-
-Then change the commit in `kernel-cache/flake.nix`, run
-`scripts/check.sh --fix`, which locks the new commit in
-`kernel-cache/flake.lock`, and push the change to `main`. The push starts the
-kernel-cache workflow, which builds and records the new revision. The workflow
-checks out the tip of `main`, not the commit that queued the run. A run that
-waited behind another one would otherwise build its older lock and record it over
-the newer one. The next [update by hand](#update-by-hand) then moves the hosts
-with `update-kernel.sh`.
-
-### When the cache lacks the kernel
-
-When the script reports missing paths because the GitHub runner is slow or
-timed out, build the revision on nixos-desktop instead:
-
-1. Run this command. It takes the Cachix push token from Infisical, builds the
-   variants in a `nixos/nix` container and pushes them. Then it starts the
-   kernel-cache workflow to record them.
-
-   ```sh
-   cd ~/Desktop/workspace && CACHIX_AUTH_TOKEN=$(infisical secrets get CACHIX_AUTH_TOKEN_NIXOS_DESKTOP --plain --silent --env secrets --path /nixos-config) \
-     ~/Desktop/workspace/nixos-config/kernel-cache/scripts/build-local.sh --rev <nix-cachyos-kernel sha> --record zen4 x86_64-v3
-   ```
-
-   The `cd` puts Infisical in the directory that holds its project file,
-   `.infisical.json`. `<nix-cachyos-kernel sha>` is the full 40-character
-   revision that `kernel-cache/flake.lock` locks on `main`, because
-   `update-kernel.sh` compares the recorded paths with that revision:
-
-   ```sh
-   gh api 'repos/OmerFarukOruc/nixos-config/contents/kernel-cache/flake.lock?ref=main' --jq .content | base64 -d | jq -r '.nodes["nix-cachyos-kernel"].locked.rev'
-   ```
-
-   The [kernel-cache README](../kernel-cache/README.md#building-on-another-machine)
-   has the other build options.
-
-2. Wait until the run that the script started has finished. This command
-   shows `completed`, `success` and a `createdAt` after the script ended. A
-   result from an earlier run does not count.
-
-   ```sh
-   gh run list --repo OmerFarukOruc/nixos-config --workflow kernel-cache.yml --event workflow_dispatch --limit 1 --json status,conclusion,createdAt
-   ```
-
-3. Run `update-kernel.sh` again.
+`deploy.sh` builds on the target with the `nix.conf` the target runs, so a
+host reads a new substituter only after it runs a system that lists it. Deploy
+a substituter change to each host before the change that needs it.
 
 ## Other inputs
 
@@ -186,13 +129,12 @@ It locks each input that `flake.lock` lacks or whose URL changed, and copies
 `flake.lock` back. Without `--fix`, the check fails while `flake.lock` lacks an
 input, and so does the pre-push hook.
 
-`move-inputs.sh` never moves the kernel or llm-agents, because each of them
-moves only once a cache holds its builds. It moves every input, or only the
-inputs it names. `prepare-update.sh inputs` runs it.
+`move-inputs.sh` never moves llm-agents, because it moves only once
+cache.numtide.com holds its builds. It moves every input, or only the inputs it
+names. `prepare-update.sh inputs` runs it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
-then compile the kernel and the llm-agents packages. Move the kernel with
-`scripts/update-kernel.sh`. To move one input by hand, use `nix flake update <input>`, or
+then compile the llm-agents packages. To move one input by hand, use `nix flake update <input>`, or
 `scripts/update-release-tags.sh <input>` for an input pinned to a release tag.
 `prepare-update.sh inputs` moves llm-agents once cache.numtide.com holds its
 builds ([Update by hand](#update-by-hand)).

@@ -7,7 +7,6 @@
 - [Secrets](#secrets)
 - [Home Manager](#home-manager)
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
-- [kernel-cache](#kernel-cache)
 
 The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `devbox`.
 
@@ -153,11 +152,10 @@ These rules follow from the list:
   `niri/shells/<name>.kdl` with its binds, because niri treats a missing include
   as an error.
 - **A kernel profile.** Add it to `kernelSpecs` in `machines/selectors.nix`. For
-  the cache to hold a CachyOS profile's build, name it
-  `cachyos-latest-lto-<variant>` and set its `package` to
-  `[ "cachyosKernels" "linuxPackages-cachyos-latest-lto-<variant>" ]`. Then add `<variant>` to
-  `variants` and a `hostPackages` entry (an empty list is valid) in
-  `kernel-cache/flake.nix`. The kernel-cache workflow reads `variants`.
+  a CachyOS profile, set its `package` to
+  `[ "cachyosKernels" "linuxPackages-cachyos-<variant>" ]` with a variant that
+  upstream's cache holds; [nix-cachyos-kernel's README](https://github.com/xddxdd/nix-cachyos-kernel#which-kernel-versions-are-provided)
+  marks the variants it does not cache ([The kernel](updates.md#the-kernel)).
 
 ## Theme
 
@@ -400,10 +398,3 @@ off` stops the daemon until `case-fans on` or the next boot (`on` also clears
 the start limit that 3 failures in 10 minutes set), `case-fans status`
 prints its state file, and `fan-status` lists every fan.
 
-## kernel-cache
-
-`kernel-cache/` is a separate flake. GitHub Actions builds it into the
-`omerfarukoruc` Cachix cache. The cache holds the CachyOS kernels, the NVIDIA
-open modules, and ryzen-smu, turbostat and nct6687d for zen4. The
-[kernel-cache README](../kernel-cache/README.md) explains how the hosts follow
-it.

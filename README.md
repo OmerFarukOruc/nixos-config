@@ -5,13 +5,11 @@
 # nixos-config
 
 **A NixOS desktop, two NixOS laptops and a server in one flake, deployed over Tailscale,<br>
-with a CachyOS kernel that GitHub compiles so the hosts never do.**
+with a CachyOS kernel that the hosts download ready-built.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
 
 [![NixOS unstable](https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white)](https://github.com/NixOS/nixpkgs/tree/nixos-unstable)
-[![kernel-cache](https://img.shields.io/github/actions/workflow/status/OmerFarukOruc/nixos-config/kernel-cache.yml?branch=main&style=flat-square&label=kernel-cache&logo=linux&logoColor=white)](https://github.com/OmerFarukOruc/nixos-config/actions/workflows/kernel-cache.yml)
-[![Cachix](https://img.shields.io/badge/cachix-omerfarukoruc-4E7FC1?style=flat-square)](https://omerfarukoruc.cachix.org)
 
 [Hosts](#hosts) · [Stack](#stack) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
 
@@ -42,7 +40,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 
 | Part | Choice |
 | --- | --- |
-| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel), built on GitHub |
+| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) and its cache |
 | Boot loader | Limine on nixos-rog, nixos-desktop and devbox, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
@@ -56,15 +54,15 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
-| Binary cache | the `omerfarukoruc` Cachix cache and `cache.numtide.com` |
+| Binary cache | `cache.lantian.pub` for the kernel and `cache.numtide.com` |
 
 ## Highlights
 
-- **🧊 A kernel the hosts download.** The [`kernel-cache`](kernel-cache/README.md)
-  flake builds the CachyOS LTO kernel, the NVIDIA open module, ryzen-smu,
-  turbostat and nct6687d on GitHub Actions and pushes them to the `omerfarukoruc` Cachix
-  cache. [`scripts/update-kernel.sh`](scripts/update-kernel.sh) moves a host
-  only to a revision whose every path is already in that cache.
+- **🧊 A kernel the hosts download.** The hosts follow the `release` branch of
+  nix-cachyos-kernel, which moves only to kernels already in upstream's cache.
+  So they download the CachyOS LTO kernel and compile only the modules built
+  against it, such as the NVIDIA open module
+  ([The kernel](docs/updates.md#the-kernel)).
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
   and niri with DankMaterialShell at the login screen. One Base16 scheme sets the
   colors, cursor, icons and wallpaper of all of them. The login screen and the
@@ -122,9 +120,7 @@ nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme,
 home-manager/          the user layer, with one module per shell and app
 niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
-kernel-cache/          the separate flake that GitHub builds into Cachix
 ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
-.github/               the kernel-cache workflow
 devenv.nix             the dev shell, its linters and the git hooks
 scripts/               checks and builds, scripts that act on nixos-rog, update scripts, the deploy unit and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
@@ -154,7 +150,6 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
 | `upgrade [--replace]` (on any host) | deploy the newest `main` to this host; on nixos-rog run the deploy unit now; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
-| `scripts/update-kernel.sh` | move the kernel to the newest cached build |
 | `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
 | `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
 | `scripts/check.sh` | run `ci/checks.sh`, the formatter, lock and flake checks, on a copy of the checkout and list each distinct evaluation warning; `--fix` formats |
@@ -202,7 +197,7 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,
 formatter and output checks, plus each host's system derivation) and
 `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
-GitHub builds only the kernel ([kernel-cache](kernel-cache/README.md)).
+GitHub runs nothing.
 Inputs and apps move only when someone runs the update by hand
 ([Update by hand](docs/updates.md#update-by-hand)).
 
@@ -220,7 +215,6 @@ Inputs and apps move only when someone runs the update by hand
 | [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
-| [kernel-cache](kernel-cache/README.md) | how GitHub builds the kernel and how hosts follow it |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
 | [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |
 

@@ -9,7 +9,7 @@
   # a rewritten pull request cannot break a rebuild. Drop them when a driver
   # release includes https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299.
   patchesOpen = [
-    ./patches/nvidia-nvpcf-refcount.patch
-    ./patches/nvidia-nvpcf-defer.patch
+    ./nvidia-patches/nvidia-nvpcf-refcount.patch
+    ./nvidia-patches/nvidia-nvpcf-defer.patch
   ];
 }

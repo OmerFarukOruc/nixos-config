@@ -106,8 +106,8 @@ cache.nixos.org does not hold the packages that come from this flake's own
 inputs, overlays or settings, such as airpods-tui, DankMaterialShell (DMS),
 Deskflow, the Glass KWin effect and Qt style, linctl, the sddm-astronaut login
 theme and the lock screen's video wallpaper plugin. Each host compiles them
-itself when an update changes them. Only the kernel is built elsewhere and
-cached, on GitHub ([kernel-cache](../kernel-cache/README.md)).
+itself when an update changes them. It also compiles the modules it builds
+against the CachyOS kernel ([The kernel](updates.md#the-kernel)).
 
 whisper-cpp is one of them. `machines/nixos-rog/media.nix` builds it for the
 RTX 4070's CUDA architecture (sm_89) only, so the laptop compiles it each time
@@ -557,9 +557,10 @@ architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when anot
   2026-10-11 on driver 615.78.08, BIOS 316, idle on battery: 4 of 4 drops from
   100 to 96 % woke it with the stock driver, and 0 of 4 with the two patches of
   [NVIDIA pull request 1299](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299)
-  that `patchesOpen` in `kernel-cache/nvidia-driver.nix` lists, which
+  that `patchesOpen` in `machines/nixos-rog/nvidia-driver.nix` lists, which
   `machines/nixos-rog/graphics.nix` imports. Both commits are kept in
-  `kernel-cache/patches/`, so a rewritten pull request cannot break a rebuild.
+  `machines/nixos-rog/nvidia-patches/`, so a rewritten pull request cannot break
+  a rebuild.
   Repeat the count after a driver update, and drop the patches when a driver
   release includes that pull request.
 - The patches do not cover unplugging the charger or switching the platform

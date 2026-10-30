@@ -5,9 +5,8 @@
 # pin or on a branch to the head of that branch. An input pinned to a commit
 # or to a tag of another form stays where it is.
 # Moves every input, or only the INPUTs named.
-# nix-cachyos-kernel and llm-agents never move here, because each moves only
-# once a cache holds its builds: update-kernel.sh moves the kernel, and
-# prepare-update.sh checks cache.numtide.com before it moves llm-agents.
+# llm-agents never moves here, because it moves only once cache.numtide.com
+# holds its builds, which prepare-update.sh checks.
 # Prints "input: old -> new" for each input it moved to a new release.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -20,7 +19,7 @@ named=" $* "
 
 selected=()
 while read -r input; do
-  [[ $input == nix-cachyos-kernel || $input == llm-agents ]] && continue
+  [[ $input == llm-agents ]] && continue
   (($# == 0)) || [[ $named == *" $input "* ]] || continue
   selected+=("$input")
 done < <(jq -r '.nodes.root.inputs | keys[]' flake.lock)

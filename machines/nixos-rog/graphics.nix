@@ -6,9 +6,7 @@
 }:
 let
   radeonRenderNode = import ./radeon-render-node.nix;
-  nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (
-    import ../../kernel-cache/nvidia-driver.nix
-  );
+  nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (import ./nvidia-driver.nix);
   driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
@@ -58,14 +56,9 @@ in
 
   hardware.nvidia = {
     open = true;
-    # nvidiaPackages.latest in flake.lock (the kernel overlay's nixpkgs is node
-    # nixpkgs_2) is older than this version. Drop this block once it is this
-    # version or newer. The cache and host import the same driver arguments.
-    # patchelf 0.15.2 while the driver's package set has 0.19.2
-    # (overlays/nvidia-patchelf.nix); the condition skips the override once
-    # that package set moves to another patchelf. The open kernel module is a
-    # passthru of the driver, so the override keeps the module that the
-    # kernel-cache workflow builds.
+    # The driver's builder needs patchelf 0.15.2 while its package set has
+    # 0.19.2 (overlays/nvidia-patchelf.nix); the condition skips the override
+    # once that package set moves to another patchelf.
     package =
       if driverPatchelf.version == "0.19.2" then
         nvidiaDriver.overrideAttrs (old: {
@@ -93,9 +86,9 @@ in
   # unplugged, but never at its own start, so a boot on battery skips it here.
   systemd.services.nvidia-powerd.unitConfig.ConditionACPower = true;
 
-  # The binary cache holds the NVIDIA module only for the selected kernel, so
-  # the recovery kernel would compile it on the machine; the recovery entry
-  # drops the driver instead. Without it, NixOS no longer blacklists nouveau.
+  # Each kernel needs its own NVIDIA module build, so the recovery entry drops
+  # the driver instead of compiling a second module on the laptop. Without it,
+  # NixOS no longer blacklists nouveau.
   specialisation.recovery.configuration = {
     services.xserver.videoDrivers = lib.mkForce (
       lib.remove "nvidia" config.services.xserver.videoDrivers
