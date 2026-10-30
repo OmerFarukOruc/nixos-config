@@ -64,7 +64,7 @@ start_watch() {
   watch_pid=$!
 }
 
-"$tools" limit-switch restore || fail "restore could not start the $run server"
+env -u CLAUDE_TOOLS_INBOX "$tools" limit-switch restore || fail "restore could not start the $run server"
 h workspace create --cwd "$dir" --label "$run" --no-focus >/dev/null
 account=$("$tools" usage --order | head -n 1)
 [[ -n "$account" ]] || fail "claude-tools usage --order names no account to start the agent on"
@@ -72,7 +72,7 @@ account=$("$tools" usage --order | head -n 1)
 step 1 "a notice waits in the inbox before any watcher"
 "$tools" orch notify INFO "sent before the watcher" --from earlier
 
-step 2 "agent start starts the agent; its brief sends a NEED notice"
+step 2 "agent start starts the agent on a server without CLAUDE_TOOLS_INBOX and passes it on; its brief sends a NEED notice into that inbox"
 cat >"$dir/brief.md" <<EOF
 Run this one shell command with the Bash tool, exactly as written:
 $tools orch notify NEED "e2e question"
@@ -135,12 +135,18 @@ wait_for 60 pane_has_no_agent "$pane" || fail "claude did not exit after /exit"
 agent_listed "$name" && fail "the agent is listed after agent stop"
 tab_labelled "$name" && fail "the tab of the exited agent is still open"
 
-step 9 "a second watcher replaces the first; a lock held by another program refuses a watcher"
+step 9 "a second watcher of the same regex replaces the first, one of another regex is refused; a lock held by another program refuses a watcher"
 lock="$CLAUDE_TOOLS_INBOX.watcher"
 lock_names() { [[ "$(cat "$lock" 2>/dev/null)" == "$1" ]]; }
 start_watch
 first=$watch_pid
 wait_for 10 lock_names "$first" || fail "the first watcher did not write its pid to $lock"
+rc=0
+out=$(timeout 20 "$tools" orch watch "other-$name" 2>&1) || rc=$?
+[[ "$rc" == 1 ]] || fail "a watcher of another regex exited $rc, wanted 1: $out"
+grep -qF "held by pid $first, which watches '$name|driver'" <<<"$out" || fail "no refusal naming pid $first and its regex in: $out"
+ps -p "$first" >/dev/null || fail "the refused watcher stopped the first one"
+lock_names "$first" || fail "the refused watcher took over $lock"
 "$tools" orch watch "$name|driver" >"$dir/watch2.log" 2>&1 &
 watch_pid=$!
 wait_for 15 lock_names "$watch_pid" || fail "the second watcher did not take the lock"

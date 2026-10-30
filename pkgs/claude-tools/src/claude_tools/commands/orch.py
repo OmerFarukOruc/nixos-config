@@ -37,10 +37,14 @@ Lines, each starting with the UTC time:
                                        line repeats only when the error changes
 The first poll only records state, so a restart prints nothing for agents that were already idle. Notices that
 arrived while no watcher ran print at start: the byte offset read so far is kept in <inbox>.offset.
-One watcher runs for each inbox, so each notice wakes the orchestrator once: a new watcher stops the older one
-(its pid is in <inbox>.watcher) and prints "watcher replaced pid N", and the older one prints "watcher stopped by
-SIGTERM" as its last line. Re-arming a Monitor is therefore safe.
-The inbox is CLAUDE_TOOLS_INBOX, by default ~/.local/state/claude-tools/orch/inbox.log.
+One watcher runs for each inbox, so each notice wakes the orchestrator once: a new watcher with the same
+NAME-REGEX stops the older one (its pid is in <inbox>.watcher) and prints "watcher replaced pid N", and the older
+one prints "watcher stopped by SIGTERM" as its last line. Re-arming a Monitor is therefore safe. A watcher whose
+NAME-REGEX differs from the running one's exits 1 and leaves it running, because every notice in the inbox prints
+whatever the regex; give each orchestrator its own inbox.
+The inbox is CLAUDE_TOOLS_INBOX, by default ~/.local/state/claude-tools/orch/inbox.log. Set it to a file of your
+own run before watching; "claude-tools agent start" passes it on to the agents it starts, so their plain
+"claude-tools orch notify" reaches this inbox.
 CLAUDE_TOOLS_HERDR_SESSION names another herdr session than the default one."""
 
 
@@ -79,10 +83,10 @@ def cmdline(pid: int | str) -> list[str]:
     return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")
 
 
-def watcher_program(argv: list[str]) -> str | None:
-    for i in range(1, len(argv) - 1):
+def watcher_of(argv: list[str]) -> tuple[str, str] | None:
+    for i in range(1, len(argv) - 2):
         if argv[i:i + 2] == ["orch", "watch"]:
-            return Path(argv[i - 1]).name
+            return Path(argv[i - 1]).name, argv[i + 2]
     return None
 
 
@@ -93,9 +97,15 @@ def stop_holder(lock_path: Path, pid: int) -> bool:
         return False
     if not argv[0]:
         return False
-    if watcher_program(argv) != watcher_program(cmdline("self")):
+    holder, own = watcher_of(argv), watcher_of(cmdline("self"))
+    if holder is None or own is None or holder[0] != own[0]:
         raise SystemExit(f"claude-tools orch watch: {lock_path} is held by pid {pid}, which is not a watcher; "
                          "not starting")
+    if holder[1] != own[1]:
+        raise SystemExit(f"claude-tools orch watch: {lock_path} is held by pid {pid}, which watches {holder[1]!r} "
+                         f"and not {own[1]!r}; replacing it would send its notices to this watcher. Set "
+                         "CLAUDE_TOOLS_INBOX to an inbox file of your own run in the environment of this watcher; "
+                         "`claude-tools agent start` passes it on to the agents it starts. Not starting")
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:

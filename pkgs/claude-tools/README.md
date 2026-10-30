@@ -40,7 +40,7 @@
 | `CLAUDE_TOOLS_DATA` | the folder with `accounts.json` and `account-prefs.json` |
 | `CLAUDE_TOOLS_CACHE` | the cache folder |
 | `CLAUDE_TOOLS_STATE` | the state folder |
-| `CLAUDE_TOOLS_INBOX` | the orchestrator inbox |
+| `CLAUDE_TOOLS_INBOX` | the orchestrator inbox; `agent start` passes it on to the agent it starts |
 | `CLAUDE_TOOLS_HERDR_SESSION` | a herdr session other than the default one |
 | `CLAUDE_TOOLS_PICK=0` | `rotate` starts on the first account without the list |
 | `CLAUDE_TOOLS_PLAIN=1` | the `claude` function runs plain `claude`; agents that `limit-switch` and `agent start` start get it |
@@ -102,9 +102,9 @@ An extra account's name is the content of its `.claude-profile` file, or `<folde
 
 ## Agents and the orchestrator
 
-- `agent start NAME --cwd DIR` opens a tab named NAME in the caller's workspace with `--no-focus`, so the view of whoever looks at herdr stays where it is. With `CLAUDE_TOOLS_HERDR_SESSION` the tab opens in that session's own workspace, because the caller's pane id belongs to its own session. The brief goes as one prompt that names the file, so a long brief never goes through argv. `--permission-mode` waits until the footer shows the mode before the brief goes out, because a mode switched by keypresses after start raced the brief once. A name whose agent just exited is waited for, since herdr frees it a moment later. When any step fails after the tab exists, the agent that started is stopped and the tab is closed, so the same command can run again.
+- `agent start NAME --cwd DIR` opens a tab named NAME in the caller's workspace with `--no-focus`, so the view of whoever looks at herdr stays where it is. With `CLAUDE_TOOLS_HERDR_SESSION` the tab opens in that session's own workspace, because the caller's pane id belongs to its own session. The brief goes as one prompt that names the file, so a long brief never goes through argv. `--permission-mode` waits until the footer shows the mode before the brief goes out, because a mode switched by keypresses after start raced the brief once. When `CLAUDE_TOOLS_INBOX` is set, the tab gets it through `herdr tab create --env`, so the agent's plain `orch notify` lands in its orchestrator's inbox. A name whose agent just exited is waited for, since herdr frees it a moment later. When any step fails after the tab exists, the agent that started is stopped and the tab is closed, so the same command can run again.
 - `agent peek` reads the last answer from the session transcript, because the screen can miss an answer on Claude's alternate screen (the dotfiles checkout's `desktop/reference/headless-clis/herdr.md`).
-- `orch watch` reads a word that starts with `-` as an option and never as its regex, because a watcher that took it as a name pattern would print the unread notices and move the shared offset, so the orchestrator's own watcher would lose them. One watcher runs per inbox; a new one stops the older one only when the lock holder's command line runs the same program with `orch watch`, and refuses to start next to any other holder.
+- `orch watch` reads a word that starts with `-` as an option and never as its regex, because a watcher that took it as a name pattern would print the unread notices and move the shared offset, so the orchestrator's own watcher would lose them. One watcher runs per inbox, and it prints every notice in the inbox whatever its regex. A new one stops the older one only when the lock holder's command line runs the same program with `orch watch` and the same `NAME-REGEX`, so re-arming a Monitor works. It exits 1 and leaves the holder running when the regex differs, because the replaced watcher's orchestrator would lose its notices to this one, and it refuses to start next to any other holder. Each orchestrator therefore sets `CLAUDE_TOOLS_INBOX` to a file of its own run.
 
 ## Config lock
 
@@ -151,7 +151,7 @@ The end-to-end tests in `tests/` run on devbox against real Claude accounts and 
 
 - `limit-switch-e2e.sh`: a switch held back while every other account is held, a switch, a scan that leaves an agent without a limit alone, a scan that holds and moves an agent whose screen shows a limit message, a scan that holds nothing after an old one, the restore after a server stop, and `resume`.
 - `rotate-e2e.sh`: the account picker and its accounts.json list, the exit codes of `rotate`, a move after a limit, the wait while no account is free, and a prompt typed during that wait.
-- `orch-e2e.sh`: `agent start`, `agent stop`, `agent peek`, `orch notify`, `orch watch`, and a watcher that replaces another one or refuses next to a foreign lock holder.
+- `orch-e2e.sh`: `agent start`, `agent stop`, `agent peek`, `orch notify`, `orch watch`, a watcher that replaces another one of the same regex, refuses to replace one of another regex, or refuses next to a foreign lock holder, and the `CLAUDE_TOOLS_INBOX` an agent starts with.
 
 The picker step reads a usage cache and a hold file that the test writes from the real cache with changed numbers, so it proves how the picker shows and orders those records, not how `usage` and `rotate` write them. The move and wait steps write the hook's flag file themselves, with a made-up session limit message, on accounts that have room, so they prove the hold, the account choice after a fresh reading, the wait and the resume, not the hook or a real limit. The limit-switch scan steps ask the agent to print a made-up limit message, so `scan` reads it off the real screen, but no real limit stands behind it.
 

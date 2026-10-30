@@ -81,8 +81,9 @@ def start(settings: Settings, a: argparse.Namespace) -> None:
         raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it")
     config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
     where = caller(settings, ag)
+    inbox_env = ["--env", f"CLAUDE_TOOLS_INBOX={settings.inbox.absolute()}"] if settings.inbox_set else []
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
-                       *(["--workspace", where["workspace_id"]] if where else []))["result"]
+                       *(["--workspace", where["workspace_id"]] if where else []), *inbox_env)["result"]
     tab, pane = created["tab"]["tab_id"], created["root_pane"]["pane_id"]
     try:
         flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
@@ -167,8 +168,10 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     st = cmds.add_parser("start", help="start a named Claude agent in its own herdr tab",
                          description="Start a named Claude agent in its own herdr tab, in the caller's workspace, "
                                      "without moving anyone's focus. It runs with --dangerously-skip-permissions "
-                                     "and gets one prompt that names the brief file. On a failure after the tab "
-                                     "exists, the agent stops and the tab closes, so the command can run again.")
+                                     "and gets one prompt that names the brief file. When CLAUDE_TOOLS_INBOX is set, "
+                                     "the agent gets it too, so its plain `claude-tools orch notify` reaches the "
+                                     "caller's inbox. On a failure after the tab exists, the agent stops and the "
+                                     "tab closes, so the command can run again.")
     st.add_argument("name", type=agent_name)
     st.add_argument("--cwd", required=True, type=folder)
     st.add_argument("--account", help="an account name or a CLAUDE_CONFIG_DIR folder; default: the caller's account")
