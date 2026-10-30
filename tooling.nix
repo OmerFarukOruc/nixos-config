@@ -106,11 +106,6 @@ in
           options = [ "scripts/check-theme-drift.sh" ];
           includes = [ "*" ];
         };
-        workflow-needs = {
-          command = lib.getExe pkgs.bash;
-          options = [ "scripts/check-workflow-needs.sh" ];
-          includes = [ ".github/workflows/*.yml" ];
-        };
         doc-contents = {
           command = lib.getExe pkgs.bash;
           options = [ "scripts/check-doc-contents.sh" ];

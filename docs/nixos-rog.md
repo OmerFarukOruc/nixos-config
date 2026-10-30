@@ -26,90 +26,12 @@ day. Repeat the measurement before you rely on it.
 
 ## Updater
 
-Two parts keep the hosts current. `.github/workflows/update.yml` moves the
-inputs and apps on GitHub and merges them to `main`. On nixos-rog,
-`oruc-auto-update.service` deploys the newest `main` to the laptop. nixos-desktop
-and nixos-latitude get `main` from `upgrade` on the host or from a manual
-`./deploy.sh <host> switch` ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)).
-
-The workflow runs every 6 hours and when started by hand
-(`gh workflow run update.yml`). It makes two commits on the same `main`, one
-for the apps and one for the inputs, and checks and merges each on its own. So
-a failing input move, such as a nixpkgs change that breaks one host, never
-holds back an app, and a broken app never holds back the inputs. Its jobs:
-
-1. **prepare-apps** and **prepare-inputs** start from the same `main`.
-   prepare-apps runs `scripts/prepare-update.sh apps`, which moves each app
-   with `update-app.sh`; an app joins only when it builds on its own. It
-   commits only `pkgs/`. prepare-inputs runs `scripts/prepare-update.sh
-   inputs`. That moves every input that the table below does not name with
-   `move-inputs.sh` and the inputs in the table by the rules there;
-   [updates.md](updates.md) has those steps. When a host's system no longer
-   evaluates after the `move-inputs.sh` moves, nixpkgs stays where it is, and
-   when that is not enough, every input does; the warning names the host and
-   the error line. An app with a `passthru.depsBun` line moves again, because
-   its dependency hash follows nixpkgs' bun. When something moved, it also
-   moves `devenv.lock` with `devenv update`, while the dev shell of
-   `devenv.nix` still builds with it (`devenv build shell`). It commits only
-   `flake.nix`, `flake.lock`, `devenv.lock` and `pkgs/`. Either job fails when
-   its moves changed another file. A move that stays out shows as a warning
-   on the run's page. Both modes take the host whose system decides the moves
-   and a file `CHANGES`, where they write the commit body that lists the moves,
-   or nothing when nothing moved. The script needs nix, `gh` with `GH_TOKEN`,
-   curl, jq and python3.
-2. **check-apps** runs the checks of the pre-push hook
-   ([Check before you deploy](deploy.md#check-before-you-deploy)),
-   `ci/checks.sh` and `ci/unit-cycles.sh`, on the apps commit.
-   `ci/checks.sh` evaluates every host's system.
-3. **build** builds each host's system with the inputs commit on its own
-   runner. A failed download gets one more try; an evaluation or compile error
-   fails at once and its line shows on the run's page. Each try ends after
-   150 minutes.
-4. **check** runs the same checks on the inputs commit.
-5. **place-apps** and **place-inputs** put each commit on the current `main`
-   with `ci/place-update.sh`. When `main` moved during the run, which takes
-   up to a few hours, and the placed tree is not the checked one, both checks
-   run again. A file that the new `main` changed and holds otherwise than the
-   commit does is a conflict. The inputs commit then merges nothing. For the
-   apps commit, an app whose `pkgs/NAME.nix` or `pkgs/NAME/` has a conflict
-   stays out and the other apps merge; when every app stays out, or a file
-   outside `pkgs/` has a conflict, it merges nothing. Each such case shows a
-   warning on the run's page, and the next run starts from that `main`. The
-   inputs commit goes on top of the apps commit, so place-inputs waits for
-   merge-apps, and runs too when the apps path failed or had nothing to merge.
-6. **merge-apps** and **merge-inputs** push their commit to `main` with
-   `ci/merge-update.sh`. `main` takes only a fast-forward, so when `main`
-   moved again, it merges nothing, shows a warning, and the next run tries
-   again. Only these jobs may push, and they run main's own script and no code
-   of the update or its inputs.
-
-A failed job fails the run, and GitHub sends its usual mail about a failed
-workflow run. When one commit fails, the other commit still merges when its
-own jobs pass, and the next run tries the failed one again from `main`. With
-`-f always=true`, a run started by hand builds and checks `main` itself when
-no input moved, and merges no inputs.
-
-A skipped job fails nothing, so the last job, **merged**, fails the run when a
-place job readied a commit and its merge job then did not succeed. A merge job
-that finds `main` moved again succeeds without a push, so **merged** passes
-then. `nix fmt` runs `scripts/check-workflow-needs.sh`, which refuses a job
-that needs an `always()`, `!cancelled()` or `failure()` job unless its own
-`if` holds `always()` or `!cancelled()`, because GitHub skips that job
-whenever a job before it was skipped.
-
-The workflow pushes nothing to a cache, so each host still compiles the
-packages listed under [Packages no cache holds](#packages-no-cache-holds).
-
-| Input | When it moves |
-| --- | --- |
-| kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
-| llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
-
-When the new llm-agents revision has a coding agent that cache.numtide.com does
-not hold yet for nixos-rog's system, or the run cannot tell, llm-agents stays
-where it is. So the laptop does not compile an agent at full load. The next run
-tries again.
+On nixos-rog, `oruc-auto-update.service` deploys the newest `main` to the
+laptop. nixos-desktop and nixos-latitude get `main` from `upgrade` on the host
+or from a manual `./deploy.sh <host> switch`
+([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)). Inputs and apps
+move only when a person or an agent runs the update by hand
+([Update by hand](updates.md#update-by-hand)).
 
 ### Deploy unit
 
@@ -153,15 +75,6 @@ it runs and exits with the run's status. From nixos-desktop:
 ssh -t nixos-rog upgrade
 ```
 
-To test a change to `scripts/prepare-update.sh` or `update.yml`, land it and
-run `gh workflow run update.yml`; add `-f always=true` when nothing upstream
-moved. Until the run ends, push nothing to `main`, because the place jobs drop
-a commit whose files `main` changed meanwhile, and a merge job pushes nothing
-when `main` moved after its place job. The `update` concurrency group keeps
-one run waiting, and a newer run, such as the 6-hourly schedule, cancels it;
-after the dispatch, check `gh run list -w update.yml` and follow the run that
-is left. A merge shows on `main` as a commit by `github-actions[bot]`.
-
 To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
 `nixosModules/deploy-unit.nix`, deploy it to nixos-rog and run `upgrade`.
 
@@ -185,8 +98,7 @@ The mask lasts until the next reboot. After the reboot the unit runs again.
 `Persistent=true` runs a missed run soon after boot (on 2026-10-11 it started
 about 2 minutes after boot). Pause the unit again after each reboot, or it may
 deploy `main` before you do. [recovery.md](recovery.md#nixos-rog) uses this
-pause when it pins a generation. The pause does not stop the workflow, which
-only merges to `main`.
+pause when it pins a generation.
 
 ### Packages no cache holds
 
@@ -199,16 +111,13 @@ cached, on GitHub ([kernel-cache](../kernel-cache/README.md)).
 
 whisper-cpp is one of them. `machines/nixos-rog/media.nix` builds it for the
 RTX 4070's CUDA architecture (sm_89) only, so the laptop compiles it each time
-an update changes its derivation. Each run of the update workflow builds cold.
-In three runs on 2026-10-27, the nixos-rog build job took 95 to 102 min,
-nixos-desktop 28 to 31 min and nixos-latitude 25 to 42 min (job start and end
-times of the runs).
+an update changes its derivation.
 
 ## Failures and notifications
 
-The workflow's failures show on GitHub, as above. This table covers the deploy
-unit on nixos-rog. The exit codes come from `deploy.sh`; the
-[exit-code table in deploy.md](deploy.md#exit-codes) says what each one means.
+This table covers the deploy unit on nixos-rog. The exit codes come from
+`deploy.sh`; the [exit-code table in deploy.md](deploy.md#exit-codes) says what
+each one means.
 
 | Event | What happens | Notification |
 | --- | --- | --- |

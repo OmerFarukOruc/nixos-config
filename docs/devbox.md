@@ -406,7 +406,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   and the box's own list) and runs Omer's agent services as user services of
   omer: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
   UI (`pkgs/herdr-web-ui.nix`, 127.0.0.1:7317), herdr's default session, the
-  Amp runner and the Cursor worker. The update workflow moves those packages
+  Amp runner and the Cursor worker. An update by hand moves those packages
   like the others ([updates.md](updates.md#apps)). A deploy leaves a running
   OpenChamber, herdr session, Amp runner and Cursor worker alone
   (`X-SwitchMethod = "keep-old"`), so the new version starts at their next

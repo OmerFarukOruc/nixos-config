@@ -55,7 +55,7 @@ Nothing unfree is pushed. The NVIDIA module builds from
 
 ## Setup
 
-- Repository variable `CACHIX_CACHE`: the Cachix cache name. Both workflows skip
+- Repository variable `CACHIX_CACHE`: the Cachix cache name. The workflow skips
   while it is unset.
 - Repository secret `CACHIX_AUTH_TOKEN`: a Cachix token that may push to that
   cache.

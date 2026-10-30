@@ -1,5 +1,6 @@
 # Update inputs, apps and the kernel
 
+- [Update by hand](#update-by-hand)
 - [The kernel](#the-kernel)
 - [Other inputs](#other-inputs)
 - [Release tags](#release-tags)
@@ -13,13 +14,81 @@
 apps with a GitHub release source. Run those scripts in a
 checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
 `update-app.sh antigravity-hub`, `update-app.sh openchamber` and
-`update-app.sh impeccable` need no Nix. The update workflow runs all four scripts through
-`scripts/prepare-update.sh`, and `devenv update` for `devenv.lock`
-([nixos-rog.md](nixos-rog.md#updater)).
+`update-app.sh impeccable` need no Nix. `scripts/prepare-update.sh` runs all
+four scripts, and `devenv update` for `devenv.lock`
+([Update by hand](#update-by-hand)).
 
 Each script changes files in that checkout and commits nothing. Commit the
 change and push it to `main` as [AGENTS.md](../AGENTS.md) describes, then
 deploy as [deploy.md](deploy.md#deploy-a-change-on-main) describes.
+
+## Update by hand
+
+Inputs and apps move only when a person or an agent runs the update. No
+workflow or timer moves them. Run it on nixos-desktop or nixos-rog, in a
+worktree on a branch from a freshly fetched `origin/main`:
+
+1. Move the apps. The script moves each app in `pkgs/` with `update-app.sh`
+   and keeps a move only when the app builds on its own. It writes the commit
+   body, one `- APP: VERSION` line per moved app, to the file named last, and
+   commits nothing:
+
+   ```sh
+   scripts/prepare-update.sh apps nixos-rog /tmp/apps-changes
+   if test -s /tmp/apps-changes; then
+     git add -u -- pkgs
+     printf '%s\n\n' 'chore(pkgs): update apps to their newest releases' | cat - /tmp/apps-changes | git commit -F -
+   fi
+   git status --short
+   ```
+
+2. Move the inputs. The script moves every input that the table below does
+   not name with `move-inputs.sh`, and the inputs in the table by the rules
+   there. When a host's system no longer evaluates after those moves, nixpkgs
+   stays where it is, and when that is not enough, every input does. An app
+   with a `passthru.depsBun` line moves again, because its dependency hash
+   follows nixpkgs' bun. When something moved, it also moves `devenv.lock`
+   with `devenv update`, while the dev shell of `devenv.nix` still builds with
+   it:
+
+   ```sh
+   scripts/prepare-update.sh inputs nixos-rog /tmp/inputs-changes
+   if test -s /tmp/inputs-changes; then
+     git add -u -- flake.nix flake.lock devenv.lock pkgs
+     printf '%s\n\n' 'chore(flake): update inputs to their newest releases' | cat - /tmp/inputs-changes | git commit -F -
+   fi
+   git status --short
+   ```
+
+   An empty changes file means nothing moved, so the block makes no commit.
+   After each block, `git status --short` must print nothing. A file it lists
+   changed outside the commit, so the build in step 3 would test a tree that
+   step 4 does not push; find out which script changed it before you go on.
+
+3. Build nixos-rog's system with `scripts/build.sh`. `devenv tasks run ci`
+   builds every host's system instead
+   ([Check before you deploy](deploy.md#check-before-you-deploy)).
+4. Push to `main` and deploy as [AGENTS.md](../AGENTS.md) describes.
+
+Both modes take the host whose system decides the moves, and need nix, `gh`,
+curl, jq and python3. A move that stays out prints a `warning:` line on
+stderr that names the cause, and the other moves go ahead.
+
+A package test that fails in the build of step 3 is a bug. Fix it in
+`overlays/` before the push, as [Nixpkgs](../AGENTS.md#nixpkgs) describes. A
+passing rerun does not clear it, because the test can fail again on the next
+build of that package.
+
+| Input | When it moves |
+| --- | --- |
+| kernel | Only when a cache holds its build. `update-kernel.sh` moves it. |
+| llm-agents | Only when a cache holds its builds. See the paragraph below. |
+| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+
+When the new llm-agents revision has a coding agent that cache.numtide.com does
+not hold yet for the host's system, or the script cannot tell, llm-agents stays
+where it is. So the laptop does not compile an agent at full load. The next
+update tries again.
 
 ## The kernel
 
@@ -63,7 +132,8 @@ Then change the commit in `kernel-cache/flake.nix`, run
 kernel-cache workflow, which builds and records the new revision. The workflow
 checks out the tip of `main`, not the commit that queued the run. A run that
 waited behind another one would otherwise build its older lock and record it over
-the newer one. The update workflow then moves the hosts with `update-kernel.sh`.
+the newer one. The next [update by hand](#update-by-hand) then moves the hosts
+with `update-kernel.sh`.
 
 ### When the cache lacks the kernel
 
@@ -118,14 +188,14 @@ input, and so does the pre-push hook.
 
 `move-inputs.sh` never moves the kernel or llm-agents, because each of them
 moves only once a cache holds its builds. It moves every input, or only the
-inputs it names. The update workflow runs it.
+inputs it names. `prepare-update.sh inputs` runs it.
 
 A plain `nix flake update` moves every input without a cache check. A host may
 then compile the kernel and the llm-agents packages. Move the kernel with
 `scripts/update-kernel.sh`. To move one input by hand, use `nix flake update <input>`, or
 `scripts/update-release-tags.sh <input>` for an input pinned to a release tag.
-The update workflow moves llm-agents once cache.numtide.com holds its builds
-([nixos-rog.md](nixos-rog.md#updater)).
+`prepare-update.sh inputs` moves llm-agents once cache.numtide.com holds its
+builds ([Update by hand](#update-by-hand)).
 
 ## Release tags
 
@@ -140,7 +210,7 @@ and locks them. It moves one of these sets:
 ## Spotify and Spicetify
 
 `home-manager/modules/spicetify.nix` builds Spotify from `nixpkgs-spotify` and
-patches it with `spicetify-nix`. Both inputs pin a commit, so the update workflow
+patches it with `spicetify-nix`. Both inputs pin a commit, so `move-inputs.sh`
 never moves them. A Spotify release that the spicetify-cli release cannot patch still
 builds, then opens a blank window. To move them:
 
@@ -186,12 +256,12 @@ devbox runs. `pkgs/openchamber.nix` is the OpenChamber desktop app. The
 `workerd` binary that `cf dev` runs goes through nix-ld
 (`nixosModules/common.nix`).
 
-The update workflow moves the apps against `main`'s `flake.lock` and builds each
-moved app on its own first. A version that does not build stays out of the
-update and shows a warning on the run's page, which quotes the build's last
-error line. The other updates go ahead. The apps land as their own commit, so
-a failing input move does not hold them back ([Updater](nixos-rog.md#updater)).
+`prepare-update.sh apps` builds each moved app on its own first. A version
+that does not build stays where it is, and the script prints a warning that
+quotes the build's last error line. The other apps still move. The apps land
+as their own commit, so a failing input move does not hold them back
+([Update by hand](#update-by-hand)).
 
 When an app's update check fails, the app stays where it is. Examples are an
 unreadable feed or index, or a feed file that is not the one the package
-downloads. Each run shows the error as a warning until a check succeeds.
+downloads. Each run prints the error as a warning until a check succeeds.

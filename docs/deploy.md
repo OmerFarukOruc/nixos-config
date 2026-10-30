@@ -57,13 +57,8 @@ This guide uses these terms:
 
 A change reaches `main` only through the git hooks of `devenv.nix`, which
 direnv installs when it loads the devenv shell. GitHub runs no check of a
-commit that a person pushes. It builds the kernel
-([kernel-cache](../kernel-cache/README.md)) and checks the updates that
-`.github/workflows/update.yml` prepares ([Updater](nixos-rog.md#updater)). A
-workflow run takes over an hour, and `main` moves several times a day. When
-`main` moved during a run, the workflow puts the update commit on the new `main`
-and runs both checks again. It does not check the new `main`'s own commits
-again, because they passed the hooks at their push.
+commit that a person pushes. It only builds the kernel
+([kernel-cache](../kernel-cache/README.md)).
 
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
@@ -83,10 +78,9 @@ The hooks see the staged tree, because prek sets unstaged edits aside while a
 hook runs. The checked tree is the pushed one only when you committed
 everything staged and the push sends `HEAD`, so commit everything before you
 push. No hook builds a host's system. The deploy builds it on the target
-and changes nothing when the build fails, and the update workflow builds every
-host before its own merge; a commit that does not build for another host
-therefore also fails the workflow's next run. `devenv tasks run ci` builds them
-all before a push.
+and changes nothing when the build fails, so a commit that does not build for
+another host fails only at that host's next deploy. `devenv tasks run ci`
+builds them all before a push.
 
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
@@ -311,8 +305,8 @@ one `--replace`, 1 when it runs as root, and with Git's status when the clone or
 fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's
-home. It never moves an input, because the update workflow owns
-`flake.lock` ([Updater](nixos-rog.md#updater)). After exit 78, merge the work of the running release into
+home. It never moves an input; inputs move only in an update by hand
+([Update by hand](updates.md#update-by-hand)). After exit 78, merge the work of the running release into
 `main`, or run `upgrade --replace` once its owner agrees that the deploy may
 drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
 
@@ -329,15 +323,13 @@ itself.
 30 of every even hour, with up to 10 minutes of random delay. The calendar is in
 UTC, because `nixosModules/common.nix` sets the timezone to Europe/Istanbul.
 Every 2 hours matches nixos-rog's deploy unit
-([Deploy unit](nixos-rog.md#deploy-unit)). The update workflow merges at most
-every 6 hours, so `main` reaches the server within 2 hours and 10 minutes of a
-merge. The even hours at minute 30 keep a run clear of the 02:10 UTC reboot. A
-run that finds nothing to deploy costs one `git fetch` and one evaluation. The
-service runs `scripts/self-deploy.sh` as root. The unit is the one that
-nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`, from
+([Deploy unit](nixos-rog.md#deploy-unit)), so `main` reaches the server within
+2 hours and 10 minutes of a push. The even hours at minute 30 keep a run clear of the
+02:10 UTC reboot. A run that finds nothing to deploy costs one `git fetch` and
+one evaluation. The service runs `scripts/self-deploy.sh` as root. The unit is
+the one that nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`, from
 `machines/nixos-rog/auto-update.nix`), and the clone and deploy steps are in
-`scripts/lib/pull-main.sh`. The update workflow moves the inputs and builds and
-checks every host before it merges to `main`, so the script only deploys.
+`scripts/lib/pull-main.sh`. The script only deploys; it moves no input.
 nixos-rog's `scripts/pull-main.sh` is its twin. A failure here is the unit's own
 status and a line at priority err, where nixos-rog shows a desktop notification.
 Each run:

@@ -12,8 +12,7 @@ out=${3:?$usage}
 }
 : >"$out"
 
-# warn TEXT: a line in the run's log that GitHub also shows as an annotation.
-warn() { echo "::warning::$1"; }
+warn() { echo "warning: $1" >&2; }
 
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
