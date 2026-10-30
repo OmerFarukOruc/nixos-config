@@ -567,16 +567,16 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   guard.
 - **First use.** The workstations have Remmina
   (`home-manager/profiles/workstation.nix`): open its `devbox` profile and log
-  in as omer with omer's password (the hash is in `secrets/devbox.yaml`). A
-  Home Manager step writes that profile with dynamic resolution, so the
-  desktop follows the window size. Without it, a quick connect from
-  nixos-desktop on 2026-10-30 kept the size Remmina read from its window
-  before the window mapped, 644x480. The profile shares the PC's home folder,
-  which appears on devbox under `~/thinclient_drives` while the session runs,
-  where devbox's agents can read and write it too, and asks for the session's
-  sound (the Audio bullet below). The step also sets Remmina's RDP
-  keyboard layout to Turkish Q. Remmina's default colour depth ("Automatic")
-  gets H.264 from xrdp.
+  in as omer with omer's password, the one `sudo` asks for on devbox (the hash
+  is in `secrets/devbox.yaml`). A Home Manager step writes that profile with
+  dynamic resolution, so the desktop follows the window size. Without it, a
+  quick connect from nixos-desktop on 2026-10-30 kept the size Remmina read
+  from its window before the window mapped, 644x480. The profile shares the
+  PC's home folder, which appears on devbox under `~/thinclient_drives` while
+  the session runs, where devbox's agents can read and write it too, and asks
+  for the session's sound (the Audio bullet below). The step also sets
+  Remmina's RDP keyboard layout to Turkish Q. Remmina's default colour depth
+  ("Automatic") gets H.264 from xrdp.
 - **Scale.** Remmina on Wayland is drawn at a whole-number scale that KWin
   resamples to a fractional Plasma scale, so devbox's desktop looks soft.
   Under Plasma, Remmina's wrapper starts it on X11 at the whole-number scale
