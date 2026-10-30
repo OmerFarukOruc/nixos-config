@@ -565,20 +565,36 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   guard.
 - **First use.** The workstations have Remmina
   (`home-manager/profiles/workstation.nix`): open its `devbox` profile and log
-  in as omer with omer's password (the hash is in `secrets/devbox.yaml`).
-  A Home Manager step writes that profile with dynamic resolution, so the
+  in as omer with omer's password (the hash is in `secrets/devbox.yaml`). A
+  Home Manager step writes that profile with dynamic resolution, so the
   desktop follows the window size. Without it, a quick connect from
   nixos-desktop on 2026-10-30 kept the size Remmina read from its window
-  before the window mapped, 644x480. The step also sets Remmina's RDP keyboard layout to
-  Turkish Q. Remmina's default colour depth ("Automatic") gets H.264 from
-  xrdp. The tailnet policy, in the Tailscale admin console, grants TCP 3389 on
-  devbox to nixos-desktop (`tag:desktop-relay`); nixos-rog and nixos-latitude
-  reach it as Omer's own devices, through the grant that lets members reach
-  every device. A one-off run of the
-  desktop test on 2026-10-28 with Remmina 1.4.43 as the client showed the `tr`
-  layout, H.264, ı, ş and ğ, and pointer moves that reach the desktop at once.
-  sesman refuses root logins, which it allows by default. The XFCE screensaver is off, because the login and every
-  reconnect ask for the password already.
+  before the window mapped, 644x480. The profile shares the PC's home folder,
+  which appears on devbox under `~/thinclient_drives` while the session runs,
+  where devbox's agents can read and write it too, and asks for the session's
+  sound (the Audio bullet below). The step also sets Remmina's RDP
+  keyboard layout to Turkish Q. Remmina's default colour depth ("Automatic")
+  gets H.264 from xrdp.
+- **Scale.** Remmina on Wayland is drawn at a whole-number scale that KWin
+  resamples to a fractional Plasma scale, so devbox's desktop looks soft.
+  Under Plasma, Remmina's wrapper starts it on X11 at the whole-number scale
+  nearest to Xft.dpi divided by 96, and sets `GDK_DPI_SCALE` so its own text
+  keeps Plasma's size. nixos-desktop (1.7) gets 2: a maximized window gave a
+  1876x979 desktop on 2026-10-30, and Omer found it sharper than the Wayland
+  window. nixos-rog (1.25) gets 1, so Remmina's icons and devbox's desktop
+  draw at 80% of Plasma's size, one remote pixel per screen pixel. Under niri
+  Remmina stays on Wayland. Setting `GDK_BACKEND` before the start skips the
+  wrapper. Remmina runs one instance, so a running Remmina keeps its backend;
+  quit it (`remmina --quit`) before a start that should change it.
+- **Network.** The tailnet policy, in the Tailscale admin console, grants TCP
+  3389 on devbox to nixos-desktop (`tag:desktop-relay`); nixos-rog and
+  nixos-latitude reach it as Omer's own devices, through the grant that lets
+  members reach every device.
+- **Desktop test.** A one-off run of the desktop test on 2026-10-28 with
+  Remmina 1.4.43 as the client showed the `tr` layout, H.264, ı, ş and ğ, and
+  pointer moves that reach the desktop at once. sesman refuses root logins,
+  which it allows by default. The XFCE screensaver is off, because the login
+  and every reconnect ask for the password already.
 - **Logs.** xrdp's logs go to the journal, where the NixOS module sends them to
   `/dev/null`, and `journalUnits` lists `xrdp.service` and
   `xrdp-sesman.service`.

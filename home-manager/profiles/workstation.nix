@@ -25,7 +25,42 @@ let
       server = "devbox";
       username = "omer";
       scale = remminaDynamicResolution;
+      drive = config.home.homeDirectory;
+      sound = "local";
     };
+  };
+  # GTK3 on Wayland draws at whole-number scales only, so on a fractional
+  # Plasma scale KWin resamples Remmina and every remote pixel lands on a
+  # fraction of a screen pixel. Plasma's Xwayland lets X11 apps scale
+  # themselves and publishes the scale as Xft.dpi. GTK3 on X11 with
+  # GDK_SCALE set takes its font DPI from Xft.dpi, which already holds the
+  # scale, so GDK_DPI_SCALE divides it back out.
+  remminaScaleEnv = pkgs.writeShellScript "remmina-scale-env" ''
+    [ -z "''${GDK_BACKEND-}" ] && [ "''${XDG_CURRENT_DESKTOP-}" = KDE ] || exit 0
+    dpi=$(${lib.getExe pkgs.xrdb} -get Xft.dpi 2>/dev/null) || exit 0
+    ${lib.getExe pkgs.gawk} -v dpi="$dpi" 'BEGIN {
+      if (dpi + 0 <= 0) exit
+      scale = int(dpi / 96 + 0.5)
+      if (scale < 1) scale = 1
+      printf "export GDK_BACKEND=x11 GDK_SCALE=%d GDK_DPI_SCALE=%g\n", scale, 1 / scale
+    }'
+  '';
+  remminaWholePixelScale = pkgs.symlinkJoin {
+    inherit (pkgs.remmina) name meta;
+    paths = [ pkgs.remmina ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      for bin in remmina remmina-file-wrapper; do
+        rm $out/bin/$bin
+        makeWrapper ${pkgs.remmina}/bin/$bin $out/bin/$bin --run 'eval "$(${remminaScaleEnv})"'
+      done
+      for desktop in $out/share/applications/*.desktop; do
+        rm "$desktop"
+        sed 's|${pkgs.remmina}/bin/|'"$out"'/bin/|g' \
+          "${pkgs.remmina}/share/applications/$(basename "$desktop")" >"$desktop"
+        if grep -q '${pkgs.remmina}/bin/' "$desktop"; then exit 1; fi
+      done
+    '';
   };
 in
 {
@@ -61,6 +96,7 @@ in
 
   services.remmina = {
     enable = true;
+    package = remminaWholePixelScale;
     systemdService.enable = false;
   };
   # Remmina writes window sizes and view modes back into these files, so the
