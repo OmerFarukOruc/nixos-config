@@ -902,7 +902,8 @@ plasma-look klassy
 
 The color scheme, the panels, the Plasma style and the KWin effects load at
 the next login. A live color scheme change can crash Electron apps such as
-Discord, so neither `plasma-look` nor a deploy changes it.
+Discord, so neither `plasma-look` nor a deploy changes it; only
+[`theme`](#switch-the-scheme) does.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `theme --reapply` after it activates the
 default look and scheme. When that step fails, the look can be half applied, and
@@ -917,10 +918,11 @@ app changes them, because no look writes them.
 To add a look:
 
 1. Add its name, in lowercase letters and digits, to `plasmaLookNames` and create
-   `home-manager/modules/plasma-looks/<name>.nix`, following `klassy.nix`. It
-   sets `oruc.plasma.colorScheme`, `oruc.plasma.widgetStyle`, the Plasma style
-   and the window decoration while it is active. A unit of the look that
-   changes colors or styles runs once per login with
+   `home-manager/modules/plasma-looks/<name>.nix`, following `klassy.nix`. Add
+   its KDE colour scheme, `OrucBase16` or `OrucBase16Glass`, and its Plasma
+   style to `looks` in `plasma-looks/default.nix`. The file sets
+   `oruc.plasma.widgetStyle` and the window decoration while it is active. A
+   unit of the look that changes colors or styles runs once per login with
    `plasma-looks/once-per-login.nix`, because Home Manager starts it again at
    every switch.
 2. Install its packages whenever Plasma runs, not only while the look is
@@ -955,6 +957,15 @@ reload, take the new colors at once, and so does Claude Code, whose dotfiles
 prompt, so it changes in open shells too; fzf and atuin take them at their next
 start, and the Markdown viewer the next time a file opens.
 
+On Plasma, the KDE colors of running apps, GTK 4 and libadwaita apps such as
+Mission Center, the cursor, the icons and the Glass glow change at once
+([Theme](architecture.md#theme)). A live color scheme change can crash an
+Electron app such as Discord; start it again. GTK 3 apps and Kate's editor
+colors change at their next start. On nixos-latitude, which has no Plasma, the
+GTK colors and the KDE colors in `~/.config/kdeglobals` follow the scheme at
+each app's next start, and the cursor, icons and GTK theme name keep the
+record's.
+
 The other apps that follow the scheme take it from a Home Manager variant, so
 they follow only the record's scheme and the schemes in `theme.schemes`
 (`machines/inventory.nix`); for any other scheme they keep the record's. VS Code
@@ -962,12 +973,7 @@ takes its theme extension and its window background at its next start. The
 wallpaper of a scheme without a file in `assets/wallpapers` is the default one
 recolored to that scheme ([Theme](architecture.md#theme)). On Plasma,
 `oruc-plasma-wallpaper` sets it again at each activation, so the desktop
-wallpaper changes with the scheme. GTK 4 and libadwaita apps (Mission Center,
-for example) read their colors file when they start, so a running one may keep
-the old colors until it restarts. That file is
-`~/.config/gtk-4.0/oruc-colors.css` on nixos-rog and `gtk.css` on
-nixos-latitude. The KDE colors and the Plasma splash load at the next login, as
-with `plasma-look`.
+wallpaper changes with the scheme. The Plasma splash loads at the next login.
 
 The login screen, the boot menu, the console, niri and the keyboard's Aura color
 keep the record's scheme. So does Spotify, because Spicetify builds its colors
@@ -980,8 +986,9 @@ Because each deploy and boot activates the record's scheme before the stored
 one, apps that follow a variant show the record's colors for a moment then.
 
 `scripts/check-theme.sh SCHEME...` switches to each scheme, checks the colour
-files and a tmux server and two Neovim instances it starts, and switches back;
-`--host nixos-latitude` runs it there.
+files and a tmux server and two Neovim instances it starts, and switches back.
+In a running Plasma session it also checks the KDE colors, the dark or light
+set and the Glass glow. `--host nixos-latitude` runs it there.
 
 To give a scheme the apps that follow a variant, add its name to
 `theme.schemes`. A scheme that tinted-theming lacks goes in `assets/schemes`

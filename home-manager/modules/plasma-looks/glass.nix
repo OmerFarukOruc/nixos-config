@@ -25,23 +25,14 @@ in
 
       (lib.mkIf active {
         oruc.plasma = {
-          colorScheme = "OrucBase16Glass";
           widgetStyle = "Glass";
           panelLayout = "islands";
         };
 
-        xdg.dataFile."color-schemes/OrucBase16Glass.colors".text = import ./kde-color-scheme.nix {
-          inherit lib;
-          rawScheme = config.scheme;
-        } true;
-
         programs.plasma = {
-          workspace = {
-            theme = "oruc-glass";
-            windowDecorations = {
-              library = "org.kde.glass";
-              theme = "Glass";
-            };
+          workspace.windowDecorations = {
+            library = "org.kde.glass";
+            theme = "Glass";
           };
 
           kwin.effects.blur.enable = false;
@@ -73,8 +64,6 @@ in
               Contrast = 1.1;
               BlurStrength = 3;
               EdgeLighting = true;
-              # Glass reads #AARRGGBB, so 10 is the alpha.
-              GlowColor = "#10${config.scheme.base0D}";
               # Refraction is off. The zeros are written out because plasma-manager
               # never removes a key it wrote before. RefractionEdgeSize stays,
               # because the edge lighting band reads it even with refraction off.
@@ -99,19 +88,11 @@ in
         };
 
         # KWin reads Glass's settings only when it loads the effect, and
-        # plasma-manager writes kwinrc without telling KWin. With no Plasma session
-        # running, KWin is not on the user bus, and the next login reads the file.
-        home.activation.reloadGlass =
-          let
-            busctl = lib.getExe' pkgs.systemd "busctl";
-          in
-          lib.hm.dag.entryAfter [ "configure-plasma" ] ''
-            if ${busctl} --user status org.kde.KWin >/dev/null 2>&1; then
-              run ${busctl} --user call org.kde.KWin /Effects org.kde.kwin.Effects \
-                reconfigureEffect s glass \
-                || warnEcho "KWin did not reload Glass; it reads the new settings at the next login."
-            fi
-          '';
+        # plasma-manager writes kwinrc without telling KWin.
+        home.activation.reloadGlass = lib.hm.dag.entryAfter [ "configure-plasma" ] ''
+          run ${lib.getExe config.oruc.plasma.reconfigureGlass} \
+            || warnEcho "KWin did not reload Glass; it reads the new settings at the next login."
+        '';
       })
     ]
   );

@@ -88,6 +88,18 @@ let
       return 1
     }
 
+    # The session's display and bus, as Home Manager's own service imports
+    # them, so the activation and the live steps reach KWin from SSH or a
+    # system unit too.
+    session_env() {
+      if [[ -z ''${DBUS_SESSION_BUS_ADDRESS:-} || -z ''${WAYLAND_DISPLAY:-} ]]; then
+        eval "$(
+          XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user show-environment 2>/dev/null |
+            sed -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p'
+        )"
+      fi
+    }
+
     activate() {
       local dir
       dir=$(variant_dir "$1" "$2") || return 1
@@ -95,15 +107,22 @@ let
         echo "A deploy replaced the system after this command started; run it again." >&2
         return 1
       fi
-      # The session's display and bus, as Home Manager's own service imports
-      # them, so the activation reaches KWin from SSH or a system unit too.
-      if [[ -z ''${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
-        eval "$(
-          XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user show-environment 2>/dev/null |
-            sed -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p'
-        )"
-      fi
+      session_env
       "$dir/activate" --driver-version ${driverVersion} 8>&-
+    }
+
+    live() {
+      ${lib.optionalString hasPlasma ''
+        session_env
+        if [[ -z ''${WAYLAND_DISPLAY:-} ]]; then
+          echo "No desktop session runs, so the KDE colours change at the next login."
+        elif ${lib.getExe hm.oruc.plasma.live} "$1" 8>&-; then
+          return 0
+        else
+          echo "theme: the KDE colours, dark or light set, Plasma style or Glass glow failed" >&2
+        fi
+      ''}
+      return 1
     }
 
     reload() {
@@ -161,9 +180,10 @@ let
       of the installed theme pack, the store path that holds each scheme's colour files.
       SCHEME activates that scheme and keeps it across deploys. Ghostty, tmux, Neovim
       and a Claude Code that selects custom:scheme take its colours at once; Starship,
-      fzf and atuin at their next run, and the Markdown viewer at its next open. VS Code
-      and KDE follow only the schemes in theme.schemes of the machine record: VS Code
-      at its next start, KDE after you log out and in.
+      fzf and atuin at their next run, and the Markdown viewer at its next open. On
+      Plasma, KDE and GTK 4 apps, the cursor, the icons and the Glass glow change at
+      once, and GTK 3 apps and Kate's editor at their next start. VS Code follows only
+      the schemes in theme.schemes of the machine record, at its next start.
       --reapply points the colour files at the stored scheme again and activates the
       stored Plasma look. The Home Manager service runs it after it activates the
       default ones.
@@ -194,7 +214,11 @@ let
           fi
           "$pointer" --set "$1"
           reload
-          echo "Ghostty, tmux and Neovim show $1 now; Starship, fzf and atuin at their next run."
+          shown="Ghostty, tmux and Neovim"
+          if live "$look"; then
+            shown="Ghostty, tmux, Neovim, KDE and GTK 4 apps"
+          fi
+          echo "$shown show $1 now; Starship, fzf and atuin at their next run."
           ;;
       esac
     '';

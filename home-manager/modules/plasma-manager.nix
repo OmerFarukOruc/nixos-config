@@ -74,11 +74,7 @@ in
 
       workspace = {
         clickItemTo = "select";
-        cursor = {
-          inherit (theme.cursor) size;
-          theme = theme.cursor.name;
-        };
-        iconTheme = theme.icons;
+        cursor.size = theme.cursor.size;
         splashScreen.theme = splashId;
       };
 

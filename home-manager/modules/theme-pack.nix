@@ -47,6 +47,10 @@ let
             path = sources.${slug};
           }
         ]
+        ++ lib.mapAttrsToList (name: render: {
+          name = "${slug}/.oruc/${name}";
+          path = text name (render args);
+        }) config.oruc.themeFacts
         ++ lib.mapAttrsToList (key: render: {
           name = "${slug}/${key}";
           path = text key (render args);
@@ -129,6 +133,11 @@ in
       type = lib.types.attrsOf (lib.types.functionTo lib.types.str);
       default = { };
       description = "Colour files per scheme, keyed by path under $HOME; each function takes { scheme, theme } (base16.nix attrs and theme-values.nix values) and returns the file text.";
+    };
+    themeFacts = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.functionTo lib.types.str);
+      default = { };
+      description = "Values per scheme that only scripts read, written to <slug>/.oruc/<name> in the pack and reached through theme/current/.oruc/<name>; each function takes { scheme, theme }.";
     };
     themeCopies = lib.mkOption {
       type = lib.types.listOf lib.types.str;

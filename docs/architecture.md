@@ -126,11 +126,11 @@ These rules follow from the list:
   `kdeglobals`, the GTK settings and the cursor, and the niri session inherits
   them. A niri-only machine keeps the files that Home Manager writes. The GTK
   colors and the GTK 3 theme name are the exceptions. Plasma's `gtk.css` is a
-  regular file that kded rewrites, so Home Manager writes `oruc-colors.css`
-  beside it and an activation step adds the `@import` line to `gtk.css`. The
-  same step sets the GTK 3 theme to adw-gtk3 (the dark one for a dark scheme)
-  in `settings.ini` and in dconf, but only while the theme is unset or already
-  adw-gtk3, so a theme chosen in System Settings stays.
+  regular file that kded rewrites, so Home Manager links `oruc-colors.css`
+  beside it and an activation step adds the `@import` line to `gtk.css`.
+  `oruc-polarity` sets the GTK 3 theme to adw-gtk3 (the dark one for a dark
+  scheme) in `settings.ini` and in dconf, but only while the theme is unset or
+  already adw-gtk3, so a theme chosen in System Settings stays.
 - **Blur rules.** Blur shows only through translucent pixels, so the
   `window-rule` and `layer-rule` blocks in `niri/config.kdl` are an allow-list of
   surfaces that are translucent. niri enables xray blur with any background
@@ -236,7 +236,45 @@ it moves `current`. A renderer runs for every scheme, so it must give a valid fi
 each; the Markdown viewer's code colours move toward black or white when the
 scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
 reuse the generation's pack, and root's Home Manager and the servers get a
-pack with the record scheme alone.
+pack with the record scheme alone. `oruc.themeFacts` adds a one-line value per
+scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
+
+On Plasma, `theme` then runs `oruc-plasma-live`
+(`home-manager/modules/plasma-looks/default.nix`), which changes the running
+session:
+
+- **KDE colours.** The pack holds the opaque `OrucBase16.colors` of Klassy and
+  the translucent `OrucBase16Glass.colors` of Glass under
+  `.local/share/oruc/kde/`. `plasma-apply-colorscheme` does nothing for the
+  scheme that is already selected, so `oruc-kde-colors` copies the file to the
+  `A` or `B` name that `kdeglobals` does not hold, such as `OrucBase16GlassB`,
+  and applies that copy. KDE apps repaint, and kded writes the GTK colours of
+  the new scheme. When the copy that runs already matches the pack's file, it
+  changes nothing.
+- **Dark or light set.** `oruc-polarity` (`home-manager/modules/appearance.nix`)
+  gives the session the cursor, icons, GTK 3 theme name and dconf
+  `color-scheme` of the scheme's variant, which the pack holds as the facts
+  `cursor`, `icons`, `gtk` and `polarity`. It does this at each login and when
+  the variant changed, and records the variant in
+  `~/.local/state/oruc/theme/polarity`. Otherwise it sets `color-scheme` to
+  `default` and back, so GTK 4 apps load `oruc-colors.css` again.
+- **Plasma style.** `looks` in `plasma-looks/default.nix` names each look's
+  colour scheme and Plasma style: `oruc-glass`, or `klassy-dark` and
+  `klassy-light` by the variant. plasma-manager runs its theme script only when
+  the script's text changed since its last run, so a switch back to a look
+  would skip it; `oruc-plasma-live` sets the style instead.
+- **Glass glow.** With the Glass colours, it writes the pack's `.oruc/glow` to
+  `kwinrc` and reconfigures the effect when the colour differs.
+
+`theme` takes the look from the KDE colour scheme that runs, so a
+`plasma-look` that waits for the next login does not change the running
+session's look. The login unit `oruc-plasma-colors` runs the same steps with
+`--login` and the generation's look once per Plasma login, so a new login shows
+the stored scheme and look; `oruc-niri-colors` applies the opaque colours once
+per niri login on a host that also has Plasma. A deploy or `plasma-look` never
+changes the KDE colours of a running session, because a live colour scheme
+change crashed Discord on 2026-10-16; `theme` does, because switching the
+scheme asks for it.
 
 `machines/scheme-parser.nix` reads each scheme file line by line, because
 base16.nix's YAML parser fails on 14 tinted-theming files, such as `dracula`

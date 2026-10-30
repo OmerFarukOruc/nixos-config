@@ -82,14 +82,23 @@ let
     ) theme.ansi
   );
 
-  kdeColorScheme = import ./plasma-looks/kde-color-scheme.nix { inherit lib rawScheme; };
-  opaqueScheme = kdeColorScheme false;
-  applyColorScheme = lib.getExe' pkgs.kdePackages.plasma-workspace "plasma-apply-colorscheme";
+  kdeColorScheme =
+    scheme:
+    import ./plasma-looks/kde-color-scheme.nix {
+      inherit lib;
+      rawScheme = scheme;
+    };
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
   setWidgetStyle = style: "${kwriteconfig} --file kdeglobals --group KDE --key widgetStyle ${style}";
-  iconTheme = "${kwriteconfig} --file kdeglobals --group Icons --key Theme ${theme.icons}";
 
-  colorsOnce = import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } "oruc-plasma-colors";
+  loginUnits = {
+    oruc-plasma-colors = "plasma-workspace.target";
+  }
+  // lib.optionalAttrs isNiri { oruc-niri-colors = "niri.service"; };
+  oncePerLogin = lib.mapAttrs (
+    name: target:
+    import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } { inherit name target; }
+  ) loginUnits;
 
   slots = map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF");
   nvimTheme = "${config.xdg.configHome}/oruc/nvim-theme.lua";
@@ -173,6 +182,14 @@ in
           set -g pane-active-border-style "fg=${s.base0D}"
         '';
     })
+    (lib.mkIf isPlasma {
+      ".local/share/oruc/kde/OrucBase16.colors" = { scheme, ... }: kdeColorScheme scheme false;
+      ".local/share/oruc/kde/OrucBase16Glass.colors" = { scheme, ... }: kdeColorScheme scheme true;
+    })
+    (lib.mkIf (isNiri && !isPlasma) {
+      ".config/kdeglobals" =
+        { scheme, ... }: kdeColorScheme scheme false + "\n[Icons]\nTheme=${theme.icons}\n";
+    })
     (lib.mkIf config.programs.atuin.enable {
       ".config/atuin/themes/oruc-base16.toml" =
         { scheme, ... }:
@@ -238,10 +255,6 @@ in
     "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}" =
       lib.mkIf hasDesktop
         { source = theme.wallpaper; };
-    "color-schemes/OrucBase16.colors" = lib.mkIf (isPlasma || isNiri) {
-      text = opaqueScheme;
-    };
-
     # Plasma's translucent desktop theme has no colors file of its own, and
     # looking one up on every menu and popup slows them down. Plasma only
     # checks that the file exists and never reads it; the colours come from
@@ -251,9 +264,17 @@ in
     };
   };
 
-  xdg.configFile."kdeglobals" = lib.mkIf (isNiri && !isPlasma) {
-    text = opaqueScheme + "\n[Icons]\nTheme=${theme.icons}\n";
-  };
+  home.activation.markLogins = lib.mkIf isPlasma (
+    lib.hm.dag.entryBefore [ "reloadSystemd" ] ''
+      if [[ ! -v DRY_RUN ]]; then
+        runtime=''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+        ${lib.concatMapAttrsStringSep "\n" (
+          _: once: "XDG_RUNTIME_DIR=$runtime ${once.markIn "$runtime"} 2>/dev/null || true"
+        ) oncePerLogin}
+        unset runtime
+      fi
+    ''
+  );
 
   systemd.user.services.oruc-plasma-colors = lib.mkIf isPlasma {
     Unit = {
@@ -268,13 +289,12 @@ in
     };
     Service = {
       Type = "oneshot";
-      ExecCondition = colorsOnce.condition;
-      ExecStart = "${applyColorScheme} ${config.oruc.plasma.colorScheme}";
+      ExecCondition = oncePerLogin.oruc-plasma-colors.condition;
+      ExecStart = "${lib.getExe config.oruc.plasma.live} --login ${config.oruc.plasma.look}";
       ExecStartPost = [
         (setWidgetStyle config.oruc.plasma.widgetStyle)
-      ]
-      ++ lib.optional isNiri iconTheme
-      ++ [ colorsOnce.mark ];
+        oncePerLogin.oruc-plasma-colors.mark
+      ];
       Restart = "on-failure";
       RestartSec = 5;
     };
@@ -289,8 +309,12 @@ in
     };
     Service = {
       Type = "oneshot";
-      ExecStart = "${applyColorScheme} OrucBase16";
-      ExecStartPost = setWidgetStyle "Breeze";
+      ExecCondition = oncePerLogin.oruc-niri-colors.condition;
+      ExecStart = "${lib.getExe config.oruc.plasma.kdeColors} OrucBase16";
+      ExecStartPost = [
+        (setWidgetStyle "Breeze")
+        oncePerLogin.oruc-niri-colors.mark
+      ];
     };
     Install.WantedBy = [ "niri.service" ];
   };
