@@ -66,7 +66,8 @@ commit that a person pushes.
 
 The times come from a test clone on 2026-10-23. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
-`ci/build-hosts.sh`:
+`ci/build-hosts.sh`. `ci/build-hosts.sh --roots DIR` keeps each system as a
+link in `DIR`, which Nix's garbage collection leaves alone:
 
 ```sh
 devenv test
@@ -283,7 +284,7 @@ on a branch.
 ## Upgrade a host to main
 
 Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
-it runs the [deploy unit](nixos-rog.md#deploy-unit) now, and on a host that
+and nixos-desktop it runs the [deploy unit](nixos-rog.md#deploy-unit) now, and on a host that
 runs [self-deploy](#self-deploy-of-a-server) it starts that unit. On every other
 host it deploys `main` to that host in these steps:
 
@@ -304,7 +305,8 @@ one `--replace`, 1 when it runs as root, and with Git's status when the clone or
 fetch fails.
 
 `upgrade` runs as your own user, because the releases live in that user's
-home. It never moves an input; inputs move only in an update by hand
+home. It never moves an input; inputs move in the nightly update on devbox
+([Nightly update](devbox.md#nightly-update)) or an update by hand
 ([Update by hand](updates.md#update-by-hand)). After exit 78, merge the work of the running release into
 `main`, or run `upgrade --replace` once its owner agrees that the deploy may
 drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
@@ -333,7 +335,7 @@ Every 2 hours matches nixos-rog's deploy unit
 02:10 UTC reboot. A run that finds nothing to deploy costs one `git fetch` and
 one evaluation. The service runs `scripts/self-deploy.sh` as root. The unit is
 the one that nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`, from
-`machines/nixos-rog/auto-update.nix`), and the clone and deploy steps are in
+`nixosModules/auto-update.nix`), and the clone and deploy steps are in
 `scripts/lib/pull-main.sh`. The script only deploys; it moves no input.
 nixos-rog's `scripts/pull-main.sh` is its twin. A failure here is the unit's own
 status and a line at priority err, where nixos-rog shows a desktop notification.

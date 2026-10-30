@@ -11,6 +11,8 @@
     ./tools.nix
     ./upgrade.nix
     ./deploy-host.nix
+    ./auto-update.nix
+    ./nightly-update.nix
     ./monitoring.nix
     ./memory.nix
     ./theme.nix

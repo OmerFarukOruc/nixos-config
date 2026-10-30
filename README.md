@@ -96,12 +96,14 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   the user's running services. A deploy that breaks any of them restores the
   previous system, even when the connection drops.
   [`deploy.sh`](deploy.sh)
-- **🔄 Updates that wait for the caches.** One script moves the inputs and
-  apps, keeps the kernel and the coding agents where they are until a cache
-  holds their builds, and keeps an app only when it builds. Every 2 hours on
-  AC power, nixos-rog deploys the newest `main` to itself.
+- **🔄 Updates that wait for the caches.** Every night devbox moves the inputs
+  and apps, keeps the coding agents where they are until a cache holds their
+  builds, keeps an app only when it builds, and pushes to `main` only what
+  builds on every host. Every 2 hours, nixos-rog and nixos-desktop deploy the
+  newest `main` to themselves.
+  [`scripts/nightly-update.sh`](scripts/nightly-update.sh),
   [`scripts/prepare-update.sh`](scripts/prepare-update.sh),
-  [`machines/nixos-rog/auto-update.nix`](machines/nixos-rog/auto-update.nix),
+  [`nixosModules/auto-update.nix`](nixosModules/auto-update.nix),
   [`scripts/pull-main.sh`](scripts/pull-main.sh)
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
   with the age key derived from that host's SSH host key.
@@ -198,8 +200,9 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 formatter and output checks, plus each host's system derivation) and
 `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
 GitHub runs nothing.
-Inputs and apps move only when someone runs the update by hand
-([Update by hand](docs/updates.md#update-by-hand)).
+Inputs and apps move every night on devbox
+([Nightly update](docs/devbox.md#nightly-update)), and by hand when someone
+needs a move now ([Update by hand](docs/updates.md#update-by-hand)).
 
 ## Docs
 

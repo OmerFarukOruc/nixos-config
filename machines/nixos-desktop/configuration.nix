@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ config, inputs, ... }:
 
 {
   imports = [
@@ -56,6 +56,12 @@
   sops = {
     defaultSopsFile = ../../secrets/nixos-desktop.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+    secrets.github-update-token.sopsFile = ../../secrets/nixos-desktop-github.yaml;
+  };
+
+  oruc.autoUpdate = {
+    enable = true;
+    githubTokenFile = config.sops.secrets.github-update-token.path;
   };
 
   home-manager.users.oruc.imports = [

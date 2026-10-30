@@ -2,17 +2,22 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage="usage: prepare-update.sh apps|inputs HOST CHANGES"
+usage="usage: prepare-update.sh apps|inputs HOST CHANGES [WARNINGS]"
 mode=${1:?$usage}
 host=${2:?$usage}
 out=${3:?$usage}
+warnings=${4:-/dev/null}
 [[ $mode == apps || $mode == inputs ]] || {
   echo "$usage" >&2
   exit 2
 }
 : >"$out"
+: >"$warnings"
 
-warn() { echo "warning: $1" >&2; }
+warn() {
+  echo "warning: $1" >&2
+  echo "$1" >>"$warnings"
+}
 
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT

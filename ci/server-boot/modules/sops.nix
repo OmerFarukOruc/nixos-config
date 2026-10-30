@@ -31,6 +31,7 @@ in
     secrets = {
       cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       github-update-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
+      github-push-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       openchamber-ui-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       opencode-server-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       herdr-web-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";

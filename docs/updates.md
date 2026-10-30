@@ -23,9 +23,10 @@ deploy as [deploy.md](deploy.md#deploy-a-change-on-main) describes.
 
 ## Update by hand
 
-Inputs and apps move only when a person or an agent runs the update. No
-workflow or timer moves them. Run it on nixos-desktop or nixos-rog, in a
-worktree on a branch from a freshly fetched `origin/main`:
+devbox runs these steps every night and pushes what passes to `main`
+([Nightly update](devbox.md#nightly-update)). Run them by hand when a move is
+needed now, on nixos-desktop or nixos-rog, in a worktree on a branch from a
+freshly fetched `origin/main`:
 
 1. Move the apps. The script moves each app in `pkgs/` with `update-app.sh`
    and keeps a move only when the app builds on its own. It writes the commit
@@ -70,8 +71,11 @@ worktree on a branch from a freshly fetched `origin/main`:
 4. Push to `main` and deploy as [AGENTS.md](../AGENTS.md) describes.
 
 Both modes take the host whose system decides the moves, and need nix, `gh`,
-curl, jq and python3. A move that stays out prints a `warning:` line on
-stderr that names the cause, and the other moves go ahead.
+curl and jq. A move that stays out prints a `warning:` line on
+stderr that names the cause, and the other moves go ahead. An optional fourth
+argument names a file that gets those warnings without the `warning:` prefix;
+the nightly update reads it, because Nix prints its own `warning:` lines on the
+same stderr.
 
 A package test that fails in the build of step 3 is a bug. Fix it in
 `overlays/` before the push, as [Nixpkgs](../AGENTS.md#nixpkgs) describes. A

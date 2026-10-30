@@ -28,6 +28,11 @@ in
   # nixosModules/monitoring.nix enables smartd unless a host says otherwise.
   services.smartd.enable = false;
 
+  oruc.nightlyUpdate = {
+    enable = true;
+    githubTokenFile = config.sops.secrets.github-push-token.path;
+  };
+
   oruc.deploy = {
     self = {
       enable = true;
@@ -56,6 +61,7 @@ in
       network-dns-3 = { };
       cloudflare-acme-dns-token.sopsFile = ../../secrets/devbox-acme.yaml;
       github-update-token.sopsFile = ../../secrets/devbox-github.yaml;
+      github-push-token.sopsFile = ../../secrets/devbox-github-push.yaml;
     };
     templates."10-public.network" = {
       group = "systemd-network";

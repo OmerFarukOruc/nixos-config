@@ -1,4 +1,5 @@
 {
+  config,
   inputs,
   lib,
   pkgs,
@@ -10,7 +11,6 @@
     inputs.sops-nix.nixosModules.sops
     ./apps.nix
     ./asus.nix
-    ./auto-update.nix
     ./claude-tools-usage-read.nix
     ./cpu-limits.nix
     ../../nixosModules/envfs.nix
@@ -96,6 +96,12 @@
   sops = {
     defaultSopsFile = ../../secrets/nixos-rog.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+    secrets.github-update-token = { };
+  };
+
+  oruc.autoUpdate = {
+    enable = true;
+    githubTokenFile = config.sops.secrets.github-update-token.path;
   };
 
   home-manager.users.oruc.imports = [

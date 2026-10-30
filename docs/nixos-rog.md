@@ -26,12 +26,13 @@ day. Repeat the measurement before you rely on it.
 
 ## Updater
 
-On nixos-rog, `oruc-auto-update.service` deploys the newest `main` to the
-laptop. nixos-desktop and nixos-latitude get `main` from `upgrade` on the host
+On nixos-rog and nixos-desktop, `oruc-auto-update.service` deploys the newest
+`main` to the host (`nixosModules/auto-update.nix`, turned on by
+`oruc.autoUpdate.enable`). nixos-latitude gets `main` from `upgrade` on the host
 or from a manual `./deploy.sh <host> switch`
 ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)). Inputs and apps
-move only when a person or an agent runs the update by hand
-([Update by hand](updates.md#update-by-hand)).
+move every night on devbox ([Nightly update](devbox.md#nightly-update)) and in
+an update by hand ([Update by hand](updates.md#update-by-hand)).
 
 ### Deploy unit
 
@@ -42,12 +43,12 @@ to 10 minutes of random delay. On battery the service skips the run. Each run:
 1. fetches `main`;
 2. stops when the deploy of this `main` failed before, and prints when it
    failed, its exit status and the first `error:` line of that run;
-3. stops when nixos-rog runs `main`, or when `main` builds the system it runs,
+3. stops when the host runs `main`, or when `main` builds the system it runs,
    such as after a docs change. The second case writes `<commit> <system>` to
    `same-system` in the state directory, so the next run on that commit and
    system skips the evaluation, which took 58 s and 6.9 GiB instead of about
    10 s (journal, 2026-10-23);
-4. otherwise deploys `main` with `./deploy.sh nixos-rog switch`.
+4. otherwise deploys `main` with `./deploy.sh <host> switch`.
 
 A desktop notification reports each deploy or failure. A switch leaves the
 desktop shell, the keyring and other user services on their old version.
@@ -67,7 +68,7 @@ Child-process environments carry only the file paths. systemd removes the direct
 can still read the file; this removes the token from inherited environments
 without isolating the service from that user.
 
-To deploy `main` now, run `upgrade` on nixos-rog (`nixosModules/upgrade.nix`,
+To deploy `main` now, run `upgrade` on the host (`nixosModules/upgrade.nix`,
 a command the hosts share). It runs this unit now, prints the unit's log while
 it runs and exits with the run's status. From nixos-desktop:
 
@@ -80,7 +81,7 @@ To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
 
 A manual deploy exits 77 while the unit holds the deploy lock, and the unit
 deploys `main` again on top of a generation you restored. To pause the unit on
-nixos-rog until the next reboot:
+the host until the next reboot:
 
 ```sh
 sudo systemctl mask --runtime --now oruc-auto-update.timer
@@ -139,7 +140,7 @@ lost access to the repository.
 The script's traps report a failed exit and the time limit. A run that ends
 another way skips them, such as a kernel kill for memory (oom-kill, which skips
 the TERM trap too) or a SIGKILL. `oruc-auto-update-died.service`
-(`machines/nixos-rog/auto-update.nix`) covers those runs. It stays quiet for the
+(`nixosModules/auto-update.nix`) covers those runs. It stays quiet for the
 results `exit-code` and `timeout`, which the traps already reported. Its popup
 goes through systembus-notify, which `nixosModules/monitoring.nix` turns on.
 
@@ -174,7 +175,15 @@ declares. It prints key names only.
 
 The token does not expire. Rotate it when it may have leaked. GitHub lists it as
 "nixos-rog auto-update". Do the steps in this order, so the laptop keeps a
-working token until the new one is deployed:
+working token until the new one is deployed. nixos-desktop's token, "nixos-desktop
+auto-update", is in `secrets/nixos-desktop-github.yaml`; for it, step 2 uses the
+command below, which needs only public keys, and steps 3 and 4 name
+nixos-desktop:
+
+```sh
+read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/nixos-desktop-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/nixos-desktop-github.yaml.new && mv secrets/nixos-desktop-github.yaml.new secrets/nixos-desktop-github.yaml; unset token
+```
+
 
 1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
    tokens). Set the repository access to this repository only, the permissions
@@ -305,7 +314,7 @@ nixos-desktop, gets a scope of its own on nixos-rog.
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too.
 The deploy unit runs outside heavy; its `MemoryHigh` slows it above 12 GiB
-(`machines/nixos-rog/auto-update.nix`) but never stops it.
+(`nixosModules/deploy-unit.nix`) but never stops it.
 
 `heavy` follows the contract of infra's `heavy` on devbox. It exports
 `HEAVY_ACTIVE=1`, and a repository script that finds `heavy` on PATH while

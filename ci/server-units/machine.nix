@@ -8,7 +8,9 @@
     ../../machines/devbox/configuration.nix
     ../../machines/devbox/hardware-configuration.nix
     ../server-boot/modules/sops.nix
+    ../server-boot/modules/nightly-update.nix
   ];
+
   virtualisation = {
     memorySize = lib.mkDefault 2048;
     bootLoaderDevice = "/dev/vda";
