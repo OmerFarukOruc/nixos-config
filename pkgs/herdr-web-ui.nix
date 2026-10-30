@@ -9,12 +9,12 @@
   nodejs_26,
 }:
 let
-  version = "0.4.20";
+  version = "0.4.21";
   src = fetchFromGitHub {
     owner = "devswha";
     repo = "ovis";
     tag = "v${version}";
-    hash = "sha256-GEJCpmJ76l+2Qxy8zZdJoaDZJdaxp5jm2bVZxzFRRtQ=";
+    hash = "sha256-7FK+Dtqzm8vleY6OQBm4efqp/82KHkcS1ZE8pftlOyg=";
   };
   deps = stdenvNoCC.mkDerivation {
     pname = "herdr-web-ui-deps";
@@ -29,7 +29,7 @@ let
     dontFixup = true;
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-qsp4ZE4qMDWqZ37t/AgYuEOXV7QMKS8coKj3nGzyRww=";
+    outputHash = "sha256-tEU+W06OSYK8EoP5EyzHHxDPY3if6skZJ2Sl7jGa6LY=";
   };
 in
 stdenv.mkDerivation {
