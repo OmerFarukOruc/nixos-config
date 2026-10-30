@@ -433,3 +433,31 @@ jobs:
         env:
           PARENT: ${{ needs.place-inputs.outputs.parent }}
         run: ci/merge-update.sh "$PARENT" "$RUNNER_TEMP/merge.bundle" flake.nix flake.lock devenv.lock pkgs
+
+  # A skipped merge job ends the run as a success, so GitHub mails nothing.
+  merged:
+    needs: [place-apps, merge-apps, place-inputs, merge-inputs]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check that each ready commit's merge job succeeded
+        env:
+          APPS_PLACE: ${{ needs.place-apps.result }}
+          APPS_READY: ${{ needs.place-apps.outputs.ready }}
+          APPS_MERGE: ${{ needs.merge-apps.result }}
+          INPUTS_PLACE: ${{ needs.place-inputs.result }}
+          INPUTS_READY: ${{ needs.place-inputs.outputs.ready }}
+          INPUTS_MERGE: ${{ needs.merge-inputs.result }}
+        run: |
+          status=0
+          unmerged() {
+            local commit=$1 place=$2 ready=$3 merge=$4
+            if [[ $place == success && $ready == true && $merge != success ]]; then
+              echo "::error::The $commit commit was ready to merge, but merge-$commit ended as $merge."
+              status=1
+            fi
+          }
+          unmerged apps "$APPS_PLACE" "$APPS_READY" "$APPS_MERGE"
+          unmerged inputs "$INPUTS_PLACE" "$INPUTS_READY" "$INPUTS_MERGE"
+          exit "$status"

@@ -84,10 +84,18 @@ holds back an app, and a broken app never holds back the inputs. Its jobs:
    of the update or its inputs.
 
 A failed job fails the run, and GitHub sends its usual mail about a failed
-workflow run. The other commit still merges when its own jobs pass, and the
-next run tries the failed one again from `main`. With `-f always=true`, a run
-started by hand builds and checks `main` itself when no input moved, and
-merges no inputs.
+workflow run. When one commit fails, the other commit still merges when its
+own jobs pass, and the next run tries the failed one again from `main`. With
+`-f always=true`, a run started by hand builds and checks `main` itself when
+no input moved, and merges no inputs.
+
+A skipped job fails nothing, so the last job, **merged**, fails the run when a
+place job readied a commit and its merge job then did not succeed. A merge job
+that finds `main` moved again succeeds without a push, so **merged** passes
+then. `nix fmt` runs `scripts/check-workflow-needs.sh`, which refuses a job
+that needs an `always()`, `!cancelled()` or `failure()` job unless its own
+`if` holds `always()` or `!cancelled()`, because GitHub skips that job
+whenever a job before it was skipped.
 
 The workflow pushes nothing to a cache, so each host still compiles the
 packages listed under [Packages no cache holds](#packages-no-cache-holds).
