@@ -294,7 +294,9 @@ A run that fails a step, or in which `prepare-update.sh` warns that a move
 stays out, opens an issue labelled `nightly-update` with the title `Nightly update failed on main`,
 or comments on it when it is open. The issue names each failed step with its
 exit status and its error line; `journalctl -u nightly-update` has the full
-log. The next run that pushes or finds nothing to move closes the issue.
+log. A later run closes the issue when it fails no step, gets no warning from
+`prepare-update.sh`, and pushes or finds nothing to move. A run that pushed
+some moves while another failed comments instead.
 
 Run it now with `sudo systemctl start nightly-update.service`. To run it on
 another branch, run

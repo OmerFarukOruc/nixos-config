@@ -167,7 +167,11 @@ move inputs 'chore(flake): update inputs to their newest releases' flake.nix fla
 
 step=push
 if [[ $(git rev-parse HEAD) == "$base" ]]; then
-  result='nothing to move'
+  if ((${#failures[@]})); then
+    result='nothing pushed'
+  else
+    result='nothing to move'
+  fi
   echo "Nothing to push."
   exit 0
 fi
