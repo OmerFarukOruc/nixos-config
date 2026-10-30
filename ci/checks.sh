@@ -144,6 +144,8 @@ check "server record" server_record
 echo
 check "server boot tests" server_boot
 echo
+check "scheme catalogue" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.scheme-catalogue
+echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)
 if [[ -z $warnings ]]; then

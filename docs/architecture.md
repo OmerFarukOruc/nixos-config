@@ -207,6 +207,14 @@ defaults and, on a host without Plasma, the cursor keep the record's scheme. `ni
 fails the evaluation when a variant's packages differ from the generation's,
 and names them.
 
+`machines/scheme-parser.nix` reads each scheme file line by line, because
+base16.nix's YAML parser fails on 14 tinted-theming files, such as `dracula`
+and `ascendancy`. It reads only `name`, `author`, `variant` and the 16 palette
+colours, and fails with the file and key on a value it cannot read, such as a
+backslash escape, and on anything else in the palette. The `scheme-catalogue`
+flake check, which `ci/checks.sh` builds, compares its result for every file
+with `yq`'s.
+
 `assets/schemes` holds the schemes that tinted-theming lacks. The
 `warm-burnout-dark` and `warm-burnout-light` schemes there copy the palette of
 the `warm-burnout` input's pinned commit (github:felipefdl/warm-burnout v1.8.0,

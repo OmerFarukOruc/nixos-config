@@ -129,6 +129,7 @@
         // import ./ci/self-deploy.nix {
           inherit inputs;
           host = box;
-        };
+        }
+        // import ./ci/scheme-catalogue.nix { inherit inputs; };
     };
 }
