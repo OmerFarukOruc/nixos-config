@@ -1,6 +1,7 @@
 {
   imports = [
     ./brave.nix
+    ./chromium.nix
     ./docker.nix
     ./connectivity.nix
     ./login.nix
