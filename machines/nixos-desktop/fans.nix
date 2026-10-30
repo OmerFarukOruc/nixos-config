@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   findHwmon = ''
     hw=""
@@ -15,86 +20,113 @@ let
     }
   '';
 
-  setSpeed = pkgs.writeShellApplication {
-    name = "case-fans-set";
-    runtimeInputs = [ pkgs.coreutils ];
-    text = ''
-      channels=(3 5 7)
-      # PWM 65 stopped both D30-140 chains; PWM 72 runs them near 750 RPM.
-      flat=72
-      kick=255
-      ${findHwmon}
+  tables = lib.importJSON ./fan-tables.json;
+  owned = [
+    tables.radiator.channel
+    tables.rear.channel
+  ]
+  ++ map (intake: intake.channel) tables.intakes;
+  ownedList = lib.concatMapStringsSep "," toString owned;
 
-      restore_on_failure() {
-        local result=$?
-        if ((result != 0)); then
-          for ch in "''${channels[@]}"; do
-            echo 2 >"$hw/pwm''${ch}_enable" || echo "Could not restore auto control on channel $ch" >&2
-          done
-        fi
-      }
-      trap restore_on_failure EXIT
+  control = pkgs.writers.writePython3Bin "case-fans-control" { } (builtins.readFile ./fan-control.py);
 
-      # A stopped fan needs full power to start turning.
-      for ch in "''${channels[@]}"; do
-        echo "$kick" >"$hw/pwm$ch"
-        echo 1 >"$hw/pwm''${ch}_enable"
-      done
-      sleep 3
-      for ch in "''${channels[@]}"; do
-        echo "$flat" >"$hw/pwm$ch"
-      done
-
-      # The driver caches readings for one second.
-      sleep 4
-      for ch in "''${channels[@]}"; do
-        rpm=$(<"$hw/fan''${ch}_input")
-        if ((rpm == 0)); then
-          echo "Fan channel $ch stopped at PWM $flat; restoring auto control" >&2
-          exit 1
-        fi
-        echo "Fan channel $ch: PWM $flat, $rpm RPM"
-      done
-    '';
+  settings = {
+    period_s = 2;
+    cpu = {
+      hwmon = "k10temp";
+      label = "Tctl";
+      rise_s = 10;
+      fall_s = 45;
+    };
+    gpu = {
+      hwmon = "amdgpu";
+      label = "edge";
+      rise_s = 5;
+      fall_s = 30;
+    };
+    inherit (tables) radiator rear intakes;
+    radiator_curve = [
+      [
+        55
+        500
+      ]
+      [
+        65
+        650
+      ]
+      [
+        75
+        900
+      ]
+      [
+        80
+        1300
+      ]
+      [
+        85
+        1800
+      ]
+    ];
+    intake_curve = [
+      [
+        50
+        600
+      ]
+      [
+        60
+        800
+      ]
+      [
+        70
+        1100
+      ]
+      [
+        80
+        1500
+      ]
+      [
+        85
+        1800
+      ]
+    ];
+    rear_rpm = 450;
+    pressure = {
+      radiator = 0.85;
+      rear = 0.30;
+    };
+    emergency = {
+      enter_filtered_c = 85;
+      enter_raw_c = 89;
+      leave_filtered_c = 80;
+      leave_s = 30;
+    };
   };
+  configFile = pkgs.writeText "case-fans.json" (builtins.toJSON settings);
 
   caseFans = pkgs.writeShellApplication {
     name = "case-fans";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.jq
       config.systemd.package
     ];
     text = ''
-      channels=(3 5 7)
       sudo=()
       if [[ $(id -u) != 0 ]]; then sudo=(/run/wrappers/bin/sudo); fi
-      ${findHwmon}
-
-      status() {
-        printf 'static: %s\n' "$(systemctl is-active case-fans.service || true)"
-        for ch in "''${channels[@]}"; do
-          case $(<"$hw/pwm''${ch}_enable") in
-            1) mode=static ;;
-            2) mode=auto ;;
-            *) mode=unknown ;;
-          esac
-          label=$(cat "$hw/fan''${ch}_label" 2>/dev/null || echo "Fan $ch")
-          echo "$label: $(<"$hw/fan''${ch}_input") rpm, pwm=$(<"$hw/pwm$ch"), mode=$mode"
-        done
-      }
 
       case ''${1:-status} in
-        on) "''${sudo[@]}" systemctl restart case-fans.service ;;
-        off)
-          "''${sudo[@]}" systemctl stop case-fans.service
-          for ch in "''${channels[@]}"; do
-            echo 2 | "''${sudo[@]}" tee "$hw/pwm''${ch}_enable" >/dev/null
-          done
+        on)
+          "''${sudo[@]}" systemctl reset-failed case-fans.service
+          "''${sudo[@]}" systemctl restart case-fans.service
           ;;
+        off) "''${sudo[@]}" systemctl stop case-fans.service ;;
         toggle)
           if systemctl is-active --quiet case-fans.service; then "$0" off; else "$0" on; fi
           ;;
-        status) status ;;
+        status)
+          printf 'case-fans: %s\n' "$(systemctl is-active case-fans.service || true)"
+          if [[ -r /run/case-fans/state.json ]]; then jq . /run/case-fans/state.json; fi
+          ;;
         *)
           echo "usage: case-fans on|off|toggle|status" >&2
           exit 2
@@ -122,7 +154,7 @@ let
           *) mode="?" ;;
         esac
         case $idx in
-          3 | 5 | 7) owner=case-fans ;;
+          ${lib.concatMapStringsSep " | " toString owned}) owner=case-fans ;;
           *) owner=BIOS ;;
         esac
         printf '%-16s %7s %5s %-7s %s\n' "$label" "$rpm" "$pwm" "$mode" "$owner"
@@ -137,19 +169,29 @@ in
   boot.kernelModules = [ "nct6687" ];
 
   systemd.services.case-fans = {
-    description = "Phanteks D30 case fans at a low fixed speed";
+    description = "Case and radiator fans on an RPM loop with positive pressure";
     after = [ "systemd-modules-load.service" ];
     wants = [ "systemd-modules-load.service" ];
     wantedBy = [ "multi-user.target" ];
+    startLimitIntervalSec = 600;
+    startLimitBurst = 3;
     serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${setSpeed}/bin/case-fans-set";
+      Type = "notify";
+      ExecStart = "${control}/bin/case-fans-control --config ${configFile}";
+      ExecStopPost = "${control}/bin/case-fans-control --restore ${ownedList}";
+      WatchdogSec = "10s";
+      WatchdogSignal = "SIGKILL";
+      TimeoutStartSec = "30s";
+      TimeoutStopSec = "5s";
+      Restart = "on-failure";
+      RestartSec = 5;
+      RuntimeDirectory = "case-fans";
     };
   };
 
   environment.systemPackages = [
     caseFans
+    control
     fanStatus
   ];
 }

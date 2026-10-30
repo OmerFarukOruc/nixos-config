@@ -370,10 +370,35 @@ host can share, such as desktop-sync, are in `home-manager/modules/`.
 
 ## nixos-desktop case fans
 
-`machines/nixos-desktop/fans.nix` runs the Phanteks D30 case fans, on channels
-3, 5 and 7 of the motherboard's nct6687 chip, at one low fixed speed from boot.
-The BIOS keeps every other fan. `case-fans off` hands the three channels back to
-the BIOS until the next boot or `case-fans on`. `fan-status` lists every fan.
+`machines/nixos-desktop/fans.nix` runs `case-fans.service`, a daemon
+(`fan-control.py`) that owns channels 1, 3, 5 and 7 of the motherboard's
+nct6687 chip: the radiator fans, the rear fan and the two intake chains. Every
+2 s it turns the filtered CPU (`k10temp` Tctl) and GPU (`amdgpu` edge)
+temperatures into a target RPM per channel, and sets the PWM that holds that
+RPM from each channel's tach reading and its measured PWM-to-RPM table. In
+normal mode the intake target never drops below 0.85 x the radiator RPM plus
+0.30 x the rear RPM, so the case keeps positive pressure; at a filtered Tctl of
+85 C or a raw Tctl of 89 C all four channels run at full speed instead. The
+curves and pressure weights live in `settings` in `fans.nix`, and the measured
+tables in `fan-tables.json`. To measure a channel's table again, stop the
+service and run the measurement as a transient unit, so the channel returns to
+the BIOS however the run ends:
+
+```sh
+sudo systemctl stop case-fans
+sudo systemd-run --wait --pipe -p ExecStopPost="$(command -v case-fans-control) --restore N" "$(command -v case-fans-control)" --calibrate N
+sudo systemctl start case-fans
+```
+
+The measurement aborts when Tctl reaches 70 C, so run it while the machine is
+idle.
+
+When the daemon stops, crashes, misses its 10 s watchdog or cannot read a
+sensor, `ExecStopPost` hands the four channels back to the BIOS curves. The
+BIOS keeps the pump (channel 2) and the AIO's VRM fan (channel 4). `case-fans
+off` stops the daemon until `case-fans on` or the next boot (`on` also clears
+the start limit that 3 failures in 10 minutes set), `case-fans status`
+prints its state file, and `fan-status` lists every fan.
 
 ## kernel-cache
 
