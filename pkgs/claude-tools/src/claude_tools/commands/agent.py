@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -81,7 +82,8 @@ def start(settings: Settings, a: argparse.Namespace) -> None:
         raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it")
     config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
     where = caller(settings, ag)
-    inbox_env = ["--env", f"CLAUDE_TOOLS_INBOX={settings.inbox.absolute()}"] if settings.inbox_set else []
+    inbox_set = bool(os.environ.get("CLAUDE_TOOLS_INBOX"))
+    inbox_env = ["--env", f"CLAUDE_TOOLS_INBOX={settings.inbox.absolute()}"] if inbox_set else []
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
                        *(["--workspace", where["workspace_id"]] if where else []), *inbox_env)["result"]
     tab, pane = created["tab"]["tab_id"], created["root_pane"]["pane_id"]

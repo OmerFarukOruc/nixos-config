@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import IO
+from typing import IO, NoReturn
 
 from claude_tools.errors import Failed
 from claude_tools.herdr import Herdr
@@ -41,7 +41,8 @@ One watcher runs for each inbox, so each notice wakes the orchestrator once: a n
 NAME-REGEX stops the older one (its pid is in <inbox>.watcher) and prints "watcher replaced pid N", and the older
 one prints "watcher stopped by SIGTERM" as its last line. Re-arming a Monitor is therefore safe. A watcher whose
 NAME-REGEX differs from the running one's exits 1 and leaves it running, because every notice in the inbox prints
-whatever the regex; give each orchestrator its own inbox.
+whatever the regex; give each orchestrator its own inbox, or stop the running watcher if it is yours (its pid is in
+the message and in <inbox>.watcher).
 The inbox is CLAUDE_TOOLS_INBOX, by default ~/.local/state/claude-tools/orch/inbox.log. Set it to a file of your
 own run before watching; "claude-tools agent start" passes it on to the agents it starts, so their plain
 "claude-tools orch notify" reaches this inbox.
@@ -83,29 +84,55 @@ def cmdline(pid: int | str) -> list[str]:
     return Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0")
 
 
+class NotWatcher(Exception):
+    pass
+
+
+class QuietParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        raise argparse.ArgumentError(None, message)
+
+
+def add_names(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("names", metavar="NAME-REGEX",
+                        help="must match a whole agent name, so agents outside it, such as reviewer subagents, do "
+                             "not wake the orchestrator")
+
+
 def watcher_of(argv: list[str]) -> tuple[str, str] | None:
     for i in range(1, len(argv) - 2):
         if argv[i:i + 2] == ["orch", "watch"]:
-            return Path(argv[i - 1]).name, argv[i + 2]
+            parser = QuietParser(add_help=False)
+            add_names(parser)
+            try:
+                return Path(argv[i - 1]).name, parser.parse_args(argv[i + 2:-1]).names
+            except argparse.ArgumentError:
+                return None
     return None
 
 
-def stop_holder(lock_path: Path, pid: int) -> bool:
+def lock_pid(lock: IO[str]) -> int | None:
+    lock.seek(0)
+    text = lock.read().strip()
+    return int(text) if text.isdigit() else None
+
+
+def stop_holder(lock: IO[str], lock_path: Path, pid: int, names: str) -> bool:
     try:
         argv = cmdline(pid)
     except OSError:
         return False
-    if not argv[0]:
+    if not argv[0] or lock_pid(lock) != pid:
         return False
     holder, own = watcher_of(argv), watcher_of(cmdline("self"))
     if holder is None or own is None or holder[0] != own[0]:
-        raise SystemExit(f"claude-tools orch watch: {lock_path} is held by pid {pid}, which is not a watcher; "
-                         "not starting")
-    if holder[1] != own[1]:
+        raise NotWatcher
+    if holder[1] != names:
         raise SystemExit(f"claude-tools orch watch: {lock_path} is held by pid {pid}, which watches {holder[1]!r} "
-                         f"and not {own[1]!r}; replacing it would send its notices to this watcher. Set "
+                         f"and not {names!r}; replacing it would send its notices to this watcher. Set "
                          "CLAUDE_TOOLS_INBOX to an inbox file of your own run in the environment of this watcher; "
-                         "`claude-tools agent start` passes it on to the agents it starts. Not starting")
+                         "`claude-tools agent start` passes it on to the agents it starts. To replace it with this "
+                         f"regex, stop pid {pid} if it is yours. Not starting")
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -113,7 +140,7 @@ def stop_holder(lock_path: Path, pid: int) -> bool:
     return True
 
 
-def take_over(lock_path: Path) -> tuple[IO[str], int | None]:
+def take_over(lock_path: Path, names: str) -> tuple[IO[str], int | None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock = lock_path.open("a+")
     replaced = None
@@ -124,11 +151,18 @@ def take_over(lock_path: Path) -> tuple[IO[str], int | None]:
             break
         except BlockingIOError:
             pass
-        lock.seek(0)
-        text = lock.read().strip()
-        if text.isdigit() and replaced != int(text) and stop_holder(lock_path, int(text)):
-            replaced = int(text)
+        foreign = None
+        pid = lock_pid(lock)
+        if pid is not None and pid != replaced:
+            try:
+                if stop_holder(lock, lock_path, pid, names):
+                    replaced = pid
+            except NotWatcher:
+                foreign = pid
         if time.monotonic() > deadline:
+            if foreign is not None:
+                raise SystemExit(f"claude-tools orch watch: {lock_path} is held by pid {foreign}, which is not a "
+                                 "watcher; not starting")
             raise SystemExit(f"claude-tools orch watch: the watcher holding {lock_path} did not stop within "
                              f"{TAKEOVER_WAIT_S} s")
         time.sleep(0.2)
@@ -247,7 +281,7 @@ class Watcher:
 def watch(settings: Settings, a: argparse.Namespace) -> int:
     inbox = Inbox(settings.inbox)
     watcher = Watcher(settings, re.compile(a.names))
-    _lock, replaced = take_over(inbox.path.with_name(inbox.path.name + ".watcher"))
+    _lock, replaced = take_over(inbox.path.with_name(inbox.path.name + ".watcher"), a.names)
 
     def stopped(*_: object) -> None:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -279,7 +313,5 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                          description="Wake the orchestrator: print one line for each event in a herdr session, so a "
                                      "Monitor on it delivers them.",
                          epilog=WATCH_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
-    wt.add_argument("names", metavar="NAME-REGEX",
-                    help="must match a whole agent name, so agents outside it, such as reviewer subagents, do not "
-                         "wake the orchestrator")
+    add_names(wt)
     wt.set_defaults(run=watch)
