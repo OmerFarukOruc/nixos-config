@@ -5,12 +5,11 @@
   ...
 }:
 let
-  scheme = config.scheme.withHashtag;
-
   batPreview = "bat --color=always --style=numbers --line-range=:200 {}";
   treePreview = "eza --tree --level=2 --color=always --icons=always {}";
   pathPreview = "if [ -d {} ]; then ${treePreview}; else ${batPreview}; fi";
   previewWindow = "--preview-window=right:50%:wrap";
+  starshipConfig = builtins.readFile ../starship.toml;
 
   secretCommands = [
     "gh auth token"
@@ -29,7 +28,10 @@ let
   ];
 in
 {
-  imports = [ ./scheme.nix ];
+  imports = [
+    ./scheme.nix
+    ./theme-pack.nix
+  ];
 
   programs.zsh = {
     enable = true;
@@ -176,29 +178,31 @@ in
   };
 
   home.sessionVariables.FZF_DEFAULT_OPTS_FILE = "${config.xdg.configHome}/fzf/fzfrc";
-  xdg.configFile."fzf/fzfrc".text = lib.concatStringsSep "\n" [
-    "--height=40%"
-    "--layout=reverse"
-    "--border=rounded"
-    "--color=${
-      lib.concatStringsSep "," (
-        lib.mapAttrsToList (name: slot: "${name}:${scheme.${slot}}") {
-          "bg+" = "base01";
-          bg = "base00";
-          spinner = "base0C";
-          hl = "base0D";
-          fg = "base04";
-          header = "base0D";
-          info = "base0A";
-          pointer = "base0C";
-          marker = "base0C";
-          "fg+" = "base06";
-          prompt = "base0A";
-          "hl+" = "base0D";
-        }
-      )
-    }"
-  ];
+  oruc.themeFiles.".config/fzf/fzfrc" =
+    { scheme, ... }:
+    lib.concatStringsSep "\n" [
+      "--height=40%"
+      "--layout=reverse"
+      "--border=rounded"
+      "--color=${
+        lib.concatStringsSep "," (
+          lib.mapAttrsToList (name: slot: "${name}:${scheme.withHashtag.${slot}}") {
+            "bg+" = "base01";
+            bg = "base00";
+            spinner = "base0C";
+            hl = "base0D";
+            fg = "base04";
+            header = "base0D";
+            info = "base0A";
+            pointer = "base0C";
+            marker = "base0C";
+            "fg+" = "base06";
+            prompt = "base0A";
+            "hl+" = "base0D";
+          }
+        )
+      }"
+    ];
 
   programs.fzf = {
     enable = true;
@@ -244,15 +248,10 @@ in
     enable = true;
     enableZshIntegration = true;
   };
-  xdg.configFile."starship.toml".text =
+  oruc.themeFiles.".config/starship.toml" =
+    { scheme, theme }:
     let
-      slot =
-        name:
-        map (c: lib.toInt config.scheme."${name}-rgb-${c}") [
-          "r"
-          "g"
-          "b"
-        ];
+      slot = theme.rgb;
       surface =
         percent:
         lib.zipListsWith (bg: fg: (bg * (100 - percent) + fg * percent) / 100) (slot "base00") (
@@ -265,7 +264,7 @@ in
       }
       # Starship lowercases a style before it looks a name up in the palette.
       // lib.listToAttrs (
-        map (name: lib.nameValuePair (lib.toLower name) scheme.${name}) [
+        map (name: lib.nameValuePair (lib.toLower name) scheme.withHashtag.${name}) [
           "base05"
           "base0A"
           "base0B"
@@ -277,7 +276,7 @@ in
     in
     ''
       palette = "scheme"
-      ${builtins.readFile ../starship.toml}
+      ${starshipConfig}
       [palettes.scheme]
       ${lib.concatStrings (lib.mapAttrsToList (name: color: "${name} = \"${color}\"\n") palette)}'';
 }

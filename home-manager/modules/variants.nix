@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   osConfig,
   sessions,
@@ -9,9 +10,9 @@ let
 in
 {
   options.oruc.variantReloads = lib.mkOption {
-    type = lib.types.listOf lib.types.str;
-    default = [ ];
-    description = "Commands the variant activator runs after a switch. Empty when no app reloads.";
+    type = lib.types.attrsOf lib.types.str;
+    default = { };
+    description = "Commands, by app name, that theme and plasma-look run after a switch so running apps load the new colours. Each exits non-zero when its reload failed.";
   };
 
   config.specialisation = lib.listToAttrs (
@@ -20,6 +21,7 @@ in
       lib.nameValuePair variant.name {
         configuration.oruc = {
           inherit (variant) scheme;
+          themePack = lib.mkForce config.oruc.themePack;
         }
         // lib.optionalAttrs (variant ? look) { plasma.look = variant.look; };
       }

@@ -31,3 +31,15 @@ The GA605WI firmware GPU mode in which the RTX 4070 is on the PCI bus and the Ra
 **Integrated mode**:
 The GA605WI firmware GPU mode in which the RTX 4070 is powered off and absent from the PCI bus (`dgpu_disable` 1).
 _Avoid_: Eco mode
+
+**Scheme**:
+One Base16 colour scheme, a YAML file in tinted-theming or `assets/schemes`, named by its file name, such as `tokyo-night-dark`.
+_Avoid_: theme, palette
+
+**Record scheme**:
+The scheme in `theme.scheme` of a machine's record. A deploy builds it, and the login screen, the boot menu, the console and niri use it.
+_Avoid_: default theme
+
+**Theme pack**:
+The store path in a Home Manager generation that holds the colour files of each scheme, which `theme` points the files in `$HOME` at. A workstation user's pack holds every scheme; root's and a server's hold only the record scheme.
+_Avoid_: theme bundle

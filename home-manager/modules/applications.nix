@@ -193,9 +193,7 @@ in
     };
   };
 
-  oruc.variantReloads = lib.mkIf config.programs.ghostty.enable [
-    ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true''
-  ];
+  oruc.variantReloads.ghostty = lib.mkIf config.programs.ghostty.enable ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true'';
 
   programs.ghostty = lib.mkIf hasDesktop {
     enable = true;

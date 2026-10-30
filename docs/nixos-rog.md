@@ -939,43 +939,53 @@ the stored look.
 
 ## Switch the scheme
 
-`theme` switches the Base16 scheme of the Home Manager apps without a rebuild,
-on every workstation. It offers the record's `theme.scheme` and the schemes in
-`theme.schemes` (`machines/inventory.nix`):
+`theme` switches the Base16 scheme without a rebuild, on every workstation. It
+takes any scheme of the theme pack, which holds all 362 of tinted-theming and
+`assets/schemes` ([Theme](architecture.md#theme)):
 
 ```sh
-theme                      # prints the active scheme and the others
-theme gruvbox-dark-medium
+theme                      # prints the active scheme and the record's
+theme --list               # prints every scheme of the pack
+theme tokyo-night-dark
 ```
 
-Ghostty (which `theme` tells to reload its config) and new Neovim windows take
-the new colors at once, and so does Claude Code, whose dotfiles `settings.json`
-selects `custom:scheme`. The wallpaper of a scheme without a
-file in `assets/wallpapers` is the default one recolored to that scheme
-([Theme](architecture.md#theme)). On Plasma, `oruc-plasma-wallpaper` sets it
-again at each activation, so the desktop wallpaper changes with the scheme. VS Code takes its theme extension and
-its window background at its next start, and the Markdown viewer takes the
-scheme the next time a file opens. GTK 4 and libadwaita apps (Mission Center,
+Ghostty, running tmux servers and running Neovim, which `theme` tells to
+reload, take the new colors at once, and so does Claude Code, whose dotfiles
+`settings.json` selects `custom:scheme`. Starship reads its colors at each
+prompt, so it changes in open shells too; fzf and atuin take them at their next
+start, and the Markdown viewer the next time a file opens.
+
+The other apps that follow the scheme take it from a Home Manager variant, so
+they follow only the record's scheme and the schemes in `theme.schemes`
+(`machines/inventory.nix`); for any other scheme they keep the record's. VS Code
+takes its theme extension and its window background at its next start. The
+wallpaper of a scheme without a file in `assets/wallpapers` is the default one
+recolored to that scheme ([Theme](architecture.md#theme)). On Plasma,
+`oruc-plasma-wallpaper` sets it again at each activation, so the desktop
+wallpaper changes with the scheme. GTK 4 and libadwaita apps (Mission Center,
 for example) read their colors file when they start, so a running one may keep
 the old colors until it restarts. That file is
 `~/.config/gtk-4.0/oruc-colors.css` on nixos-rog and `gtk.css` on
-nixos-latitude. The KDE colors
-and the Plasma splash load at the next login, as with `plasma-look`. The login
-screen, the boot menu, the console, niri and the keyboard's Aura color keep the
-record's scheme. So does
-Spotify, because Spicetify builds its colors into the package, which a variant
-cannot replace. The login form assumes a dark record scheme, because it draws
-the form at 30 % opacity over the dark Jake video, where a light scheme's dark
-text loses contrast. Starship reads its colors at each prompt, so it changes in
-open shells too. [Theme](architecture.md#theme) lists the apps that keep fixed
-colors. The choice lasts across
-deploys and reboots, and `theme <record's scheme>` goes back. Because each
-deploy and boot activates the record's scheme before the stored one, apps that
-follow the scheme show the record's colors for a moment then.
+nixos-latitude. The KDE colors and the Plasma splash load at the next login, as
+with `plasma-look`.
 
-To offer another scheme, add its name to `theme.schemes`. A name from the
-tinted-theming collection needs nothing else; a scheme it lacks goes in
-`assets/schemes` ([architecture.md](architecture.md#theme)).
+The login screen, the boot menu, the console, niri and the keyboard's Aura color
+keep the record's scheme. So does Spotify, because Spicetify builds its colors
+into the package, which a variant cannot replace. The login form assumes a dark
+record scheme, because it draws the form at 30 % opacity over the dark Jake
+video, where a light scheme's dark text loses contrast.
+[Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
+lasts across deploys and reboots, and `theme <record's scheme>` goes back.
+Because each deploy and boot activates the record's scheme before the stored
+one, apps that follow a variant show the record's colors for a moment then.
+
+`scripts/check-theme.sh SCHEME...` switches to each scheme, checks the colour
+files and a tmux server and two Neovim instances it starts, and switches back;
+`--host nixos-latitude` runs it there.
+
+To give a scheme the apps that follow a variant, add its name to
+`theme.schemes`. A scheme that tinted-theming lacks goes in `assets/schemes`
+([architecture.md](architecture.md#theme)).
 
 ## Deskflow
 

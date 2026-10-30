@@ -10,7 +10,6 @@ let
   inherit (lib) mkOption types;
   schemeName = schemeOf config;
   schemes = import ../machines/schemes.nix { inherit inputs lib; };
-  isLight = config.scheme.scheme-variant == "light";
 
   readOnly =
     type: description:
@@ -24,6 +23,11 @@ in
 
   options.oruc.theme = {
     isLight = readOnly types.bool "Whether the selected scheme is a light variant.";
+    polarity = readOnly (types.enum [
+      "dark"
+      "light"
+    ]) "The selected scheme's variant, dark or light.";
+    rgb = readOnly (types.functionTo (types.listOf types.int)) "The red, green and blue channels, 0 to 255, of a scheme slot such as base00.";
     cursor = {
       name = readOnly types.str "Cursor theme that follows the scheme variant.";
       size = readOnly types.int "Cursor size in pixels.";
@@ -42,18 +46,11 @@ in
   config = {
     scheme = schemes.${schemeName};
 
-    oruc.theme = {
-      inherit isLight;
-      cursor = {
-        name = if isLight then "Bibata-Modern-Classic" else "Bibata-Modern-Ice";
-        size = 24;
-      };
-      icons = if isLight then "Papirus-Light" else "Papirus-Dark";
+    oruc.theme = import ./theme-values.nix { inherit lib; } config.scheme // {
       fonts = {
         ui = "Inter";
         mono = "JetBrainsMono Nerd Font";
       };
-      gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
       wallpaper =
         let
           storePathOfFileAlone =
@@ -79,34 +76,6 @@ in
           '';
         in
         if named == null then "${recolored}/${schemeName}.png" else storePathOfFileAlone named;
-      ansiNames = [
-        "Black"
-        "Red"
-        "Green"
-        "Yellow"
-        "Blue"
-        "Magenta"
-        "Cyan"
-        "White"
-      ];
-      ansi = [
-        "base00"
-        "base08"
-        "base0B"
-        "base0A"
-        "base0D"
-        "base0E"
-        "base0C"
-        "base05"
-        "base03"
-        "base08"
-        "base0B"
-        "base0A"
-        "base0D"
-        "base0E"
-        "base0C"
-        "base07"
-      ];
     };
   };
 }

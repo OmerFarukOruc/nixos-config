@@ -161,9 +161,11 @@ These rules follow from the list:
 
 ## Theme
 
-`nixosModules/theme-module.nix` derives the read-only `oruc.theme` values from
-a Base16 scheme. The values are whether the scheme is light, the cursor, icons
-and GTK theme that follow that variant, the wallpaper, and the ANSI slots. The font families are fixed.
+`nixosModules/theme-module.nix` sets the read-only `oruc.theme` values of a
+Base16 scheme. `nixosModules/theme-values.nix` gives whether the scheme is
+light, the cursor, icons and GTK theme that follow that variant, and the ANSI
+slots; the module adds the wallpaper and the fixed font families. The theme
+pack calls `theme-values.nix` for every scheme.
 
 NixOS and Home Manager each import that module with their own scheme:
 
@@ -189,11 +191,12 @@ Each other row is a specialisation (`home-manager/modules/variants.nix`), which
 function in `machines/variants.nix` is the only encoder of a specialisation's
 directory. The shell commands read the finished rows and do not rebuild them.
 
-`theme <scheme>` activates one at run time and keeps it across deploys
-([Switch the scheme](nixos-rog.md#switch-the-scheme)). `plasma-look <look>` and
-`theme <scheme>` each store a choice and activate the variant of both stored
-choices. Each deploy and each boot activates the default variant first, so the
-Home Manager service then activates the stored one. Every variant adds a
+`plasma-look <look>` and `theme <scheme>` each store a choice and activate the
+variant of both stored choices
+([Switch the scheme](nixos-rog.md#switch-the-scheme)). A scheme outside
+`theme.schemes` uses the record scheme's variant. Each deploy and each boot
+activates the default variant first, so the Home Manager service then runs
+`theme --reapply`, which activates the stored one. Every variant adds a
 Home Manager evaluation to each deploy. With two looks and four schemes,
 an evaluation of nixos-rog's system on nixos-rog took 59 to 66 seconds in 3
 runs, against 29 to 46 seconds in 4 runs with one scheme (measured
@@ -206,6 +209,34 @@ window and fzf read their colors from files for this reason. kVitals' package
 defaults and, on a host without Plasma, the cursor keep the record's scheme. `nixosModules/hm-variants.nix`
 fails the evaluation when a variant's packages differ from the generation's,
 and names them.
+
+The apps that read their colours from a file follow any scheme without a
+variant, through the theme pack (`home-manager/modules/theme-pack.nix`). Each
+module adds a renderer to `oruc.themeFiles`, keyed by the file's path under
+`$HOME`, and the pack, a store path in the generation, holds each renderer's
+file for each scheme as `<scheme>/<path>`, with a `slugs` file that lists the
+schemes and, per scheme, `.oruc/polarity` (dark or light) and the scheme's YAML
+as `.oruc/source.yaml`. Each such file in `$HOME` links to
+`~/.local/state/oruc/theme/current/<path>`, and `current` links to
+`pack/<scheme>`. `theme/pack` links to the generation's pack and is a GC root.
+`oruc-theme-pointer` owns these links and holds `theme/lock` while it changes
+them. `theme` and `plasma-look` hold `switch.lock` for a whole switch, so two
+runs cannot leave the active variant and the stored scheme apart, and they
+refuse to activate a variant once a deploy replaced the system they came
+from. Each Home Manager activation roots its own pack, so a rollback brings
+the old pack back, and points `current` at the stored scheme
+(`~/.local/state/oruc/scheme`), or at the record scheme when the pack lacks
+it. `theme <scheme>` replaces the stored scheme through a rename, which is the
+one step that commits a switch, points `current` at it, and then runs
+`oruc.variantReloads` so Ghostty, tmux and Neovim load the new files. Claude
+Code reloads its theme when the file is replaced, but not when a link on its
+path changes target, so its theme file is listed in `oruc.themeCopies`: the
+pointer writes it as a regular file and replaces it through a rename each time
+it moves `current`. A renderer runs for every scheme, so it must give a valid file for
+each; the Markdown viewer's code colours move toward black or white when the
+scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
+reuse the generation's pack, and root's Home Manager and the servers get a
+pack with the record scheme alone.
 
 `machines/scheme-parser.nix` reads each scheme file line by line, because
 base16.nix's YAML parser fails on 14 tinted-theming files, such as `dracula`

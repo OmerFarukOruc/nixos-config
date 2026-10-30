@@ -1,6 +1,9 @@
-{ inputs, lib }:
+{
+  inputs,
+  lib,
+  parse ? import ./scheme-parser.nix { inherit lib; },
+}:
 let
-  parse = import ./scheme-parser.nix { inherit lib; };
   schemesIn =
     dir:
     lib.pipe (builtins.readDir dir) [

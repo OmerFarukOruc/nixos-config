@@ -17,8 +17,8 @@ let
   hasDesktop = sessions.hasAnyDesktop cfg;
   hasFonts = sessions.hasGraphicalUser cfg;
 
-  isWarmBurnout = lib.hasPrefix "warm-burnout-" config.oruc.scheme;
-  warmBurnoutVariant = if theme.isLight then "light" else "dark";
+  warmBurnout = lib.hasPrefix "warm-burnout-";
+  isWarmBurnout = warmBurnout config.oruc.scheme;
   warmBurnoutVersion = (lib.importJSON "${inputs.warm-burnout}/vscode/package.json").version;
   warmBurnoutVscode = pkgs.vscode-utils.buildVscodeExtension {
     pname = "felip3fdl-warm-burnout";
@@ -90,6 +90,12 @@ let
   iconTheme = "${kwriteconfig} --file kdeglobals --group Icons --key Theme ${theme.icons}";
 
   colorsOnce = import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } "oruc-plasma-colors";
+
+  slots = map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF");
+  nvimTheme = "${config.xdg.configHome}/oruc/nvim-theme.lua";
+  tmuxTheme = "${config.xdg.configHome}/tmux/oruc-theme.conf";
+  tmux = lib.getExe config.programs.tmux.package;
+  nvim = lib.getExe config.programs.nvf.finalPackage;
 in
 {
   fonts.fontconfig.enable = hasFonts;
@@ -104,33 +110,15 @@ in
     ]
   );
 
-  programs.ghostty = {
-    # Home Manager validates each theme file with an unquoted path, so the
-    # theme name must not contain a space.
-    themes.oruc-base16 = {
-      palette = lib.imap0 (index: slot: "${toString index}=${scheme.${slot}}") theme.ansi;
-      background = rawScheme.base00;
-      foreground = rawScheme.base05;
-      cursor-color = rawScheme.base05;
-      selection-background = rawScheme.base02;
-      selection-foreground = rawScheme.base05;
-    };
-    settings.theme = "oruc-base16";
-  };
+  programs.ghostty.settings.config-file = "?oruc-colors";
 
   programs.tmux.extraConfig = ''
-    set -g status-style "fg=${scheme.base05},bg=${scheme.base01}"
-    set -g window-status-style "fg=${scheme.base04}"
-    set -g window-status-current-style "fg=${scheme.base00},bg=${scheme.base0D},bold"
-    set -g message-style "fg=${scheme.base05},bg=${scheme.base02}"
-    set -g mode-style "fg=${scheme.base05},bg=${scheme.base02}"
-    set -g pane-border-style "fg=${scheme.base02}"
-    set -g pane-active-border-style "fg=${scheme.base0D}"
+    source-file -q ${tmuxTheme}
   '';
 
   oruc.vscodeSettings = {
     "workbench.colorTheme" =
-      if isWarmBurnout then "Warm Burnout ${lib.toSentenceCase warmBurnoutVariant}" else tintedThemeLabel;
+      if isWarmBurnout then "Warm Burnout ${lib.toSentenceCase theme.polarity}" else tintedThemeLabel;
     "workbench.colorCustomizations" = {
       "terminal.foreground" = scheme.base05;
     }
@@ -138,43 +126,108 @@ in
     "terminal.integrated.minimumContrastRatio" = 1;
   };
 
-  programs.atuin = {
-    settings.theme.name = "Oruc Base16";
-    themes.oruc-base16 = {
-      theme.name = "Oruc Base16";
-      colors = {
-        Base = scheme.base05;
-        Title = scheme.base0D;
-        Important = scheme.base08;
-        Guidance = scheme.base04;
-        Annotation = scheme.base03;
-        AlertInfo = scheme.base0C;
-        AlertWarn = scheme.base0A;
-        AlertError = scheme.base08;
-      };
-    };
-  };
+  programs.atuin.settings.theme.name = "Oruc Base16";
 
   programs.vscode.profiles.default.extensions = [
     (if isWarmBurnout then warmBurnoutVscode else tintedVscode)
   ];
 
-  xdg.configFile."oruc/nvim-theme.lua".text =
-    if isWarmBurnout then
-      "vim.cmd.colorscheme('warm-burnout-${warmBurnoutVariant}')"
-    else
-      "require('base16-colorscheme').setup({ ${
-        lib.concatMapStringsSep ", " (slot: "${slot} = '${scheme.${slot}}'") (
-          map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF")
-        )
-      } })";
+  oruc.themeFiles = lib.mkMerge [
+    {
+      ".config/oruc/nvim-theme.lua" =
+        { scheme, ... }:
+        if warmBurnout scheme.scheme-slug then
+          "vim.cmd.colorscheme('${scheme.scheme-slug}')"
+        else
+          "require('base16-colorscheme').setup({ ${
+            lib.concatMapStringsSep ", " (slot: "${slot} = '${scheme.withHashtag.${slot}}'") slots
+          } })";
+    }
+    (lib.mkIf config.programs.ghostty.enable {
+      ".config/ghostty/oruc-colors" =
+        { scheme, theme }:
+        lib.concatLines (
+          lib.imap0 (index: slot: "palette = ${toString index}=${scheme.withHashtag.${slot}}") theme.ansi
+          ++ [
+            "background = ${scheme.base00}"
+            "foreground = ${scheme.base05}"
+            "cursor-color = ${scheme.base05}"
+            "selection-background = ${scheme.base02}"
+            "selection-foreground = ${scheme.base05}"
+          ]
+        );
+    })
+    (lib.mkIf config.programs.tmux.enable {
+      ".config/tmux/oruc-theme.conf" =
+        { scheme, ... }:
+        let
+          s = scheme.withHashtag;
+        in
+        ''
+          set -g status-style "fg=${s.base05},bg=${s.base01}"
+          set -g window-status-style "fg=${s.base04}"
+          set -g window-status-current-style "fg=${s.base00},bg=${s.base0D},bold"
+          set -g message-style "fg=${s.base05},bg=${s.base02}"
+          set -g mode-style "fg=${s.base05},bg=${s.base02}"
+          set -g pane-border-style "fg=${s.base02}"
+          set -g pane-active-border-style "fg=${s.base0D}"
+        '';
+    })
+    (lib.mkIf config.programs.atuin.enable {
+      ".config/atuin/themes/oruc-base16.toml" =
+        { scheme, ... }:
+        lib.concatLines (
+          [ "[colors]" ]
+          ++ lib.mapAttrsToList (name: slot: "${name} = \"${scheme.withHashtag.${slot}}\"") {
+            Base = "base05";
+            Title = "base0D";
+            Important = "base08";
+            Guidance = "base04";
+            Annotation = "base03";
+            AlertInfo = "base0C";
+            AlertWarn = "base0A";
+            AlertError = "base08";
+          }
+          ++ [
+            ""
+            "[theme]"
+            "name = \"Oruc Base16\""
+          ]
+        );
+    })
+  ];
+
+  oruc.variantReloads = lib.mkMerge [
+    (lib.mkIf config.programs.tmux.enable {
+      tmux = ''
+        status=0
+        for socket in "''${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)"/*; do
+          [[ -S $socket ]] || continue
+          ${tmux} -S "$socket" list-sessions >/dev/null 2>&1 || continue
+          ${tmux} -S "$socket" source-file -q ${tmuxTheme} || status=1
+        done
+        exit "$status"
+      '';
+    })
+    (lib.mkIf config.programs.nvf.enable {
+      neovim = ''
+        status=0
+        for server in "''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/${config.programs.nvf.settings.vim.appname}.*.0; do
+          [[ -S $server ]] || continue
+          timeout 2 ${nvim} --server "$server" --remote-expr 1 >/dev/null 2>&1 || continue
+          timeout 5 ${nvim} --server "$server" --remote-expr "execute('luafile ${nvimTheme}')" >/dev/null || status=1
+        done
+        exit "$status"
+      '';
+    })
+  ];
 
   programs.nvf.settings.vim = {
     startPlugins = [ "base16" ];
     extraPlugins.oruc-theme = {
       package = warmBurnoutNvim;
       setup = ''
-        local ok, err = pcall(dofile, ${builtins.toJSON "${config.xdg.configHome}/oruc/nvim-theme.lua"})
+        local ok, err = pcall(dofile, ${builtins.toJSON nvimTheme})
         if not ok then vim.notify(err, vim.log.levels.WARN) end
       '';
     };

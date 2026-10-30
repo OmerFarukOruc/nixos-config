@@ -26,7 +26,8 @@ let
   );
 
   common = ''
-    state=''${XDG_STATE_HOME:-$HOME/.local/state}/oruc
+    state=${lib.escapeShellArg hm.oruc.themeState}
+    pointer=${lib.getExe hm.oruc.themePointer}
     base=${hm.home.activationPackage}
     default_look=${
       lib.escapeShellArg (if variants.defaultLook == null then "" else variants.defaultLook)
@@ -43,18 +44,32 @@ let
     }
 
     stored() {
-      local file=$1 default=$2 choice
-      shift 2
+      local file=$1 default=$2 known=$3 choice
       choice=$(cat "$state/$file" 2>/dev/null || true)
-      if [[ -n $choice && " $* " == *" $choice "* ]]; then
+      if [[ -n $choice ]] && "$known" "$choice"; then
         echo "$choice"
       else
         [[ -z $choice ]] || echo "$file: the stored $choice no longer exists; $default stays" >&2
         echo "$default"
       fi
     }
-    stored_look() { stored plasma-look "$default_look" "''${looks[@]}"; }
-    stored_scheme() { stored scheme "$default_scheme" "''${schemes[@]}"; }
+    is_look() { [[ " ''${looks[*]} " == *" $1 "* ]]; }
+    stored_look() { stored plasma-look "$default_look" is_look; }
+    stored_scheme() { "$pointer" --stored; }
+    in_pack() { "$pointer" --list 2>/dev/null | grep -xF -- "$1" >/dev/null; }
+
+    hold_switch_lock() {
+      mkdir -p "$state"
+      exec 8>"$state/switch.lock"
+      flock 8
+    }
+    row_scheme() {
+      if [[ " ''${schemes[*]} " == *" $1 "* ]]; then
+        echo "$1"
+      else
+        echo "$default_scheme"
+      fi
+    }
 
     variant_dir() {
       local want_look=$1 want_scheme=$2 gen name scheme look
@@ -76,6 +91,10 @@ let
     activate() {
       local dir
       dir=$(variant_dir "$1" "$2") || return 1
+      if ! grep -qF " $base" /run/current-system/etc/systemd/system/home-manager-${cfg.user}.service; then
+        echo "A deploy replaced the system after this command started; run it again." >&2
+        return 1
+      fi
       # The session's display and bus, as Home Manager's own service imports
       # them, so the activation reaches KWin from SSH or a system unit too.
       if [[ -z ''${DBUS_SESSION_BUS_ADDRESS:-} ]]; then
@@ -84,8 +103,20 @@ let
             sed -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p'
         )"
       fi
-      "$dir/activate" --driver-version ${driverVersion}
-      ${lib.concatStringsSep "\n" (map (command: "      ${command}") hm.oruc.variantReloads)}
+      "$dir/activate" --driver-version ${driverVersion} 8>&-
+    }
+
+    reload() {
+      :
+      ${lib.concatLines (
+        lib.mapAttrsToList (name: command: ''
+          if ! (
+            ${command}
+          ) 8>&-; then
+            echo ${lib.escapeShellArg "theme: ${name} reload failed"} >&2
+          fi
+        '') hm.oruc.variantReloads
+      )}
     }
 
     choose() {
@@ -104,9 +135,11 @@ let
       inherit name;
       runtimeInputs = with pkgs; [
         coreutils
+        gnugrep
         gnused
         procps
         systemd
+        util-linux
       ];
       text = ''
         ${common}
@@ -122,36 +155,46 @@ let
   theme = mkCommand {
     name = "theme";
     usage = ''
-      Usage: theme [SCHEME | --reapply]
+      Usage: theme [SCHEME | --list | --reapply]
 
-      With no argument, prints the active Base16 scheme and the schemes to choose from.
-      SCHEME activates that scheme and keeps it across deploys. Ghostty, new Neovim
-      windows and a Claude Code that selects custom:scheme take its colors at once,
-      VS Code at its next start; log out and in to load its KDE colors.
-      --reapply activates the stored scheme and Plasma look again. The Home Manager
-      service runs it after it activates the default ones.
+      With no argument, prints the active Base16 scheme. --list prints every scheme
+      of the installed theme pack, the store path that holds each scheme's colour files.
+      SCHEME activates that scheme and keeps it across deploys. Ghostty, tmux, Neovim
+      and a Claude Code that selects custom:scheme take its colours at once; Starship,
+      fzf and atuin at their next run, and the Markdown viewer at its next open. VS Code
+      and KDE follow only the schemes in theme.schemes of the machine record: VS Code
+      at its next start, KDE after you log out and in.
+      --reapply points the colour files at the stored scheme again and activates the
+      stored Plasma look. The Home Manager service runs it after it activates the
+      default ones.
       The login screen, the boot menu, the console and niri keep the scheme of the
       machine record.'';
     text = ''
       case ''${1:-} in
-        "")
-          echo "active: $(stored_scheme)"
-          echo "schemes: ''${schemes[*]} (default: $default_scheme)"
-          ;;
+        "") echo "active: $(stored_scheme) (default: $default_scheme)" ;;
+        --list) "$pointer" --list ;;
         -h | --help) usage ;;
         --reapply)
-          look=$(stored_look) scheme=$(stored_scheme)
-          [[ $look == "$default_look" && $scheme == "$default_scheme" ]] && exit 0
-          activate "$look" "$scheme"
+          hold_switch_lock
+          "$pointer"
+          look=$(stored_look) row=$(row_scheme "$(stored_scheme)")
+          [[ $look == "$default_look" && $row == "$default_scheme" ]] && exit 0
+          activate "$look" "$row"
+          reload
           ;;
         *)
-          if [[ " ''${schemes[*]} " != *" $1 "* ]]; then
+          if ! in_pack "$1"; then
             usage >&2
             exit 64
           fi
-          choose scheme "$1"
-          activate "$(stored_look)" "$1"
-          echo "Ghostty and new Neovim windows take the $1 colors, VS Code at its next start. Log out and in to load its KDE colors."
+          hold_switch_lock
+          look=$(stored_look) row=$(row_scheme "$1")
+          if [[ $row != "$(row_scheme "$(stored_scheme)")" ]]; then
+            activate "$look" "$row" || exit 1
+          fi
+          "$pointer" --set "$1"
+          reload
+          echo "Ghostty, tmux and Neovim show $1 now; Starship, fzf and atuin at their next run."
           ;;
       esac
     '';
@@ -177,8 +220,10 @@ let
             usage >&2
             exit 64
           fi
+          hold_switch_lock
           choose plasma-look "$1"
-          activate "$1" "$(stored_scheme)"
+          activate "$1" "$(row_scheme "$(stored_scheme)")"
+          reload
           echo "Log out and in to load the $1 look's colors, Plasma style, panels and KWin effects."
           ;;
       esac
@@ -209,7 +254,7 @@ in
       pkgs.writeShellApplication {
         name = "theme-reapply";
         text = ''
-          state=''${XDG_STATE_HOME:-$HOME/.local/state}/oruc
+          state=${lib.escapeShellArg hm.oruc.themeState}
           mkdir -p "$state"
           if ${lib.getExe theme} --reapply; then
             rm -f "$state/reapply-failed"

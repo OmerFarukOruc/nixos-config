@@ -20,6 +20,7 @@
     ./modules/session-scope.nix
     ./modules/shell.nix
     ./modules/shells
+    ./modules/theme-pack.nix
     ./modules/theme.nix
     ./modules/variants.nix
     ./modules/vscode.nix
