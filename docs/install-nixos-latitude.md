@@ -107,5 +107,13 @@ the LAN.
    root goes stale after the first boot. angrr, which deletes old generations
    before each `nix-gc`, never sees it, and it would stay on disk for good.
 
+   Then move the install copy of the repository out of `/etc/nixos`, so
+   nothing builds that stale copy again
+   ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)):
+
+   ```
+   ssh -t nixos-latitude 'sudo mv /etc/nixos /etc/nixos.install-copy'
+   ```
+
 Hardware facts and measured dead ends for this laptop are in
 [nixos-latitude.md](nixos-latitude.md).

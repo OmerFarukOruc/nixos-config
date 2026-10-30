@@ -310,6 +310,12 @@ home. It never moves an input; inputs move only in an update by hand
 `main`, or run `upgrade --replace` once its owner agrees that the deploy may
 drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
 
+`nixos-rebuild` on every host refuses every action except `switch`, `boot` or
+`test` with `--rollback`, `list-generations` and `--help`, and points to
+`upgrade` (`nixosModules/upgrade.nix`). A plain `sudo nixos-rebuild switch` once built
+the stale install copy in `/etc/nixos` on nixos-desktop and switched to it,
+which removed users and services until a deploy of `main` brought them back.
+
 ## Self-deploy of a server
 
 A server deploys itself, so it follows `main` without anyone at a keyboard. The

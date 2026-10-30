@@ -81,6 +81,36 @@ let
       exit "$status"
     '';
   };
+
+  stockRebuild = config.system.build.nixos-rebuild;
+
+  rollbackOnlyRebuildBin = pkgs.writeShellApplication {
+    name = "nixos-rebuild";
+    text = ''
+      rebuild=${stockRebuild}/bin/nixos-rebuild
+      case "''${1-}" in
+        list-generations | --help | -h)
+          exec "$rebuild" "$@"
+          ;;
+        switch | boot | test)
+          for arg in "''${@:2}"; do
+            if [[ $arg == --rollback ]]; then
+              exec "$rebuild" "$@" --no-reexec
+            fi
+          done
+          ;;
+      esac
+      echo "This host deploys only the main branch of nixos-config. Run upgrade as your own user to deploy it." >&2
+      echo "nixos-rebuild here runs only switch --rollback, boot --rollback, test --rollback, list-generations and --help." >&2
+      exit 1
+    '';
+  };
+
+  rollbackOnlyRebuild = pkgs.symlinkJoin {
+    name = "nixos-rebuild";
+    paths = [ rollbackOnlyRebuildBin ];
+    postBuild = "ln -s ${stockRebuild}/share $out/share";
+  };
 in
 {
   options.oruc.upgrade.updater = lib.mkOption {
@@ -90,5 +120,11 @@ in
     description = "Base name of the systemd unit that `upgrade` starts instead of deploying main itself. With null, `upgrade` deploys the newest main to this host.";
   };
 
-  config.environment.systemPackages = [ (if updater == null then deployMain else runUpdater) ];
+  config = {
+    system.tools.nixos-rebuild.enable = false;
+    environment.systemPackages = [
+      (if updater == null then deployMain else runUpdater)
+      rollbackOnlyRebuild
+    ];
+  };
 }

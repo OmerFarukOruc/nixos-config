@@ -152,7 +152,14 @@ what you keep first. Before you start, have these ready:
    ssh -t nixos-desktop 'sudo nix-env -p /nix/var/nix/profiles/system --delete-generations 1'
    ```
 
-   Do this after the host boots a generation that `deploy.sh` made.
+   Do this after the host boots a generation that `deploy.sh` made. Then move
+   the install copy of the repository out of `/etc/nixos`, so nothing builds
+   that stale copy again
+   ([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)):
+
+   ```
+   ssh -t nixos-desktop 'sudo mv /etc/nixos /etc/nixos.install-copy'
+   ```
 
 10. Set up Omer's own credentials with
     [Per-host credentials](../home-manager/README.md#per-host-credentials): the
