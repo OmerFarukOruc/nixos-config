@@ -82,8 +82,8 @@ use three 10-second windows.
   Reboot remotely only when someone is at nixos-latitude.
 - On 2026-09-21 the Wi-Fi lost the access point (beacon loss) and Tailscale
   could not reach its relay for about 6 minutes. The uptime was unchanged, so
-  the host had not crashed. Wait a few minutes before you treat an unreachable
-  host as down.
+  the host had not crashed. The opening section of [deploy.md](deploy.md) says
+  when to retry a deploy to an unreachable host.
 - Run long tests on AC. A test series on 2026-09-21 stopped at 8 % battery
   with nixos-latitude not charging.
 

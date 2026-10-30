@@ -26,9 +26,13 @@ pushed change and the `main` it landed on. Before the push, print both as
 [AGENTS.md](../AGENTS.md#lookups) describes. After the push,
 `scripts/affected-hosts.sh <old>..<sha>` compares the two
 ([Deploy a change on main](#deploy-a-change-on-main)). When a host is unreachable,
-retry the deploy once after about 6 minutes, the Wi-Fi outage nixos-latitude
-showed on 2026-09-21 ([nixos-latitude.md](nixos-latitude.md#operation)).
-Report it as the blocker only when it is still unreachable.
+read its line in `tailscale status`. A line without `offline`, or with
+`offline, last seen` under about 6 minutes ago, can be a short outage: on
+2026-09-21 nixos-latitude lost its Wi-Fi for about 6 minutes
+([nixos-latitude.md](nixos-latitude.md#operation)). Retry the deploy once
+after about 6 minutes, and report the host as the blocker only when it is
+still unreachable. A host offline for longer, such as one that is powered off,
+gets no retry; report that it still runs an older system.
 `scripts/affected-hosts.sh --running` lists each host whose running system
 differs from `main`, such as one that was offline at the last deploy, so run it
 before you end a session that deployed. For a host that is behind, it lists the
