@@ -409,9 +409,13 @@ jobs:
           overwrite: true
           retention-days: 1
 
+  # Without !cancelled(), GitHub skips this job whenever merge-apps, a job
+  # place-inputs waits for, failed or was skipped.
   merge-inputs:
     needs: place-inputs
-    if: needs.place-inputs.outputs.ready == 'true'
+    if: >-
+      !cancelled() && needs.place-inputs.result == 'success'
+      && needs.place-inputs.outputs.ready == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
