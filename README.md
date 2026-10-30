@@ -194,8 +194,9 @@ and `.github/workflows/update.yml` runs `scripts/prepare-update.sh`. A server ru
 `scripts/self-deploy.sh` and `scripts/self-deploy-reboot.sh` from its timers to
 deploy itself and to reboot for a new kernel
 ([Self-deploy of a server](docs/deploy.md#self-deploy-of-a-server)).
-`scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
-`scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
+`scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh`,
+`scripts/check-theme-drift.sh` and `scripts/check-workflow-needs.sh` run inside
+`nix fmt`, and `scripts/lib/` holds
 helpers that other scripts source. Nobody runs these by hand.
 
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:

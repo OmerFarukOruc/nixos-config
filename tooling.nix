@@ -19,11 +19,13 @@ in
       runtimeInputs = with pkgs; [
         actionlint
         deadnix
+        jq
         keep-sorted
         lychee
         ruff
         shellcheck
         shfmt
+        yq-go
       ];
       # Without a tree root, treefmt outside a Git checkout falls back to the
       # directory of its config file, /nix/store, and formats the whole store.
@@ -103,6 +105,11 @@ in
           command = lib.getExe pkgs.bash;
           options = [ "scripts/check-theme-drift.sh" ];
           includes = [ "*" ];
+        };
+        workflow-needs = {
+          command = lib.getExe pkgs.bash;
+          options = [ "scripts/check-workflow-needs.sh" ];
+          includes = [ ".github/workflows/*.yml" ];
         };
         doc-contents = {
           command = lib.getExe pkgs.bash;
