@@ -13,8 +13,11 @@
 # ancestor of REV, one from a dirty tree, or one with no release record),
 # unreachable, or not-deployed.
 # REV defaults to origin/main and must be pushed, because this host evaluates
-# it from GitHub. Exits 1 when an evaluation or a Git lookup fails, 2 for a
-# usage error.
+# it from GitHub. This host keeps each commit's systems in
+# ${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts, one file per commit
+# and Nix version, so a later call for the same commit on this host skips its
+# evaluation; delete the file to evaluate again. Exits 1 when an evaluation or
+# a Git lookup fails, 2 for a usage error.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -91,13 +94,13 @@ on_host() {
 
 systems() {
   on_host "$this_host" "github:$repo/$1" <<'REMOTE'
-set -e
+set -eo pipefail
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
-hosts=$("${nix[@]}" eval --raw --no-write-lock-file "$1#nixosConfigurations" \
+hosts=$("${nix[@]}" eval --raw --no-update-lock-file "$1#nixosConfigurations" \
   --apply 'c: builtins.concatStringsSep " " (builtins.attrNames c)' </dev/null)
 for host in $hosts; do
-  "${nix[@]}" eval --json --no-write-lock-file "$1#nixosConfigurations.$host" \
+  "${nix[@]}" eval --json --no-update-lock-file "$1#nixosConfigurations.$host" \
     --apply "h: { \"$host\" = {
       drv = h.config.system.build.toplevel.drvPath;
       out = h.config.system.build.toplevel.outPath;
@@ -108,18 +111,45 @@ done | jq -s add
 REMOTE
 }
 
+cache_dir=${XDG_CACHE_HOME:-$HOME/.cache}/nixos-config/affected-hosts
+nix_version=$(nix --version)
+nix_version=${nix_version##* }
+
+valid_systems() {
+  jq -e 'type == "object" and length > 0
+    and all(.[]; (.drv | type) == "string" and (.out | type) == "string")' \
+    >/dev/null 2>&1
+}
+
+cached_systems() {
+  local file=$cache_dir/$1-nix-$nix_version.json json tmp
+  if [[ -s $file ]] && valid_systems <"$file"; then
+    cat "$file"
+    return
+  fi
+  json=$(systems "$1") || return 1
+  if ! valid_systems <<<"$json"; then
+    echo "The evaluation of $1 printed no systems." >&2
+    return 1
+  fi
+  if mkdir -p "$cache_dir" && tmp=$(mktemp "$cache_dir/.$1.XXXXXX"); then
+    { printf '%s\n' "$json" >"$tmp" && mv -f "$tmp" "$file"; } || rm -f "$tmp"
+  fi
+  printf '%s\n' "$json"
+}
+
 if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha^"); then
   echo "$sha has no parent to compare with." >&2
   exit 1
 fi
-new=$(systems "$sha")
+new=$(cached_systems "$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
 not_deployed() {
   [[ $(jq -r --arg h "$1" '.[$h].deployed' <<<"$new") == false ]]
 }
 
 if ! $running; then
-  old=$(systems "$parent")
+  old=$(cached_systems "$parent")
   for host in "${hosts[@]}"; do
     if not_deployed "$host"; then
       printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"

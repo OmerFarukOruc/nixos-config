@@ -224,7 +224,11 @@ one `nix eval` per host, under `heavy` where the host has it, because `heavy`
 evaluation per host stays under that cap. Three systems in one evaluation did
 not, and systemd-oomd killed it. nixos-rog
 took 70 to 90 seconds (measured on 2026-10-15), and nixos-desktop about 160
-seconds for one revision (2026-10-24). From the main checkout, run:
+seconds for one revision (2026-10-24). The host that runs the script keeps
+each commit's result in `${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts/`,
+so the `--running` check after the deploy, and the next push's comparison with
+this commit, skip that evaluation when they run on the same host. From the main
+checkout, run:
 
 ```sh
 git fetch origin
