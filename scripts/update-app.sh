@@ -60,7 +60,7 @@ elif [[ -n $github ]]; then
   latest=$(curl -fsSL --max-time 20 --retry 2 "${auth[@]}" "https://api.github.com/repos/$github/releases?per_page=30" |
     jq -r '.[] | select(.draft | not) | select(.prerelease | not) | .tag_name | select(test("^v[0-9][0-9.]*$"))' |
     sed 's/^v//' | sort -V | tail -n 1) || latest=
-  sha=$([[ -n $latest ]] && nix flake prefetch --json "github:$github/v$latest" | jq -r .hash) || sha=
+  sha=$([[ -n $latest ]] && nix flake prefetch --json "https://github.com/$github/archive/refs/tags/v$latest.tar.gz" | jq -r .hash) || sha=
 elif [[ -n $npm ]]; then
   meta=$(curl -fsSL --max-time 20 --retry 2 "https://registry.npmjs.org/$npm") || meta=
   latest=$(jq -r '."dist-tags".latest // empty' <<<"$meta" 2>/dev/null) || latest=
