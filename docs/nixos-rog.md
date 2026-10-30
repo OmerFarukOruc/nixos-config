@@ -1037,6 +1037,9 @@ On nixos-rog:
   With an older libportal, Deskflow builds without clipboard code and the laptop
   never sends what you copy. The overlay's install check fails the build in that
   case.
+  The overlay also runs Deskflow's unit tests one at a time, because
+  `LoggerTests` and `ComputerTests` rewrite the same `tmp/test/Deskflow.conf`
+  and fail when they run in parallel.
 - Home Manager sets only `log.toFile` in `~/.config/Deskflow/Deskflow.conf`,
   because Deskflow rewrites that file. The server address and the TLS keys in it
   stay as you set them in the Deskflow window. Both machines write

@@ -26,6 +26,9 @@ let
 in
 {
   deskflow = withLibportal.overrideAttrs {
+    # LoggerTests and ComputerTests both rewrite tmp/test/Deskflow.conf in the
+    # same directory, so ctest must run them one at a time.
+    enableParallelChecking = false;
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
