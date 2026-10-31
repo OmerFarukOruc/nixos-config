@@ -262,13 +262,18 @@ output in that log:
 ```sh
 d=$HOME/Desktop/workspace/worktrees/nixos-config/deploy-<short-sha>
 [ -d "$d" ] || git worktree add -q --detach "$d" <sha>
-log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "exit $rc" >> "$log"; exit $rc; }
+s=${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:?no session id}} && logs=/tmp/agents/deploy-${s:0:8} && mkdir -p "$logs"
+log=$(mktemp "$logs/<host>.XXXXXX") && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "exit $rc" >> "$log"; exit $rc; }
 ```
 
 Each run gets its own log, because two agents can deploy the same commit to
 the same host, and the second one exits 77 (see
-[One deploy at a time](#one-deploy-at-a-time)). The task's exit code is the
-deploy's exit code; a command after the block would replace it with its own.
+[One deploy at a time](#one-deploy-at-a-time)). Every session shares `/tmp`,
+so the logs sit in the session's own folder under `/tmp/agents/`, named after
+`CLAUDE_CODE_SESSION_ID` or `CODEX_THREAD_ID`, and the session's cleanup
+removes only its own logs. Without either variable the block stops before the
+deploy. The task's exit code is the deploy's exit code; a command after the
+block would replace it with its own.
 The log's last line is `exit <code>` however the deploy ends, so
 `wait-exit <log> <seconds>` ends on it. On success, the line before it
 is `Deployment completed from release <release>.`.
