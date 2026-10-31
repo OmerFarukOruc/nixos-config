@@ -11,7 +11,12 @@ for dp_timer in ["self-deploy", "self-deploy-reboot"]:
 dp_calendar = lambda timer: machine.succeed(f"systemctl show -p TimersCalendar {timer}.timer")
 assert "00/2:30:00 UTC" in dp_calendar("self-deploy"), "the deploy calendar is not in UTC"
 assert "02:10:00 UTC" in dp_calendar("self-deploy-reboot"), "the reboot calendar is not 02:10 UTC"
-machine.succeed("systemctl mask --runtime --now self-deploy.timer self-deploy-reboot.timer")
+machine.succeed(
+    "mkdir -p /run/systemd/system.control"
+    " && ln -sfn /dev/null /run/systemd/system.control/self-deploy.timer"
+    " && ln -sfn /dev/null /run/systemd/system.control/self-deploy-reboot.timer"
+    " && systemctl daemon-reload && systemctl stop self-deploy.timer self-deploy-reboot.timer"
+)
 
 assert machine.succeed("systemctl show self-deploy.service -p User --value").strip() == "root"
 assert "DEPLOY_REPOSITORY=https://github.com/OmerFarukOruc/nixos-config.git" in machine.succeed(
@@ -88,7 +93,7 @@ machine.succeed(
         system() { readlink -f "$1"; }
         records() { ls /root/.local/state/nixos-config-deploy/releases/*.source | wc -l; }
         unit_log() {
-          journalctl "_SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value self-deploy.service)" -o cat --no-pager "$@"
+          journalctl _SYSTEMD_UNIT=self-deploy.service --after-cursor="$(cat /var/lib/server-test/cursor)" -o cat --no-pager "$@"
         }
         publish() {
           install -m 0644 /var/lib/server-test/flakes/$1.nix "$work/flake.nix"
@@ -120,6 +125,7 @@ def dp_run(command):
 
 def dp_deploy():
     """Runs the unit, shows the end of its journal and returns its exit status."""
+    dp_sh("journalctl -q -n 1 -o export | sed -n 's/^__CURSOR=//p' > /var/lib/server-test/cursor")
     status, _ = dp_run("timeout 900 systemctl start self-deploy.service")
     print(f"self-deploy.service ended with status {status}; its journal ends:")
     print(dp_sh("unit_log | tail -n 14 | cut -c1-240 | sed 's/^/  | /'"))
@@ -139,6 +145,9 @@ print("phase: a good main")
 dp_sh("publish good")
 dp_sha = dp_sh('git -C "$work" rev-parse HEAD')
 assert dp_deploy() == 0, "the timer's deploy of a good main failed"
+for dp_timer in ["self-deploy", "self-deploy-reboot"]:
+    assert machine.succeed(f"systemctl show -p LoadState --value {dp_timer}.timer").strip() == "masked", f"the switch unmasked {dp_timer}.timer"
+    machine.fail(f"systemctl is-active --quiet {dp_timer}.timer")
 assert dp_system("/run/current-system") == dp_out["good"], "the good system does not run"
 assert dp_system("/nix/var/nix/profiles/system") == dp_out["good"], "the good system is not the boot default"
 dp_record = machine.succeed(

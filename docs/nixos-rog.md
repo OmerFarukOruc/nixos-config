@@ -96,15 +96,24 @@ deploys `main` again on top of a generation you restored. To pause the unit on
 the host until the next reboot:
 
 ```sh
-sudo systemctl mask --runtime --now oruc-auto-update.timer
+sudo mkdir -p /run/systemd/system.control
+sudo ln -sfn /dev/null /run/systemd/system.control/oruc-auto-update.timer
+sudo systemctl daemon-reload
+sudo systemctl stop oruc-auto-update.timer
 ```
 
 Use a mask, not a stop. An activation can restart a timer that was only
-stopped. The mask does not stop a run that is already going. Run
+stopped. `systemctl mask --runtime` does not work here: it writes the mask to
+`/run/systemd/system`, which systemd reads after `/etc/systemd/system`, where
+NixOS keeps the unit (`systemctl show -p UnitPath`). The mask in
+`/run/systemd/system.control` comes first, so
+`systemctl show -p LoadState oruc-auto-update.timer` prints
+`LoadState=masked`. The mask does not stop a run that is already going. Run
 `systemctl is-active oruc-auto-update.service` and wait until it prints
 `inactive` or `failed` before you restore a generation or deploy by hand. To resume
 before the next reboot, run
-`sudo systemctl unmask --runtime oruc-auto-update.timer` and then
+`sudo rm /run/systemd/system.control/oruc-auto-update.timer`,
+`sudo systemctl daemon-reload` and then
 `sudo systemctl start oruc-auto-update.timer`.
 
 The mask lasts until the next reboot. After the reboot the unit runs again.

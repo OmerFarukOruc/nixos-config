@@ -311,10 +311,11 @@ Run it now with `sudo systemctl start nightly-update.service`. To run it on
 another branch, run
 `sudo systemctl set-environment NIGHTLY_UPDATE_BRANCH=<branch>` before the start
 and `sudo systemctl unset-environment NIGHTLY_UPDATE_BRANCH` after it. Pause it
-with `sudo systemctl mask --runtime --now nightly-update.timer`, because a
-deploy starts a stopped timer again. Resume it with
-`sudo systemctl unmask --runtime nightly-update.timer` and
-`sudo systemctl start nightly-update.timer`.
+by masking `nightly-update.timer` in `/run/systemd/system.control` and stopping
+it, as the [deploy unit](nixos-rog.md#deploy-unit) of nixos-rog shows, because a
+deploy starts a stopped timer again and `systemctl mask --runtime` does not
+mask a unit that NixOS keeps in `/etc/systemd/system`. Resume it by removing that link, running
+`sudo systemctl daemon-reload` and `sudo systemctl start nightly-update.timer`.
 
 The push and the issue calls use the fine-grained token `github-push-token` in
 `secrets/devbox-github-push.yaml`, which GitHub lists as "devbox nightly

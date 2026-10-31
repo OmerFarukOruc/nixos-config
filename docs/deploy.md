@@ -471,10 +471,13 @@ file and leaves out nothing more. On devbox the list holds the
 long-running agents of omer. A deploy of that host runs as root, whose session
 has none of them, so the list matters only for a deploy as omer.
 
-To pause the deploys on the host until the next reboot, run
-`sudo systemctl mask --runtime --now self-deploy.timer`, as for nixos-rog, and
-wait until `systemctl is-active self-deploy.service` prints `inactive` or
-`failed`.
+To pause the deploys on the host until the next reboot, mask
+`self-deploy.timer` in `/run/systemd/system.control` and stop it, as the
+[deploy unit](nixos-rog.md#deploy-unit) of nixos-rog shows, and wait until
+`systemctl is-active self-deploy.service` prints `inactive` or `failed`.
+Resume them by running
+`sudo rm /run/systemd/system.control/self-deploy.timer`,
+`sudo systemctl daemon-reload` and `sudo systemctl start self-deploy.timer`.
 
 ## What the deploy does
 
