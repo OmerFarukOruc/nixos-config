@@ -30,7 +30,6 @@ in
     age.sshKeyPaths = [ "${secrets}/ssh_host_ed25519_key" ];
     secrets = {
       cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-      github-update-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       openchamber-ui-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       opencode-server-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
       herdr-web-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";

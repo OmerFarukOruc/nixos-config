@@ -14,7 +14,6 @@
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
-- [Deploy test in a VM](#deploy-test-in-a-vm)
 - [What no test covers](#what-no-test-covers)
 - [Streamed desktop CPU](#streamed-desktop-cpu)
 
@@ -30,7 +29,7 @@ The host imports four more modules for its services: `tailnet-web.nix`,
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
 ([Streamed desktop](#streamed-desktop)).
 
-The box deploys itself ([Deploys](#deploys)), and the deploy rule of AGENTS.md
+The box installs `main` by itself ([Deploys](#deploys)), and the deploy rule of AGENTS.md
 reaches it like the workstations.
 
 ## Disk and boot
@@ -75,7 +74,7 @@ drops ping.
 ## Install
 
 sops-nix decrypts `secrets/devbox.yaml`,
-`secrets/devbox-acme.yaml`, `secrets/devbox-github.yaml`,
+`secrets/devbox-acme.yaml`,
 `secrets/devbox-services.yaml` and
 `secrets/devbox-cliproxy.yaml` while the system activates, with the
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
@@ -111,42 +110,6 @@ starts networkd. A switch that changes the file restarts networkd. The IPv4
 gateway is on-link (`GatewayOnLink`), the IPv6 gateway is `fe80::1`, and router
 advertisements are off.
 
-### Rotate the box's token
-
-The deploy unit ([Deploys](#deploys)) reads a fine-grained GitHub token,
-`github-update-token`, so that Nix's GitHub fetches stay within the API limit
-and `deploy.sh` can ask `gh` which pull request merged a running release. The
-token has its own file, `secrets/devbox-github.yaml`, encrypted for the
-same two recipients as the file above (`.sops.yaml`). GitHub lists the token as
-"devbox self-deploy". It does not expire. Rotate it when it may have
-leaked, in this order, so the box keeps a working token until the new one runs.
-The steps apply after the move to NixOS:
-
-1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
-   tokens). Set the repository access to this repository only, the permissions
-   Contents and Pull requests to read-only, and no expiration.
-2. From the repository root, write the token into the file without printing it.
-   The command waits for the token on a hidden prompt. `jq -R` turns it into
-   the JSON that `sops encrypt` reads from stdin, so it never appears in a
-   process list. `sops encrypt` needs public keys only, so no password is
-   asked:
-
-   ```sh
-   read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/devbox-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/devbox-github.yaml.new && mv secrets/devbox-github.yaml.new secrets/devbox-github.yaml; unset token
-   ```
-
-3. Land the file, then deploy it with `./deploy.sh devbox switch`, or
-   wait for the timer. [deploy.md](deploy.md) has the rules.
-4. On the box, run `sudo systemctl start self-deploy.service` and read
-   `journalctl -u self-deploy`. The new token works when the run ends without a
-   GitHub `401` error from Nix. When Nix reports `401`, the new token is wrong
-   or lacks access to this repository. Skip step 5, create a corrected token,
-   and repeat steps 2 to 4 with it.
-5. Delete the old token on the same GitHub page.
-
-After an edit, `scripts/check-secrets.sh` on the box decrypts every sops file
-with the host key and compares their key names with the declared secrets.
-
 ## Telemetry
 
 `nixosModules/telemetry.nix` is for every server. `oruc.telemetry.enable` turns
@@ -175,8 +138,7 @@ outage loses nothing that the retry window covers.
   name keeps the old one so existing SigNoz queries match. The Debian box
   listed 16 patterns of infra units. The new box lists `caddy.service`,
   `acme-*.service`, `xrdp.service` and `xrdp-sesman.service`, and
-  `nixosModules/deploy-host.nix` adds `self-deploy.service` and
-  `self-deploy-reboot.service`, so each service that comes to the box later
+  `nixosModules/auto-upgrade.nix` adds `nixos-upgrade.service`, so each service that comes to the box later
   needs its unit in `journalUnits` before its lines ship.
   The lines of user units ship under the same `service.name` through
   `journalUserUnits`, which lists exact names, because a glob matches nothing
@@ -250,20 +212,19 @@ delivery to SigNoz, which the cutover proves.
 
 ## Deploys
 
-After the move, the box keeps itself on `main`. `self-deploy.timer` runs
-`./deploy.sh devbox switch` on the box every 2 hours, as root, with
-deploy.sh's lock and rollback, and `self-deploy-reboot.timer` reboots at 02:10
-UTC when the kernel or the initrd changed. The files are
-`nixosModules/deploy-host.nix`, `nixosModules/deploy-unit.nix`, `scripts/self-deploy.sh` and
-`scripts/self-deploy-reboot.sh`; [Self-deploy of a server](deploy.md#self-deploy-of-a-server)
-has the details, the failure signal and how to pause the timer.
+The box installs `main` every hour with `system.autoUpgrade`, as the PCs do
+([Updater](nixos-rog.md#updater)), and reboots at night when the new `main`
+changes the kernel, the initrd or the kernel modules. That install has none of
+deploy.sh's rollback, so a `main` that breaks sshd or Tailscale leaves only the
+provider's console. [Deploy to a server](deploy.md#deploy-to-a-server) has the
+reboot, the failure signal and the root login.
 
 A deploy from nixos-desktop or nixos-rog logs in as root, not as omer, because
 omer's sudo asks for a password (`deployLogin` in the machine record). The release
-records of both kinds of deploy are in `/root/.local/state/nixos-config-deploy/`.
+records are in `/root/.local/state/nixos-config-deploy/`.
 The long-running agent units of omer are in `oruc.deploy.sessionIgnore` in
 `configuration.nix`. deploy.sh's session check leaves them out of a deploy as
-omer. A deploy as root, which is every deploy above, checks only root's own
+omer. A deploy as root, which is every deploy from another host, checks only root's own
 services.
 
 ## Web names
@@ -346,7 +307,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   use. The SigNoz alert rules live in statuslantern-scraper's
   `deploy/signoz/alerts/`, and none reads these lines yet. The rule waits for
   the first NixOS deploy to ship them, as for
-  [self-deploy](deploy.md#self-deploy-of-a-server) failures, so until then
+  `nixos-upgrade.service` failures, so until then
   only someone on the host sees the failed state.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
@@ -638,37 +599,6 @@ failed to start in a VM test (`smartd.service: Failed with result 'exit-code'`)
 on a virtio disk, the kind this host has, and `nixosModules/monitoring.nix`
 enables smartd unless a host says otherwise.
 
-## Deploy test in a VM
-
-The flake check `devbox-self-deploy` (`ci/self-deploy.nix`) is a NixOS
-test of the deploy path of [Deploys](#deploys), and it needs KVM like the boot
-tests. Run it with
-`scripts/build.sh .#checks.x86_64-linux.devbox-self-deploy`. It
-is not part of the boot test, because disko's test machine mounts a read-only
-`/nix/store` that a deploy cannot write to.
-
-The node is named devbox and loads `nixosModules/upgrade.nix`,
-`nixosModules/deploy-host.nix` and `nixosModules/telemetry.nix` (whose option the
-second one sets), not the host's whole configuration. Its ESP is
-a 4 GiB second disk with Limine, because `deploy.sh` wants 1 GiB of free space
-there and qemu-vm's own ESP has 256 MiB. Three specialisations of the node are
-the systems to deploy: a good one, one whose sshd fails to restart, and one
-with another initrd. The VM has no network, so a local repository stands for
-GitHub, and each main in it holds a test flake that answers for the host with
-the store path of one specialisation. `ci/self-deploy/test.py` holds the
-checks. They start `self-deploy.service` against a good main, the same main
-again, a main that breaks sshd (the previous system returns, the unit fails and
-the next run waits for main to move) and a main with another initrd (the reboot
-unit schedules a reboot, and waits while a deploy holds the lock) and a main
-whose evaluation cannot download an input (the unit fails, records no failed
-main, and the next main deploys). They also check the timer calendars, the
-ignore list of the session check, omer's sudo password, the boot entries on the
-ESP and the private Nix config that a test token becomes.
-
-The test does not show that a deploy over SSH as root reaches the box, that the
-box fetches the real main from GitHub, that the real flake evaluates (the boot
-tests and `ci/checks.sh` do), or that a deployed system boots; it never reboots.
-
 ## What no test covers
 
 A deploy rolls back when a system unit fails during the switch or root's
@@ -691,8 +621,18 @@ in daily use:
   layout, the reconnect to the same session, and the desktop that starts only
   at the first login show at the next RDP login. A patch that stops applying
   fails the build.
-- **A unit that fails only at boot.** Nothing rolls back after the 02:10 UTC
-  reboot.
+- **The hourly install.** `nixos-upgrade.service` switches with no rollback
+  timer, session check or SSH check, so a unit that fails after its switch
+  stays failed.
+- **A unit that fails only at boot.** Nothing rolls back after the night
+  reboot ([Deploy to a server](deploy.md#deploy-to-a-server)).
+- **The night reboot.** No test reboots for a kernel change or checks the
+  window; the assertion in `nixosModules/auto-upgrade.nix` only ties the
+  window to the time zone.
+- **deploy.sh's own checks on devbox.** No test runs deploy.sh's rollback after
+  a switch that breaks sshd, the session check's ignore list
+  (`oruc.deploy.sessionIgnore`), or the Limine entries a deploy writes, and
+  nothing checks that omer's sudo asks for a password.
 
 ## Streamed desktop CPU
 

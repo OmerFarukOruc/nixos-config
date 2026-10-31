@@ -55,7 +55,7 @@ nixos-latitude, read the files in
 To go back to a kept generation that the boot menu does not list, do these
 steps:
 
-1. Pause `nixos-upgrade.timer` first, or on devbox `self-deploy.timer`.
+1. Pause `nixos-upgrade.timer` first.
    [Updater](nixos-rog.md#updater) has the pause, the wait, and
    the resume.
 

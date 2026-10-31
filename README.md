@@ -99,7 +99,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 - **🔄 Updates without anyone at a keyboard.** Every 2 hours a GitHub workflow
   moves the apps and inputs, keeps the coding agents where they are until a
   cache holds their builds, keeps an app only when it builds, and pushes to
-  `main` what passes the checks. Every hour each workstation installs the
+  `main` what passes the checks. Every hour each host installs the
   newest `main` with NixOS's `system.autoUpgrade`; `upgrade` does it now.
   [`.github/workflows/update.yml`](.github/workflows/update.yml),
   [`ci/update.sh`](ci/update.sh),
@@ -123,7 +123,7 @@ niri/                  niri config shared by every niri session, with one file p
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
 ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
 devenv.nix             the dev shell, its linters and the git hooks
-scripts/               checks and builds, scripts that act on nixos-rog, update scripts, the server deploy units and the post-deploy check
+scripts/               checks and builds, scripts that act on nixos-rog, update scripts and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
@@ -163,7 +163,7 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `./deploy.sh nixos-rog boot` | set the boot default without activating |
 | `./deploy.sh nixos-rog prune` | delete old release copies, keeping the five newest and any the host runs or boots |
 | `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
-| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.devbox-boot-bios` runs devbox's [boot test](docs/devbox.md#boot-test-in-a-vm), and `.#checks.x86_64-linux.devbox-self-deploy` its [deploy test](docs/devbox.md#deploy-test-in-a-vm) |
+| `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.devbox-boot-bios` runs devbox's [boot test](docs/devbox.md#boot-test-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
@@ -186,9 +186,6 @@ dirty tree and `--replace` to drop a running release's files; [Deploy](docs/depl
 says when to use either flag. Every deploy command can change boot or running
 system state.
 
-A server runs `scripts/self-deploy.sh` and `scripts/self-deploy-reboot.sh` from
-its timers to deploy itself and to reboot for a new kernel
-([Self-deploy of a server](docs/deploy.md#self-deploy-of-a-server)).
 `scripts/check-exit-codes.sh`, `scripts/check-doc-contents.sh` and
 `scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
 helpers that other scripts source. Nobody runs these by hand.

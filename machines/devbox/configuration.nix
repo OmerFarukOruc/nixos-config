@@ -22,17 +22,14 @@ in
 
   services.qemuGuest.enable = true;
 
-  # smartd failed to start in the boot test (smartd.service: Failed with result
-  # 'exit-code'), whose virtio disk is the kind this host has. A unit that fails
-  # during a switch makes the switch exit 4, which deploy.sh rolls back.
-  # nixosModules/monitoring.nix enables smartd unless a host says otherwise.
   services.smartd.enable = false;
 
+  oruc.autoUpgrade = {
+    enable = true;
+    reboot = true;
+  };
+
   oruc.deploy = {
-    self = {
-      enable = true;
-      githubTokenFile = config.sops.secrets.github-update-token.path;
-    };
     sessionIgnore = [
       "amp-runner.service"
       "cliproxy*.service"
@@ -55,7 +52,6 @@ in
       network-dns-2 = { };
       network-dns-3 = { };
       cloudflare-acme-dns-token.sopsFile = ../../secrets/devbox-acme.yaml;
-      github-update-token.sopsFile = ../../secrets/devbox-github.yaml;
     };
     templates."10-public.network" = {
       group = "systemd-network";

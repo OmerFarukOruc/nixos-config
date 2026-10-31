@@ -14,7 +14,7 @@ creation_rules:
       - age:
           - *omer-all-devices
           - *nixos-desktop
-  - path_regex: secrets/devbox(-acme|-github|-services|-cliproxy)?\.yaml$
+  - path_regex: secrets/devbox(-acme|-services|-cliproxy)?\.yaml$
     key_groups:
       - age:
           - *omer-all-devices

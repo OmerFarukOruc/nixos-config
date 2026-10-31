@@ -26,7 +26,7 @@ day. Repeat the measurement before you rely on it.
 
 ## Updater
 
-Every host except devbox installs the newest `main` with NixOS's
+Every host installs the newest `main` with NixOS's
 `system.autoUpgrade` (`nixosModules/auto-upgrade.nix`, turned on by
 `oruc.autoUpgrade.enable`). `nixos-upgrade.timer` starts `nixos-upgrade.service`
 every hour, with up to 10 minutes of random delay, and `Persistent=true` runs a
@@ -35,8 +35,12 @@ fetches `main` into `/var/lib/nixos-upgrade/repo.git` over git, which needs no
 GitHub token, and the service then runs
 `nixos-rebuild switch --refresh --flake git+file:///var/lib/nixos-upgrade/repo.git`,
 which builds this host's system from that `main` and switches to it. It never
-reboots, and it has none of `deploy.sh`'s rollback timer, session check or SSH
-check. A successful run writes the system and the commit to
+reboots a PC; devbox reboots at night for a new kernel
+([Deploy to a server](deploy.md#deploy-to-a-server)). It has none of `deploy.sh`'s rollback timer, session check or SSH
+check. On devbox, which reboots for a new kernel, the service runs
+`nixos-rebuild boot` first and switches only when the kernel stays the same.
+A successful run whose running system is the boot default writes the system
+and the commit to
 `/var/lib/nixos-upgrade/installed`, which `scripts/lib/running-revision.sh`
 reads, so `scripts/affected-hosts.sh --running` can tell a host that is behind.
 `flake.lock` on `main` moves every 2 hours

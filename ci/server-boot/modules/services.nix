@@ -82,6 +82,7 @@ in
         [
           "claude-tools-limit-switch"
           "cliproxy-update"
+          "nixos-upgrade"
           "stay-green"
         ]
         (_: {
