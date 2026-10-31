@@ -6,10 +6,13 @@
 }:
 let
   inherit (config.oruc.upgrade) updater nowFile;
-  systemctl = "${config.systemd.package}/bin/systemctl";
 
   runUpdater = pkgs.writeShellApplication {
     name = "upgrade";
+    runtimeInputs = with pkgs; [
+      gnused
+      jq
+    ];
     text = ''
       unit=${updater}.service
       identifier=${updater}
@@ -22,13 +25,9 @@ let
         exit 1
       fi
       sudo -v
-      joined=false
-      case $(${systemctl} show -P ActiveState "$unit") in
-        activating | active | deactivating | reloading) joined=true ;;
-      esac
-      started=$(${systemctl} show -P ExecMainStartTimestampMonotonic "$unit")
+      cursor=$(journalctl --show-cursor --lines 0 --no-pager | sed -n 's/^-- cursor: //p')
       ${lib.optionalString (nowFile != null) "sudo touch ${lib.escapeShellArg nowFile}"}
-      journalctl --follow --lines 0 --output cat \
+      journalctl --follow --after-cursor "$cursor" --output cat \
         _SYSTEMD_UNIT="$unit" SYSLOG_IDENTIFIER="$identifier" + _PID=1 UNIT="$unit" &
       follow=$!
       trap 'kill "$follow" 2>/dev/null' EXIT
@@ -40,8 +39,11 @@ let
       sudo systemctl start "$unit" </dev/null || status=$?
       ${lib.optionalString (nowFile != null) "sudo rm -f ${lib.escapeShellArg nowFile}"}
       sleep 1
-      if ((status == 0)) && ! $joined && [[ $(${systemctl} show -P ExecMainStartTimestampMonotonic "$unit") == "$started" ]]; then
-        echo "The run skipped; the line above says why." >&2
+      skipped=$(journalctl --after-cursor "$cursor" --output json --no-pager \
+        _PID=1 UNIT="$unit" UNIT_RESULT=exec-condition | jq -r '.INVOCATION_ID' | tail -n 1)
+      if [[ -n $skipped ]]; then
+        reason=$(journalctl --output cat --no-pager _SYSTEMD_INVOCATION_ID="$skipped" SYSLOG_IDENTIFIER="$identifier" | tail -n 1)
+        echo "The run skipped: ''${reason:-no reason logged}" >&2
         exit 1
       fi
       exit "$status"

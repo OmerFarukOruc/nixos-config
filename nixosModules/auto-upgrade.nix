@@ -52,6 +52,7 @@ in
       };
       serviceConfig = {
         StateDirectory = "nixos-upgrade";
+        SyslogIdentifier = "nixos-upgrade";
         TimeoutStartSec = "3h";
         MemoryHigh = "12G";
         ExecCondition = lib.getExe condition;
