@@ -16,11 +16,6 @@ let
       launcher = "vicinae";
       theme = {
         scheme = "warm-burnout-dark";
-        schemes = [
-          "gruvbox-dark-medium"
-          "warm-burnout-light"
-          "catppuccin-mocha"
-        ];
       };
       kernel.profile = "cachyos-latest-lto-x86_64-v3";
       gpu = "intel";
@@ -55,11 +50,6 @@ let
       launcher = "rofi";
       theme = {
         scheme = "warm-burnout-dark";
-        schemes = [
-          "gruvbox-dark-medium"
-          "warm-burnout-light"
-          "catppuccin-mocha"
-        ];
         plasmaLook = "glass";
       };
       kernel.profile = "cachyos-latest-lto-zen4";
@@ -91,11 +81,6 @@ let
       launcher = "rofi";
       theme = {
         scheme = "warm-burnout-dark";
-        schemes = [
-          "gruvbox-dark-medium"
-          "warm-burnout-light"
-          "catppuccin-mocha"
-        ];
         plasmaLook = "glass";
       };
       kernel.profile = "cachyos-latest-lto-zen4";

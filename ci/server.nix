@@ -151,7 +151,6 @@ in
         kind = "workstation";
         features.streamedDesktop = true;
       };
-    themeSchemes = !validates { theme.schemes = [ "catppuccin-mocha" ]; };
     remoteAccess = !validates { features.remoteAccess = true; };
     biosDeviceWithSystemdBoot = !validates { bootloader = "systemd-boot"; };
   };

@@ -32,13 +32,12 @@ let
     default_look=${
       lib.escapeShellArg (if variants.defaultLook == null then "" else variants.defaultLook)
     }
-    default_scheme=${lib.escapeShellArg variants.defaultScheme}
+    default_scheme=${lib.escapeShellArg cfg.theme.scheme}
     looks=(${lib.escapeShellArgs variants.looks})
-    schemes=(${lib.escapeShellArgs variants.schemes})
     variant_rows=${
       lib.escapeShellArg (
         lib.concatMapStrings (
-          row: "${if row.generation then "1" else "0"}|${row.name}|${row.scheme}|${row.look or ""}\n"
+          row: "${if row.generation then "1" else "0"}|${row.name}|${row.look}\n"
         ) variants.rows
       )
     }
@@ -63,19 +62,11 @@ let
       exec 8>"$state/switch.lock"
       flock 8
     }
-    row_scheme() {
-      if [[ " ''${schemes[*]} " == *" $1 "* ]]; then
-        echo "$1"
-      else
-        echo "$default_scheme"
-      fi
-    }
-
     variant_dir() {
-      local want_look=$1 want_scheme=$2 gen name scheme look
-      while IFS='|' read -r gen name scheme look; do
-        [[ -n $scheme ]] || continue
-        if [[ $scheme == "$want_scheme" && $look == "$want_look" ]]; then
+      local want_look=$1 gen name look
+      while IFS='|' read -r gen name look; do
+        [[ -n $look ]] || continue
+        if [[ $look == "$want_look" ]]; then
           if [[ $gen == 1 ]]; then
             printf '%s\n' "$base"
           else
@@ -84,7 +75,7 @@ let
           return 0
         fi
       done <<<"$variant_rows"
-      echo "no variant for look '$want_look' and scheme '$want_scheme'" >&2
+      echo "no variant for look '$want_look'" >&2
       return 1
     }
 
@@ -102,7 +93,7 @@ let
 
     activate() {
       local dir
-      dir=$(variant_dir "$1" "$2") || return 1
+      dir=$(variant_dir "$1") || return 1
       if ! grep -qF " $base" /run/current-system/etc/systemd/system/home-manager-${cfg.user}.service; then
         echo "A deploy replaced the system after this command started; run it again." >&2
         return 1
@@ -201,9 +192,9 @@ let
         --reapply)
           hold_switch_lock
           "$pointer"
-          look=$(stored_look) row=$(row_scheme "$(stored_scheme)")
-          if [[ $look != "$default_look" || $row != "$default_scheme" ]]; then
-            activate "$look" "$row"
+          look=$(stored_look)
+          if [[ $look != "$default_look" ]]; then
+            activate "$look"
           fi
           reload
           ;;
@@ -213,10 +204,7 @@ let
             exit 64
           fi
           hold_switch_lock
-          look=$(stored_look) row=$(row_scheme "$1")
-          if [[ $row != "$(row_scheme "$(stored_scheme)")" ]]; then
-            activate "$look" "$row" || exit 1
-          fi
+          look=$(stored_look)
           "$pointer" --set "$1"
           reload
           shown="Ghostty, tmux, Neovim and VS Code"
@@ -251,7 +239,7 @@ let
           fi
           hold_switch_lock
           choose plasma-look "$1"
-          activate "$1" "$(row_scheme "$(stored_scheme)")"
+          activate "$1"
           reload
           echo "Log out and in to load the $1 look's colors, Plasma style, panels and KWin effects."
           ;;

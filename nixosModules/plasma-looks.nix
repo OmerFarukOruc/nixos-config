@@ -9,18 +9,14 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.${cfg.user};
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
-  variantRow =
-    look: scheme:
-    lib.findFirst (
-      row: (row.look or null) == look && row.scheme == scheme
-    ) (throw "No Plasma variant for look ${toString look} and scheme ${scheme}") variants.rows;
-  variantConfig =
-    look: scheme:
-    let
-      row = variantRow look scheme;
-    in
-    if row.generation then hm else hm.specialisation.${row.name}.configuration;
-  lookConfigs = lib.genAttrs variants.looks (look: variantConfig look variants.defaultScheme);
+  lookConfigs = lib.listToAttrs (
+    map (
+      row:
+      lib.nameValuePair row.look (
+        if row.generation then hm else hm.specialisation.${row.name}.configuration
+      )
+    ) variants.rows
+  );
   looks = lib.attrNames lookConfigs;
 
   pluginSwitches =
@@ -51,7 +47,6 @@ in
 
     oruc.verifyFacts = {
       plasma_look_default = variants.defaultLook;
-      scheme_default = variants.defaultScheme;
     }
     // lib.concatMapAttrs (
       look: lookConfig:
@@ -69,26 +64,16 @@ in
       }
     ) lookConfigs;
 
-    environment.etc = lib.listToAttrs (
-      map
-        (
-          variant:
-          lib.nameValuePair "oruc/verify-plasma-panels/${(variantRow variant.look variant.scheme).name}.json"
-            {
-              text = builtins.toJSON (
-                map (panel: {
-                  inherit (panel) location;
-                  widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
-                }) (variantConfig variant.look variant.scheme).programs.plasma.panels
-              );
-            }
-        )
-        (
-          lib.cartesianProduct {
-            look = looks;
-            scheme = variants.schemes;
-          }
-        )
-    );
+    environment.etc = lib.mapAttrs' (
+      look: lookConfig:
+      lib.nameValuePair "oruc/verify-plasma-panels/${look}.json" {
+        text = builtins.toJSON (
+          map (panel: {
+            inherit (panel) location;
+            widgets = map (widget: { inherit (widget) name config; }) panel.widgets;
+          }) lookConfig.programs.plasma.panels
+        );
+      }
+    ) lookConfigs;
   };
 }

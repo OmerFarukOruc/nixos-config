@@ -30,7 +30,8 @@ it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
-It checks that oruc-wallpaper-path prints the scheme's own wallpaper from
+It checks that `theme` activates no Home Manager generation. It checks that
+oruc-wallpaper-path prints the scheme's own wallpaper from
 assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
 in a Plasma session that the desktop shows it. Outside Plasma, on a host with
 niri, it checks dconf's colour preference, cursor and icon theme.
@@ -482,7 +483,8 @@ for slug in "$@"; do
       sleep 0.2
     done
   fi
-  theme "$slug" >/dev/null || fail "theme $slug exited $?"
+  output=$(theme "$slug" 2>&1) || fail "theme $slug exited $?"
+  ! grep -qE '^(Activating|Starting Home Manager activation)' <<<"$output" || fail "theme $slug activated a Home Manager generation"
   points_at "$slug" "theme $slug"
   [[ $(cat "$state/scheme") == "$slug" ]] || fail "theme $slug stored $(cat "$state/scheme")"
 

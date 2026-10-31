@@ -38,8 +38,8 @@ a Plasma session that started after the current system and the last
 plasma-look; an older session is listed as manual.
 
 After a panel build from the current system's panel script, the panel file
-must hold every widget setting of the look's panels with the stored scheme,
-which the system writes to /etc/oruc/verify-plasma-panels/LOOK_SCHEME.json.
+must hold every widget setting of the look's panels, which the system writes
+to /etc/oruc/verify-plasma-panels/LOOK.json.
 After an older build the check is listed as manual. Each dock launcher in that file must name a desktop file
 that the Plasma session can find. Each panel widget's General icon setting,
 or the default in its main.xml file, must name an icon that the icon theme
@@ -172,10 +172,7 @@ widget_icon_ok=0
 icon_plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $icon_plasma_look =~ ^[a-z0-9]+$ ]] || icon_plasma_look=none
-icon_scheme=$(ssh "${ssh_opts[@]}" "$host" \
-  'cat .local/state/oruc/scheme 2>/dev/null || sed -n "s/^scheme_default=//p" /etc/oruc/verify-facts' || true)
-[[ $icon_scheme =~ ^[a-z0-9-]+$ ]] || icon_scheme=none
-icon_panels=/etc/oruc/verify-plasma-panels/${icon_plasma_look}_$icon_scheme.json
+icon_panels=/etc/oruc/verify-plasma-panels/$icon_plasma_look.json
 mkdir -p "$work/widget-defaults"
 # shellcheck disable=SC2029 # icon_panels holds only a fixed path and a checked look name
 if ssh "${ssh_opts[@]}" "$host" cat "$icon_panels" >"$work/icons-panels.json" 2>/dev/null &&
@@ -225,10 +222,7 @@ esac
 plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
-scheme=$(ssh "${ssh_opts[@]}" "$host" \
-  'cat .local/state/oruc/scheme 2>/dev/null || sed -n "s/^scheme_default=//p" /etc/oruc/verify-facts' || true)
-[[ $scheme =~ ^[a-z0-9-]+$ ]] || scheme=none
-panels_json=/etc/oruc/verify-plasma-panels/${plasma_look}_$scheme.json
+panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
 
 build=$(
   # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name

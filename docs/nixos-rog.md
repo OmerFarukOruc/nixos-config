@@ -775,7 +775,7 @@ Discord, so neither `plasma-look` nor a deploy changes it; only
 [`theme`](#switch-the-scheme) does.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `theme --reapply` after it activates the
-default look and scheme. When that step fails, the look can be half applied, and
+default look. When that step fails, the look can be half applied, and
 `journalctl -u home-manager-oruc` shows the error; run `plasma-look <look>`
 again. That failure does not fail the unit, because a failed unit makes the
 deploy roll back the whole system.
@@ -854,13 +854,13 @@ rendered the first time `theme` selects the scheme
 
 The login screen, the boot menu, the console and the keyboard's Aura color
 keep the record's scheme. So does Spotify, because Spicetify builds its colors
-into the package, which a variant cannot replace. The login form assumes a dark
+into the package, which a switch cannot replace. The login form assumes a dark
 record scheme, because it draws the form at 30 % opacity over the dark Jake
 video, where a light scheme's dark text loses contrast.
 [Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
 lasts across deploys and reboots, and `theme <record's scheme>` goes back.
-Because each deploy and boot activates the record's scheme before the stored
-one, apps that follow a variant show the record's colors for a moment then.
+On a host without Plasma, each deploy and boot writes the record's GTK
+settings to dconf until `theme --reapply` runs the reloads a moment later.
 
 `scripts/check-theme.sh SCHEME...` switches to each scheme, checks the colour
 files and a tmux server and two Neovim instances it starts, and switches back.
@@ -869,8 +869,7 @@ set and the Glass glow. It checks VS Code's `settings.json` after each switch,
 and `--contrast` also checks the text contrast of every scheme's VS Code theme.
 `--host nixos-latitude` runs it there.
 
-To give a scheme the apps that follow a variant, add its name to
-`theme.schemes`. A scheme that tinted-theming lacks goes in `assets/schemes`
+A scheme that tinted-theming lacks goes in `assets/schemes`
 ([architecture.md](architecture.md#theme)).
 
 ## Deskflow

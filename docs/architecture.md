@@ -28,15 +28,14 @@ gates on `kind == "workstation"`, on a feature, on the machine's `gpu`
 (`intel-graphics.nix` and `amd-graphics.nix`), or on the machine's sessions, and
 the modules for graphical apps, the wallpaper and the failure popup skip a
 machine with no session, and the fonts skip one with no graphical user.
-`connectivity.nix` (NetworkManager, SSH and sudo) is workstation-only, so the schema rejects `features.remoteAccess` on a server, and
-it rejects `theme.schemes`, because only a workstation gets the `theme` command.
+`connectivity.nix` (NetworkManager, SSH and sudo) is workstation-only, so the schema rejects `features.remoteAccess` on a server.
 `nixosModules/tailscale.nix` and `nixosModules/ssh.nix` (the settings every
 sshd shares) serve every host, and `nixosModules/server-access.nix` adds a
 server's Tailscale flags and SSH ([devbox](devbox.md#access)). `ci/server.nix` evaluates a
 server record with no sessions, and `ci/checks.sh` fails when one of the pieces
-it lists comes in or when the schema stops rejecting one of the four records it
-rejects: `theme.schemes` or `features.remoteAccess` on a server, `biosDevice`
-with systemd-boot, and `features.streamedDesktop` on a workstation.
+it lists comes in or when the schema stops rejecting one of the three records it
+rejects: `features.remoteAccess` on a server, `biosDevice` with systemd-boot,
+and `features.streamedDesktop` on a workstation.
 
 A server has a desktop through `features.streamedDesktop`, not through a login
 session: `nixosModules/streamed-desktop.nix` starts XFCE for each RDP login of
@@ -77,7 +76,7 @@ The other files in `machines/` define what a record may hold:
   tinted-theming input or `assets/schemes`.
 - `sessions.nix` has the `sessions` helpers.
 - `variants.nix` lists the Home Manager variants of a record: one per Plasma
-  look and scheme ([Theme](#theme)).
+  look ([Theme](#theme)).
 
 Every session reads the same idle and touchpad settings. Plasma reads the idle
 settings through powerdevil (`home-manager/modules/plasma-manager.nix`). It reads
@@ -189,26 +188,17 @@ sets it at each login after the panel script, which deletes the desktop's
 wallpaper when it rebuilds the panels, and the reload `wallpaper` sets it at
 each switch. waybar's `oruc-wallpaper.service` restarts swaybg at each switch.
 
-`theme.schemes` in the machine record lists other schemes. Each one, with each
-Plasma look, is a Home Manager variant (`machines/variants.nix`). With Plasma,
-there is one row per look and scheme. Without Plasma, there is one row per
-scheme, and that row has no look. The row of the record's scheme, and of
-`theme.plasmaLook` when the machine has Plasma, is the Home Manager generation.
-Each other row is a specialisation (`home-manager/modules/variants.nix`), which
-`plasma-look` and `theme` activate (`nixosModules/hm-variants.nix`). The `name`
-function in `machines/variants.nix` is the only encoder of a specialisation's
-directory. The shell commands read the finished rows and do not rebuild them.
-
-`plasma-look <look>` and `theme <scheme>` each store a choice and activate the
-variant of both stored choices
-([Switch the scheme](nixos-rog.md#switch-the-scheme)). A scheme outside
-`theme.schemes` uses the record scheme's variant. Each deploy and each boot
-activates the default variant first, so the Home Manager service then runs
-`theme --reapply`, which activates the stored one. Every variant adds a
-Home Manager evaluation to each deploy. With two looks and four schemes,
-an evaluation of nixos-rog's system on nixos-rog took 59 to 66 seconds in 3
-runs, against 29 to 46 seconds in 4 runs with one scheme (measured
-2026-10-16).
+Each Plasma look is a Home Manager variant (`machines/variants.nix`). The
+row of `theme.plasmaLook` is the Home Manager generation, and each other look
+is a specialisation (`home-manager/modules/variants.nix`), which `plasma-look`
+activates (`nixosModules/hm-variants.nix`). A host without Plasma has no
+variants. The shell commands read the finished rows and do not rebuild them.
+`theme <scheme>` activates no variant: it stores the scheme, points `current`
+at it in the pack and runs the reloads, so any of the 362 schemes switches in
+the same way. `plasma-look <look>` stores the look and activates its variant
+([Switch the scheme](nixos-rog.md#switch-the-scheme)). Each deploy and each
+boot activates the default look first, so the Home Manager service then runs
+`theme --reapply`, which activates the stored look and runs the reloads.
 
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home

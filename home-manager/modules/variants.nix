@@ -20,10 +20,9 @@ in
       variant:
       lib.nameValuePair variant.name {
         configuration.oruc = {
-          inherit (variant) scheme;
           themePack = lib.mkForce config.oruc.themePack;
-        }
-        // lib.optionalAttrs (variant ? look) { plasma.look = variant.look; };
+          plasma.look = variant.look;
+        };
       }
     ) variants.specialisations
   );

@@ -73,8 +73,7 @@ missing_widget_icons() {
     [[ -z $icon ]] || icon_found "$icon" || printf '%s: %s\n' "$name" "$icon"
   done <<<"$widget_icon_rows"
 }
-scheme=$(cat "$HOME/.local/state/oruc/scheme" 2>/dev/null || echo "${scheme_default:-}")
-panels_file=/etc/oruc/verify-plasma-panels/${plasma_look:-}_$scheme.json
+panels_file=/etc/oruc/verify-plasma-panels/${plasma_look:-}.json
 if [[ -r $panels_file ]]; then
   if [[ ${widget_icon_ok:-0} != 1 ]]; then
     report plasma-widget-icons manual "could not copy plasmoid main.xml to resolve icon defaults"

@@ -99,13 +99,7 @@ let
     theme.scheme = mkOption {
       type = types.enum schemeNames;
       default = "gruvbox-dark-medium";
-      description = "Base16 scheme selected by this machine, named as in the pinned schemes input or assets/schemes. The login screen, the boot menu, the console and niri always use it, and Home Manager uses it until `theme` selects another one.";
-    };
-
-    theme.schemes = mkOption {
-      type = types.listOf (types.enum schemeNames);
-      default = [ ];
-      description = "Other Base16 schemes that `theme` switches Home Manager to without a rebuild. Each one adds a Home Manager build per Plasma look to every deploy.";
+      description = "Base16 scheme selected by this machine, named as in the pinned schemes input or assets/schemes. The login screen, the boot menu and the console always use it, and Home Manager's apps use it until `theme` selects another one.";
     };
 
     theme.plasmaLook = mkOption {
@@ -213,9 +207,6 @@ let
     assert lib.assertMsg (
       machine.kind == "workstation" || desktops == [ ]
     ) "Only workstation machines may offer a desktop session.";
-    assert lib.assertMsg (
-      machine.kind == "workstation" || machine.theme.schemes == [ ]
-    ) "Only workstation machines may list theme.schemes, because only they get the theme command.";
     assert lib.assertMsg (
       machine.kind == "workstation" || !machine.features.remoteAccess
     ) "Only workstation machines may set features.remoteAccess.";
