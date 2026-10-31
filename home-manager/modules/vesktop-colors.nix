@@ -24,25 +24,25 @@
 # SOFTWARE.
 colors: ''
   :root {
-      --base00: #${colors.base00}; /* Black */
-      --base01: #${colors.base01}; /* Bright Black */
-      --base02: #${colors.base02}; /* Grey */
-      --base03: #${colors.base03}; /* Brighter Grey */
-      --base04: #${colors.base04}; /* Bright Grey */
-      --base05: #${colors.base05}; /* White */
-      --base06: #${colors.base06}; /* Brighter White */
-      --base07: #${colors.base07}; /* Bright White */
-      --base08: #${colors.base08}; /* Red */
-      --base09: #${colors.base09}; /* Orange */
-      --base0A: #${colors.base0A}; /* Yellow */
-      --base0B: #${colors.base0B}; /* Green */
-      --base0C: #${colors.base0C}; /* Cyan */
-      --base0D: #${colors.base0D}; /* Blue */
-      --base0E: #${colors.base0E}; /* Purple */
-      --base0F: #${colors.base0F}; /* Magenta */
+      --base00: #${colors.base00};
+      --base01: #${colors.base01};
+      --base02: #${colors.base02};
+      --base03: #${colors.base03};
+      --base04: #${colors.base04};
+      --base05: #${colors.base05};
+      --base06: #${colors.base06};
+      --base07: #${colors.base07};
+      --base08: #${colors.base08};
+      --base09: #${colors.base09};
+      --base0A: #${colors.base0A};
+      --base0B: #${colors.base0B};
+      --base0C: #${colors.base0C};
+      --base0D: #${colors.base0D};
+      --base0E: #${colors.base0E};
+      --base0F: #${colors.base0F};
 
-      --primary-630: var(--base00); /* Autocomplete background */
-      --primary-660: var(--base00); /* Search input background */
+      --primary-630: var(--base00);
+      --primary-660: var(--base00);
   }
 
     /* Copyright (c) 2025 Cole Schaefer
@@ -217,28 +217,23 @@ colors: ''
       --__lottieIconColor: var(--base03) !important;
   }
 
-  /*--- Default Folder Color Recolor ---*/
   .default__459fb {
       background-color: var(--base07) !important;
   }
 
-  /*--- Add Friend Button Text Recolor ---*/
   .addFriend__133bf {
       color: var(--base00) !important;
   }
 
-  /*--- Close Icon Path Recolor ---*/
   svg[class^="closeIcon__"] path {
       fill: var(--base01) !important;
   }
 
-  /*--- Listen Along Invite Recolor ---*/
   .invite__4d3fa {
       background: var(--base01) !important;
       border-color: var(--base02) !important;
   }
 
-  /*--- Activity Card Background Recolor ---*/
   .card__73069 {
       background-color: var(--base01);
   }
@@ -247,7 +242,6 @@ colors: ''
       background-color: var(--base01) !important;
       border-color: var(--base02) !important;
   }
-  /*--- Voice Bar Text Recolor ---*/
   .barText__7aaec {
       color: var(--base0B) !important;
   }
@@ -255,32 +249,26 @@ colors: ''
       color: var(--base0B) !important;
   }
 
-  /*--- Mentions Bar Text Recolor ---*/
   .mentionsBar__7aaec .barText__7aaec {
       color: var(--base05) !important;
   }
 
-  /*--- Forum Background Recolor ---*/
   .container_f369db {
       background-color: var(--bg-overlay-2);
   }
 
-  /*--- Sidebar Icon Recolor ---*/
   .circleIconButton__5bc7e {
       color: var(--base04);
   }
 
-  /*--- Summaries Tag Icon Recolor ---*/
   .summariesBetaTag_cf58b5 {
       color: var(--base03);
   }
 
-  /*--- Folder Icon Recolor ---*/
   div.folderIconWrapper__48112 {
       background-color: var(--base01) !important;
   }
 
-  /*--- Voice Chat Action Icon Recolor ---*/
   path[fill^="rgb(88,101,242)"],
   path[stroke^="rgb(88,101,242)"] {
       fill: var(--base05) !important;
@@ -294,11 +282,9 @@ colors: ''
       background-color: var(--base02);
   }
 
-  /* --- Checkbox Recolor (OFF) --- */
   .container__87bf1 {
       background-color: var(--base03) !important;
   }
-  /* --- Checkbox Recolor (ON) --- */
   .checked__87bf1 {
       background-color: var(--base0B) !important;
   }
@@ -306,34 +292,28 @@ colors: ''
       fill: var(--base0B) !important;
   }
 
-  /* --- Secure Lock Icon Recolor --- */
   .lockIcon__2666b {
       display: none;
   }
 
-  /*--- Status Icon Recolor (DO NOT DISTURB) ---*/
   svg[fill^="#f23f43"],
   rect[fill^="#f23f43"] {
       fill: var(--status-danger) !important;
   }
-  /*--- Status Icon Recolor (IDLE) ---*/
   svg[fill^="#f0b232"],
   rect[fill^="#f0b232"] {
       fill: var(--status-warning) !important;
   }
-  /*--- Status Icon Recolor (ONLINE) ---*/
   path[fill^="#23a55a"],
   svg[fill^="#23a55a"],
   rect[fill^="#23a55a"] {
       fill: var(--status-positive) !important;
   }
-  /*--- Status Icon Recolor (OFFLINE) ---*/
   svg[fill^="#80848e"],
   rect[fill^="#80848e"] {
       fill: var(--base03) !important;
   }
 
-  /*--- Default Color Swap ---*/
   path[fill^="currentColor"],
   svg[fill^="currentColor"],
   rect[fill^="currentColor"] {
@@ -343,24 +323,20 @@ colors: ''
       fill: var(--base02) !important;
   }
 
-  /*--- Voice Chat Icon Badge Recolor ---*/
   div[class^="iconBadge"] path[d^="M12 3a1 1 0 0 0-1-1h-.06"],
   div[class^="iconBadge"] path[d^="M15.16 16.51c-.57.28"] {
       fill: var(--base05) !important;
   }
 
-  /*--- Nitro Icon Recolor ---*/
   .premiumLabel_e681d1 svg path,
   svg.guildBoostBadge__5dba5 path {
       fill: var(--base0E) !important;
   }
 
-  /*--- Server Booster Icon Recolor ---*/
   .premiumIcon__5d473 {
       color: var(--base0F);
   }
 
-  /*--- Call Container Recolor ---*/
   .callContainer_cb9592 {
       background-color: var(--base00);
   }
@@ -368,7 +344,6 @@ colors: ''
       background-image: var(--base00);
   }
 
-  /*--- Store Gradient Recolors ---*/
   .gradient_e9ef78 {
       background: var(--base01) !important;
   }
@@ -376,18 +351,15 @@ colors: ''
       background: var(--base00) !important;
   }
 
-  /*--- Text Selection Highlight Recolor ---*/
   ::selection {
     background-color: var(--base02);
     color: var(--base05);
   }
 
-  /*--- Increase Text Legibility ---*/
   * {
       text-rendering: optimizeLegibility !important;
   }
 
-  /*--- Codeblock Syntax Highlighting Recolor ---*/
   .hljs-attr {
       color: var(--base06) !important;
   }
@@ -431,8 +403,6 @@ colors: ''
       color: var(--base0E) !important;
   }
 
-  /*--- Visual Refresh Recolor ---*/
-  /*--- BIG WORK IN PROGRESS. DISCORD MADE SOME BIG CHANGES. ---*/
   .visual-refresh {
       div[class^="autocomplete__"] {
           background-color: var(--base02) !important;
@@ -476,23 +446,19 @@ colors: ''
           background-color: var(--base02) !important;
       }
 
-      /*--- Status Icon Recolor (DO NOT DISTURB) ---*/
       svg[fill^="#d83a42"],
       rect[fill^="#d83a42"] {
           fill: var(--status-danger) !important;
       }
-      /*--- Status Icon Recolor (IDLE) ---*/
       svg[fill^="#ca9654"],
       rect[fill^="#ca9654"] {
           fill: var(--status-warning) !important;
       }
-      /*--- Status Icon Recolor (ONLINE) ---*/
       path[fill^="#43a25a"],
       svg[fill^="#43a25a"],
       rect[fill^="#43a25a"] {
           fill: var(--status-positive) !important;
       }
-      /*--- Status Icon Recolor (OFFLINE) ---*/
       svg[fill^="#83838b"],
       rect[fill^="#83838b"] {
           fill: var(--base03) !important;

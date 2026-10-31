@@ -53,12 +53,13 @@ each text colour the VS Code theme draws on an accent background reaches
 4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
 and side bar backgrounds, that the Claude Code status line's segment colours
 are the scheme's and their text reaches 4.5:1 on them, and that OBS's text on
-its accent colours and SourceGit's badge and conflict text reach 4.5:1.
+its accent colours, SourceGit's badge and conflict text, and Vesktop's text on
+its accent fills reach 4.5:1.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
-Vesktop and the Cursor editor it checks that their theme files hold the scheme's base00,
-and that the Cursor editor's settings.json selects the Oruc Base16 theme of
-the scheme's dark or light variant. `oruc-app-settings --check` then checks
+Vesktop and the Cursor editor it checks that their theme files hold the
+scheme's base00, and that the Cursor editor's settings.json selects the Oruc
+Base16 theme of the scheme's dark or light variant. `oruc-app-settings --check` then checks
 that every settings file the switch sets, such as ~/.codex/config.toml or
 jadx's gui.json, holds the scheme's values; while an app that writes its own
 settings runs, the switch leaves them alone, and the script prints a skip
@@ -325,6 +326,22 @@ def statusline_failures(slug):
 
 
 obs_var = re.compile(r"^\s*--([a-z_0-9]+): #([0-9a-fA-F]{6});", re.M)
+vesktop_var = re.compile(r"^\s*--([a-z0-9-]+): #([0-9a-f]{6}) !important;", re.M)
+vesktop_pairs = [
+    ("control-primary-text-default", "control-primary-background-default"),
+    ("control-primary-text-hover", "control-primary-background-hover"),
+    ("control-primary-text-active", "control-primary-background-active"),
+    ("badge-primary-text", "badge-primary-background"),
+    ("white", "brand-260"),
+    ("white", "brand-500"),
+    ("mention-foreground", "mention-background"),
+    ("white", "green-360"),
+    ("white", "status-positive"),
+    ("status-positive-text", "status-positive-background"),
+    ("white", "button-danger-background"),
+    ("white", "menu-item-danger-hover-bg"),
+    ("white", "menu-item-danger-active-bg"),
+]
 
 
 def app_failures(slug):
@@ -344,6 +361,14 @@ def app_failures(slug):
             ratio = contrast(basic[text][-6:], basic[background][-6:])
             if ratio < 4.5:
                 found.append(f"{slug}: SourceGit {text} on {background} is {ratio:.2f}:1")
+    vesktop = pack / slug / ".config/vesktop/themes/oruc.css"
+    if vesktop.exists():
+        block = vesktop.read_text().rsplit(".visual-refresh {", 1)[1]
+        colors = dict(vesktop_var.findall(block))
+        for text, background in vesktop_pairs:
+            ratio = contrast(colors[text], colors[background])
+            if ratio < 4.5:
+                found.append(f"{slug}: Vesktop {text} on {background} is {ratio:.2f}:1")
     return found
 
 
@@ -358,14 +383,14 @@ for line in (failures + statusline + apps)[:20]:
 if failures or statusline or apps:
     sys.exit(
         f"check-theme: {len(failures)} VS Code, {len(statusline)} status line"
-        f" and {len(apps)} OBS or SourceGit contrast failures"
+        f" and {len(apps)} OBS, SourceGit or Vesktop contrast failures"
     )
 print(
     f"ok contrast: VS Code text in {checked} schemes;"
     f" {skipped} use their own theme and were skipped"
 )
 print(f"ok contrast: the Claude Code status line in {len(slugs)} schemes")
-print(f"ok contrast: OBS and SourceGit accent text in {len(slugs)} schemes")
+print(f"ok contrast: OBS, SourceGit and Vesktop accent text in {len(slugs)} schemes")
 PYTHON
 }
 

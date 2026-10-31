@@ -56,14 +56,7 @@ let
             yellow = scheme.base0A;
             purple = scheme.base0E;
           };
-      readableTarget = contrast.mostReadable scheme.base05 [
-        "000000"
-        "ffffff"
-      ];
-      readablePct = lib.findFirst (
-        pct: contrast.ratio scheme.base05 (contrast.mixHex pct scheme.base0D readableTarget) >= 4.5
-      ) 0 (lib.reverseList (lib.range 0 100));
-      accent = steps: contrast.mixHex (lib.max 0 (readablePct - steps)) scheme.base0D readableTarget;
+      accent = steps: contrast.fillBehind scheme.base05 steps scheme.base0D;
       vars = ramps // {
         grey8 = scheme.base00;
         grey7 = scheme.base00;

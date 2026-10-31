@@ -160,6 +160,18 @@ rec {
     in
     lib.mapAttrs (_: lib.toLower) { inherit foreground dim faint; };
 
+  fillBehind =
+    text: steps: color:
+    let
+      target = mostReadable text [
+        "000000"
+        "ffffff"
+      ];
+      readable = pct: ratio text (mixHex pct color target) >= 4.5;
+      pct = lib.findFirst readable 0 (lib.reverseList (lib.range 0 100));
+    in
+    lib.toLower (mixHex (lib.max 0 (pct - steps)) color target);
+
   hoverOf =
     background: text:
     lib.toLower (

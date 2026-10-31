@@ -464,8 +464,11 @@ and a light scheme changes its icons at its next start.
 `home-manager/modules/chat-themes.nix`, which the workstation profile imports,
 installs Vesktop, a Discord client that loads Vencord themes. Its pack theme
 `~/.config/vesktop/themes/oruc.css` is Stylix's Discord theme
-(`vesktop-colors.nix`, MIT) with the button and notice text set by
-`readableOn`, and Vencord's `enabledThemes` lists it. Vencord watches the
+(`vesktop-colors.nix`, MIT) followed by a block that sets Discord's text
+variables from the scheme's text roles, whatever Discord's own dark or light
+setting is, and its accent fills to the scheme's accent moved toward black or
+white until that text reaches 4.5:1 on them (`contrast.nix` `fillBehind`, which
+OBS's accents use too). Vencord's `enabledThemes` lists it. Vencord watches the
 folder, so Vesktop repaints at once.
 
 The ChatGPT app only offers its built-in code themes, listed in
