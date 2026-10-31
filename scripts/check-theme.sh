@@ -30,7 +30,11 @@ it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
-It checks that `theme` activates no Home Manager generation. It checks that
+It checks that `theme` activates no Home Manager generation, that it stores the
+scheme in /var/lib/oruc/theme/scheme, that the console's black is the scheme's
+base00, that the login screen's text colour is the scheme's base05, or the
+record scheme's for a light scheme, and that oruc-theme-root refuses an
+unknown scheme with exit 64 and changes nothing. It checks that
 oruc-wallpaper-path prints the scheme's own wallpaper from
 assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
 in a Plasma session that the desktop shows it. Outside Plasma, on a host with
@@ -341,6 +345,26 @@ check_plasma() {
   fi
 }
 
+system_scheme=/var/lib/oruc/theme/scheme
+login_colors=/var/lib/oruc/theme/sddm/jake_the_dog.conf.user
+theme_root=/run/current-system/sw/bin/oruc-theme-root
+
+check_system() {
+  local slug=$1 red login_text
+  [[ -x $theme_root ]] || fail "$slug: this system has no oruc-theme-root"
+  [[ $(cat "$system_scheme") == "$slug" ]] || fail "$slug: $system_scheme holds $(cat "$system_scheme")"
+  red=$(decimal "$(color "$slug" base00)")
+  [[ $(cut -d, -f1 /sys/module/vt/parameters/default_red) == "${red%%,*}" ]] ||
+    fail "$slug: the console's black is not the scheme's base00"
+  if [[ $(cat "$pack/$slug/.oruc/polarity") == light ]]; then
+    login_text=$(color "$record" base05)
+  else
+    login_text=$(color "$slug" base05)
+  fi
+  grep -qixF "HeaderTextColor=\"#$login_text\"" "$login_colors" ||
+    fail "$slug: $login_colors does not hold HeaderTextColor #$login_text"
+}
+
 check_wallpaper() {
   local slug=$1 path inode extension own=
   command -v oruc-wallpaper-path >/dev/null || return 0
@@ -524,6 +548,7 @@ for slug in "$@"; do
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
   check_session "$slug"
+  check_system "$slug"
   check_wallpaper "$slug"
   check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then
@@ -552,6 +577,16 @@ fi
 [[ $(cat "$state/scheme") == "$last" && $(readlink "$state/theme/current") == "$before" ]] ||
   fail "theme not-a-scheme changed the stored scheme or theme/current"
 echo "ok unknown scheme"
+
+system_mtime=$(stat -c %Y "$system_scheme")
+if /run/wrappers/bin/sudo -n "$theme_root" <<<not-a-scheme >/dev/null 2>&1; then
+  fail "oruc-theme-root not-a-scheme exited 0"
+else
+  [[ $? == 64 ]] || fail "oruc-theme-root not-a-scheme did not exit 64"
+fi
+[[ $(stat -c %Y "$system_scheme") == "$system_mtime" && $(cat "$system_scheme") == "$last" ]] ||
+  fail "oruc-theme-root not-a-scheme changed $system_scheme"
+echo "ok unknown system scheme"
 
 kde_before=$(kdeglobal kdeglobals General ColorScheme 2>/dev/null || true)
 kde_unchanged() {

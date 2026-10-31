@@ -9,6 +9,7 @@
 let
   cfg = config.oruc.machine;
   theme = config.oruc.theme;
+  systemThemeValues = import ./system-theme-values.nix { inherit lib; };
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
   niriShells = sessions.shellsOf cfg "niri";
@@ -68,7 +69,7 @@ in
       services.orca.enable = false;
       hardware.graphics.enable = true;
       users.users.${cfg.user}.extraGroups = [ "video" ];
-      console.colors = map (slot: config.scheme.${slot}) theme.ansi;
+      console.colors = systemThemeValues.consoleColors config.scheme;
     })
 
     (lib.mkIf hasNiri {

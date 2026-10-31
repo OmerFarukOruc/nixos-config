@@ -164,12 +164,14 @@ let
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout and mpv at their next start, and the Plasma splash at
       the next login. The wallpaper changes at once in Plasma, Noctalia and DMS,
-      and outside Plasma so do the GTK theme, cursor and icons in dconf.
+      and outside Plasma so do the GTK theme, cursor and icons in dconf. The
+      console changes at once and the login screen at its next start; a light
+      scheme leaves the login screen on the machine record's colours, because
+      its form is drawn see-through over a dark video.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
-      default ones.
-      The login screen, the boot menu and the console keep the scheme of the
-      machine record.'';
+      default ones; it leaves the console and the login screen as they are.
+      The boot menu keeps the scheme of the machine record.'';
     text = ''
       case ''${1:-} in
         "") echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})" ;;
@@ -193,6 +195,11 @@ let
           look=$(stored_look)
           "$pointer" --set "$1"
           reload
+          ${lib.optionalString (config.oruc.login.colorsFile != null) ''
+            if ! /run/wrappers/bin/sudo -n /run/current-system/sw/bin/oruc-theme-root <<<"$1"; then
+              echo "theme: the login screen or console failed" >&2
+            fi
+          ''}
           shown="Ghostty, tmux, Neovim and VS Code"
           if live "$look"; then
             shown="Ghostty, tmux, Neovim, VS Code, KDE and GTK 4 apps"

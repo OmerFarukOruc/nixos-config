@@ -1,0 +1,67 @@
+{ lib }:
+let
+  themeValues = import ./theme-values.nix { inherit lib; };
+  consoleSlots = scheme: (themeValues scheme).ansi;
+in
+{
+  sddmConfUser =
+    scheme:
+    let
+      color = scheme.withHashtag;
+    in
+    lib.generators.toINI { } {
+      General = lib.mapAttrs (_: value: ''"${value}"'') {
+        HeaderTextColor = color.base05;
+        DateTextColor = color.base05;
+        TimeTextColor = color.base05;
+
+        FormBackgroundColor = color.base00;
+        BackgroundColor = color.base00;
+        DimBackgroundColor = color.base00;
+
+        LoginFieldBackgroundColor = color.base05;
+        PasswordFieldBackgroundColor = color.base05;
+        LoginFieldTextColor = color.base05;
+        PasswordFieldTextColor = color.base05;
+        UserIconColor = color.base05;
+        PasswordIconColor = color.base05;
+
+        PlaceholderTextColor = color.base03;
+        WarningColor = color.base08;
+
+        LoginButtonTextColor = color.base00;
+        LoginButtonBackgroundColor = color.base0D;
+        SystemButtonsIconsColor = color.base05;
+        SessionButtonTextColor = color.base05;
+        VirtualKeyboardButtonTextColor = color.base05;
+
+        DropdownTextColor = color.base05;
+        DropdownSelectedBackgroundColor = color.base02;
+        DropdownBackgroundColor = color.base01;
+
+        HighlightTextColor = color.base00;
+        HighlightBackgroundColor = color.base0D;
+
+        HoverUserIconColor = color.base0D;
+        HoverPasswordIconColor = color.base0D;
+        HoverSystemButtonsIconsColor = color.base0D;
+        HoverSessionButtonTextColor = color.base0D;
+        HoverVirtualKeyboardButtonTextColor = color.base0D;
+      };
+    };
+
+  consoleColors = scheme: map (slot: scheme.${slot}) (consoleSlots scheme);
+
+  vtrgb =
+    scheme:
+    lib.concatMapStrings
+      (
+        channel:
+        lib.concatMapStringsSep "," (slot: scheme."${slot}-rgb-${channel}") (consoleSlots scheme) + "\n"
+      )
+      [
+        "r"
+        "g"
+        "b"
+      ];
+}

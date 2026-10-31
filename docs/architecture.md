@@ -168,8 +168,9 @@ for every scheme.
 NixOS and Home Manager each import that module with their own scheme:
 
 - NixOS (`nixosModules/theme.nix`) uses `theme.scheme` from the machine record.
-  The login screen, the boot menu and the console read it, and so does niri
-  until a Home Manager activation writes its colour file (below).
+  The boot menu reads it, and so does niri until a Home Manager activation
+  writes its colour file (below). The console and the login screen start from
+  it and then follow the stored scheme (below).
 - Home Manager (`home-manager/modules/scheme.nix`) uses `theme.scheme` too, so
   its `config.scheme` and `config.oruc.theme` hold the record scheme. Only the
   pack renderers below follow `theme`; a file that a module builds from
@@ -258,6 +259,21 @@ scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
 reuse the generation's pack, and root's Home Manager and the servers get a
 pack with the record scheme alone. `oruc.themeFacts` adds a value per
 scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
+
+The console and the login screen run outside the user session, so
+`nixosModules/theme-root.nix` builds a system pack with each scheme's console
+palette (`vtrgb`) and login screen colours (`sddm.conf.user`), on hosts with a
+desktop. `theme <scheme>` passes the scheme on stdin to `oruc-theme-root`
+through `sudo -n`, which a sudo rule allows for the record's user alone. The
+helper stores it in `/var/lib/oruc/theme/scheme`, runs `setvtrgb`, and writes
+`/var/lib/oruc/theme/sddm/jake_the_dog.conf.user`, the file the login theme's
+`.conf.user` link in the store points at; SDDM reads it at each greeter start.
+At boot, `oruc-theme-root.service` runs `oruc-theme-root --apply` before the
+display manager, which applies the stored scheme, or the record's when none
+is stored. The unit always exits 0, so a failure never rolls back a deploy.
+A light scheme's `sddm.conf.user` holds the record's colours, because the
+login form is drawn at 30 % opacity over a dark video. `theme --reapply` does
+not call the helper.
 
 On Plasma, `theme` then runs `oruc-plasma-live`
 (`home-manager/modules/plasma-looks/default.nix`), which changes the running

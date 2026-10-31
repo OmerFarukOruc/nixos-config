@@ -11,6 +11,7 @@
     ./desktop.nix
     ./hm-variants.nix
     ./plasma-looks.nix
+    ./theme-root.nix
     ./remote-desktop.nix
   ];
 }
