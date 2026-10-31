@@ -443,8 +443,12 @@ These stay fixed on purpose, and the check does not cover them:
 - The print stylesheet of the Markdown viewer.
 - Spotify follows only the machine record's scheme, because Spicetify builds
   the colors into its package.
-- The keyboard's Aura color follows only the machine record's scheme, because
-  asusd reads it from a system file (`machines/nixos-rog/asus.nix`).
+- The keyboard's Aura color and nixos-desktop's case lights follow the
+  machine record's scheme from boot until the login, because asusd reads it
+  from a system file (`machines/nixos-rog/asus.nix`) and `openrgb-boot`
+  applies a fixed profile. After the login, `oruc-keyboard-light`
+  (`home-manager/modules/keyboard-light.nix`) sets them to the stored scheme's
+  base09, and `theme` does at each switch.
 - Brave keeps its synced theme, because a managed theme policy would lock the
   setting and override the synced one. `nixosModules/brave.nix` writes Brave's
   settings as policies, which Brave Origin reads from `/etc/brave/policies`. The

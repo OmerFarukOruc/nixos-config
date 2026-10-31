@@ -295,4 +295,9 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
   # blacklists it with the comment "kernel freeze when type c port is used";
   # we found no other report of it. The cost is the USB-C power source readout.
   boot.blacklistedKernelModules = [ "ucsi_acpi" ];
+
+  home-manager.users.oruc = import ../../home-manager/modules/keyboard-light.nix {
+    setColour =
+      colour: "${lib.getExe' config.services.asusd.package "asusctl"} aura effect static -c ${colour}";
+  };
 }

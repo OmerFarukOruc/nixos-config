@@ -164,7 +164,8 @@ let
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout and mpv at their next start, and the Plasma splash at
       the next login. The wallpaper changes at once in Plasma, Noctalia and DMS,
-      and outside Plasma so do the GTK theme, cursor and icons in dconf. The
+      and outside Plasma so do the GTK theme, cursor and icons in dconf. Keyboard
+      and case lights take its base09 at once. The
       console changes at once and the login screen at its next start; a light
       scheme leaves the login screen on the machine record's colours, because
       its form is drawn see-through over a dark video.

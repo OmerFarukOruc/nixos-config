@@ -30,7 +30,8 @@ it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
-It checks that `theme` activates no Home Manager generation, that it stores the
+On nixos-rog it checks that the keyboard's Aura light turns static in the
+scheme's base09 within 5 s. It checks that `theme` activates no Home Manager generation, that it stores the
 scheme in /var/lib/oruc/theme/scheme, that the console palette holds the
 scheme's 16 ANSI colours, that the login theme links to the file oruc-theme-root
 writes and that file's text colour is the scheme's base05, or the record
@@ -404,6 +405,22 @@ check_system() {
     fail "$slug: $login_colors does not hold HeaderTextColor #$login_text"
 }
 
+aura_led() {
+  busctl --system get-property xyz.ljones.Asusd /xyz/ljones/aura/19b6_3_4 xyz.ljones.Aura LedModeData
+}
+
+check_keyboard_light() {
+  local slug=$1 red green blue want
+  aura_led >/dev/null 2>&1 || return 0
+  IFS=, read -r red green blue <<<"$(decimal "$(color "$slug" base09)")"
+  want="(uu(yyy)(yyy)ss) 0 0 $red $green $blue "
+  for _ in $(seq 25); do
+    [[ $(aura_led) == "$want"* ]] && return 0
+    sleep 0.2
+  done
+  fail "$slug: the keyboard's Aura mode is $(aura_led), not static $red $green $blue"
+}
+
 check_wallpaper() {
   local slug=$1 path inode extension own=
   command -v oruc-wallpaper-path >/dev/null || return 0
@@ -596,6 +613,7 @@ for slug in "$@"; do
   check_session "$slug"
   check_system "$slug"
   check_boot_menu "$slug"
+  check_keyboard_light "$slug"
   check_wallpaper "$slug"
   check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then

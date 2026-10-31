@@ -46,6 +46,13 @@ in
   home-manager.users.oruc =
     { config, lib, ... }:
     {
+      imports = [
+        (import ../../home-manager/modules/keyboard-light.nix {
+          waitFor = "openrgb-boot.service";
+          setColour = colour: "${pkgs.openrgb}/bin/openrgb -c ${colour}";
+        })
+      ];
+
       home.activation.openrgbProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${install} ${config.xdg.configHome}/OpenRGB/profiles/boot.json
         run ${install} ${config.xdg.configHome}/OpenRGB/Configuration.json
