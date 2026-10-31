@@ -101,7 +101,10 @@ eval_line() {
 }
 
 tags=$(scripts/move-inputs.sh)
-failed=$(eval_error)
+failed=
+if ! cmp -s flake.nix "$work/flake.nix" || ! cmp -s flake.lock "$work/flake.lock"; then
+  failed=$(eval_error)
+fi
 if [[ -n $failed ]]; then
   # Nix names lock nodes in walk order, so the root's nixpkgs can have another
   # name in each lock.
