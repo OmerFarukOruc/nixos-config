@@ -197,13 +197,19 @@ let
           reload
           ${lib.optionalString (config.oruc.themeRoot.command != null) ''
             if ! /run/wrappers/bin/sudo -n ${config.oruc.themeRoot.command} <<<"$1"; then
-              echo "theme: the login screen or console failed" >&2
+              echo "theme: the console or the login screen failed" >&2
             fi
           ''}
           shown="Ghostty, tmux, Neovim and VS Code"
           if live "$look"; then
             shown="Ghostty, tmux, Neovim, VS Code, KDE and GTK 4 apps"
           fi
+          ${lib.optionalString config.oruc.themeRoot.bootMenu ''
+            exec 8>&-
+            if ! /run/wrappers/bin/sudo -n ${config.oruc.themeRoot.command} --limine; then
+              echo "theme: the boot menu failed" >&2
+            fi
+          ''}
           echo "$shown show $1 now; Starship, fzf and atuin at their next run."
           ;;
       esac

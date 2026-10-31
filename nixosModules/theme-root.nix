@@ -18,7 +18,7 @@ let
     inherit (config.lib.base16) mkSchemeAttrs;
   };
   recordLogin = systemThemeValues.sddmConfUser config.scheme;
-  limine = cfg.bootloader == "limine";
+  limine = cfg.bootloader == "limine" && !config.boot.loader.limine.enrollConfig;
   limineColors =
     scheme:
     let
@@ -85,25 +85,32 @@ let
       Usage: oruc-theme-root [--apply | --limine]
 
       With no argument, reads a scheme name from stdin, stores it, and applies it
-      to the console, the login screen and, on a Limine host, the boot menu.
-      --apply applies the stored scheme to the console and the login screen, and
-      --limine to the boot menu alone, or the machine record's scheme when none
-      is stored.
+      to the console and the login screen. --apply applies the stored scheme to
+      the console and the login screen, and --limine to the Limine boot menu, or
+      the machine record's scheme when none is stored.
       EOF
         exit 64
       }
 
       in_pack() { [[ $1 =~ ^[a-z0-9-]+$ && -d $pack/$1 ]]; }
 
+      replace() {
+        if sync "$1" && mv -T "$1" "$2" && sync -f "$2"; then
+          return 0
+        fi
+        rm -f "$1"
+        return 1
+      }
+
       write() {
         local tmp
         mkdir -p "''${2%/*}" || return 1
         tmp=$(mktemp "$2.XXXXXX") || return 1
-        if cat "$1" >"$tmp" && chmod 0644 "$tmp" && mv -T "$tmp" "$2"; then
-          return 0
+        if ! cat "$1" >"$tmp" || ! chmod 0644 "$tmp"; then
+          rm -f "$tmp"
+          return 1
         fi
-        rm -f "$tmp"
-        return 1
+        replace "$tmp" "$2"
       }
 
       report() {
@@ -116,7 +123,7 @@ let
       }
 
       boot_menu() {
-        local colors=$pack/$slug/limine tmp=$limine_conf.tmp line key count pattern
+        local colors=$pack/$slug/limine tmp line key count pattern
         local edits=()
         if [[ ! -f $limine_conf ]]; then
           unchanged "$limine_conf does not exist"
@@ -124,14 +131,16 @@ let
         fi
         while IFS= read -r line; do
           key=''${line%%: *}
-          count=$(grep -c "^$key: " "$limine_conf" || true)
-          if [[ $count != 1 ]]; then
-            unchanged "$key appears $count times"
+          count=$(grep -c "^$key:" "$limine_conf" || true)
+          if [[ $count != 1 ]] || ! grep -q "^$key: " "$limine_conf"; then
+            unchanged "$key appears $count times or without a space after its colon"
             return 1
           fi
           edits+=(-e "s/^$key: .*/$line/")
         done <"$colors"
-        pattern="^($(cut -d: -f1 "$colors" | paste -sd '|')): "
+        pattern="^($(cut -d: -f1 "$colors" | paste -sd '|')):"
+        tmp=$(mktemp "$limine_conf.XXXXXX") || return 1
+        chmod --reference="$limine_conf" "$tmp" 2>/dev/null || true
         if ! sed "''${edits[@]}" "$limine_conf" >"$tmp"; then
           rm -f "$tmp"
           unchanged "sed failed"
@@ -143,11 +152,19 @@ let
           unchanged "a line outside the colour keys would change"
           return 1
         fi
-        sync "$tmp" && mv -T "$tmp" "$limine_conf" && sync -f "$limine_conf"
+        replace "$tmp" "$limine_conf"
+      }
+
+      hold_lock() {
+        mkdir -p "$state"
+        exec 9>"$state/lock"
+        if ! flock -w 60 9; then
+          echo "oruc-theme-root: another run held $state/lock for 60 s" >&2
+          exit 1
+        fi
       }
 
       hold_switch_lock() {
-        [[ -n $limine && -z ''${NIXOS_ACTION:-} ]] || return 0
         mkdir -p /run/nixos
         exec 8>/run/nixos/switch-to-configuration.lock
         if ! flock -w 60 8; then
@@ -161,13 +178,9 @@ let
         in_pack "$slug" || slug=$record
       }
 
-      hold_lock() {
-        mkdir -p "$state"
-        exec 9>"$state/lock"
-        if ! flock -w 60 9; then
-          echo "oruc-theme-root: another run held $state/lock for 60 s" >&2
-          exit 1
-        fi
+      apply_session() {
+        setvtrgb "$pack/$slug/vtrgb" || report "the console"
+        write "$pack/$slug/sddm.conf.user" "$colors_file" || report "the login screen"
       }
 
       case ''${1:-} in
@@ -178,29 +191,24 @@ let
             echo "oruc-theme-root: $slug is not a scheme of the system pack" >&2
             exit 64
           fi
-          hold_switch_lock
           hold_lock
           write <(printf '%s\n' "$slug") "$state/scheme" || report "storing the scheme"
+          apply_session
           ;;
         --apply)
           hold_lock
           stored_or_record
+          apply_session
           ;;
         --limine)
           [[ -n $limine ]] || usage
-          hold_switch_lock
+          [[ -n ''${NIXOS_ACTION:-} ]] || hold_switch_lock
           hold_lock
           stored_or_record
           boot_menu || report "the boot menu"
-          exit "$failed"
           ;;
         *) usage ;;
       esac
-      setvtrgb "$pack/$slug/vtrgb" || report "the console"
-      write "$pack/$slug/sddm.conf.user" "$colors_file" || report "the login screen"
-      if [[ -n $limine && -z ''${1:-} ]]; then
-        boot_menu || report "the boot menu"
-      fi
       exit "$failed"
     '';
   };
@@ -217,6 +225,11 @@ in
       readOnly = true;
       description = "Path of oruc-theme-root, which theme runs through sudo with the scheme on stdin, or null on a host without a desktop.";
     };
+    bootMenu = lib.mkOption {
+      type = lib.types.bool;
+      readOnly = true;
+      description = "Whether oruc-theme-root --limine recolours the Limine boot menu: on a Limine host with a desktop whose limine.conf is not enrolled into the bootloader.";
+    };
   };
 
   config = lib.mkMerge [
@@ -224,6 +237,7 @@ in
       oruc.themeRoot = {
         colorsFile = if themed then colorsFile else null;
         command = if themed then command else null;
+        bootMenu = themed && limine;
       };
     }
 

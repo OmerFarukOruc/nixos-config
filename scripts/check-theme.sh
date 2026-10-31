@@ -371,7 +371,7 @@ live_console() {
 }
 
 limine_conf=/boot/limine/limine.conf
-limine_keys='^(backdrop|interface_branding_colour|interface_help_colour|interface_help_colour_bright|term_palette|term_palette_bright|term_foreground|term_background|term_foreground_bright|term_background_bright): '
+limine_keys='^(backdrop|interface_branding_colour|interface_help_colour|interface_help_colour_bright|term_palette|term_palette_bright|term_foreground|term_background|term_foreground_bright|term_background_bright):'
 
 boot_menu_rest() {
   /run/wrappers/bin/sudo -n grep -vE "$limine_keys" "$limine_conf" || true
@@ -526,7 +526,9 @@ for i in 1 2; do
 done
 
 boot_menu_before=
-if /run/wrappers/bin/sudo -n test -e "$limine_conf" 2>/dev/null; then
+if ! /run/wrappers/bin/sudo -n true 2>/dev/null; then
+  echo "skip boot menu checks: sudo -n asks for a password"
+elif /run/wrappers/bin/sudo -n test -e "$limine_conf"; then
   boot_menu_before=$(boot_menu_rest)
 fi
 

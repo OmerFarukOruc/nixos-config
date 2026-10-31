@@ -287,11 +287,15 @@ line unchanged, else it leaves the file as it was, and it replaces the file
 through a rename and syncs it. Each bootloader install writes the record's
 colours, so `boot.loader.limine.extraInstallCommands` runs
 `oruc-theme-root --limine`, which writes the stored scheme's colours again and
-never fails the install. `theme` takes `/run/nixos/switch-to-configuration.lock`
-for up to 60 s before it stores a scheme, so it never edits the file during a
-switch; a switch that starts meanwhile exits with "Could not acquire lock" and
-the next one succeeds. `--limine` skips that lock when `NIXOS_ACTION` is set,
-because then a switch that holds it runs the install.
+never fails the install. `theme` runs `oruc-theme-root --limine` as its last
+step, after it released its own lock, so a switch that waits for `theme
+--reapply` can finish first. `--limine` takes
+`/run/nixos/switch-to-configuration.lock` for up to 60 s, so it never edits the
+file during a switch; a switch that starts meanwhile exits with "Could not
+acquire lock" and the next one succeeds. It skips that lock when `NIXOS_ACTION`
+is set, because then a switch that holds it runs the install. With
+`boot.loader.limine.enrollConfig` on, Limine checks the file against a hash in
+its binary, so the helper then leaves the boot menu alone.
 
 On Plasma, `theme` then runs `oruc-plasma-live`
 (`home-manager/modules/plasma-looks/default.nix`), which changes the running
