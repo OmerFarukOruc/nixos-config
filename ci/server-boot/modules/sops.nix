@@ -43,6 +43,10 @@ in
           "cliproxy-cloudflare-dns-token"
           "cliproxy-ts-authkey"
           "cliproxy-share-host"
+          "iptv-provider-url"
+          "iptv-provider-username"
+          "iptv-provider-password"
+          "iptv-client-password"
         ]
         (_: {
           sopsFile = lib.mkForce "${secrets}/secrets.yaml";

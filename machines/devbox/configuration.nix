@@ -11,6 +11,7 @@ in
     inputs.disko.nixosModules.disko
     inputs.sops-nix.nixosModules.sops
     ./disk.nix
+    ./iptv.nix
     ./services.nix
     ../../nixosModules/agent-runtime.nix
     ../../nixosModules/envfs.nix
