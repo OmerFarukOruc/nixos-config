@@ -119,8 +119,10 @@ holds() {
 mpv_reads_osd_color() {
   local slug=$1 colour=$2 key=.config/mpv/oruc-colors.conf
   [[ -e $pack/$slug/$key ]] || return 0
-  mpv --no-config --include="$HOME/$key" --msg-level=cplayer=v --idle=no 2>&1 |
-    grep -qiF "Setting option 'osd-color' = '#$colour'" ||
+  local log
+  log=$(mpv --no-config --include="$HOME/$key" --msg-level=cplayer=v --idle=no 2>&1) ||
+    fail "$slug: mpv exited $? with ~/$key"
+  grep -qiF "Setting option 'osd-color' = '#$colour'" <<<"$log" ||
     fail "$slug: mpv does not read osd-color #$colour from ~/$key"
 }
 
@@ -369,7 +371,7 @@ gtk_polarity_applies() {
 }
 
 check_gtk_polarity() {
-  local slug=$1 gtk_before=$2 icons_before=$3 polarity cursor icons gtk expected
+  local slug=$1 gtk_before=$2 icons_before=$3 polarity cursor icons gtk expected replaceable
   gtk_polarity_applies "$slug" || return 0
   polarity=$(cat "$pack/$slug/.oruc/polarity")
   cursor=$(cat "$pack/$slug/.oruc/cursor")
@@ -386,8 +388,8 @@ check_gtk_polarity() {
   [[ $(dconf read /org/gnome/desktop/interface/gtk-theme) == "$expected" ]] ||
     fail "$slug: dconf gtk-theme is not $expected"
   expected=$icons_before
-  if [[ -z $icons_before ]] || sort -u "$pack"/*/.oruc/icons <(printf '%s\n' breeze breeze-dark) |
-    sed "s/.*/'&'/" | grep -qxF -- "$icons_before"; then
+  replaceable=$(sort -u "$pack"/*/.oruc/icons <(printf '%s\n' breeze breeze-dark) | sed "s/.*/'&'/")
+  if [[ -z $icons_before ]] || grep -qxF -- "$icons_before" <<<"$replaceable"; then
     expected="'$icons'"
   fi
   [[ $(dconf read /org/gnome/desktop/interface/icon-theme) == "$expected" ]] ||
