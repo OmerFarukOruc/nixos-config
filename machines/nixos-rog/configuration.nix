@@ -23,6 +23,7 @@
     ./powertop.nix
     ./profile-sync.nix
     ./stay-active.nix
+    ../../nixosModules/via-devbox.nix
     ../../nixosModules/warp.nix
     ./zapret2.nix
   ];

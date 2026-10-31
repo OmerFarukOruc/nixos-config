@@ -4,6 +4,7 @@
 - [Failures and notifications](#failures-and-notifications)
 - [Secrets](#secrets)
 - [DNS](#dns)
+- [Apps through devbox](#apps-through-devbox)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
 - [Heavy commands](#heavy-commands)
 - [Power and heat](#power-and-heat)
@@ -176,6 +177,72 @@ sudo captive-dns off
 ```
 
 A reboot also switches back.
+
+## Apps through devbox
+
+On nixos-rog and nixos-desktop, `via-devbox COMMAND` runs one program with its
+internet traffic leaving through devbox in Germany, while the rest of the PC
+stays on the direct route. Traffic to tailnet addresses still goes straight
+over the tailnet. The IPTVnator entry in the app menu starts IPTVnator this way
+(`home-manager/modules/via-devbox-launchers.nix`), because the IPTV provider's
+Cloudflare firewall refuses Turkish addresses, Cloudflare WARP's included
+(observed 2026-10-31). IPTVnator ignores proxy settings for its portal requests
+(it sets `proxy: false` in `apps/electron-backend/src/app/util/validated-axios.ts`
+of 4gray/iptvnator v0.24.0), so a proxy launcher like the WARP ones does not
+work. In IPTVnator's settings, pick the MPV player: the provider answers 401 to
+every request that names VLC as its user agent, while mpv's `libmpv` gets the
+stream (measured 2026-10-31). The account allows one stream at a time: a new
+stream ends the one already playing, which mpv shows as playback that stops
+after its buffer of about 30 seconds runs out.
+
+The menu entry also passes `--disable-features=UseDnsHttpsSvcb`. The
+provider's domain publishes a DNS HTTPS record, so Chromium, and with it
+IPTVnator's HTML5 player, upgrades its `http://` stream links to `https://`,
+where the provider's Cloudflare site answers 521 because its server serves no
+HTTPS. A headless Chromium in the namespace sent a `file://` page's
+`http://` fetch to `https://` without the flag and kept it on `http://` with
+it (2026-10-31).
+
+`nixosModules/via-devbox.nix` makes the `via-devbox` network namespace, a veth
+pair to the host that NAT sends out of the PC's uplink, and a Tailscale node of
+its own, `<host>-via-devbox`, that runs in the namespace with devbox as its exit
+node. Each PC has its own node and depends only on devbox, so nixos-desktop
+works while nixos-rog is off. The node uses the host's Tailscale package, so it
+moves with every system update. Programs in the namespace resolve names
+through 1.1.1.1 and 9.9.9.9 over that exit node: the namespace's own
+`nsswitch.conf` looks names up only in `/etc/hosts` and DNS, and `via-devbox` hides the host's nscd
+socket, which would otherwise answer through the host's DNS. An nftables rule
+in the namespace lets only the node's own marked traffic out over the veth, so
+while the node is logged out, stopped or restarting, the programs have no
+network at all. The rule confines an ordinary program's traffic; a program that
+runs `sudo` can change it. The unit keeps an existing namespace when it
+restarts, so a running program keeps its route. Since NAT turns on IPv4
+forwarding, the firewall filters forwarded traffic
+(`networking.firewall.filterForward`) and accepts only the namespace's,
+Docker's and Podman's bridges.
+
+`via-devbox` enters the namespace through `sudo -n` and drops back to the
+calling user with the caller's whole environment, so it needs passwordless
+sudo. Electron apps keep one instance: quit a copy started outside
+`via-devbox` before you start one through it, or the new launch only focuses
+the old window.
+
+Check the route and the node:
+
+```sh
+via-devbox curl -s https://ipinfo.io/country
+tailscale --socket=/run/tailscale-via-devbox/tailscaled.sock status
+```
+
+The first prints `DE`. After a new install, or when the node's key expires, run
+`via-devbox-login` and open the URL it prints. It logs the node in, restarts
+it so the settings of its config file apply again, because a login resets
+them, sets devbox as the exit node, and exits 1 when devbox does not come online
+as the exit node within 15 seconds. The config file cannot name the exit node:
+tailscaled stores a name there as a node ID without resolving it
+(`ipn/conf.go` of tailscale v1.104.4), and an IP or node ID of the tailnet
+does not belong in this public repository. Turn off key expiry for the node in
+the Tailscale admin console, so it stays logged in.
 
 ## Claude Code and Codex setup
 

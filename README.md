@@ -53,6 +53,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Secrets | sops-nix with age on nixos-desktop, nixos-rog and devbox |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
+| Per-app route abroad | IPTVnator through a network namespace whose Tailscale node exits at devbox, on nixos-desktop and nixos-rog ([Apps through devbox](docs/nixos-rog.md#apps-through-devbox)) |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
 | Binary cache | `cache.lantian.pub` for the kernel and `cache.numtide.com` |
 

@@ -21,6 +21,11 @@ in
     openFirewall = true;
   };
 
+  # NixOS blacklists ip_tables once nftables is on, so tailscaled must not
+  # fall back to iptables.
+  systemd.services.tailscaled.environment.TS_DEBUG_FIREWALL_MODE =
+    lib.mkIf config.networking.nftables.enable "nftables";
+
   systemd.services.tailscaled-set = lib.mkIf (config.services.tailscale.extraSetFlags != [ ]) {
     partOf = [ "tailscaled.service" ];
     serviceConfig.RemainAfterExit = true;

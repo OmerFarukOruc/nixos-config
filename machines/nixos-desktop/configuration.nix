@@ -6,6 +6,7 @@
     ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
     ../../nixosModules/nixpkgs-clone.nix
+    ../../nixosModules/via-devbox.nix
     ../../nixosModules/warp.nix
     ../../nixosModules/zapret2.nix
     ./fans.nix

@@ -17,6 +17,7 @@
     ./oled-care.nix
     ../../home-manager/modules/box-view.nix
     ../../home-manager/modules/sshfs-devbox.nix
+    ../../home-manager/modules/via-devbox-launchers.nix
     ../../home-manager/modules/warp-launchers.nix
   ];
 
