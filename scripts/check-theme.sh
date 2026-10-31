@@ -11,9 +11,10 @@ colour file under $HOME resolves into it, that each file holds the colour of
 the slot its app uses, and that a tmux server and two Neovim instances started
 before the switch show the new colours. On a host with Plasma whose desktop
 session runs, it also checks that the session's KDE colour scheme moved to the
-other of its A and B copies with the scheme's background, that the icons,
-cursor, GTK theme and colour preference follow the scheme's dark or light
-variant, that the look keeps its Plasma style, and that the Glass glow has the
+other of its A and B copies with the scheme's background, that the cursor,
+GTK theme and colour preference follow the scheme's dark or light variant, that
+the icon theme is the scheme's or stays as picked in System Settings, that the
+look keeps its Plasma style, and that the Glass glow has the
 scheme's blue. The expected colours come from the scheme's YAML in the pack.
 It also checks that an unknown scheme exits 64 and changes nothing, that
 `theme --reapply` finishes a switch interrupted after the stored scheme
@@ -100,7 +101,7 @@ plasma_session() {
 }
 
 check_plasma() {
-  local slug=$1 before=$2 previous=$3 now base variant bg icons cursor gtk style preference glow
+  local slug=$1 before=$2 previous=$3 icons_before=$4 now base variant bg icons cursor gtk style preference glow
   now=$(kdeglobal kdeglobals General ColorScheme)
   base=${before%[AB]}
   if [[ $slug == "$previous" && $before == "${base}"[AB] ]]; then
@@ -113,10 +114,12 @@ check_plasma() {
   [[ $bg == "$(decimal "$base00")"* ]] || fail "$slug: the KDE window background is $bg, not $(decimal "$base00")"
   variant=$(sed -nE 's/^variant:[[:space:]]*"?([a-z]+)"?.*/\1/p' "$pack/$slug/.oruc/source.yaml")
   icons=$(<"$pack/$slug/.oruc/icons")
-  case $variant in
-    light) cursor=Bibata-Modern-Classic gtk=adw-gtk3 ;;
-    *) cursor=Bibata-Modern-Ice gtk=adw-gtk3-dark ;;
-  esac
+  if [[ -n $icons_before && $icons_before != breeze && $icons_before != breeze-dark ]] &&
+    ! grep -qxF "$icons_before" "$pack"/*/.oruc/icons; then
+    icons=$icons_before
+  fi
+  cursor=$(<"$pack/$slug/.oruc/cursor")
+  gtk=$(<"$pack/$slug/.oruc/gtk")
   [[ $(kdeglobal kdeglobals Icons Theme) == "$icons" ]] || fail "$slug: the icon theme is not $icons"
   [[ $(kdeglobal kcminputrc Mouse cursorTheme) == "$cursor" ]] || fail "$slug: the cursor is not $cursor"
   [[ $(dconf read /org/gnome/desktop/interface/gtk-theme) == "'$gtk'" ]] || fail "$slug: the GTK theme is not $gtk"
@@ -154,8 +157,10 @@ done
 previous=$original
 for slug in "$@"; do
   plasma_before=
+  icons_before=
   if plasma_session "$slug"; then
     plasma_before=$(kdeglobal kdeglobals General ColorScheme)
+    icons_before=$(kdeglobal kdeglobals Icons Theme)
   fi
   theme "$slug" >/dev/null || fail "theme $slug exited $?"
   points_at "$slug" "theme $slug"
@@ -191,7 +196,7 @@ for slug in "$@"; do
       grep -qF oruc-colors.css "$HOME/.config/$gtkDir/gtk.css" || fail "$slug: ~/.config/$gtkDir/gtk.css does not import oruc-colors.css"
     done
   fi
-  [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous"
+  [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   if [[ $slug == warm-burnout-* ]]; then
     holds "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"

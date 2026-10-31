@@ -10,7 +10,11 @@ in
       if isLight then "Light" else "Dark"
     }";
 
-  automatic =
+  replaceable = [
+    "breeze"
+    "breeze-dark"
+  ]
+  ++
     lib.concatMap
       (family: [
         "${family}-Dark"

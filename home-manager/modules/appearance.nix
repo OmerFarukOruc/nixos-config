@@ -64,9 +64,7 @@ let
   };
   gtkImport = dir: "@import url(\"file://${config.xdg.configHome}/${dir}/oruc-colors.css\");";
 
-  # Only GTK 3 reads the GTK theme name. The GTK and icon theme names are ours
-  # while they are unset or already one we set, so a theme chosen in System
-  # Settings stays.
+  # Only GTK 3 reads the GTK theme name.
   # GTK 3 on Wayland takes the name from gsettings whenever it sees the
   # org.gnome.desktop.interface schema, which beats settings.ini, so both get
   # it. Without a session bus (a deploy at boot) dconf runs on a private one,
@@ -95,7 +93,7 @@ let
         fi
       }
 
-      gtk_theme() {
+      gtk_theme_unless_picked() {
         local settings=${config.xdg.configHome}/gtk-3.0/settings.ini now
         case $(kreadconfig6 --file "$settings" --group Settings --key gtk-theme-name) in
           "" | adw-gtk3 | adw-gtk3-dark)
@@ -110,11 +108,12 @@ let
         esac
       }
 
-      icon_theme() {
-        case $(kreadconfig6 --file kdeglobals --group Icons --key Theme) in
-          "" | breeze | breeze-dark | ${
-            lib.concatMapStringsSep " | " lib.escapeShellArg iconTheme.automatic
-          })
+      icon_theme_unless_picked() {
+        local now
+        now=$(kreadconfig6 --file kdeglobals --group Icons --key Theme)
+        [[ $now != "$icons" ]] || return 0
+        case $now in
+          "" | ${lib.concatMapStringsSep " | " lib.escapeShellArg iconTheme.replaceable})
             ${pkgs.kdePackages.plasma-workspace}/libexec/plasma-changeicons "$icons"
             ;;
         esac
@@ -123,7 +122,7 @@ let
       force=
       case ''${1:-} in
         --gtk)
-          gtk_theme
+          gtk_theme_unless_picked
           exit
           ;;
         --login)
@@ -131,17 +130,16 @@ let
           ;;
       esac
 
-      applied="$polarity $cursor $icons $gtk"
-      if [[ -n $force || $(cat "$state/theme/applied" 2>/dev/null) != "$applied" ]]; then
+      if [[ -n $force || $(cat "$state/theme/polarity" 2>/dev/null) != "$polarity" ]]; then
         plasma-apply-cursortheme "$cursor" --size ${toString theme.cursor.size}
-        icon_theme
-        gtk_theme
+        gtk_theme_unless_picked
         dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-$polarity'"
-        printf '%s\n' "$applied" >"$state/theme/applied"
+        printf '%s\n' "$polarity" >"$state/theme/polarity"
       else
         dconf_write /org/gnome/desktop/interface/color-scheme "'default'"
         dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-$polarity'"
       fi
+      icon_theme_unless_picked
     '';
   };
 in
@@ -150,7 +148,7 @@ in
     type = lib.types.package;
     readOnly = true;
     default = applyPolarity;
-    description = "oruc-polarity [--login | --gtk]: on Plasma, gives the session the cursor, icons, GTK theme and color-scheme preference of the stored scheme when one of them differs from the set it last applied, or with --login, else toggles the color-scheme preference so GTK 4 apps reload their colours. --gtk sets only the GTK 3 theme name.";
+    description = "oruc-polarity [--login | --gtk]: on Plasma, gives the session the cursor, GTK theme and color-scheme preference of the stored scheme's dark or light variant when that variant changed or with --login, else toggles the color-scheme preference so GTK 4 apps reload their colours; on every run it gives the session the stored scheme's icon theme unless System Settings picked one outside nixosModules/icon-theme.nix's replaceable names. --gtk sets only the GTK 3 theme name.";
   };
 
   config = lib.mkMerge [

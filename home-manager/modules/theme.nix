@@ -188,7 +188,7 @@ in
     })
     (lib.mkIf (isNiri && !isPlasma) {
       ".config/kdeglobals" =
-        { scheme, ... }: kdeColorScheme scheme false + "\n[Icons]\nTheme=${theme.icons}\n";
+        { scheme, theme }: kdeColorScheme scheme false + "\n[Icons]\nTheme=${theme.icons}\n";
     })
     (lib.mkIf config.programs.atuin.enable {
       ".config/atuin/themes/oruc-base16.toml" =
