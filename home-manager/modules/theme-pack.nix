@@ -154,6 +154,11 @@ in
       readOnly = true;
       description = "Command that, under a lock, roots a pack (--pack PATH) or stores a scheme (--set SCHEME), then points theme/current at the stored scheme in the pack, or at the record scheme. --list prints the pack's schemes and --stored the scheme that theme/current follows.";
     };
+    themeFactsDir = lib.mkOption {
+      type = lib.types.str;
+      readOnly = true;
+      description = "Folder that holds the stored scheme's oruc.themeFacts, one file per name.";
+    };
     themeState = lib.mkOption {
       type = lib.types.str;
       readOnly = true;
@@ -165,6 +170,7 @@ in
     oruc.themePack = pack;
     oruc.themePointer = pointer;
     oruc.themeState = state;
+    oruc.themeFactsDir = "${state}/theme/current/.oruc";
 
     home.file = lib.mapAttrs (key: _: {
       source = config.lib.file.mkOutOfStoreSymlink "${state}/theme/current/${key}";

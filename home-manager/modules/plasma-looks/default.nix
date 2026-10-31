@@ -26,6 +26,7 @@ let
   };
 
   current = "${config.oruc.themeState}/theme/current";
+  facts = config.oruc.themeFactsDir;
   kreadconfig = lib.getExe' pkgs.kdePackages.kconfig "kreadconfig6";
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
 
@@ -91,7 +92,7 @@ let
           ) looks}
         esac
       fi
-      polarity=$(cat ${current}/.oruc/polarity)
+      polarity=$(cat ${facts}/polarity)
       case $look in
         ${lib.concatMapAttrsStringSep "\n  " (
           name: look: "${name}) base=${look.colorScheme} style=${look.plasmaStyle "$polarity"} ;;"
@@ -105,7 +106,7 @@ let
       ${lib.getExe config.oruc.applyPolarity} $login
       plasma-apply-desktoptheme "$style"
       if [[ $base == ${looks.glass.colorScheme} ]]; then
-        glow=$(cat ${current}/.oruc/glow)
+        glow=$(cat ${facts}/glow)
         if [[ $(${kreadconfig} --file kwinrc --group Effect-blurplus --key GlowColor) != "$glow" ]]; then
           ${kwriteconfig} --file kwinrc --group Effect-blurplus --key GlowColor "$glow"
           ${lib.getExe reconfigureGlass}

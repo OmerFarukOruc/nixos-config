@@ -205,8 +205,9 @@ runs, against 29 to 46 seconds in 4 runs with one scheme (measured
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, VS Code and fzf
-read their colors from files for this reason. On a host without Plasma, the
-cursor keeps the record's scheme.
+read their colors from files for this reason. On a host without Plasma, niri
+draws the cursor of the selected scheme's dark or light variant, while the GTK
+cursor setting keeps the record's scheme.
 On a host without Plasma, KDE apps take the icon theme of any scheme from
 `~/.config/kdeglobals` in the pack, while GTK takes the active variant's, so a
 scheme outside `theme.schemes` gives GTK the record scheme's icons.
@@ -232,7 +233,10 @@ the old pack back, and points `current` at the stored scheme
 it. `theme <scheme>` replaces the stored scheme through a rename, which is the
 one step that commits a switch, points `current` at it, and then runs
 `oruc.variantReloads` so Ghostty, tmux, Neovim, VS Code, Noctalia and DMS load
-the new files. A reload exits 0 when its app does not run. Claude Code reloads
+the new files. A reload exits 0 when its app does not run. `theme --reapply`
+runs the reloads too, and `noctalia.service` and `dms.service` run their reload
+script when they start, because each shell keeps its dark or light mode in its
+own state, which no Home Manager file sets. Claude Code reloads
 its theme when the file is replaced, but not when a link on its path changes
 target, so its theme file is listed in `oruc.themeCopies`: the pointer writes
 it as a regular file and replaces it through a rename each time it moves

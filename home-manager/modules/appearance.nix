@@ -79,7 +79,7 @@ let
     ];
     text = ''
       state=${lib.escapeShellArg config.oruc.themeState}
-      facts=$state/theme/current/.oruc
+      facts=${lib.escapeShellArg config.oruc.themeFactsDir}
       polarity=$(cat "$facts/polarity")
       cursor=$(cat "$facts/cursor")
       icons=$(cat "$facts/icons")

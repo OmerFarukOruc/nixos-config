@@ -2,6 +2,7 @@
   config,
   lib,
   osConfig,
+  pkgs,
   sessions,
   ...
 }:
@@ -10,7 +11,19 @@ let
   inherit (theme) wallpaper;
   noctalia = lib.getExe config.programs.noctalia.package;
   palette = ".config/noctalia/palettes/oruc-base16.json";
-  polarity = "${config.oruc.themeState}/theme/current/.oruc/polarity";
+  applyScheme = pkgs.writeShellApplication {
+    name = "oruc-noctalia-scheme";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      for _ in $(seq 40); do
+        ${noctalia} msg theme-mode-get >/dev/null 2>&1 && break
+        sleep 0.5
+      done
+      ${noctalia} msg color-scheme-set custom oruc-base16
+      ${noctalia} msg config-reload
+      ${noctalia} msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+    '';
+  };
 
   noctaliaMode =
     { scheme, theme }:
@@ -180,11 +193,10 @@ in
         dark = noctaliaMode args;
         light = noctaliaMode args;
       };
+    systemd.user.services.noctalia.Service.ExecStartPost = [ "-${lib.getExe applyScheme}" ];
     oruc.variantReloads.noctalia = ''
       systemctl --user is-active -q noctalia.service || exit 0
-      ${noctalia} msg color-scheme-set custom oruc-base16
-      ${noctalia} msg config-reload
-      ${noctalia} msg theme-mode-set "$(<${lib.escapeShellArg polarity})"
+      ${lib.getExe applyScheme}
     '';
   };
 }

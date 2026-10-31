@@ -26,8 +26,8 @@ checks cannot run.
 For Noctalia, DMS, rofi, vicinae, niri, wlogout, mpv and the Plasma splash it
 checks that each file holds the scheme's colour. While Noctalia or DMS runs,
 it also checks that the shell shows the custom palette in the scheme's dark or
-light mode, and in a niri session that niri still answers after it reads the
-new colours.
+light mode, and in a niri session that niri's configuration parses and that
+niri reports a successful reload after the switch.
 
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
@@ -77,6 +77,8 @@ tmux_socket=oruc-check-theme-$$
 nvim_pids=()
 vscode_settings=${XDG_CONFIG_HOME:-$HOME/.config}/Code/User/settings.json
 vscode_saved=
+niri_events=
+niri_stream=
 
 fail() {
   echo "check-theme: $*" >&2
@@ -90,6 +92,7 @@ cleanup() {
   [[ -z $vscode_saved ]] || cp "$vscode_saved" "$vscode_settings"
   tmux -L "$tmux_socket" kill-server 2>/dev/null || true
   kill "${nvim_pids[@]}" 2>/dev/null || true
+  [[ -z $niri_stream ]] || kill "$niri_stream" 2>/dev/null || true
   rm -r "${scratch:?}"
   theme "$original" >/dev/null || echo "check-theme: could not switch back to $original" >&2
 }
@@ -324,12 +327,9 @@ check_plasma() {
 check_session() {
   local slug=$1 polarity
   polarity=$(cat "$pack/$slug/.oruc/polarity")
-  holds "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
-  holds "$slug" .config/dms/oruc-theme.json "\"#$base00\""
   holds "$slug" .local/share/rofi/themes/custom.rasi "background-color: #$base00;"
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "background = \"#$base00\""
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "variant = \"$polarity\""
-  holds "$slug" .config/niri/oruc-theme.kdl "active-color \"#$base0D\""
   holds "$slug" .config/wlogout/style.css "border-color: #$base0D;"
   holds "$slug" .config/mpv/script-opts/modernz.conf "seekbarfg_color=#$base0D"
   holds "$slug" .config/mpv/oruc-colors.conf "osd-color=#$base05"
@@ -340,16 +340,31 @@ check_session() {
       fail "$slug: Noctalia shows $(noctalia msg color-scheme-get), not custom oruc-base16"
     [[ $(noctalia msg theme-mode-get) == "$polarity" ]] ||
       fail "$slug: Noctalia's mode is $(noctalia msg theme-mode-get), not $polarity"
+  else
+    holds "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
   fi
   if systemctl --user is-active -q dms.service; then
     holds_required "$slug" .config/dms/oruc-theme.json "\"#$base00\""
     [[ -f $HOME/.config/dms/oruc-theme.json && ! -L $HOME/.config/dms/oruc-theme.json ]] ||
       fail "$slug: ~/.config/dms/oruc-theme.json is not a regular file"
     [[ $(dms ipc call theme getMode) == "$polarity" ]] || fail "$slug: DMS's mode is not $polarity"
+  else
+    holds "$slug" .config/dms/oruc-theme.json "\"#$base00\""
   fi
-  if niri msg version >/dev/null 2>&1; then
+  if [[ -n $niri_events ]]; then
     holds_required "$slug" .config/niri/oruc-theme.kdl "active-color \"#$base0D\""
-    niri msg focused-output >/dev/null || fail "$slug: niri msg focused-output exited $?"
+    niri validate -c /etc/niri/config.kdl >/dev/null 2>&1 || fail "$slug: niri validate rejects /etc/niri/config.kdl"
+    for _ in $(seq 50); do
+      [[ $(grep -c '"ConfigLoaded"' "$niri_events") -ge 2 ]] && break
+      sleep 0.2
+    done
+    tail -n 1 < <(grep '"ConfigLoaded"' "$niri_events") | grep -qF '"failed":false' ||
+      fail "$slug: niri did not load the new colours"
+    kill "$niri_stream"
+    niri_stream=
+    niri_events=
+  else
+    holds "$slug" .config/niri/oruc-theme.kdl "active-color \"#$base0D\""
   fi
 }
 
@@ -382,6 +397,15 @@ for slug in "$@"; do
   if plasma_session "$slug"; then
     plasma_before=$(kdeglobal kdeglobals General ColorScheme)
     icons_before=$(kdeglobal kdeglobals Icons Theme)
+  fi
+  if niri msg version >/dev/null 2>&1; then
+    niri_events=$scratch/niri-events-$slug
+    niri msg --json event-stream >"$niri_events" &
+    niri_stream=$!
+    for _ in $(seq 25); do
+      grep -q '"ConfigLoaded"' "$niri_events" && break
+      sleep 0.2
+    done
   fi
   theme "$slug" >/dev/null || fail "theme $slug exited $?"
   points_at "$slug" "theme $slug"

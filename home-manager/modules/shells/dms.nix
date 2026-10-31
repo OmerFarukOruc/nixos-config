@@ -2,6 +2,7 @@
   config,
   lib,
   osConfig,
+  pkgs,
   inputs,
   sessions,
   ...
@@ -9,7 +10,18 @@
 let
   inherit (config.oruc.theme) wallpaper;
   themeFile = ".config/dms/oruc-theme.json";
-  polarity = "${config.oruc.themeState}/theme/current/.oruc/polarity";
+  dms = lib.getExe config.programs.dank-material-shell.package;
+  applyScheme = pkgs.writeShellApplication {
+    name = "oruc-dms-scheme";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = ''
+      for _ in $(seq 40); do
+        ${dms} ipc call theme getMode >/dev/null 2>&1 && break
+        sleep 0.5
+      done
+      ${dms} ipc call theme "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+    '';
+  };
 
   dmsMode =
     { scheme, ... }:
@@ -51,9 +63,10 @@ in
         light = dmsMode args;
       };
     oruc.themeCopies = [ themeFile ];
+    systemd.user.services.dms.Service.ExecStartPost = [ "-${lib.getExe applyScheme}" ];
     oruc.variantReloads.dms = ''
       systemctl --user is-active -q dms.service || exit 0
-      ${lib.getExe config.programs.dank-material-shell.package} ipc call theme "$(<${lib.escapeShellArg polarity})"
+      ${lib.getExe applyScheme}
     '';
     # dms-open hands a page or link to the DMS app picker, which runs only in
     # niri. Plasma once picked it for an HTML file, and the open failed.

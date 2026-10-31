@@ -843,9 +843,9 @@ Mission Center, the cursor, the icons and the Glass glow change at once
 Electron app such as Discord; start it again. GTK 3 apps and Kate's editor
 colors change at their next start. On nixos-latitude, which has no Plasma, the
 GTK colors and the KDE colors and icon theme in `~/.config/kdeglobals` follow
-the scheme at each app's next start. The cursor keeps the record's, and the GTK
-icons and GTK theme name follow only the record's scheme and the schemes in
-`theme.schemes`.
+the scheme at each app's next start. niri's cursor follows the scheme's dark or
+light variant, while the GTK cursor, the GTK icons and the GTK theme name
+follow only the record's scheme and the schemes in `theme.schemes`.
 
 The other apps that follow the scheme take it from a Home Manager variant, so
 they follow only the record's scheme and the schemes in `theme.schemes`

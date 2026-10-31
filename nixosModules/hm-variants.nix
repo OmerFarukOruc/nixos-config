@@ -187,8 +187,8 @@ let
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout and mpv at their next start, and the Plasma splash at
       the next login.
-      --reapply points the colour files at the stored scheme again and activates the
-      stored Plasma look. The Home Manager service runs it after it activates the
+      --reapply points the colour files at the stored scheme again, activates the
+      stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
       default ones.
       The login screen, the boot menu and the console keep the scheme of the
       machine record.'';
@@ -201,8 +201,10 @@ let
           hold_switch_lock
           "$pointer"
           look=$(stored_look) row=$(row_scheme "$(stored_scheme)")
-          [[ $look == "$default_look" && $row == "$default_scheme" ]] && exit 0
-          activate "$look" "$row"
+          if [[ $look != "$default_look" || $row != "$default_scheme" ]]; then
+            activate "$look" "$row"
+          fi
+          session_env
           reload
           ;;
         *)
