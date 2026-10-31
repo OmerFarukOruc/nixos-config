@@ -54,7 +54,6 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Discord and Brave as its fallback, on nixos-desktop and nixos-rog |
 | Per-app route abroad | IPTVnator through a network namespace whose Tailscale node exits at devbox, on nixos-desktop and nixos-rog ([Apps through devbox](docs/nixos-rog.md#apps-through-devbox)) |
-| IPTV | tuliprox on devbox serves the Xtream subscription to tailnet devices ([IPTV](docs/devbox.md#iptv)) |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
 | Binary cache | `cache.lantian.pub` for the kernel and `cache.numtide.com` |
 
@@ -213,7 +212,7 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [nixos-rog](docs/nixos-rog.md) | the updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
-| [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, IPTV, streamed desktop, and its tests in a VM |
+| [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |

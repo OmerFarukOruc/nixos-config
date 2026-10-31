@@ -11,7 +11,6 @@
 - [Containers](#containers)
 - [Agent runtime](#agent-runtime)
 - [CLIProxyAPI](#cliproxyapi)
-- [IPTV](#iptv)
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
@@ -74,19 +73,19 @@ drops ping.
 
 ## Install
 
-sops-nix decrypts `secrets/devbox.yaml`, `secrets/devbox-acme.yaml`,
-`secrets/devbox-services.yaml`, `secrets/devbox-cliproxy.yaml` and
-`secrets/devbox-iptv.yaml` while the system activates, with the age key of
-`/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in place. The
-network file and both password hashes come from the first file, the Cloudflare
-token for the certificates from the second, OpenChamber's passwords and the
-herdr web UI's token from the third (`machines/devbox/services.nix`),
-CLIProxyAPI's keys from the fourth, and the IPTV logins from the fifth
-(`machines/devbox/iptv.nix`).
+sops-nix decrypts `secrets/devbox.yaml`,
+`secrets/devbox-acme.yaml`,
+`secrets/devbox-services.yaml` and
+`secrets/devbox-cliproxy.yaml` while the system activates, with the
+age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
+place, because the network file and both password hashes come from the first
+file, the Cloudflare token for the certificates from the second, the deploy
+unit's GitHub token from the third, and OpenChamber's passwords and the
+herdr web UI's token from the fourth, and CLIProxyAPI's keys from the fifth
+(`machines/devbox/services.nix`).
 An install that makes new host keys boots with no address, no password, no
-certificates and none of the service, CLIProxyAPI or IPTV secrets. Install the
-Debian box's own key before the first boot, for example with
-`nixos-anywhere --copy-host-keys`, and check that
+certificates and no deploy token. Install the Debian box's own key before the first boot, for example
+with `nixos-anywhere --copy-host-keys`, and check that
 `ssh-to-age < ssh_host_ed25519_key.pub` prints the `devbox` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
 `programs.ssh.knownHosts`; adding this one there changes every host's system, so
@@ -432,38 +431,6 @@ before its config exists.
   127.0.0.1 of the box (8085, 1455, 54545, 51121 or 11451, by provider).
   Forward that port from a workstation before the login, for example
   `ssh -N -L 1455:127.0.0.1:1455 omer@devbox`.
-
-## IPTV
-
-`tuliprox.service` (`machines/devbox/iptv.nix`) serves Omer's Xtream IPTV
-subscription again as an Xtream server on port 8901. The provider refuses
-Turkish addresses, so a phone or TV in Turkey that runs the Tailscale app
-watches through devbox's German address. The firewall opens no port on the public interface and trusts tailscale0, so the
-server answers only on the tailnet ([Access](#access)).
-
-- A player adds an Xtream playlist with server `http://devbox:8901`, user
-  `omer` and the client password. The device needs MagicDNS, because tuliprox
-  names `devbox` in every stream URL it hands out.
-- `secrets/devbox-iptv.yaml` holds the provider's URL, username and password,
-  and the client password. sops-nix renders them into an environment file that
-  tuliprox reads as `${env:...}` in its config. After a password changes, edit
-  the file with `sops` and deploy; sops-nix then restarts `tuliprox.service`.
-  tuliprox pastes each value into a double-quoted YAML string, so a value may
-  not hold `\` or `"`, and the unit refuses to start when one does.
-- Every stream goes through tuliprox (`proxy = "reverse"`), which sends the
-  provider a Lavf user agent, so a player that sends VLC's, which the provider
-  refuses, still plays.
-- The subscription allows one provider stream at a time, and a second one ends
-  the first, so the input sets `max_connections = 1` and the grace period that
-  allows one extra stream is 0. While one device plays, a second device gets
-  tuliprox's "connections exhausted" clip, on any channel, and the first keeps
-  playing. `share_live_streams` stays off, because with it on, a second device
-  on another channel made the first device's stream stall for about 10 seconds
-  at a time.
-- tuliprox fetches the channel lists at start, after `network-online.target`,
-  and at 05:00 and 17:00 Istanbul time. Its web UI is off.
-- `overlays/tuliprox.nix` builds 3.2.0 without `wasm-opt`, which fails on its
-  web UI module with binaryen 133.
 
 ## Streamed desktop
 
