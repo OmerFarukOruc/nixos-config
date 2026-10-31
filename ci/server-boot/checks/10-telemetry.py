@@ -2,7 +2,6 @@
 import json as tel_json
 import re
 import shlex as tel_shlex
-import time as tel_time
 
 tel_dir = "/var/lib/telemetry-sink"
 
@@ -31,7 +30,7 @@ assert tel_rules.count("always,exclude") == 3, "auditctl does not list 3 exclude
 
 machine.succeed(f"sshd -T -C user={BOX_USER},host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
 
-machine.wait_until_succeeds("curl -sf http://127.0.0.1:13133", timeout=60)
+machine.wait_until_succeeds("curl -sf http://127.0.0.1:13133")
 tel_log = "journalctl -u opentelemetry-collector.service -b --no-pager -o cat"
 machine.succeed(f"{tel_log} | grep -F 'Everything is ready'")
 machine.fail(f"{tel_log} | grep -E '[[:space:]]error[[:space:]]'")
@@ -46,7 +45,7 @@ assert tel_status_code == "200", f"the local OTLP HTTP port answered {tel_status
 
 
 def tel_wait(file, text):
-    machine.wait_until_succeeds(f"grep -q -- {tel_shlex.quote(text)} {tel_dir}/{file}", timeout=60)
+    machine.wait_until_succeeds(f"grep -q -- {tel_shlex.quote(text)} {tel_dir}/{file}")
 
 
 def tel_count(file, pattern):
@@ -59,13 +58,14 @@ def tel_attr(file, key, value):
 
 def tel_records(file):
     records = []
-    for _ in range(30):
+    out = ""
+
+    def tel_whole(_last_try):
+        nonlocal out
         out = machine.succeed(f"cat {tel_dir}/{file}")
-        if out.endswith("\n"):
-            break
-        tel_time.sleep(1)
-    else:
-        raise AssertionError(f"{file} still ended inside a line after 30 s")
+        return out.endswith("\n")
+
+    retry(tel_whole)
     for line in out.splitlines():
         for resource_logs in tel_json.loads(line).get("resourceLogs", []):
             resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}

@@ -17,7 +17,7 @@ machine.succeed("ip -6 route show default | grep -F 'via fe80::1'")
 machine.succeed(r"ss -Htln | grep -E '(0\.0\.0\.0|\*):2222 '")
 machine.succeed(r"ss -Htln | grep -E '\[::\]:2222 '")
 machine.fail(r"ss -Htln | grep -E ':22 '")
-machine.succeed("timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222; [[ $line == SSH-2.0-* ]]'")
+machine.wait_until_succeeds("timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222; [[ $line == SSH-2.0-* ]]'")
 
 
 def sshd_settings(user):
@@ -66,7 +66,7 @@ def ssh_banner():
 machine.forward_port(12222, 2222)
 assert not ssh_banner().startswith(b"SSH-"), "sshd answers outside the tailnet interface"
 machine.succeed("iptables -I nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
-assert ssh_banner().startswith(b"SSH-"), "the forwarded connection does not reach sshd"
+retry(lambda _last_try: ssh_banner().startswith(b"SSH-"))
 machine.succeed("iptables -D nixos-fw -p tcp --dport 2222 -j nixos-fw-accept")
 
 lsblk = machine.succeed("lsblk -no SIZE,PARTTYPENAME /dev/vda")

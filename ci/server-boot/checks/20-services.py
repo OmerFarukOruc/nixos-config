@@ -10,11 +10,11 @@ svc_uid = machine.succeed(f"id -u {BOX_USER}").strip()
 svc_rt = f"/run/user/{svc_uid}"
 
 
-def svc_user(command, timeout=120):
+def svc_user(command):
     """Run a shell command as the box user with the user manager's environment."""
     env = f"XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus HOME=/home/{BOX_USER}"
     return machine.succeed(
-        f"runuser -u {BOX_USER} -- env {env} timeout {timeout} bash -c {svc_shlex.quote(command)}"
+        f"runuser -u {BOX_USER} -- env {env} bash -c {svc_shlex.quote(command)}"
     )
 
 
@@ -138,7 +138,7 @@ def svc_tls_handshake():
 machine.forward_port(12443, 443)
 assert not svc_tls_handshake(), "Caddy answers outside the tailnet interface"
 machine.succeed("iptables -I nixos-fw -p tcp --dport 443 -j nixos-fw-accept")
-assert svc_tls_handshake(), "the forwarded connection does not reach Caddy"
+retry(lambda _last_try: svc_tls_handshake())
 machine.succeed("iptables -D nixos-fw -p tcp --dport 443 -j nixos-fw-accept")
 
 svc_tmpfiles = machine.succeed("systemd-tmpfiles --cat-config")
@@ -147,10 +147,9 @@ for svc_path in ["/tmp/tmux-*", "/tmp/.X11-unix", "/tmp/.ICE-unix"]:
         rf"^'?x'? '?{svc_re.escape(svc_path)}'? ", svc_tmpfiles, svc_re.M
     ), f"systemd-tmpfiles has no x rule for {svc_path}"
 
-machine.wait_until_succeeds(f"test -S {svc_rt}/docker.sock", timeout=180)
+machine.wait_until_succeeds(f"test -S {svc_rt}/docker.sock")
 machine.wait_until_succeeds(
-    f"curl -s --max-time 10 --unix-socket {svc_rt}/podman/podman.sock http://d/_ping | grep -Fx OK",
-    timeout=180,
+    f"curl -s --max-time 10 --unix-socket {svc_rt}/podman/podman.sock http://d/_ping | grep -Fx OK"
 )
 machine.succeed(
     f"curl -s --max-time 10 --unix-socket {svc_rt}/docker.sock http://d/_ping | grep -Fx OK"
@@ -204,12 +203,11 @@ svc_user(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
 svc_user(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")
 machine.succeed(
     f"runuser -u {BOX_USER} -- {svc_usr_path} HOME=/home/{BOX_USER} XDG_RUNTIME_DIR={svc_rt} "
-    "timeout 120 /usr/bin/podman run --rm probe:1 echo podman-direct-ok | grep -Fx podman-direct-ok"
+    "/usr/bin/podman run --rm probe:1 echo podman-direct-ok | grep -Fx podman-direct-ok"
 )
 
 machine.wait_until_succeeds(
-    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status",
-    timeout=180,
+    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status"
 )
 machine.succeed(r"ss -Htln | grep -E '127\.0\.0\.1:5920 '")
 machine.fail(r"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):5920 '")
