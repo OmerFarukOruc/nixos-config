@@ -32,15 +32,7 @@ let
     default_look=${
       lib.escapeShellArg (if variants.defaultLook == null then "" else variants.defaultLook)
     }
-    default_scheme=${lib.escapeShellArg cfg.theme.scheme}
     looks=(${lib.escapeShellArgs variants.looks})
-    variant_rows=${
-      lib.escapeShellArg (
-        lib.concatMapStrings (
-          row: "${if row.generation then "1" else "0"}|${row.name}|${row.look}\n"
-        ) variants.rows
-      )
-    }
 
     stored() {
       local file=$1 default=$2 known=$3 choice
@@ -63,20 +55,14 @@ let
       flock 8
     }
     variant_dir() {
-      local want_look=$1 gen name look
-      while IFS='|' read -r gen name look; do
-        [[ -n $look ]] || continue
-        if [[ $look == "$want_look" ]]; then
-          if [[ $gen == 1 ]]; then
-            printf '%s\n' "$base"
-          else
-            printf '%s\n' "$base/specialisation/$name"
-          fi
-          return 0
-        fi
-      done <<<"$variant_rows"
-      echo "no variant for look '$want_look'" >&2
-      return 1
+      if ! is_look "$1"; then
+        echo "no variant for look '$1'" >&2
+        return 1
+      elif [[ $1 == "$default_look" ]]; then
+        printf '%s\n' "$base"
+      else
+        printf '%s\n' "$base/specialisation/$1"
+      fi
     }
 
     # The session's display and bus, as Home Manager's own service imports
@@ -186,7 +172,7 @@ let
       machine record.'';
     text = ''
       case ''${1:-} in
-        "") echo "active: $(stored_scheme) (default: $default_scheme)" ;;
+        "") echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})" ;;
         --list) "$pointer" --list ;;
         -h | --help) usage ;;
         --reapply)

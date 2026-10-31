@@ -170,9 +170,10 @@ NixOS and Home Manager each import that module with their own scheme:
 - NixOS (`nixosModules/theme.nix`) uses `theme.scheme` from the machine record.
   The login screen, the boot menu and the console read it, and so does niri
   until a Home Manager activation writes its colour file (below).
-- Home Manager (`home-manager/modules/scheme.nix`) uses `oruc.scheme`, which
-  starts as `theme.scheme`. Every app that Home Manager configures reads
-  `config.scheme` and `config.oruc.theme`, never the NixOS values.
+- Home Manager (`home-manager/modules/scheme.nix`) uses `theme.scheme` too, so
+  its `config.scheme` and `config.oruc.theme` hold the record scheme. Only the
+  pack renderers below follow `theme`; a file that a module builds from
+  `config.scheme` directly keeps the record scheme.
 
 The wallpaper is the file in `assets/wallpapers` named after the scheme. A scheme
 without one gets `assets/wallpapers/default.png` recolored to the scheme's 16
@@ -228,9 +229,9 @@ as `.oruc/source.yaml`. Each such file in `$HOME` links to
 `pack/<scheme>`. `theme/pack` links to the generation's pack and is a GC root.
 `oruc-theme-pointer` owns these links and holds `theme/lock` while it changes
 them. `theme` and `plasma-look` hold `switch.lock` for a whole switch, so two
-runs cannot leave the active variant and the stored scheme apart, and they
-refuse to activate a variant once a deploy replaced the system they came
-from. Each Home Manager activation roots its own pack, so a rollback brings
+runs cannot leave the stored look, the activated look and the reloads apart.
+`plasma-look` and `theme --reapply` refuse to activate a look once a deploy
+replaced the system they came from. Each Home Manager activation roots its own pack, so a rollback brings
 the old pack back, and points `current` at the stored scheme
 (`~/.local/state/oruc/scheme`), or at the record scheme when the pack lacks
 it. `theme <scheme>` replaces the stored scheme through a rename, which is the
@@ -380,8 +381,8 @@ holds `theme-drift-ok: <reason>` passes. A file listed in
 the check fails when an entry matches no tracked file, so the list cannot go
 stale. It does not read Markdown, lock files or `assets/`. It cannot see a hex string without `#`, a decimal triple, a color name
 or a default inside a package, so a new package or module whose UI has colors
-takes them from `config.scheme` or `oruc.theme.ansi`, or lands in the list
-below with its reason.
+writes them from an `oruc.themeFiles` renderer, or lands in the list below
+with its reason.
 
 These stay fixed on purpose, and the check does not cover them:
 
@@ -414,6 +415,9 @@ These stay fixed on purpose, and the check does not cover them:
   color are managed-only policies, and Brave Sync carries them, so they stay in
   the profile.
 - Grok and Codex themes live outside this repository.
+- waybar, mako, fuzzel, walker and anyrun follow only the machine record's
+  scheme, because they build their colors from `config.scheme` and no host
+  selects them.
 
 ## Secrets
 

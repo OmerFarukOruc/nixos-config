@@ -15,15 +15,10 @@ in
     description = "Commands, by app name, that theme and plasma-look run after a switch so running apps load the new colours. Each exits non-zero when its reload failed.";
   };
 
-  config.specialisation = lib.listToAttrs (
-    map (
-      variant:
-      lib.nameValuePair variant.name {
-        configuration.oruc = {
-          themePack = lib.mkForce config.oruc.themePack;
-          plasma.look = variant.look;
-        };
-      }
-    ) variants.specialisations
-  );
+  config.specialisation = lib.genAttrs variants.specialisations (look: {
+    configuration.oruc = {
+      themePack = lib.mkForce config.oruc.themePack;
+      plasma.look = look;
+    };
+  });
 }

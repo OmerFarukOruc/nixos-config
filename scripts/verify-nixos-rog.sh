@@ -169,13 +169,13 @@ remote_checks() {
 
 widget_icon_tsv=
 widget_icon_ok=0
-icon_plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
+plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
-[[ $icon_plasma_look =~ ^[a-z0-9]+$ ]] || icon_plasma_look=none
-icon_panels=/etc/oruc/verify-plasma-panels/$icon_plasma_look.json
+[[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
+panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
 mkdir -p "$work/widget-defaults"
-# shellcheck disable=SC2029 # icon_panels holds only a fixed path and a checked look name
-if ssh "${ssh_opts[@]}" "$host" cat "$icon_panels" >"$work/icons-panels.json" 2>/dev/null &&
+# shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
+if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/icons-panels.json" 2>/dev/null &&
   ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
 set -euo pipefail
 out=$(mktemp -d)
@@ -218,11 +218,6 @@ case $status in
   66) record verify-facts fail "/etc/oruc/verify-facts is missing on $host or lacks a fact the checks need; deploy a system that writes it" ;;
   *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
 esac
-
-plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
-  'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
-[[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
-panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
 
 build=$(
   # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name

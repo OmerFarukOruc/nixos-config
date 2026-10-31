@@ -204,7 +204,6 @@ in
           package = pkgs.adw-gtk3;
         };
         iconTheme.name = theme.icons;
-        colorScheme = if theme.isLight then "light" else "dark";
         gtk2.configLocation = "${config.xdg.configHome}/gtk-2.0/gtkrc";
         gtk3.extraCss = gtkImport "gtk-3.0";
         gtk4.extraCss = gtkImport "gtk-4.0";

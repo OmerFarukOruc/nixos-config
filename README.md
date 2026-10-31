@@ -73,10 +73,10 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   switches the Base16 scheme and `plasma-look klassy` switches the Plasma look
   at run time. `theme` takes any of the 362 schemes from a theme pack that each
   deploy builds, and every look other than the default is a Home Manager
-  specialisation of the same generation; both choices stay across deploys. The login screen, boot menu and console keep the machine's
-  default scheme. A look sets the
-  Plasma style, window decoration, Qt style and KWin effects that belong
-  together; Glass and Klassy are the two looks.
+  specialisation of the same generation; both choices stay across deploys.
+  The login screen, boot menu and console keep the machine's default scheme.
+  A look sets the Plasma style, window decoration, Qt style and KWin effects
+  that belong together; Glass and Klassy are the two looks.
   [`machines/variants.nix`](machines/variants.nix),
   [`nixosModules/hm-variants.nix`](nixosModules/hm-variants.nix),
   [`home-manager/modules/plasma-looks/`](home-manager/modules/plasma-looks)

@@ -9,15 +9,10 @@ let
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.${cfg.user};
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
-  lookConfigs = lib.listToAttrs (
-    map (
-      row:
-      lib.nameValuePair row.look (
-        if row.generation then hm else hm.specialisation.${row.name}.configuration
-      )
-    ) variants.rows
+  lookConfigs = lib.genAttrs looks (
+    look: if look == variants.defaultLook then hm else hm.specialisation.${look}.configuration
   );
-  looks = lib.attrNames lookConfigs;
+  inherit (variants) looks;
 
   pluginSwitches =
     look: lib.attrNames (lookConfigs.${look}.programs.plasma.configFile.kwinrc.Plugins or { });

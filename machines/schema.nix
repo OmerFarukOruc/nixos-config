@@ -99,7 +99,7 @@ let
     theme.scheme = mkOption {
       type = types.enum schemeNames;
       default = "gruvbox-dark-medium";
-      description = "Base16 scheme selected by this machine, named as in the pinned schemes input or assets/schemes. The login screen, the boot menu and the console always use it, and Home Manager's apps use it until `theme` selects another one.";
+      description = "Base16 scheme selected by this machine, named as in the pinned schemes input or assets/schemes. The login screen, the boot menu, the console and the apps that build their colours from `config.scheme` always use it; the theme pack's files use it until `theme` selects another one.";
     };
 
     theme.plasmaLook = mkOption {
