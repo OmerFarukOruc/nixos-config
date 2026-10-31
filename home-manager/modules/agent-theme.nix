@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -94,30 +93,36 @@ let
     in
     if named != null then named.id else nearest.id;
 
-  codexFact =
+  codexSettings =
     { scheme, theme }:
+    let
+      side = lib.toSentenceCase theme.polarity;
+    in
     builtins.toJSON {
-      inherit (theme) polarity;
-      codeTheme = codeTheme { inherit scheme theme; };
-      chrome = {
-        accent = hex scheme.base0D;
-        surface = hex scheme.base00;
-        ink = hex (
-          contrast.mostReadable scheme.base00 [
-            scheme.base05
-            scheme.base06
-            scheme.base07
-            "000000"
-            "ffffff"
-          ]
-        );
-        accentSource = "custom";
-        contrast = 100;
-        opaqueWindows = true;
-        semanticColors = {
-          diffAdded = hex scheme.base0B;
-          diffRemoved = hex scheme.base08;
-          skill = hex scheme.base0E;
+      tui.theme = "oruc";
+      desktop = {
+        "appearance${side}CodeThemeId" = codeTheme { inherit scheme theme; };
+        "appearance${side}ChromeTheme" = {
+          accent = hex scheme.base0D;
+          surface = hex scheme.base00;
+          ink = hex (
+            contrast.mostReadable scheme.base00 [
+              scheme.base05
+              scheme.base06
+              scheme.base07
+              "000000"
+              "ffffff"
+            ]
+          );
+          accentSource = "custom";
+          contrast = 100;
+          opaqueWindows = true;
+          fonts = { };
+          semanticColors = {
+            diffAdded = hex scheme.base0B;
+            diffRemoved = hex scheme.base08;
+            skill = hex scheme.base0E;
+          };
         };
       };
     };
@@ -383,36 +388,7 @@ let
       };
     };
 
-  settings = pkgs.writeText "oruc-agent-theme.json" (
-    builtins.toJSON {
-      current = builtins.dirOf config.oruc.themeFactsDir;
-      codex = {
-        name = "Codex or the ChatGPT app";
-        config = "${home}/.codex/config.toml";
-        executables = [
-          "/nix/store/[a-z0-9]{32}-codex-[^/]+/libexec/codex/bin/codex"
-          "/nix/store/[a-z0-9]{32}-chatgpt-[^/]+/lib/chatgpt/ChatGPT"
-        ];
-        servers = [ "app-server" ];
-      };
-      opencode = {
-        name = "opencode";
-        config = "${config.xdg.configHome}/opencode/cli.json";
-        executables = [ ''/nix/store/[a-z0-9]{32}-opencode[^/]*/bin/\.opencode[^/]*-wrapped'' ];
-        servers = [ "serve" ];
-      };
-      pi = {
-        name = "pi";
-        config = "${home}/.pi/agent/settings.json";
-        executables = [ "/nix/store/[a-z0-9]{32}-pi-[^/]+/libexec/pi/pi" ];
-        servers = [ ];
-      };
-    }
-  );
-  agentTheme = pkgs.writers.writePython3 "oruc-agent-theme" {
-    libraries = [ (pkgs.callPackage ./settings-file.nix { }) ];
-  } (builtins.readFile ./agent-theme.py);
-  reload = app: "${agentTheme} ${settings} ${app}";
+  storeExe = name: path: "/nix/store/[a-z0-9]{32}-${name}-[^/]+/${path}";
 
   gumAccent = "4";
   gumHeader = "5";
@@ -428,10 +404,66 @@ in
         ".config/opencode/themes/oruc.json" = opencodeTheme;
       };
       oruc.themeCopies = [ ".codex/themes/oruc.tmTheme" ];
-      oruc.themeFacts.codex = codexFact;
-      oruc.variantReloads = {
-        codex = reload "codex";
-        opencode = reload "opencode";
+      oruc.themeFacts.codex-settings = codexSettings;
+      oruc.appSettings = {
+        codex = {
+          label = "Codex or the ChatGPT app";
+          executables = [
+            (storeExe "codex" "libexec/codex/bin/codex")
+            (storeExe "chatgpt" "lib/chatgpt/ChatGPT")
+          ];
+          servers = [ "app-server" ];
+          files = [
+            {
+              path = "${home}/.codex/config.toml";
+              format = "toml";
+              fact = "codex-settings";
+            }
+          ];
+        };
+        opencode = {
+          label = "opencode";
+          executables = [ (storeExe "opencode[^/]*" ''bin/\.opencode[^/]*-wrapped'') ];
+          servers = [ "serve" ];
+          terminalSignal = {
+            name = "SIGUSR2";
+            subcommands = [
+              "acp"
+              "api"
+              "auth"
+              "debug"
+              "mcp"
+              "mini"
+              "models"
+              "pair"
+              "plugin"
+              "reload"
+              "run"
+              "serve"
+              "service"
+              "session"
+              "stats"
+              "uninstall"
+              "update"
+              "upgrade"
+            ];
+            valueFlags = [
+              "--completions"
+              "--log-level"
+              "--prompt"
+              "--server"
+              "--session"
+              "-s"
+            ];
+          };
+          files = [
+            {
+              path = "${config.xdg.configHome}/opencode/cli.json";
+              format = "json";
+              values.theme.name = "oruc";
+            }
+          ];
+        };
       };
 
       home.sessionVariables = {
@@ -475,7 +507,17 @@ in
     (lib.mkIf config.oruc.piTheme {
       oruc.themeFiles.".pi/agent/themes/oruc.json" = piTheme;
       oruc.themeCopies = [ ".pi/agent/themes/oruc.json" ];
-      oruc.variantReloads.pi = reload "pi";
+      oruc.appSettings.pi = {
+        label = "pi";
+        executables = [ (storeExe "pi" "libexec/pi/pi") ];
+        files = [
+          {
+            path = "${home}/.pi/agent/settings.json";
+            format = "json";
+            values.theme = "oruc";
+          }
+        ];
+      };
     })
   ];
 }

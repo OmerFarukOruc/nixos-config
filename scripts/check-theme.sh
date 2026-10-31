@@ -24,9 +24,9 @@ the pack is a GC root. It prints a skip line for each scheme whose Plasma
 checks cannot run.
 
 For Noctalia, DMS, rofi, vicinae, niri, wlogout, mpv and the Plasma splash it
-checks that each file holds the scheme's colour; for mpv's OSD colours it asks
-mpv itself to read the file. While Noctalia or DMS runs,
-it also checks that the shell shows the custom palette in the scheme's dark or
+checks that each file holds the scheme's colour; for mpv's OSD and subtitle
+colours it asks mpv itself to read the file. While Noctalia or DMS runs, it
+also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
@@ -54,11 +54,14 @@ each text colour the VS Code theme draws on an accent background reaches
 and side bar backgrounds, and that the Claude Code status line's segment
 colours are the scheme's and their text reaches 4.5:1 on them.
 
-For Codex, opencode and pi it checks that their theme files hold the
-scheme's base00, and that ~/.codex/config.toml, opencode's cli.json and pi's
-settings.json select the oruc theme, with Codex's chrome in the scheme's
-accent and background; while one of them runs, `theme` leaves its settings
-alone and prints a line that this script turns into a skip line.
+For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS and
+the Cursor editor it checks that their theme files hold the scheme's base00,
+and that the Cursor editor's settings.json selects the Oruc Base16 theme of
+the scheme's dark or light variant. `oruc-app-settings --check` then checks
+that every settings file the switch sets, such as ~/.codex/config.toml or
+jadx's gui.json, holds the scheme's values; while an app that writes its own
+settings runs, the switch leaves them alone, and the script prints a skip
+line for it.
 
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.
@@ -132,14 +135,16 @@ holds() {
   grep -qiF -- "$text" "$HOME/$key" || fail "$slug: ~/$key does not hold $text"
 }
 
-mpv_reads_osd_color() {
+mpv_reads_colors() {
   local slug=$1 colour=$2 key=.config/mpv/oruc-colors.conf
   [[ -e $pack/$slug/$key ]] || return 0
   local log
   log=$(mpv --no-config --include="$HOME/$key" --msg-level=cplayer=v --idle=no 2>&1) ||
     fail "$slug: mpv exited $? with ~/$key"
-  grep -qiF "Setting option 'osd-color' = '#$colour'" <<<"$log" ||
-    fail "$slug: mpv does not read osd-color #$colour from ~/$key"
+  for option in osd-color sub-color; do
+    grep -qiF "Setting option '$option' = '#$colour'" <<<"$log" ||
+      fail "$slug: mpv does not read $option #$colour from ~/$key"
+  done
 }
 
 holds_required() {
@@ -379,37 +384,28 @@ selects() {
   fi
 }
 
-codex_selects() {
-  python3 -I - "$HOME/.codex/config.toml" "$pack/$1/.oruc/codex" <<'PYTHON'
-import json
-import sys
-import tomllib
-
-with open(sys.argv[1], "rb") as f:
-    config = tomllib.load(f)
-with open(sys.argv[2]) as f:
-    fact = json.load(f)
-side = "Dark" if fact["polarity"] == "dark" else "Light"
-desktop = config.get("desktop", {})
-chrome = desktop.get(f"appearance{side}ChromeTheme", {})
-sys.exit(
-    config.get("tui", {}).get("theme") != "oruc"
-    or {key: chrome.get(key) for key in fact["chrome"]} != fact["chrome"]
-    or desktop.get(f"appearance{side}CodeThemeId") != fact["codeTheme"]
-)
-PYTHON
-}
-
-check_agents() {
-  local slug=$1 err=$2
+check_app_settings() {
+  local slug=$1 err=$2 polarity side line
+  polarity=$(<"$pack/$slug/.oruc/polarity")
+  side=${polarity^}
   holds_required "$slug" .codex/themes/oruc.tmTheme "<string>#$base00</string>"
   holds_required "$slug" .config/opencode/themes/oruc.json "\"background\":\"#$base00\""
-  selects "$slug" "Codex or the ChatGPT app" "$err" codex_selects "$slug"
-  selects "$slug" opencode "$err" test "$(jq -r .theme.name "$HOME/.config/opencode/cli.json")" = oruc
-  if [[ -e $pack/$slug/.pi/agent/themes/oruc.json ]]; then
-    holds "$slug" .pi/agent/themes/oruc.json "\"pageBg\":\"#$base00\""
-    selects "$slug" pi "$err" test "$(jq -r .theme "$HOME/.pi/agent/settings.json")" = oruc
-  fi
+  holds "$slug" .pi/agent/themes/oruc.json "\"pageBg\":\"#$base00\""
+  holds "$slug" .local/share/konsole/OrucBase16.colorscheme "Color=$(decimal "$base00")"
+  holds "$slug" .config/oruc/thunderbird.css "--layout-background-0: #$base00"
+  holds "$slug" .config/oruc/obsidian.css "--background-primary: #$base00"
+  holds "$slug" .config/oruc/sourcegit-theme.json "\"Window\":\"#FF${base00^^}\""
+  holds "$slug" ".config/obs-studio/themes/Oruc$side.ovt" "--grey7: #$base00"
+  holds "$slug" .config/oruc/cursor-colors.json "\"Oruc Base16 $side\""
+  [[ ! -e $pack/$slug/.config/oruc/cursor-colors.json ]] ||
+    [[ $(jq -r '.["workbench.colorTheme"]' "${XDG_CONFIG_HOME:-$HOME/.config}/Cursor/User/settings.json") == "Oruc Base16 $side" ]] ||
+    fail "$slug: the Cursor editor's settings.json does not select Oruc Base16 $side"
+  command -v oruc-app-settings >/dev/null || return 0
+  selects "$slug" "Codex or the ChatGPT app" "$err" grep -qx 'theme = "oruc"' "$HOME/.codex/config.toml"
+  oruc-app-settings --check >"$scratch/apps-$slug" || fail "$slug: oruc-app-settings --check found a file the switch left unset"
+  while IFS= read -r line; do
+    [[ $line != skip* ]] || echo "skip $slug: ${line#skip }"
+  done <"$scratch/apps-$slug"
 }
 
 check_plasma() {
@@ -583,7 +579,7 @@ check_session() {
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "variant = \"$polarity\""
   holds "$slug" .config/wlogout/style.css "border-color: #$base0D;"
   holds "$slug" .config/mpv/script-opts/modernz.conf "seekbarfg_color=#$base0D"
-  mpv_reads_osd_color "$slug" "$base05"
+  mpv_reads_colors "$slug" "$base05"
   holds "$slug" .local/share/plasma/look-and-feel/oruc.splash/contents/splash/Splash.qml "color: \"#$base00\""
   if systemctl --user is-active -q noctalia.service; then
     holds_required "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
@@ -713,7 +709,7 @@ for slug in "$@"; do
   [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
-  check_agents "$slug" "$theme_err"
+  check_app_settings "$slug" "$theme_err"
   check_session "$slug"
   check_system "$slug"
   check_boot_menu "$slug"

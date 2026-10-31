@@ -2,6 +2,7 @@
 {
   imports = [
     ./modules/agent-theme.nix
+    ./modules/app-settings.nix
     ./modules/appearance.nix
     ./modules/applications.nix
     ./modules/claude-code-theme.nix

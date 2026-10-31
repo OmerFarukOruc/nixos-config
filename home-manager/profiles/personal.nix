@@ -21,8 +21,11 @@ in
 {
   imports = [
     ../modules/agent-cli.nix
+    ../modules/app-themes.nix
     ../modules/playwright.nix
   ];
+
+  oruc.cursorEditor = true;
 
   # ChatGPT and Grok Bot register their URL schemes with xdg-mime at start;
   # declaring them keeps that rewrite of mimeapps.list identical to the Home

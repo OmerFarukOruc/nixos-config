@@ -156,6 +156,7 @@ let
 
   themeFile = ".config/oruc/vscode-theme.json";
   colorsFile = ".config/oruc/vscode-colors.json";
+  cursorColorsFile = ".config/oruc/cursor-colors.json";
   vibrancyFile = ".config/oruc/vscode-vibrancy.json";
   themeLabel = polarity: "Oruc Base16 ${lib.toSentenceCase polarity}";
 
@@ -430,6 +431,11 @@ let
   ];
   settingsPath = "${config.xdg.configHome}/Code/User/settings.json";
   colorsPath = "${config.home.homeDirectory}/${colorsFile}";
+  cursorEditor = config.oruc.cursorEditor;
+  cursorSettingsPath = "${config.xdg.configHome}/Cursor/User/settings.json";
+  cursorColorsPath = "${config.home.homeDirectory}/${cursorColorsFile}";
+  cursorExtensions = ".cursor/extensions";
+  applyCursorColors = "${lib.getExe codeColors} ${lib.escapeShellArg cursorSettingsPath} ${lib.escapeShellArg cursorColorsPath}";
 in
 {
   options.oruc = {
@@ -442,6 +448,7 @@ in
         stays off the other machines.
       '';
     };
+    cursorEditor = lib.mkEnableOption "the scheme's theme in the Cursor editor";
   };
 
   config = lib.mkIf (sessions.hasAnyDesktop osConfig.oruc.machine) {
@@ -502,10 +509,24 @@ in
             warnEcho "VS Code settings.json is unchanged, so the scheme's colours apply at the next switch after it parses."
         '';
 
+    home.activation.cursorColors = lib.mkIf cursorEditor (
+      lib.hm.dag.entryAfter [ "orucThemePointer" ] ''
+        run ${applyCursorColors} ||
+          warnEcho "Cursor settings.json is unchanged, so the scheme's theme applies at the next switch after it parses."
+      ''
+    );
+
+    home.file.${"${cursorExtensions}/oruc.base16-theme"} = lib.mkIf cursorEditor {
+      source = "${extension}/share/vscode/extensions/oruc.base16-theme";
+    };
+
     oruc.themeFiles = {
       ${themeFile} = renderTheme;
       ${colorsFile} = renderColors;
       ${vibrancyFile} = args: builtins.toJSON (vibrancyFor args).injectData;
+      ${cursorColorsFile} = lib.mkIf cursorEditor (
+        { theme, ... }: builtins.toJSON { "workbench.colorTheme" = themeLabel theme.polarity; }
+      );
     };
     oruc.themeCopies = [ themeFile ];
     oruc.themeFacts = {
@@ -517,6 +538,30 @@ in
     oruc.variantReloads.vscode = ''
       ${lib.getExe codeColors} ${lib.escapeShellArg settingsPath} ${lib.escapeShellArg colorsPath}
     '';
+    oruc.variantReloads.cursor-colors = lib.mkIf cursorEditor applyCursorColors;
+
+    oruc.appSettings.cursor-editor = lib.mkIf cursorEditor {
+      label = "Cursor";
+      executables = [ "/nix/store/[a-z0-9]{32}-cursor-[^/]+/lib/cursor/cursor" ];
+      files = [
+        {
+          path = "${config.home.homeDirectory}/${cursorExtensions}/extensions.json";
+          format = "json";
+          values = [
+            {
+              identifier.id = "oruc.base16-theme";
+              inherit (extension) version;
+              location = {
+                "$mid" = 1;
+                path = "${config.home.homeDirectory}/${cursorExtensions}/oruc.base16-theme";
+                scheme = "file";
+              };
+              relativeLocation = "oruc.base16-theme";
+            }
+          ];
+        }
+      ];
+    };
 
     assertions =
       let

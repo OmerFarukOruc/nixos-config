@@ -18,6 +18,78 @@ let
   };
 
   inherit (import ./audio-nodes.nix) mic;
+
+  contrast = import ../../nixosModules/contrast.nix { inherit lib; };
+  obsThemes = {
+    dark = {
+      id = "com.oruc.base16.dark";
+      extends = "com.obsproject.Yami";
+    };
+    light = {
+      id = "com.oruc.base16.light";
+      extends = "com.obsproject.Yami.Light";
+    };
+  };
+  obsFile = polarity: ".config/obs-studio/themes/Oruc${lib.toSentenceCase polarity}.ovt";
+  obsTheme =
+    polarity:
+    { scheme, ... }:
+    let
+      ramp = color: [
+        (contrast.mixHex 70 color "ffffff")
+        color
+        (contrast.mixHex 80 color "000000")
+        (contrast.mixHex 62 color "000000")
+        (contrast.mixHex 45 color "000000")
+        (contrast.mixHex 30 color "000000")
+      ];
+      ramps =
+        lib.concatMapAttrs
+          (
+            name: color:
+            lib.listToAttrs (lib.imap1 (step: lib.nameValuePair "${name}${toString step}") (ramp color))
+          )
+          {
+            blue = scheme.base0D;
+            red = scheme.base08;
+            green = scheme.base0B;
+            yellow = scheme.base0A;
+            purple = scheme.base0E;
+          };
+      vars = ramps // {
+        grey8 = scheme.base00;
+        grey7 = scheme.base00;
+        grey6 = scheme.base01;
+        grey5 = contrast.mixHex 50 scheme.base01 scheme.base02;
+        grey4 = scheme.base02;
+        grey3 = contrast.mixHex 50 scheme.base02 scheme.base03;
+        grey2 = contrast.mixHex 75 scheme.base03 scheme.base02;
+        grey1 = scheme.base03;
+        white1 = scheme.base07;
+        white2 = scheme.base06;
+        white3 = scheme.base05;
+        white4 = scheme.base04;
+        white5 = scheme.base04;
+        text = scheme.base05;
+        text_light = scheme.base06;
+        text_muted = scheme.base04;
+        primary = ramps.blue3;
+        primary_light = ramps.blue2;
+        primary_dark = ramps.blue4;
+      };
+    in
+    ''
+      @OBSThemeMeta {
+          name: 'Oruc Base16 ${lib.toSentenceCase polarity}';
+          id: '${obsThemes.${polarity}.id}';
+          extends: '${obsThemes.${polarity}.extends}';
+          author: 'oruc';
+          dark: '${lib.boolToString (polarity == "dark")}';
+      }
+
+      @OBSThemeVars {
+      ${lib.concatStrings (lib.mapAttrsToList (name: color: "    --${name}: #${color};\n") vars)}}
+    '';
   micVolume = "0.25";
 
   easyeffectsSettings = pkgs.writeShellApplication {
@@ -93,6 +165,33 @@ in
       };
       pipewire-pulse."20-realtime" = rtArgs;
     };
+
+  home-manager.users.oruc = {
+    oruc.themeFiles = lib.mapAttrs' (
+      polarity: _: lib.nameValuePair (obsFile polarity) (obsTheme polarity)
+    ) obsThemes;
+    oruc.themeCopies = map obsFile (lib.attrNames obsThemes);
+    oruc.themeFacts.obs-settings =
+      { theme, ... }:
+      builtins.toJSON {
+        Appearance = {
+          Theme = obsThemes.${theme.polarity}.id;
+          AutoReload = "true";
+        };
+      };
+    oruc.appSettings.obs = {
+      label = "OBS";
+      executables = [ "/nix/store/[a-z0-9]{32}-obs-studio-[^/]+/bin/obs" ];
+      files = [
+        {
+          path = "${config.users.users.oruc.home}/.config/obs-studio/user.ini";
+          format = "ini";
+          fact = "obs-settings";
+          create = false;
+        }
+      ];
+    };
+  };
 
   programs.obs-studio = {
     enable = true;

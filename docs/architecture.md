@@ -415,18 +415,46 @@ rewrites.
 
 `home-manager/modules/agent-theme.nix` gives Codex a tmTheme
 (`~/.codex/themes/oruc.tmTheme`) and opencode and pi a theme JSON each, all
-named `oruc`. The reloads `codex`, `opencode` and `pi` run
-`agent-theme.py`, which sets `tui.theme`, the ChatGPT app's chrome and code
-theme in `~/.codex/config.toml` (from the pack's `codex` fact), opencode's
-`cli.json` and pi's `settings.json` to that theme, and sends opencode's
-terminal UI `SIGUSR2`, which makes it read its themes again. Each app writes
-that file itself, so the script leaves it alone while the app runs and prints
-`theme: <app> runs`. It finds an app by its executable's path pattern, so a
-process still running from an older store path counts too. A Codex
-`app-server` or opencode `serve` process and its children do not count,
-because such a background server writes the file only for a client.
-`settings_file.py` holds the TOML merge and the write through a temporary file
-that keeps the file's mode, for this script and herdr's.
+named `oruc`. Their `oruc.appSettings` entries set `tui.theme`, the ChatGPT
+app's chrome and code theme in `~/.codex/config.toml` (from the pack's
+`codex-settings` fact), opencode's `cli.json` and pi's `settings.json` to that
+theme, and opencode's entry sends its terminal UI `SIGUSR2`, which makes it
+read its themes again.
+
+`home-manager/modules/app-settings.nix` turns `oruc.appSettings` into one
+reload per app, each a run of `oruc-app-settings <app>`, which merges fixed
+values or a fact's JSON into the app's JSON, TOML, INI or `user.js` file, or
+copies a pack file. A path may hold `{vault}`, each vault in Obsidian's vault
+list, or `{profile}`, the default profile of a Mozilla `profiles.ini`. An app
+that writes its settings file itself would overwrite the change, so the tool
+leaves that file alone while the app runs and prints `theme: <app> runs`;
+an entry marked `live` is a file the app only reads, written at once. It finds
+an app by its executable's path pattern, or a command line pattern for one
+started by an interpreter, so a process still running from an older store
+path counts too. A Codex `app-server` or opencode `serve` process and its
+children do not count, because such a background server writes the file only
+for a client. `oruc-app-settings --check` exits 1 when a file differs from
+what the stored scheme sets. `settings_file.py` holds the TOML merge and the
+write through a temporary file that keeps the file's mode, for this tool and
+herdr's.
+
+`home-manager/modules/app-themes.nix`, which the personal profile imports,
+themes the desktop apps through the same tool. Konsole's default profile
+`Oruc` selects the pack's `OrucBase16` colour scheme. Thunderbird's default
+profile gets the pack's stylesheet as `chrome/userChrome.css` and
+`userContent.css`, with the `user.js` preference that makes it load them.
+Obsidian gets the pack's snippet `oruc-scheme.css` in each vault, enabled in
+the vault's `appearance.json`. SourceGit's `preference.json` names the pack's
+`sourcegit-theme.json` in `ThemeOverrides`, and jadx's `gui.json` takes the
+FlatLaf look of the scheme's dark or light variant; the switch creates neither
+file nor OBS's `user.ini`, so each app writes its own at its first start. The
+Cursor editor gets `vscode.nix`'s extension in `~/.cursor/extensions` and its
+`settings.json` selects `Oruc Base16 Dark` or `Light`. On nixos-rog, OBS gets
+two pack themes, `OrucDark.ovt` extending Yami and `OrucLight.ovt` extending
+Yami Light, and `user.ini` selects the one of the scheme's variant with
+`AutoReload=true`, so OBS repaints when the switch replaces the file. OBS reads
+the theme list and the `dark` flag only at start, so a switch between a dark
+and a light scheme changes its icons at its next start.
 
 The ChatGPT app only offers its built-in code themes, listed in
 `codex-code-themes.json` from its 26.1027.30824 bundle. The `codex` fact
@@ -471,7 +499,6 @@ These stay fixed on purpose, and the check does not cover them:
   orange (`#fe8019`) in Colloid's `install.sh`.
 - The Breeze desktop theme SVGs (their colors come from kdeglobals at run time)
   and the Glass Qt style.
-- mpv subtitles.
 - The print stylesheet of the Markdown viewer.
 - Spotify follows only the machine record's scheme, because Spicetify builds
   the colors into its package.

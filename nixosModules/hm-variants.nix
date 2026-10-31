@@ -167,8 +167,10 @@ let
       once, and GTK 3 apps and Kate's editor at their next start. VS Code changes its
       colours at once and its see-through window at its next start. niri's
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
-      next open, wlogout and mpv at their next start, and the Plasma splash at
-      the next login. The wallpaper changes at once in Plasma, Noctalia and DMS,
+      next open, wlogout, mpv, Konsole, Thunderbird, SourceGit and jadx at their
+      next start, the Cursor editor, Obsidian and OBS at once, and the Plasma
+      splash at the next login; while SourceGit, jadx or OBS runs, its settings
+      wait like Codex's. The wallpaper changes at once in Plasma, Noctalia and DMS,
       and outside Plasma so do the GTK theme, cursor and icons in dconf. Keyboard
       and case lights take its base09 at once. The
       console changes at once and the login screen at its next start; a light
