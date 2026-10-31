@@ -343,9 +343,8 @@ short, because the reboot takes no deploy lock; the host then boots the boot
 default, the new `main`.
 Limine counts no boot attempts, so a new kernel that does not boot leaves the
 host down until someone opens the provider's console and picks the previous
-entry from Limine's menu; nothing reports it. For devbox, an agent can open the
-console of netcup's Server Control Panel with agent-browser; no one has tried
-that path yet.
+entry from Limine's menu; nothing reports it. For devbox,
+[recovery.md](recovery.md#devbox) has that console path and when it may be used.
 
 **Who sees a failure.** devbox has no desktop, so a failed run shows no popup.
 It leaves `nixos-upgrade.service` failed, which `systemctl --failed` lists, and

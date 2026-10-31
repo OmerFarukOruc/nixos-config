@@ -9,6 +9,7 @@
 - [Out of memory](#out-of-memory)
 - [nixos-rog](#nixos-rog)
 - [nixos-desktop](#nixos-desktop)
+- [devbox](#devbox)
 
 Each host keeps the newest 5 system generations, one from each of the last 7
 days, the running one, and the booted one. `services.angrr` in
@@ -250,3 +251,56 @@ mkdir -p /mnt/nix /mnt/boot
 mount -o subvol=@nixos-nix /dev/disk/by-partlabel/nixos /mnt/nix
 mount -o umask=077 /dev/disk/by-partlabel/nixos-esp /mnt/boot
 ```
+
+## devbox
+
+devbox has no keyboard or screen we reach, so its only console is the one in
+netcup's Server Control Panel (SCP), a web page. No one has used it on this box
+yet, so every step below that names an SCP button is unverified. The agent that
+first runs it corrects this section with what it saw, in the same session.
+
+**When to use it.** Only when devbox stays unreachable after a reboot or a
+switch: `tailscale status | grep devbox` shows `offline` for more than about 6
+minutes, and `timeout 10 ssh root@devbox true` fails. A shorter outage is a
+reboot in progress ([Deploy to a server](deploy.md#deploy-to-a-server)).
+Write down what you checked and when (`date -u +%FT%TZ`) before step 1.
+
+**Ask first, every time.** The SCP needs Omer's netcup login, and a reset there
+cuts every process on the box, so neither an earlier yes nor this section
+authorizes it. Ask with one question that names what is down, since when, and
+the steps you will take, for example: "devbox is offline since 02:14 UTC after
+the night reboot. May I open netcup's console in your Brave on nixos-desktop,
+look at the screen, and if it hangs at boot, reset the box and pick the
+previous generation in the Limine menu?" Never use SCP's reinstall, rescue
+system, image, snapshot or disk options; those are Omer's to run.
+
+**Steps.** Drive Omer's Brave with the agent-browser skill (`brave-browser`).
+Save a screenshot of the console after each step under
+`/tmp/agents/<task>-<session8>/console/`, and report each step and its
+screenshot in the final message, so Omer can follow what was done.
+
+1. Open `https://www.servercontrolpanel.de/` (unverified address). When it shows
+   a login, stop and ask Omer to sign in in that tab; never type his password or
+   his second factor.
+2. Pick the server whose name or IP matches devbox and open its console
+   (noVNC). Read the screen before you press anything:
+   - a login prompt on tty1 means the system runs, so the fault is the network,
+     sshd or Tailscale. Log in only if Omer gives the password himself, then run
+     `systemctl --failed` and `journalctl -b -p err`, and roll back with
+     `/run/current-system/bin/switch-to-configuration` of the previous
+     generation as in [Roll back a running host](#roll-back-a-running-host);
+   - a kernel panic, an initrd emergency shell or a frozen boot means the new
+     generation does not boot; go to step 3.
+3. Reset the box from SCP (its reset or restart control, not power off and
+   reinstall). Watch the console: Limine shows its menu for a few seconds.
+   Press a key to stop the countdown, open the previous `Generation <number>`
+   entry and pick `Default`. With agent-browser, send keys to the console with
+   `press ArrowDown` and `press Enter` after a click on the console canvas.
+4. Once SSH answers again, keep the box on that generation: pause
+   `nixos-upgrade.timer` and drop the newer generations as steps 2 and 3 of
+   the [nixos-rog](#nixos-rog) section show, because Limine always boots the
+   newest generation and the hourly install would build the broken `main`
+   again and reboot into it in the next night window.
+5. Open an issue with the broken `main` commit, the screenshots' findings and
+   the first error of `journalctl -b -1 -p err`, and tell Omer the timer stays
+   paused until a fixed `main` lands.
