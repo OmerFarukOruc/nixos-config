@@ -9,6 +9,7 @@
 let
   cfg = osConfig.oruc.machine;
   theme = config.oruc.theme;
+  iconTheme = import ../../nixosModules/icon-theme.nix { inherit lib; };
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
   dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
@@ -63,8 +64,9 @@ let
   };
   gtkImport = dir: "@import url(\"file://${config.xdg.configHome}/${dir}/oruc-colors.css\");";
 
-  # Only GTK 3 reads the theme name. The name is ours while it is unset or
-  # already one of adw-gtk3's, so a theme chosen in System Settings stays.
+  # Only GTK 3 reads the GTK theme name. The GTK and icon theme names are ours
+  # while they are unset or already one we set, so a theme chosen in System
+  # Settings stays.
   # GTK 3 on Wayland takes the name from gsettings whenever it sees the
   # org.gnome.desktop.interface schema, which beats settings.ini, so both get
   # it. Without a session bus (a deploy at boot) dconf runs on a private one,
@@ -108,6 +110,16 @@ let
         esac
       }
 
+      icon_theme() {
+        case $(kreadconfig6 --file kdeglobals --group Icons --key Theme) in
+          "" | breeze | breeze-dark | ${
+            lib.concatMapStringsSep " | " lib.escapeShellArg iconTheme.automatic
+          })
+            ${pkgs.kdePackages.plasma-workspace}/libexec/plasma-changeicons "$icons"
+            ;;
+        esac
+      }
+
       force=
       case ''${1:-} in
         --gtk)
@@ -119,12 +131,13 @@ let
           ;;
       esac
 
-      if [[ -n $force || $(cat "$state/theme/polarity" 2>/dev/null) != "$polarity" ]]; then
+      applied="$polarity $cursor $icons $gtk"
+      if [[ -n $force || $(cat "$state/theme/applied" 2>/dev/null) != "$applied" ]]; then
         plasma-apply-cursortheme "$cursor" --size ${toString theme.cursor.size}
-        ${pkgs.kdePackages.plasma-workspace}/libexec/plasma-changeicons "$icons"
+        icon_theme
         gtk_theme
         dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-$polarity'"
-        printf '%s\n' "$polarity" >"$state/theme/polarity"
+        printf '%s\n' "$applied" >"$state/theme/applied"
       else
         dconf_write /org/gnome/desktop/interface/color-scheme "'default'"
         dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-$polarity'"
@@ -137,10 +150,12 @@ in
     type = lib.types.package;
     readOnly = true;
     default = applyPolarity;
-    description = "oruc-polarity [--login | --gtk]: on Plasma, gives the session the cursor, icons, GTK theme and color-scheme preference of the stored scheme's dark or light variant when that variant changed or with --login, else toggles the color-scheme preference so GTK 4 apps reload their colours. --gtk sets only the GTK 3 theme name.";
+    description = "oruc-polarity [--login | --gtk]: on Plasma, gives the session the cursor, icons, GTK theme and color-scheme preference of the stored scheme when one of them differs from the set it last applied, or with --login, else toggles the color-scheme preference so GTK 4 apps reload their colours. --gtk sets only the GTK 3 theme name.";
   };
 
   config = lib.mkMerge [
+    (lib.mkIf (hasNiri || hasPlasma) { home.packages = iconTheme.packages pkgs; })
+
     (lib.mkIf (hasNiri && !hasPlasma) {
       home.pointerCursor = {
         inherit (osConfig.oruc.theme.cursor) name size;
@@ -156,10 +171,7 @@ in
           name = theme.gtk;
           package = pkgs.adw-gtk3;
         };
-        iconTheme = {
-          name = theme.icons;
-          package = pkgs.papirus-icon-theme;
-        };
+        iconTheme.name = theme.icons;
         colorScheme = if theme.isLight then "light" else "dark";
         gtk2.configLocation = "${config.xdg.configHome}/gtk-2.0/gtkrc";
         gtk3.extraCss = gtkImport "gtk-3.0";
@@ -177,7 +189,6 @@ in
       home.packages = [
         pkgs.adw-gtk3
         pkgs.bibata-cursors
-        pkgs.papirus-icon-theme
       ];
 
       # kde-gtk-config (kded) owns gtk.css and replaces it with a regular file

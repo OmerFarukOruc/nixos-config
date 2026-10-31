@@ -17,7 +17,7 @@ in
     name = if isLight then "Bibata-Modern-Classic" else "Bibata-Modern-Ice";
     size = 24;
   };
-  icons = if isLight then "Papirus-Light" else "Papirus-Dark";
+  icons = (import ./icon-theme.nix { inherit lib; }).name scheme isLight;
   gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
   ansiNames = [
     "Black"

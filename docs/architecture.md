@@ -161,9 +161,10 @@ These rules follow from the list:
 
 `nixosModules/theme-module.nix` sets the read-only `oruc.theme` values of a
 Base16 scheme. `nixosModules/theme-values.nix` gives whether the scheme is
-light, the cursor, icons and GTK theme that follow that variant, and the ANSI
-slots; the module adds the wallpaper and the fixed font families. The theme
-pack calls `theme-values.nix` for every scheme.
+light, the cursor and GTK theme that follow that variant, the icons
+(`nixosModules/icon-theme.nix`), and the ANSI slots; the module adds the
+wallpaper and the fixed font families. The theme pack calls `theme-values.nix`
+for every scheme.
 
 NixOS and Home Manager each import that module with their own scheme:
 
@@ -204,7 +205,10 @@ NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, the VS Code
 window and fzf read their colors from files for this reason. kVitals' package
-defaults and, on a host without Plasma, the cursor keep the record's scheme. `nixosModules/hm-variants.nix`
+defaults and, on a host without Plasma, the cursor keep the record's scheme.
+On a host without Plasma, GTK, DMS and the KDE apps read the icon theme of the
+active variant, so a scheme outside `theme.schemes` keeps the record scheme's
+icons. `nixosModules/hm-variants.nix`
 fails the evaluation when a variant's packages differ from the generation's,
 and names them.
 
@@ -252,9 +256,10 @@ session:
 - **Dark or light set.** `oruc-polarity` (`home-manager/modules/appearance.nix`)
   gives the session the cursor, icons, GTK 3 theme name and dconf
   `color-scheme` of the scheme's variant, which the pack holds as the facts
-  `cursor`, `icons`, `gtk` and `polarity`. It does this at each login and when
-  the variant changed, and records the variant in
-  `~/.local/state/oruc/theme/polarity`. Otherwise it sets `color-scheme` to
+  `cursor`, `icons`, `gtk` and `polarity`, but keeps a GTK or icon theme picked
+  in System Settings. It does this at each login and when one of those facts
+  changed, and records them in
+  `~/.local/state/oruc/theme/applied`. Otherwise it sets `color-scheme` to
   `default` and back, so GTK 4 apps load `oruc-colors.css` again.
 - **Plasma style.** `looks` in `plasma-looks/default.nix` names each look's
   colour scheme and Plasma style: `oruc-glass`, or `klassy-dark` and
@@ -329,8 +334,15 @@ These stay fixed on purpose, and the check does not cover them:
 - Web pages and Electron app interiors follow only the dark or light variant,
   through the desktop portal.
 - niri's hotkey overlay, screenshot UI and error banner.
-- The Bibata cursor and the Papirus icons (the variant follows the scheme), and
-  the icons of wlogout.
+- The Bibata cursor (the variant follows the scheme), and the icons of wlogout.
+- The icons. `nixosModules/icon-theme.nix` picks Gruvbox Plus for a gruvbox
+  scheme and Papirus for every other scheme, each in the dark or light form of
+  the scheme. It also installs Fluent, MoreWaita and Colloid (orange accent,
+  default and Gruvbox folders) to pick by hand in System Settings. On Plasma a
+  theme picked there stays through `theme` switches and logins, until System
+  Settings selects Papirus, Gruvbox Plus or Breeze again. Colloid's
+  Catppuccin set is left out, because its orange folders use the Gruvbox
+  orange (`#fe8019`) in Colloid's `install.sh`.
 - The Breeze desktop theme SVGs (their colors come from kdeglobals at run time)
   and the Glass Qt style.
 - mpv subtitles.

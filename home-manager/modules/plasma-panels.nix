@@ -249,8 +249,8 @@ let
     src = inputs.mac-tahoe;
   };
 
-  # The launcher's default icon, view-app-grid, is in no installed icon theme;
-  # Papirus has only its symbolic form.
+  # The launcher's default icon, view-app-grid, is in neither Papirus nor
+  # Gruvbox Plus; both have only its symbolic form.
   tahoeLauncher = {
     name = "org.kde.mac-tahoe-liquid-kde.launcher";
     config.General.icon = "view-app-grid-symbolic";

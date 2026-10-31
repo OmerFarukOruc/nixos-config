@@ -112,9 +112,10 @@ check_plasma() {
   bg=$(kdeglobal kdeglobals Colors:Window BackgroundNormal)
   [[ $bg == "$(decimal "$base00")"* ]] || fail "$slug: the KDE window background is $bg, not $(decimal "$base00")"
   variant=$(sed -nE 's/^variant:[[:space:]]*"?([a-z]+)"?.*/\1/p' "$pack/$slug/.oruc/source.yaml")
+  icons=$(<"$pack/$slug/.oruc/icons")
   case $variant in
-    light) icons=Papirus-Light cursor=Bibata-Modern-Classic gtk=adw-gtk3 ;;
-    *) icons=Papirus-Dark cursor=Bibata-Modern-Ice gtk=adw-gtk3-dark ;;
+    light) cursor=Bibata-Modern-Classic gtk=adw-gtk3 ;;
+    *) cursor=Bibata-Modern-Ice gtk=adw-gtk3-dark ;;
   esac
   [[ $(kdeglobal kdeglobals Icons Theme) == "$icons" ]] || fail "$slug: the icon theme is not $icons"
   [[ $(kdeglobal kcminputrc Mouse cursorTheme) == "$cursor" ]] || fail "$slug: the cursor is not $cursor"

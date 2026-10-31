@@ -32,7 +32,7 @@ in
       name = readOnly types.str "Cursor theme that follows the scheme variant.";
       size = readOnly types.int "Cursor size in pixels.";
     };
-    icons = readOnly types.str "Icon theme that follows the scheme variant.";
+    icons = readOnly types.str "Icon theme of the scheme, named by nixosModules/icon-theme.nix: Gruvbox Plus for a gruvbox scheme, else Papirus, each dark or light by the variant.";
     fonts = {
       ui = readOnly types.str "Font family of interface text.";
       mono = readOnly types.str "Nerd Font family of the shell bars.";
