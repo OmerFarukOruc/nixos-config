@@ -10,16 +10,18 @@
 let
   inherit (config.oruc.theme) wallpaper;
   themeFile = ".config/dms/oruc-theme.json";
-  dms = lib.getExe config.programs.dank-material-shell.package;
   applyScheme = pkgs.writeShellApplication {
     name = "oruc-dms-scheme";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      config.programs.dank-material-shell.package
+    ];
     text = ''
       for _ in $(seq 40); do
-        ${dms} ipc call theme getMode >/dev/null 2>&1 && break
+        dms ipc call theme getMode >/dev/null 2>&1 && break
         sleep 0.5
       done
-      ${dms} ipc call theme "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+      dms ipc call theme "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
     '';
   };
 

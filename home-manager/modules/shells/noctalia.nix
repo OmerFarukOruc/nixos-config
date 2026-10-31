@@ -9,19 +9,21 @@
 let
   theme = config.oruc.theme;
   inherit (theme) wallpaper;
-  noctalia = lib.getExe config.programs.noctalia.package;
   palette = ".config/noctalia/palettes/oruc-base16.json";
   applyScheme = pkgs.writeShellApplication {
     name = "oruc-noctalia-scheme";
-    runtimeInputs = [ pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.coreutils
+      config.programs.noctalia.package
+    ];
     text = ''
       for _ in $(seq 40); do
-        ${noctalia} msg theme-mode-get >/dev/null 2>&1 && break
+        noctalia msg theme-mode-get >/dev/null 2>&1 && break
         sleep 0.5
       done
-      ${noctalia} msg color-scheme-set custom oruc-base16
-      ${noctalia} msg config-reload
-      ${noctalia} msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+      noctalia msg color-scheme-set custom oruc-base16
+      noctalia msg config-reload
+      noctalia msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
     '';
   };
 
