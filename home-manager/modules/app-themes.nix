@@ -9,7 +9,6 @@ let
   home = config.home.homeDirectory;
   hex = color: "#${lib.toLower color}";
   decimal = color: lib.concatMapStringsSep "," toString (contrast.channels color);
-  storeExe = name: path: "/nix/store/[a-z0-9]{32}-${name}-[^/]+/${path}";
   polarityName = theme: lib.toSentenceCase theme.polarity;
 
   konsoleScheme = "OrucBase16";
@@ -134,7 +133,7 @@ let
 
   argb = color: "#FF${lib.toUpper color}";
   sourcegit =
-    { scheme, ... }:
+    { scheme, theme }:
     builtins.toJSON {
       BasicColors =
         lib.mapAttrs (_: argb) {
@@ -146,9 +145,9 @@ let
           PopupBorder = scheme.base02;
           Contents = scheme.base00;
           Badge = scheme.base03;
-          BadgeFG = scheme.base06;
+          BadgeFG = theme.readableOn scheme.base03;
           Conflict = scheme.base0A;
-          "Conflict.Foreground" = scheme.base00;
+          "Conflict.Foreground" = theme.readableOn scheme.base0A;
           Border0 = scheme.base01;
           Border1 = scheme.base03;
           Border2 = scheme.base02;
@@ -201,6 +200,12 @@ in
         Theme = polarityName theme;
         ThemeOverrides = "${home}/${sourcegitFile}";
       };
+    obsidian-settings =
+      { theme, ... }:
+      builtins.toJSON {
+        enabledCssSnippets = [ "oruc-scheme" ];
+        theme = if theme.polarity == "dark" then "obsidian" else "moonstone";
+      };
     jadx-settings = { theme, ... }: builtins.toJSON { lafTheme = "FlatLaf ${polarityName theme}"; };
   };
 
@@ -217,30 +222,24 @@ in
     thunderbird = {
       label = "Thunderbird";
       profiles = thunderbirdProfiles;
-      files =
-        map
-          (name: {
-            path = "{profile}/chrome/${name}";
-            format = "copy";
-            source = thunderbirdFile;
-            live = true;
-          })
-          [
-            "userChrome.css"
-            "userContent.css"
-          ]
-        ++ [
-          {
-            path = "{profile}/user.js";
-            format = "userjs";
-            values."toolkit.legacyUserProfileCustomizations.stylesheets" = true;
-            live = true;
-          }
-        ];
+      files = [
+        {
+          path = "{profile}/chrome/userChrome.css";
+          format = "copy";
+          source = thunderbirdFile;
+          live = true;
+        }
+        {
+          path = "{profile}/user.js";
+          format = "userjs";
+          values."toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+          live = true;
+        }
+      ];
     };
     obsidian = {
       label = "Obsidian";
-      commandLines = [ (storeExe "obsidian" ''share/obsidian/app\.asar'') ];
+      commandLines = [ ''/obsidian-[^/ ]+/share/obsidian/app\.asar'' ];
       vaults = "${config.xdg.configHome}/obsidian/obsidian.json";
       files = [
         {
@@ -252,18 +251,24 @@ in
         {
           path = "{vault}/.obsidian/appearance.json";
           format = "json";
-          values.enabledCssSnippets = [ "oruc-scheme" ];
+          fact = "obsidian-settings";
         }
       ];
     };
     sourcegit = {
       label = "SourceGit";
-      executables = [ (storeExe "sourcegit" "lib/sourcegit/SourceGit") ];
+      executables = [
+        {
+          package = "sourcegit";
+          path = "lib/sourcegit/SourceGit";
+        }
+      ];
       files = [
         {
           path = "${config.xdg.configHome}/SourceGit/preference.json";
           format = "json";
           fact = "sourcegit-settings";
+          create = false;
         }
       ];
     };

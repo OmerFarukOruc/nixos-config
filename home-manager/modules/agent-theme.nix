@@ -388,8 +388,6 @@ let
       };
     };
 
-  storeExe = name: path: "/nix/store/[a-z0-9]{32}-${name}-[^/]+/${path}";
-
   gumAccent = "4";
   gumHeader = "5";
   gumMuted = "8";
@@ -409,8 +407,14 @@ in
         codex = {
           label = "Codex or the ChatGPT app";
           executables = [
-            (storeExe "codex" "libexec/codex/bin/codex")
-            (storeExe "chatgpt" "lib/chatgpt/ChatGPT")
+            {
+              package = "codex";
+              path = "libexec/codex/bin/codex";
+            }
+            {
+              package = "chatgpt";
+              path = "lib/chatgpt/ChatGPT";
+            }
           ];
           servers = [ "app-server" ];
           files = [
@@ -423,7 +427,12 @@ in
         };
         opencode = {
           label = "opencode";
-          executables = [ (storeExe "opencode[^/]*" ''bin/\.opencode[^/]*-wrapped'') ];
+          executables = [
+            {
+              package = "opencode[^/]*";
+              path = ''bin/\.opencode[^/]*-wrapped'';
+            }
+          ];
           servers = [ "serve" ];
           terminalSignal = {
             name = "SIGUSR2";
@@ -509,7 +518,12 @@ in
       oruc.themeCopies = [ ".pi/agent/themes/oruc.json" ];
       oruc.appSettings.pi = {
         label = "pi";
-        executables = [ (storeExe "pi" "libexec/pi/pi") ];
+        executables = [
+          {
+            package = "pi";
+            path = "libexec/pi/pi";
+          }
+        ];
         files = [
           {
             path = "${home}/.pi/agent/settings.json";

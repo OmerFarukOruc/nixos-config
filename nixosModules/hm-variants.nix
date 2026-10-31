@@ -169,8 +169,10 @@ let
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout, mpv, Konsole, Thunderbird, SourceGit and jadx at their
       next start, the Cursor editor, Obsidian and OBS at once, and the Plasma
-      splash at the next login; while SourceGit, jadx or OBS runs, its settings
-      wait like Codex's. The wallpaper changes at once in Plasma, Noctalia and DMS,
+      splash at the next login. While SourceGit, jadx, OBS, Obsidian or the Cursor
+      editor runs, the settings it writes itself wait like Codex's: the Cursor
+      editor lists the theme and Obsidian enables its snippet after that, and OBS
+      switches between its dark and light theme at its next start. The wallpaper changes at once in Plasma, Noctalia and DMS,
       and outside Plasma so do the GTK theme, cursor and icons in dconf. Keyboard
       and case lights take its base09 at once. The
       console changes at once and the login screen at its next start; a light

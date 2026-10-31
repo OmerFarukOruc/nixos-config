@@ -56,6 +56,14 @@ let
             yellow = scheme.base0A;
             purple = scheme.base0E;
           };
+      readableTarget = contrast.mostReadable scheme.base05 [
+        "000000"
+        "ffffff"
+      ];
+      readablePct = lib.findFirst (
+        pct: contrast.ratio scheme.base05 (contrast.mixHex pct scheme.base0D readableTarget) >= 4.5
+      ) 0 (lib.reverseList (lib.range 0 100));
+      accent = steps: contrast.mixHex (lib.max 0 (readablePct - steps)) scheme.base0D readableTarget;
       vars = ramps // {
         grey8 = scheme.base00;
         grey7 = scheme.base00;
@@ -73,9 +81,9 @@ let
         text = scheme.base05;
         text_light = scheme.base06;
         text_muted = scheme.base04;
-        primary = ramps.blue3;
-        primary_light = ramps.blue2;
-        primary_dark = ramps.blue4;
+        primary_light = accent 0;
+        primary = accent 12;
+        primary_dark = accent 24;
       };
     in
     ''
@@ -181,7 +189,12 @@ in
       };
     oruc.appSettings.obs = {
       label = "OBS";
-      executables = [ "/nix/store/[a-z0-9]{32}-obs-studio-[^/]+/bin/obs" ];
+      executables = [
+        {
+          package = "obs-studio";
+          path = ''bin/\.obs-wrapped'';
+        }
+      ];
       files = [
         {
           path = "${config.users.users.oruc.home}/.config/obs-studio/user.ini";

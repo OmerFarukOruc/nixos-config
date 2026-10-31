@@ -44,7 +44,6 @@ let
       osd-border-color = ''"${scheme.withHashtag.base00}"'';
       sub-color = ''"${scheme.withHashtag.base05}"'';
       sub-outline-color = ''"${scheme.withHashtag.base00}"'';
-      sub-back-color = ''"#80${scheme.base00}"'';
     };
 
   # Opening the RTX 4070 wakes it, and the Vulkan loader opens every driver it

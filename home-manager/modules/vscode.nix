@@ -542,7 +542,12 @@ in
 
     oruc.appSettings.cursor-editor = lib.mkIf cursorEditor {
       label = "Cursor";
-      executables = [ "/nix/store/[a-z0-9]{32}-cursor-[^/]+/lib/cursor/cursor" ];
+      executables = [
+        {
+          package = "cursor";
+          path = "lib/cursor/cursor";
+        }
+      ];
       files = [
         {
           path = "${config.home.homeDirectory}/${cursorExtensions}/extensions.json";

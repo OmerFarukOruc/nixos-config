@@ -429,35 +429,40 @@ list, or `{profile}`, the default profile of a Mozilla `profiles.ini`. An app
 that writes its settings file itself would overwrite the change, so the tool
 leaves that file alone while the app runs and prints `theme: <app> runs`;
 an entry marked `live` is a file the app only reads, written at once. It finds
-an app by its executable's path pattern, or a command line pattern for one
-started by an interpreter, so a process still running from an older store
-path counts too. A Codex `app-server` or opencode `serve` process and its
+an app by its executable's package name and path in any store path, or a
+command line pattern for one started by an interpreter, so a process still
+running from an older store path counts too. A Codex `app-server` or opencode `serve` process and its
 children do not count, because such a background server writes the file only
-for a client. `oruc-app-settings --check` exits 1 when a file differs from
-what the stored scheme sets. `settings_file.py` holds the TOML merge and the
+for a client. The tool compares parsed values, so an app that writes the same
+settings in its own layout leaves nothing to change. It reports a file it
+cannot parse and still writes the others. `oruc-app-settings --check` exits 1
+when a file's values differ from what the stored scheme sets. `settings_file.py` holds the TOML merge and the
 write through a temporary file that keeps the file's mode, for this tool and
 herdr's.
 
 `home-manager/modules/app-themes.nix`, which the personal profile imports,
 themes the desktop apps through the same tool. Konsole's default profile
 `Oruc` selects the pack's `OrucBase16` colour scheme. Thunderbird's default
-profile gets the pack's stylesheet as `chrome/userChrome.css` and
-`userContent.css`, with the `user.js` preference that makes it load them.
-Obsidian gets the pack's snippet `oruc-scheme.css` in each vault, enabled in
-the vault's `appearance.json`. SourceGit's `preference.json` names the pack's
-`sourcegit-theme.json` in `ThemeOverrides`, and jadx's `gui.json` takes the
+profile gets the pack's stylesheet as `chrome/userChrome.css`, with the
+`user.js` preference that makes it load it; mail content keeps its own
+colours. Obsidian gets the pack's snippet `oruc-scheme.css` in each vault, and
+the vault's `appearance.json` enables it and picks Obsidian's dark or light
+base to match the scheme. SourceGit's `preference.json` names the pack's
+`sourcegit-theme.json` in `ThemeOverrides` with its dark or light `Theme`,
+and jadx's `gui.json` takes the
 FlatLaf look of the scheme's dark or light variant; the switch creates neither
 file nor OBS's `user.ini`, so each app writes its own at its first start. The
 Cursor editor gets `vscode.nix`'s extension in `~/.cursor/extensions` and its
 `settings.json` selects `Oruc Base16 Dark` or `Light`. On nixos-rog, OBS gets
 two pack themes, `OrucDark.ovt` extending Yami and `OrucLight.ovt` extending
-Yami Light, and `user.ini` selects the one of the scheme's variant with
+Yami Light, whose accents are moved toward black or white until OBS's text
+reaches 4.5:1 on them, and `user.ini` selects the one of the scheme's variant with
 `AutoReload=true`, so OBS repaints when the switch replaces the file. OBS reads
 the theme list and the `dark` flag only at start, so a switch between a dark
 and a light scheme changes its icons at its next start.
 
 The ChatGPT app only offers its built-in code themes, listed in
-`codex-code-themes.json` from its 26.1027.30824 bundle. The `codex` fact
+`codex-code-themes.json` from its 26.1027.30824 bundle. The `codex-settings` fact
 names the one a scheme takes: the one its name matches, such as `catppuccin`
 for the Catppuccin schemes, else the variant of its dark or light kind
 nearest by Oklab distance (`contrast.nix`) over background, text and accent,

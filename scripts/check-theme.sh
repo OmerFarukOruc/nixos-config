@@ -51,8 +51,9 @@ settings.json that does not parse byte-identical and reports the failed
 reload. With --contrast it first checks, for every scheme in the pack, that
 each text colour the VS Code theme draws on an accent background reaches
 4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
-and side bar backgrounds, and that the Claude Code status line's segment
-colours are the scheme's and their text reaches 4.5:1 on them.
+and side bar backgrounds, that the Claude Code status line's segment colours
+are the scheme's and their text reaches 4.5:1 on them, and that OBS's text on
+its accent colours and SourceGit's badge and conflict text reach 4.5:1.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS and
 the Cursor editor it checks that their theme files hold the scheme's base00,
@@ -323,19 +324,48 @@ def statusline_failures(slug):
     return found
 
 
+obs_var = re.compile(r"^\s*--([a-z_0-9]+): #([0-9a-fA-F]{6});", re.M)
+
+
+def app_failures(slug):
+    found = []
+    polarity = (pack / slug / ".oruc/polarity").read_text().strip()
+    obs = pack / slug / f".config/obs-studio/themes/Oruc{polarity.title()}.ovt"
+    if obs.exists():
+        colors = dict(obs_var.findall(obs.read_text()))
+        for name in ("primary", "primary_light", "primary_dark"):
+            ratio = contrast(colors["text"], colors[name])
+            if ratio < 4.5:
+                found.append(f"{slug}: OBS text on {name} is {ratio:.2f}:1")
+    sourcegit = pack / slug / ".config/oruc/sourcegit-theme.json"
+    if sourcegit.exists():
+        basic = json.loads(sourcegit.read_text())["BasicColors"]
+        for text, background in (("BadgeFG", "Badge"), ("Conflict.Foreground", "Conflict")):
+            ratio = contrast(basic[text][-6:], basic[background][-6:])
+            if ratio < 4.5:
+                found.append(f"{slug}: SourceGit {text} on {background} is {ratio:.2f}:1")
+    return found
+
+
 statusline = []
+apps = []
 slugs = (pack / "slugs").read_text().split()
 for slug in slugs:
     statusline += statusline_failures(slug)
-for line in (failures + statusline)[:20]:
+    apps += app_failures(slug)
+for line in (failures + statusline + apps)[:20]:
     print(f"check-theme: {line}", file=sys.stderr)
-if failures or statusline:
-    sys.exit(f"check-theme: {len(failures)} VS Code and {len(statusline)} status line contrast failures")
+if failures or statusline or apps:
+    sys.exit(
+        f"check-theme: {len(failures)} VS Code, {len(statusline)} status line"
+        f" and {len(apps)} OBS or SourceGit contrast failures"
+    )
 print(
     f"ok contrast: VS Code text in {checked} schemes;"
     f" {skipped} use their own theme and were skipped"
 )
 print(f"ok contrast: the Claude Code status line in {len(slugs)} schemes")
+print(f"ok contrast: OBS and SourceGit accent text in {len(slugs)} schemes")
 PYTHON
 }
 
@@ -374,18 +404,8 @@ plasma_session() {
   return 1
 }
 
-selects() {
-  local slug=$1 app=$2 err=$3
-  shift 3
-  if grep -qF "theme: $app runs" "$err"; then
-    echo "skip $slug: $app runs, so its settings wait for the next switch"
-  else
-    "$@" || fail "$slug: $app's settings do not select the scheme's theme"
-  fi
-}
-
 check_app_settings() {
-  local slug=$1 err=$2 polarity side line
+  local slug=$1 polarity side line
   polarity=$(<"$pack/$slug/.oruc/polarity")
   side=${polarity^}
   holds_required "$slug" .codex/themes/oruc.tmTheme "<string>#$base00</string>"
@@ -400,8 +420,6 @@ check_app_settings() {
   [[ ! -e $pack/$slug/.config/oruc/cursor-colors.json ]] ||
     [[ $(jq -r '.["workbench.colorTheme"]' "${XDG_CONFIG_HOME:-$HOME/.config}/Cursor/User/settings.json") == "Oruc Base16 $side" ]] ||
     fail "$slug: the Cursor editor's settings.json does not select Oruc Base16 $side"
-  command -v oruc-app-settings >/dev/null || return 0
-  selects "$slug" "Codex or the ChatGPT app" "$err" grep -qx 'theme = "oruc"' "$HOME/.codex/config.toml"
   oruc-app-settings --check >"$scratch/apps-$slug" || fail "$slug: oruc-app-settings --check found a file the switch left unset"
   while IFS= read -r line; do
     [[ $line != skip* ]] || echo "skip $slug: ${line#skip }"
@@ -709,7 +727,7 @@ for slug in "$@"; do
   [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
-  check_app_settings "$slug" "$theme_err"
+  check_app_settings "$slug"
   check_session "$slug"
   check_system "$slug"
   check_boot_menu "$slug"

@@ -7,9 +7,11 @@ import signal
 import sys
 
 import tomlkit
-from settings_file import merge, read, replace
+from settings_file import merged_toml, read, replace
 
 PREF = re.compile(r'^\s*user_pref\("([^"]+)",')
+BOM = "\ufeff"
+BROKEN = (OSError, ValueError, configparser.Error)
 
 
 def processes():
@@ -113,6 +115,8 @@ def merge_list(items, values):
 def merge_json(data, values):
     if isinstance(values, list):
         return merge_list(data if isinstance(data, list) else [], values)
+    if not isinstance(data, dict):
+        raise ValueError(f"holds a JSON {type(data).__name__}, not an object")
     for key, value in values.items():
         if isinstance(value, dict) and isinstance(data.get(key), dict):
             merge_json(data[key], value)
@@ -123,10 +127,15 @@ def merge_json(data, values):
     return data
 
 
-def ini_text(text, values):
+def ini_parsed(text):
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
-    parser.read_string(text)
+    parser.read_string(text.removeprefix(BOM))
+    return parser
+
+
+def ini_text(text, values):
+    parser = ini_parsed(text)
     for section, pairs in values.items():
         if not parser.has_section(section):
             parser.add_section(section)
@@ -134,7 +143,7 @@ def ini_text(text, values):
             parser[section][key] = str(value)
     out = io.StringIO()
     parser.write(out, space_around_delimiters=False)
-    return out.getvalue()
+    return (BOM if text.startswith(BOM) else "") + out.getvalue()
 
 
 def userjs_text(text, values):
@@ -145,6 +154,7 @@ def userjs_text(text, values):
             i for i, old in enumerate(lines)
             if PREF.match(old) and PREF.match(old)[1] == key
         ]
+        lines = [old for i, old in enumerate(lines) if i not in found[1:]]
         if found:
             lines[found[0]] = line
         else:
@@ -168,25 +178,42 @@ def rendered(entry, text, current):
         data = json.loads(text) if text.strip() else empty
         return json.dumps(merge_json(data, values), indent=2) + "\n"
     if entry["format"] == "toml":
-        doc = tomlkit.parse(text)
-        merge(doc, values)
-        return tomlkit.dumps(doc)
+        return merged_toml(text, values)
     if entry["format"] == "ini":
         return ini_text(text, values)
-    if entry["format"] == "userjs":
-        return userjs_text(text, values)
-    raise SystemExit(f"oruc-app-settings: unknown format {entry['format']}")
+    return userjs_text(text, values)
 
 
-def changes(app, current):
-    for entry in app["files"]:
-        for path in paths(app, entry):
+def meaning(entry, text):
+    if entry["format"] == "json":
+        return json.loads(text) if text.strip() else None
+    if entry["format"] == "toml":
+        return tomlkit.parse(text).unwrap()
+    if entry["format"] == "ini":
+        parser = ini_parsed(text)
+        return {name: dict(parser[name]) for name in parser.sections()}
+    return text
+
+
+def updates(app, entries, current, failures):
+    found = []
+    for entry in entries:
+        try:
+            targets = paths(app, entry)
+        except BROKEN as error:
+            failures.append(f"{entry['path']}: {error}")
+            continue
+        for path in targets:
             if not entry["create"] and not os.path.exists(path):
                 continue
-            text = read(path)
-            new = rendered(entry, text, current)
-            if new != text:
-                yield entry, path, new
+            try:
+                text = read(path)
+                new = rendered(entry, text, current)
+                if meaning(entry, new) != meaning(entry, text):
+                    found.append((entry, path, new))
+            except BROKEN as error:
+                failures.append(f"{path}: {error}")
+    return found
 
 
 def terminal_ui(app, argv):
@@ -199,21 +226,27 @@ def terminal_ui(app, argv):
     return True
 
 
+def report(failures):
+    for failure in failures:
+        print(f"oruc-app-settings: {failure}", file=sys.stderr)
+
+
 def apply(app, current):
-    pending = list(changes(app, current))
-    runs = any(not entry["live"] for entry, _, _ in pending) and bool(
-        app_processes(app)
-    )
-    for entry, path, new in pending:
-        if runs and not entry["live"]:
-            continue
+    failures = []
+    live = [entry for entry in app["files"] if entry["live"]]
+    later = [entry for entry in app["files"] if not entry["live"]]
+    for _, path, new in updates(app, live, current, failures):
         replace(path, new)
-    if runs:
+    waiting = updates(app, later, current, failures)
+    if waiting and app_processes(app):
         print(
             f"theme: {app['label']} runs, so its colours change"
             " at the next theme switch after it closes",
             file=sys.stderr,
         )
+    else:
+        for _, path, new in waiting:
+            replace(path, new)
     if app.get("terminalSignal"):
         number = signal.Signals[app["terminalSignal"]["name"]]
         for pid, argv in app_processes(app):
@@ -222,20 +255,25 @@ def apply(app, current):
                     os.kill(pid, number)
                 except ProcessLookupError:
                     pass
+    report(failures)
+    return 1 if failures else 0
 
 
 def check(spec, current):
     failed = False
     for name, app in sorted(spec["apps"].items()):
-        stale = list(changes(app, current))
-        waiting = [e for e, _, _ in stale if not e["live"]]
-        if waiting and len(waiting) == len(stale) and app_processes(app):
+        failures = []
+        stale = updates(app, app["files"], current, failures)
+        waits = any(not entry["live"] for entry, _, _ in stale)
+        runs = waits and bool(app_processes(app))
+        for entry, path, _ in stale:
+            if not (runs and not entry["live"]):
+                failures.append(f"{path} is not set")
+        report(failures)
+        failed = failed or bool(failures)
+        if runs:
             print(f"skip {name}: {app['label']} runs, so its settings wait")
-            continue
-        for _, path, _ in stale:
-            print(f"oruc-app-settings: {path} is not set", file=sys.stderr)
-        failed = failed or bool(stale)
-        if not stale:
+        elif not failures:
             print(f"ok {name} settings")
     return 1 if failed else 0
 
@@ -247,7 +285,7 @@ def main():
     current = spec["current"]
     if command == "--check":
         sys.exit(check(spec, current))
-    apply(spec["apps"][command], current)
+    sys.exit(apply(spec["apps"][command], current))
 
 
 main()

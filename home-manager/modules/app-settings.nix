@@ -52,6 +52,36 @@ let
     };
   };
 
+  executable = types.submodule {
+    options = {
+      package = mkOption {
+        type = types.str;
+        description = "Regular expression for the package name between the store hash and the version.";
+      };
+      path = mkOption {
+        type = types.str;
+        description = "Regular expression for the executable's path inside the package.";
+      };
+    };
+  };
+
+  terminalSignal = types.submodule {
+    options = {
+      name = mkOption {
+        type = types.str;
+        description = "Name of the signal, such as SIGUSR2.";
+      };
+      subcommands = mkOption {
+        type = types.listOf types.str;
+        description = "First arguments that start a mode without the terminal UI.";
+      };
+      valueFlags = mkOption {
+        type = types.listOf types.str;
+        description = "Flags that take the next argument as their value.";
+      };
+    };
+  };
+
   app = types.submodule {
     options = {
       label = mkOption {
@@ -59,9 +89,9 @@ let
         description = "The app's name in the line that says it runs.";
       };
       executables = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf executable;
         default = [ ];
-        description = "Regular expressions that match the whole /proc/<pid>/exe of a running app.";
+        description = "Executables whose /proc/<pid>/exe shows a running app, from any store path of the package.";
       };
       commandLines = mkOption {
         type = types.listOf types.str;
@@ -74,9 +104,9 @@ let
         description = "First arguments of a background server of the app that writes its settings only for a client; it and its children do not count as the app running.";
       };
       terminalSignal = mkOption {
-        type = types.nullOr types.attrs;
+        type = types.nullOr terminalSignal;
         default = null;
-        description = "{ name, subcommands, valueFlags }: the signal sent to each running process of the app whose first argument that is not a flag or a flag's value is no subcommand.";
+        description = "The signal sent to each running process of the app whose first argument that is not a flag or a flag's value is no subcommand.";
       };
       vaults = mkOption {
         type = types.nullOr types.str;
@@ -98,7 +128,13 @@ let
   spec = pkgs.writeText "oruc-app-settings.json" (
     builtins.toJSON {
       current = builtins.dirOf config.oruc.themeFactsDir;
-      apps = cfg;
+      apps = lib.mapAttrs (
+        _: app:
+        app
+        // {
+          executables = map (exe: "/nix/store/[a-z0-9]{32}-${exe.package}-[^/]+/${exe.path}") app.executables;
+        }
+      ) cfg;
     }
   );
   script = pkgs.writers.writePython3 "oruc-app-settings-script" {
@@ -119,19 +155,29 @@ in
     assertions = lib.concatLists (
       lib.mapAttrsToList (
         name: app:
-        map (entry: {
-          assertion =
-            if entry.format == "copy" then
-              entry.source != null
-            else
-              lib.length (
-                lib.filter (x: x != null) [
-                  entry.values
-                  entry.fact
-                ]
-              ) == 1;
-          message = "oruc.appSettings.${name}: ${entry.path} needs a source for copy, else exactly one of values and fact.";
-        }) app.files
+        lib.concatMap (entry: [
+          {
+            assertion = !lib.hasInfix "{vault}" entry.path || app.vaults != null;
+            message = "oruc.appSettings.${name}: ${entry.path} names {vault}, so the app needs vaults.";
+          }
+          {
+            assertion = !lib.hasInfix "{profile}" entry.path || app.profiles != null;
+            message = "oruc.appSettings.${name}: ${entry.path} names {profile}, so the app needs profiles.";
+          }
+          {
+            assertion =
+              if entry.format == "copy" then
+                entry.source != null
+              else
+                lib.length (
+                  lib.filter (x: x != null) [
+                    entry.values
+                    entry.fact
+                  ]
+                ) == 1;
+            message = "oruc.appSettings.${name}: ${entry.path} needs a source for copy, else exactly one of values and fact.";
+          }
+        ]) app.files
       ) cfg
     );
   };
