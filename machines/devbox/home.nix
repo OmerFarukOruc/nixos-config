@@ -88,21 +88,6 @@ in
   };
 
   systemd.user.services = {
-    herdr-default = {
-      Unit = {
-        Description = "herdr default session, where Omer's own agents run";
-        X-SwitchMethod = "keep-old";
-      };
-      Service = {
-        UMask = "0022";
-        Environment = [ "SHELL=${lib.getExe pkgs.zsh}" ];
-        WorkingDirectory = home;
-        ExecStart = "${lib.getExe pkgs.zsh} -c 'exec herdr server'";
-        Restart = "on-failure";
-        RestartSec = 5;
-      };
-      Install.WantedBy = [ "default.target" ];
-    };
     amp-runner = {
       Unit = {
         Description = "Amp runner for Omer's threads (outbound connection only)";

@@ -136,10 +136,8 @@ in
   };
   users.users.root.hashedPasswordFile = config.sops.secrets.root-password-hash.path;
 
-  # Agent sessions run in the user slice, so systemd-oomd must not kill it for
-  # swap use (nixosModules/memory.nix). The box has 62 GiB of RAM (observed on
-  # 2026-10-27); the numbers below are guesses for many agents, not measurements.
-  systemd.slices.user.sliceConfig.ManagedOOMSwap = "auto";
+  # The box has 62 GiB of RAM (observed on 2026-10-27); the numbers below are
+  # guesses for many agents, not measurements.
   boot.kernel.sysctl."vm.swappiness" = 100;
   zramSwap = {
     enable = true;

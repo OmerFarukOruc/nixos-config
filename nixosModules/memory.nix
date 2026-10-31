@@ -12,11 +12,24 @@ let
 in
 {
   # systemd-oomd monitors no cgroup until a slice opts in. When memory pressure
-  # in a user slice stays above 80% for 30 s, it kills every process in one
-  # leaf cgroup under it, such as an app's scope or one Ghostty tab.
+  # in a slice of the user manager stays above 80% for 30 s, it kills every
+  # process in one leaf cgroup under it, such as an app's scope or one Ghostty
+  # tab. oomd honors ManagedOOMPreference=avoid on a user's cgroup only when a
+  # cgroup that user owns is the monitored one (systemd.resource-control(5)),
+  # so the root-owned user.slice stays unmonitored and herdr's avoid counts.
   systemd.oomd.enableUserSlices = true;
+  systemd.slices.user.sliceConfig.ManagedOOMMemoryPressure = lib.mkForce "auto";
 
-  systemd.slices.user.sliceConfig.ManagedOOMSwap = lib.mkDefault "kill";
+  # With swap and memory both above 90%, oomd kills the leaf cgroup with the
+  # most swap under app.slice: a Ghostty tab, Brave or a build scope. herdr's
+  # agents run in session.slice (home-manager/modules/herdr.nix), out of reach.
+  systemd.user.units."app.slice" = lib.mkIf (sessions.hasAnyDesktop config.oruc.machine) {
+    overrideStrategy = "asDropin";
+    text = ''
+      [Slice]
+      ManagedOOMSwap=kill
+    '';
+  };
 
   systemd.user.units."app-ghostty-surface-transient-.scope" =
     lib.mkIf (sessions.hasAnyDesktop config.oruc.machine)

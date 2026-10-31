@@ -133,16 +133,33 @@ with about 6400 small python3 processes filled RAM and swap twice.
 systemd-oomd did not act on memory pressure, and the kernel OOM killer picked
 the biggest single process, Ghostty's main process, which closed every tab.
 Since then, with swap and memory both above 90%, systemd-oomd kills the leaf
-cgroup with the most swap (`ManagedOOMSwap=kill` on the user slice), such as
-that one tab.
+cgroup with the most swap under the user manager's `app.slice`
+(`ManagedOOMSwap=kill`), such as that one tab, Brave or a `heavy` build scope.
+
+On 2026-10-31 that kill picked the Ghostty tab that ran the herdr server, which
+held 5.8 GiB of swap, and every agent in herdr died with it. The herdr server
+now runs as `herdr-default.service` (`home-manager/modules/herdr.nix`) in
+`session.slice`, outside `app.slice`, so the swap kill never picks it. oomd
+ignores `ManagedOOMPreference=avoid` for swap on a cgroup a user owns
+(systemd.resource-control(5)), so moving the server out of the watched slice is
+the only protection. For memory pressure, oomd watches each slice of the user
+manager and honors herdr's `avoid` there, because the user owns both cgroups.
+The root-owned `user.slice` has no pressure kill for that reason, so login and
+SSH session scopes outside the user manager have no oomd kill.
 
 Each Ghostty tab is a transient scope with `TasksMax=4096`, `MemoryMax=20G`
 and `MemorySwapMax=6G`. On 2026-10-24 the busiest normal tab peaked at 2494
 tasks, 16.2 GiB of RAM and 1.7 GiB of swap, and the runaway tab at 18.9 GiB of
 RAM and 23.8 GiB of swap, so `MemoryMax` alone would have missed it. The values
-sit above the normal peaks; they are not measured limits. The busiest normal
-tab runs herdr and its agents, so it is the one closest to the limits; above
-20G the kernel kills its largest process.
+sit above the normal peaks; they are not measured limits. That busiest tab ran
+herdr and its agents, so `herdr-default.service` takes the same limits on the
+workstations; above 20G the kernel kills its largest process.
+
+A herdr server started from a terminal, before the service ran, still lives in
+that tab's scope. The service skips its start while any herdr server runs. To
+move a running server into the service, stop it from a terminal outside herdr,
+which ends its agents: `herdr server stop && systemctl --user start
+herdr-default.service`.
 
 `memory-pressure-snapshot.service` writes every process with its parent and
 command line, and each user cgroup's memory, to

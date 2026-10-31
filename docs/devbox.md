@@ -637,9 +637,9 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
 ## Memory and logs
 
 The host sets zram swap of 16 GiB, `vm.swappiness` 100 and journald's cap at 2
-GiB, each over the shared value. The user slice has no systemd-oomd swap kill,
-which `nixosModules/memory.nix` sets on the workstations and which would kill
-agent sessions. `/tmp` stays on the disk, loses files untouched for 7 days, and
+GiB, each over the shared value. The host has no systemd-oomd swap kill,
+because `nixosModules/memory.nix` sets it on `app.slice` of the workstations
+only. `/tmp` stays on the disk, loses files untouched for 7 days, and
 keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
 
 ## Boot test in a VM
