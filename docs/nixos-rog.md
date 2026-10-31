@@ -43,12 +43,22 @@ to 10 minutes of random delay. On battery the service skips the run. Each run:
 1. fetches `main`;
 2. stops when the deploy of this `main` failed before, and prints when it
    failed, its exit status and the first `error:` line of that run;
-3. stops when the host runs `main`, or when `main` builds the system it runs,
-   such as after a docs change. The second case writes `<commit> <system>` to
-   `same-system` in the state directory, so the next run on that commit and
-   system skips the evaluation, which took 58 s and 6.9 GiB instead of about
-   10 s (journal, 2026-10-23);
-4. otherwise deploys `main` with `./deploy.sh <host> switch`.
+3. stops when the host runs `main`, or when `same-system` in the state
+   directory records this commit and the running system;
+4. defers the run while another deploy holds the deploy lock, because two
+   evaluations of 7.2 GB each ran at once on 2026-10-31 and swap filled. It
+   also defers while MemAvailable is below 10 GiB, because the evaluation
+   in the next step took 6.9 GiB (journal, 2026-10-23) and 10 GiB leaves a
+   guessed margin. It also defers while an agent in herdr's default session
+   is working, until the first deferral in a row is 24 hours old, a policy
+   guess. `deferred-since` in the state directory holds the time of that first
+   deferral. A run that cannot read herdr's agents goes on. A run that
+   `upgrade` started skips the memory and agent checks, but not the lock;
+5. stops when `main` builds the system it runs, such as after a docs change,
+   and writes `<commit> <system>` to `same-system`, so the next run on that
+   commit and system skips the evaluation, which took 58 s and 6.9 GiB instead
+   of about 10 s (journal, 2026-10-23);
+6. otherwise deploys `main` with `./deploy.sh <host> switch`.
 
 A desktop notification reports each deploy or failure. A switch leaves the
 desktop shell, the keyring and other user services on their old version.
@@ -70,7 +80,9 @@ without isolating the service from that user.
 
 To deploy `main` now, run `upgrade` on the host (`nixosModules/upgrade.nix`,
 a command the hosts share). It runs this unit now, prints the unit's log while
-it runs and exits with the run's status. From nixos-desktop:
+it runs and exits with the run's status. It first creates `deploy-now` in the
+state directory, so that run skips the load check of step 4 and removes the
+file. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade
@@ -123,6 +135,8 @@ each one means.
 | Event | What happens | Notification |
 | --- | --- | --- |
 | GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
+| MemAvailable is below 10 GiB, or a herdr agent is working | The run exits quietly before the evaluation. The next run tries again. | None |
+| A deferral has lasted 24 hours and memory is below 10 GiB now | The run still defers; busy agents stop deferring it after 24 hours. | "Update waiting", once, until a run passes the check or finds `main` already running |
 | A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
 | The build of `main` fails on a download, such as GitHub's API limit | The run fails and records nothing against `main`. The next run tries again. | Critical |
 | The deploy fails with 71, 74 or 79 | The next run tries the same `main` again. | Critical |

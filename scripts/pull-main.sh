@@ -9,6 +9,9 @@ failed=$STATE_DIRECTORY/failed-main
 failed_why=$STATE_DIRECTORY/failed-main.why
 waiting=$STATE_DIRECTORY/waiting
 same=$STATE_DIRECTORY/same-system
+deferred_since=$STATE_DIRECTORY/deferred-since
+deferred_notified=$STATE_DIRECTORY/deferred-notified
+deploy_now=$STATE_DIRECTORY/deploy-now
 export GIT_CONFIG_GLOBAL=/dev/null
 # shellcheck source=/dev/null
 . "${DEPLOY_LIB:?}"
@@ -26,6 +29,44 @@ notify() {
   DBUS_SESSION_BUS_ADDRESS=unix:path=$bus timeout 5 notify-send -a "System update" -u "$1" -- "$2" "$3"
 }
 warn() { echo "$*"; }
+
+defer_for_load() {
+  local available now since='' waited_day=false out rc=0 working=0
+  now=$(date +%s)
+  [[ ! -f $deferred_since ]] || since=$(<"$deferred_since")
+  if [[ $since =~ ^[0-9]+$ ]]; then
+    ((now - since < 86400)) || waited_day=true
+  else
+    since=''
+  fi
+  available=$(awk '$1 == "MemAvailable:" { print $2 }' /proc/meminfo)
+  if ((available < 10485760)); then
+    echo "Deferred: MemAvailable is $((available / 1024)) MiB, below the 10 GiB a build of main needs. The next run tries again."
+    if [[ -z $since ]]; then
+      echo "$now" >"$deferred_since"
+    elif $waited_day && [[ ! -f $deferred_notified ]] &&
+      notify normal "Update waiting" "$host has deferred the deploy of main since $(date -d "@$since" '+%F %H:%M'), and memory is below 10 GiB now. See: journalctl -u $unit_name"; then
+      : >"$deferred_notified"
+    fi
+    return 0
+  fi
+  [[ -x ${HERDR_BIN:-} ]] || return 1
+  out=$(timeout 10 "$HERDR_BIN" agent list 2>/dev/null) || rc=$?
+  ((rc != 0)) || working=$(jq -e -s '[.[].result.agents[] | select(.agent_status == "working")] | length' <<<"$out" 2>/dev/null) || rc=$?
+  ((rc != 0)) || [[ $working =~ ^[0-9]+$ ]] || rc=1
+  if ((rc != 0)); then
+    echo "Could not read herdr's agents (exit $rc); deploying as if none were working."
+    return 1
+  fi
+  ((working > 0)) || return 1
+  if $waited_day; then
+    echo "Deploying although $working herdr agents are working, because the deploy has waited since $(date -d "@$since" '+%F %H:%M')."
+    return 1
+  fi
+  echo "Deferred: $working herdr agents are working. The next run tries again; after 24 hours the deploy goes ahead."
+  [[ -n $since ]] || echo "$now" >"$deferred_since"
+  return 0
+}
 reported=false
 fail() {
   reported=true
@@ -56,6 +97,7 @@ if [[ -f $failed && $(<"$failed") == "$main" ]]; then
   else
     echo "The deploy of main at ${main:0:12} failed before and waits for main to move."
   fi
+  rm -f -- "$deploy_now"
   exit 0
 fi
 
@@ -64,9 +106,22 @@ fi
 if runs_tree_of "$main" ||
   [[ -f $same && $(<"$same") == "$main $(readlink -f /run/current-system)" ]]; then
   echo "$host already runs main at ${main:0:12}."
-  rm -f -- "$waiting"
+  rm -f -- "$waiting" "$deferred_since" "$deferred_notified" "$deploy_now"
   exit 0
 fi
+
+deploy_lock=$HOME/.local/state/nixos-config-deploy/deploy.lock
+if [[ -f $deploy_lock ]] && ! flock -n "$deploy_lock" true; then
+  echo "Deferred: another deploy holds the deploy lock ($(cat -- "${deploy_lock%/*}/deploy.owner" 2>/dev/null || echo "owner unknown")). The next run tries again."
+  rm -f -- "$deploy_now"
+  exit 0
+fi
+if [[ -f $deploy_now ]]; then
+  echo "upgrade asked for this run, so it skips the load check."
+elif defer_for_load; then
+  exit 0
+fi
+rm -f -- "$deferred_since" "$deferred_notified" "$deploy_now"
 
 eval_log=$RUNTIME_DIRECTORY/eval.log
 new_system=$(nix build --no-link --print-out-paths ".#nixosConfigurations.$host.config.system.build.toplevel" 2>"$eval_log") || new_system=

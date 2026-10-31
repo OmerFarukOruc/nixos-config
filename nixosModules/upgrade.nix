@@ -5,7 +5,7 @@
   ...
 }:
 let
-  inherit (config.oruc.upgrade) updater;
+  inherit (config.oruc.upgrade) updater skipLoadCheckFile;
 
   runUpdater = pkgs.writeShellApplication {
     name = "upgrade";
@@ -21,6 +21,9 @@ let
         exit 1
       fi
       sudo -v
+      ${lib.optionalString (
+        skipLoadCheckFile != null
+      ) "sudo touch ${lib.escapeShellArg skipLoadCheckFile}"}
       journalctl --follow --lines 0 --output cat \
         _SYSTEMD_UNIT="$unit" SYSLOG_IDENTIFIER="$identifier" + _PID=1 UNIT="$unit" &
       follow=$!
@@ -118,6 +121,13 @@ in
     default = null;
     example = "oruc-auto-update";
     description = "Base name of the systemd unit that `upgrade` starts instead of deploying main itself. With null, `upgrade` deploys the newest main to this host.";
+  };
+
+  options.oruc.upgrade.skipLoadCheckFile = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    example = "/var/lib/oruc-auto-update/deploy-now";
+    description = "A file that `upgrade` creates before it starts the updater, so that run deploys without waiting for free memory or idle agents.";
   };
 
   config = {

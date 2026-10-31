@@ -19,6 +19,7 @@ in
 
   config = lib.mkIf cfg.enable {
     oruc.upgrade.updater = "oruc-auto-update";
+    oruc.upgrade.skipLoadCheckFile = "/var/lib/oruc-auto-update/deploy-now";
 
     systemd.services.oruc-auto-update = lib.mkMerge [
       (import ./deploy-unit.nix { inherit config pkgs; } {
@@ -30,6 +31,7 @@ in
       })
       {
         description = "Deploy the newest main";
+        environment.HERDR_BIN = "/etc/profiles/per-user/${config.oruc.machine.user}/bin/herdr";
         unitConfig.ConditionACPower = true;
         onFailure = [ "oruc-auto-update-died.service" ];
       }
