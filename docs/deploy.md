@@ -455,7 +455,9 @@ that starts within that one minute can still be cut short by the reboot. After
 a deploy cut short, the host boots the previous system, the boot default that
 the deploy had not yet replaced. Limine counts no boot attempts, so a new kernel that does not
 boot leaves the host down until someone opens the provider's console and picks
-the previous entry from Limine's menu; nothing reports it. The telemetry work
+the previous entry from Limine's menu; nothing reports it. For devbox, an agent
+can open the console of netcup's Server Control Panel with agent-browser; no
+one has tried that path yet. The telemetry work
 that ships the journal is where an alert on a missing host belongs.
 
 **The session check.** SSH can still answer while a switch broke the desktop.

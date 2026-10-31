@@ -118,14 +118,6 @@
           inherit inputs;
           host = box;
         }
-        // import ./ci/server-units.nix {
-          inherit inputs;
-          host = box;
-        }
-        // import ./ci/server-desktop.nix {
-          inherit inputs;
-          host = box;
-        }
         // import ./ci/self-deploy.nix {
           inherit inputs;
           host = box;

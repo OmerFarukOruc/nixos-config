@@ -15,9 +15,9 @@
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
-- [Unit check in a VM](#unit-check-in-a-vm)
 - [Deploy test in a VM](#deploy-test-in-a-vm)
-- [Desktop test in a VM](#desktop-test-in-a-vm)
+- [What no test covers](#what-no-test-covers)
+- [Streamed desktop CPU](#streamed-desktop-cpu)
 
 ## What it is
 
@@ -284,6 +284,14 @@ during the run, it rebases and runs the checks again; a rebase conflict or a
 push race leaves `main` alone until the next night. The module is
 `nixosModules/nightly-update.nix`.
 
+No VM check runs in the job, because devbox has no KVM (`/dev/kvm` is missing).
+A kernel or initrd that it moves meets the 02:10 UTC reboot unchecked, and the
+units its moves reach are checked only by the deploy
+([What no test covers](#what-no-test-covers)). A run took 51 min 19 s on
+2026-10-30 when the moved kernel needed its NVIDIA and sensor modules built for
+nixos-desktop and nixos-rog, and 23 min 34 s on 2026-10-31 for a nixpkgs move
+that reused the kept builds (`journalctl -u nightly-update`).
+
 The unit runs as the system user `nightly-update` with a 4h30min limit. It
 has no start window, and while it runs the 02:10 UTC reboot
 ([Deploys](#deploys)) waits for the next night. A run started in the minute
@@ -324,13 +332,13 @@ changes:
   ```
 
 - Step 4 checks both permissions on the box without a run. A push with
-  `--dry-run` asks GitHub for write access and sends nothing, and a label edit
-  that keeps the label's color needs Issues write. The new token works when the
-  command prints `Everything up-to-date` and `nightly-update`; a `403` names
-  the missing permission:
+  `--dry-run` of a new branch name asks GitHub for write access and creates
+  nothing, and a label edit that keeps the label's color needs Issues write.
+  The new token works when the command prints `[new branch]` and
+  `nightly-update`; a `403` names the missing permission:
 
   ```sh
-  sudo nix shell nixpkgs#git nixpkgs#gh -c bash -c 'export GH_TOKEN=$(</run/secrets/github-push-token); cd /var/lib/nightly-update/repo && git -c safe.directory="$PWD" -c credential.helper= -c "credential.helper=!gh auth git-credential" push --dry-run origin origin/main:refs/heads/main && gh api -X PATCH repos/OmerFarukOruc/nixos-config/labels/nightly-update -f color=d93f0b --jq .name'
+  sudo nix shell nixpkgs#git nixpkgs#gh -c bash -c 'export GH_TOKEN=$(</run/secrets/github-push-token); cd /var/lib/nightly-update/repo && git -c safe.directory="$PWD" -c credential.helper= -c "credential.helper=!gh auth git-credential" push --dry-run origin HEAD:refs/heads/nightly-update-token-check && gh api -X PATCH repos/OmerFarukOruc/nixos-config/labels/nightly-update -f color=d93f0b --jq .name'
   ```
 
 ## Web names
@@ -369,7 +377,11 @@ everywhere and connects from the tailnet only.
   `reloadServices`), and the orders after the first run at the same time. An
   order that has copied its files but not yet run its `chmod` leaves a
   certificate and key that Caddy cannot read, so a restart in that window made
-  Caddy exit with status 1 and stay down. A restart stops Caddy at once, and
+  Caddy exit with status 1 and stay down. A VM test with a test CA that held
+  each order's `chmod` showed that exit in each run without this ordering; no
+  check guards the ordering now. A failed order shows as `activating`, not in
+  `systemctl --failed`, because its unit restarts after 15 minutes, and it
+  leaves the self-signed certificate in place. A restart stops Caddy at once, and
   its start waits for the orders that run, so Caddy starts once they are done.
   The cost is that Caddy waits for the orders at boot, which begin after
   `network-online.target`, and is down while the last orders of a renewal
@@ -593,7 +605,7 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   3389 on devbox to nixos-desktop (`tag:desktop-relay`); nixos-rog and
   nixos-latitude reach it as Omer's own devices, through the grant that lets
   members reach every device.
-- **Desktop test.** A one-off run of the desktop test on 2026-10-28 with
+- **Remmina check.** A run in a NixOS VM on 2026-10-28 with
   Remmina 1.4.43 as the client showed the `tr` layout, H.264, ı, ş and ğ, and
   pointer moves that reach the desktop at once. sesman refuses root logins,
   which it allows by default. The XFCE screensaver is off, because the login
@@ -617,8 +629,7 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   `wpctl inspect @DEFAULT_AUDIO_SINK@ | grep node.name` on the box prints
   `xrdp-sink`.
 - **Why not Sunshine.** Sunshine with Moonlight was the other route. In the
-  last passing [desktop test](#desktop-test-in-a-vm)
-  that measured both, on 4 cores of nixos-desktop, the whole VM used 0.99
+  NixOS VM test of 2026-10-27 that measured both, on 4 cores of nixos-desktop, the whole VM used 0.99
   cores on an idle desktop with Moonlight connected and 0.08 with an RDP
   client, and 1.62 and 0.84 while playing a 1080p video. Sunshine also needs an
   X session logged in as omer from boot, with no screen lock.
@@ -646,7 +657,8 @@ scripts/build.sh .#checks.x86_64-linux.devbox-boot-bios
 The test installs the host's disk layout (`disk.nix`) and system from an
 installer VM, including Limine's BIOS stage. It then reboots from that disk
 without QEMU's kernel loader, so the firmware and Limine start the system. The
-Python checks of `ci/server-boot/checks/` run last. They cover the units, the
+Python checks of `ci/server-boot/checks/` run last. They wait for sshd,
+tailscaled, systemd-networkd, getty, Caddy and the telemetry units, and cover the
 address and routes from the sops template, the sshd listeners and settings, the
 users, the firewall, the sysctls, the disk layout, and the swap, journal and
 /tmp settings. The telemetry check ([Telemetry](#telemetry)) covers the
@@ -689,58 +701,17 @@ settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets files, that the netcup network works, that
 Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI and
 stay-green start (they need a registry and a Teams sign-in, so the test turns
-them off and checks their secrets only; the unit check below checks their
-settings), that Let's Encrypt issues the host's certificates with the real
+them off and checks their secrets only), that Let's Encrypt issues the host's certificates with the real
 Cloudflare token, or that the BIOS stage installs from the kexec installer. The
 cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no
 guest agent channel, so `qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
 and a 9p `/nix/store`, which is disko's test wrapper.
 
-## Unit check in a VM
-
-The flake check `devbox-units` (`ci/server-units.nix`) boots the host's
-own modules in a plain NixOS test and fails when any unit has failed after boot,
-Home Manager's included. It also reads the environment of omer's stay-green and
-cliproxy units, because systemd splits an unquoted value at a space. A unit
-that fails during a switch makes `switch-to-configuration` exit 4, which `deploy.sh` rolls back, so one failed
-unit would roll back every deploy. Run it with
-`scripts/build.sh .#checks.x86_64-linux.devbox-units`. It is separate from
-the boot test because disko's booted machine has a read-only `/nix/store` and no
-database of its closure, which fails the Home Manager units there for reasons
-the box does not have. This test uses qemu-vm's standard store, which is
-writable and registered.
-
-A unit that failed after boot has happened: `smartd` failed to start in the boot
-test (`smartd.service: Failed with result 'exit-code'`) on a virtio disk, the
-kind this host has, and `nixosModules/monitoring.nix` enables smartd unless a
-host says otherwise. So `configuration.nix` sets `services.smartd.enable =
-false`.
-
-The test also starts a test ACME server (pebble) and a DNS server for the
-challenge (`ci/server-units/acme.nix`), and swaps lego's DNS provider for its
-`exec` provider, so the certificate orders of the host succeed. The
-Cloudflare provider wiring is not covered; a real order at the cutover proves
-it. A failed order is not in `systemctl --failed`: the order unit has
-`Restart=on-failure` with a 15 minute delay, so it shows as `activating`. The
-test therefore also requires that no unit is still activating after boot and
-that Caddy serves a certificate from the test CA. A failed order on the box
-leaves the self-signed certificate in place and shows only in the journal,
-which reaches SigNoz without an alert.
-
-The test adds a third name, `race-test.risoluto.dev`, and holds the `chmod`
-of each order's output for 10, 20 and 30 seconds (`ci/server-units/acme.nix`),
-so the orders of the first issuance overlap on purpose. With the host's two
-names alone, one order would follow the first and none would overlap it. Each order copies its files into `out/`, then runs `chmod`
-and `chown` for the web server's group, and until that `chmod` the files are
-0600, so Caddy cannot read them. Orders that share an account run at the same
-time, except the first, which runs alone, and an order that is done restarts
-Caddy while the others are in that window. A real order passes the `chmod` in
-milliseconds, so that overlap is rare on the box and certain in the test. The
-held `chmod` is the one on `out`, and it logs `test: chmod of out waited N s`
-after the wait, so the test can check that the wait still happens after a
-nixpkgs move. In each run of this test without the ordering of Caddy
-after the orders, Caddy exited with status 1.
+`configuration.nix` sets `services.smartd.enable = false`, because smartd
+failed to start in a VM test (`smartd.service: Failed with result 'exit-code'`)
+on a virtio disk, the kind this host has, and `nixosModules/monitoring.nix`
+enables smartd unless a host says otherwise.
 
 ## Deploy test in a VM
 
@@ -774,58 +745,40 @@ The test does not show that a deploy over SSH as root reaches the box, that the
 box fetches the real main from GitHub, that the real flake evaluates (the boot
 tests and `ci/checks.sh` do), or that a deployed system boots; it never reboots.
 
-## Desktop test in a VM
+## What no test covers
 
-The flake check `devbox-desktop` (`ci/server-desktop.nix`) is a NixOS
-test of the [streamed desktop](#streamed-desktop), and it needs KVM. Run it
-with `scripts/build.sh .#checks.x86_64-linux.devbox-desktop`; its
-script takes about 5 minutes once everything is built (285.67 s in the passing
-run on nixos-desktop). `machine` runs the host's own modules, as the
-[unit check](#unit-check-in-a-vm) does, with 6 GiB of RAM and 4 cores. A second
-node, `client`, runs an X session with the Turkish layout and FreeRDP.
+A deploy rolls back when a system unit fails during the switch or root's
+session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
+--failed` and `systemctl --user -M omer@ --failed` on the box. These show only
+in daily use:
 
-`machine` has a second network card that the test renames to tailscale0, which
-the firewall trusts. So a connection from `client` through eth1 stands for the
-public interface, and one through tailscale0 for the tailnet. Tailscale runs
-without a tun device in the test, because the renamed card holds that name.
-`ci/server-desktop/machine.nix` holds these changes and the workload of the CPU
-measurements.
+- **omer's user units.** A root deploy checks only root's own services, so a
+  failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
+- **Units that keep their old version.** OpenChamber, herdr, the Amp runner and
+  the Cursor worker set `X-SwitchMethod = "keep-old"` in
+  `machines/devbox/home.nix`, so a deploy does not start their new version.
+- **Quoted environment values.** stay-green's schedule is quoted in
+  `machines/devbox/home.nix`; without the quotes systemd splits the value at a
+  space, and no unit fails.
+- **ACME orders.** A failed order shows as `activating`
+  ([Web names](#web-names)), and nothing checks that Caddy starts after the
+  orders; Caddy down after a renewal shows it.
+- **The streamed desktop.** H.264 from xrdp (`overlays/xrdp.nix`), the `tr`
+  layout, the reconnect to the same session, and the desktop that starts only
+  at the first login show at the next RDP login. A patch that stops applying
+  fails the build.
+- **A unit that fails only at boot.** Nothing rolls back after the 02:10 UTC
+  reboot.
 
-`ci/server-desktop/test.py` checks these:
+## Streamed desktop CPU
 
-1. No unit has failed or is still starting after boot, xrdp runs, and no
-   desktop runs before the first RDP login.
-2. xrdp's port 3389 gets no answer from the public interface, and answers on
-   tailscale0. A rule that opens the port for a moment shows that the firewall
-   alone causes the drop. The rules of the firewall accept nothing but
-   tailscale0, loopback, replies and Tailscale's own UDP port (and, on IPv6,
-   ICMPv6 and the DHCPv6 client port).
-3. FreeRDP, asking for H.264, logs in as omer and gets a 1920x1080 XFCE, and
-   xrdp's log says it matched H.264 and used x264. After a disconnect the
-   session keeps running, and sesman logs a reconnect to the same XFCE and its
-   windows.
-4. xrdp's log shows that the client sent the Turkish layout (`0x0000041F`)
-   and that xrdp gave the session X's `tr`. A click on the client lands on
-   the same spot of the desktop, and xev on the desktop gets the keys typed on
-   the client, with the keys of ı, ş and ğ as those letters. The test clicks
-   because FreeRDP's X11 client (`xfreerdp` 3.32.2) sends a pointer move only
-   when the next input event reaches it, as its trace log showed in a run of
-   this test.
-5. The CPU use of `machine` with the RDP client connected
-   ([measurements](#cpu-measurements)).
-
-The test does not show an RDP client from the tailnet, a real Tailscale
-connection, or the netcup CPU. The cutover proves the first two.
-
-### CPU measurements
-
-These are VM numbers: `machine` has 4 cores of nixos-desktop's CPU, not the
-netcup box's. Each cell is the average busy cores over 30 seconds, from
-`/proc/stat` (`ci/server-desktop/cpu.py`). The load runs on `machine` itself as
+A NixOS VM test on nixos-desktop measured the streamed desktop on 2026-10-28.
+These are VM numbers: the VM had 4 cores of nixos-desktop's CPU, not the netcup
+box's. Each cell is the average busy cores over 30 seconds, from
+`/proc/stat`. The load ran in the VM itself as
 omer, in the RDP session: Chromium on a 20000-line text page that a script scrolls,
 and Chromium on a 20 s looping 1080p VP9 video, a synthetic test pattern that
-Chromium decodes in software on a host with no GPU (`workload` in
-`ci/server-desktop/machine.nix`). The client asks for H.264 at
+Chromium decodes in software on a host with no GPU. The client asks for H.264 at
 1920x1080 (`/gfx:AVC420`) and gets x264 from xrdp.
 
 | Load | whole VM | `xrdp` process | `Xorg` of the session |
@@ -834,7 +787,7 @@ Chromium decodes in software on a host with no GPU (`workload` in
 | scrolling page | 0.83 | 0.18 | 0.13 |
 | video 1080p | 0.75 | 0.15 | 0.07 |
 
-`cpu.py` lists the six busiest processes, and on the idle desktop neither
+The measurement listed the six busiest processes, and on the idle desktop neither
 `xrdp` nor `Xorg` was among them, behind processes at 0.00. Chromium itself
 used 0.37 cores while scrolling and 0.42 while playing video.
 The host's steal time (CPU that the host took from the VM) was at most 0.01
