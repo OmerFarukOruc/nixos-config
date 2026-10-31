@@ -23,7 +23,6 @@ in
 {
   nixpkgs.overlays = [
     (import ../overlays/khal.nix)
-    (import ../overlays/ghostty.nix)
     (import ../overlays/mcp-nixos.nix)
   ];
 
