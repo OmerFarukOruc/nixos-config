@@ -461,6 +461,13 @@ reaches 4.5:1 on them, and `user.ini` selects the one of the scheme's variant wi
 the theme list and the `dark` flag only at start, so a switch between a dark
 and a light scheme changes its icons at its next start.
 
+`home-manager/modules/chat-themes.nix`, which the workstation profile imports,
+installs Vesktop, a Discord client that loads Vencord themes. Its pack theme
+`~/.config/vesktop/themes/oruc.css` is Stylix's Discord theme
+(`vesktop-colors.nix`, MIT) with the button and notice text set by
+`readableOn`, and Vencord's `enabledThemes` lists it. Vencord watches the
+folder, so Vesktop repaints at once.
+
 The ChatGPT app only offers its built-in code themes, listed in
 `codex-code-themes.json` from its 26.1027.30824 bundle. The `codex-settings` fact
 names the one a scheme takes: the one its name matches, such as `catppuccin`

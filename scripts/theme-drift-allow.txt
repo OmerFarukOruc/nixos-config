@@ -1,0 +1,1 @@
+home-manager/modules/vesktop-colors.nix	Stylix's Discord CSS matches Discord's own fixed icon colours in its selectors

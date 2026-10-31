@@ -66,6 +66,7 @@ in
 {
   imports = [
     ../modules/airpods.nix
+    ../modules/chat-themes.nix
     ../modules/spicetify.nix
   ];
 

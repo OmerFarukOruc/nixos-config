@@ -55,8 +55,8 @@ and side bar backgrounds, that the Claude Code status line's segment colours
 are the scheme's and their text reaches 4.5:1 on them, and that OBS's text on
 its accent colours and SourceGit's badge and conflict text reach 4.5:1.
 
-For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS and
-the Cursor editor it checks that their theme files hold the scheme's base00,
+For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
+Vesktop and the Cursor editor it checks that their theme files hold the scheme's base00,
 and that the Cursor editor's settings.json selects the Oruc Base16 theme of
 the scheme's dark or light variant. `oruc-app-settings --check` then checks
 that every settings file the switch sets, such as ~/.codex/config.toml or
@@ -417,6 +417,7 @@ check_app_settings() {
   holds "$slug" .config/oruc/sourcegit-theme.json "\"Window\":\"#FF${base00^^}\""
   holds "$slug" ".config/obs-studio/themes/Oruc$side.ovt" "--grey7: #$base00"
   holds "$slug" .config/oruc/cursor-colors.json "\"Oruc Base16 $side\""
+  holds "$slug" .config/vesktop/themes/oruc.css "--base00: #$base00;"
   [[ ! -e $pack/$slug/.config/oruc/cursor-colors.json ]] ||
     [[ $(jq -r '.["workbench.colorTheme"]' "${XDG_CONFIG_HOME:-$HOME/.config}/Cursor/User/settings.json") == "Oruc Base16 $side" ]] ||
     fail "$slug: the Cursor editor's settings.json does not select Oruc Base16 $side"
