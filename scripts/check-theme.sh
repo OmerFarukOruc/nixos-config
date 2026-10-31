@@ -24,7 +24,8 @@ the pack is a GC root. It prints a skip line for each scheme whose Plasma
 checks cannot run.
 
 For Noctalia, DMS, rofi, vicinae, niri, wlogout, mpv and the Plasma splash it
-checks that each file holds the scheme's colour. While Noctalia or DMS runs,
+checks that each file holds the scheme's colour; for mpv's OSD colours it asks
+mpv itself to read the file. While Noctalia or DMS runs,
 it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
@@ -112,6 +113,14 @@ holds() {
   local slug=$1 key=$2 text=$3
   [[ -e $pack/$slug/$key ]] || return 0
   grep -qiF -- "$text" "$HOME/$key" || fail "$slug: ~/$key does not hold $text"
+}
+
+mpv_reads_osd_color() {
+  local slug=$1 colour=$2 key=.config/mpv/oruc-colors.conf
+  [[ -e $pack/$slug/$key ]] || return 0
+  mpv --no-config --include="$HOME/$key" --msg-level=cplayer=v --idle=no 2>&1 |
+    grep -qiF "Setting option 'osd-color' = '#$colour'" ||
+    fail "$slug: mpv does not read osd-color #$colour from ~/$key"
 }
 
 holds_required() {
@@ -392,7 +401,7 @@ check_session() {
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "variant = \"$polarity\""
   holds "$slug" .config/wlogout/style.css "border-color: #$base0D;"
   holds "$slug" .config/mpv/script-opts/modernz.conf "seekbarfg_color=#$base0D"
-  holds "$slug" .config/mpv/oruc-colors.conf "osd-color=#$base05"
+  mpv_reads_osd_color "$slug" "$base05"
   holds "$slug" .local/share/plasma/look-and-feel/oruc.splash/contents/splash/Splash.qml "color: \"#$base00\""
   if systemctl --user is-active -q noctalia.service; then
     holds_required "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
