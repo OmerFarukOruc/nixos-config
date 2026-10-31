@@ -115,6 +115,11 @@ in
       };
     };
 
+    oruc.variantReloads.oruc-wallpaper = ''
+      systemctl --user is-active -q oruc-wallpaper.service || exit 0
+      systemctl --user restart oruc-wallpaper.service
+    '';
+
     systemd.user.services.oruc-wallpaper = {
       Unit = {
         Description = "Base16 desktop wallpaper";

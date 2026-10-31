@@ -22,22 +22,10 @@ in
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "plasma") {
     home.packages = [ pkgs.kdePackages.spectacle ];
 
-    systemd.user.services.oruc-plasma-wallpaper = {
-      Unit = {
-        Description = "Apply the selected Plasma wallpaper";
-        After = [
-          "plasma-workspace.target"
-          "plasma-plasmashell.service"
-        ];
-        PartOf = [ "plasma-workspace.target" ];
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = lib.getExe applyWallpaper;
-        Restart = "on-failure";
-        RestartSec = 5;
-      };
-      Install.WantedBy = [ "plasma-workspace.target" ];
+    programs.plasma.startup.startupScript.oruc-wallpaper = {
+      text = lib.getExe applyWallpaper;
+      priority = 4;
+      runAlways = true;
     };
 
     oruc.variantReloads.wallpaper = ''

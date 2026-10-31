@@ -3,8 +3,7 @@
 A scheme without a wallpaper of its own gets `default.png` recolored to the
 scheme's 16 colors. `oruc-wallpaper-path` (`home-manager/modules/wallpaper.nix`)
 renders it the first time `theme` selects the scheme and keeps it in
-`~/.cache/oruc/wallpapers`; NixOS recolors the record scheme's in
-`nixosModules/theme-module.nix` (the `wallpaper` value). To
+`~/.cache/oruc/wallpapers`. To
 give a scheme its own wallpaper, add a file named after it, for example
 `gruvbox-dark-medium.png`. PNG, JPEG, and WebP files are discovered without
 adding host-specific monitor or layout policy. When several files carry the

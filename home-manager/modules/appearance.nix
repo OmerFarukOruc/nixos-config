@@ -19,7 +19,8 @@ let
     cursor=$(cat "$facts/cursor")
     icons=$(cat "$facts/icons")
     gtk=$(cat "$facts/gtk")
-
+  '';
+  dconfHelpers = ''
     dconf_write() {
       if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
         dconf write "$@"
@@ -105,6 +106,7 @@ let
     text = ''
       state=${lib.escapeShellArg config.oruc.themeState}
       ${readFacts}
+      ${dconfHelpers}
 
       gtk_theme_unless_picked() {
         local settings=${config.xdg.configHome}/gtk-3.0/settings.ini
@@ -158,6 +160,7 @@ let
     ];
     text = ''
       ${readFacts}
+      ${dconfHelpers}
       interface=/org/gnome/desktop/interface
       dconf_gtk_theme_unless_picked
       dconf_write "$interface/cursor-theme" "'$cursor'"

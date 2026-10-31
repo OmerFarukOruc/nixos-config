@@ -3,7 +3,6 @@ schemeOf:
   config,
   inputs,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -40,7 +39,6 @@ in
     };
     gtk = readOnly types.str "GTK theme that follows the scheme variant.";
     readableOn = readOnly (types.functionTo types.str) "The text colour for a background given as six hex digits: base00 or base07 when one reaches 4.5:1 contrast on it, else black or white, as six lowercase hex digits.";
-    wallpaper = readOnly types.path "Wallpaper named after the selected scheme in assets/wallpapers, or the default wallpaper recolored with the scheme.";
     ansi = readOnly (types.listOf types.str) "Scheme slots of the 16 ANSI colors: black, red, green, yellow, blue, magenta, cyan, white, then the bright row.";
     ansiNames = readOnly (types.listOf types.str) "Capitalized names of the eight ANSI colors, in the order of each row of ansi.";
   };
@@ -53,31 +51,6 @@ in
         ui = "Inter";
         mono = "JetBrainsMono Nerd Font";
       };
-      wallpaper =
-        let
-          storePathOfFileAlone =
-            file:
-            "${
-              lib.fileset.toSource {
-                root = dirOf file;
-                fileset = file;
-              }
-            }/${baseNameOf file}";
-          named = lib.findFirst builtins.pathExists null (
-            map (extension: ../assets/wallpapers + "/${schemeName}.${extension}") [
-              "png"
-              "jpg"
-              "jpeg"
-              "webp"
-            ]
-          );
-          colors = lib.genList (i: config.scheme.withHashtag."base0${lib.toHexString i}") 16;
-          recolored = pkgs.runCommand "wallpaper-${schemeName}" { nativeBuildInputs = [ pkgs.lutgen ]; } ''
-            mkdir "$out"
-            lutgen apply -R -o "$out/${schemeName}.png" ${storePathOfFileAlone ../assets/wallpapers/default.png} -- ${lib.escapeShellArgs colors}
-          '';
-        in
-        if named == null then "${recolored}/${schemeName}.png" else storePathOfFileAlone named;
     };
   };
 }

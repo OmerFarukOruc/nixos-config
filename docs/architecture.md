@@ -162,8 +162,8 @@ These rules follow from the list:
 `nixosModules/theme-module.nix` sets the read-only `oruc.theme` values of a
 Base16 scheme. `nixosModules/theme-values.nix` gives whether the scheme is
 light, the cursor and GTK theme that follow that variant, the icons
-(`nixosModules/icon-theme.nix`), and the ANSI slots; the module adds the
-wallpaper and the fixed font families. The theme pack calls `theme-values.nix`
+(`nixosModules/icon-theme.nix`), and the ANSI slots; the module adds the fixed
+font families. The theme pack calls `theme-values.nix`
 for every scheme.
 
 NixOS and Home Manager each import that module with their own scheme:
@@ -179,14 +179,15 @@ The wallpaper is the file in `assets/wallpapers` named after the scheme. A schem
 without one gets `assets/wallpapers/default.png` recolored to the scheme's 16
 colors by lutgen. In the session, `oruc-wallpaper-path`
 (`home-manager/modules/wallpaper.nix`) prints the wallpaper of the scheme that
-`theme/current` points at: the scheme's own file, or a PNG it renders once from
-the pack's `palette` fact into `~/.cache/oruc/wallpapers/<scheme>.png`. One
-render took 0.05 to 0.07 s in 3 runs on nixos-rog, and its PNG equals the one
-the NixOS derivation builds for the same scheme (`cmp`, 2026-10-31). Plasma (`oruc-plasma-wallpaper`, at
-login and as a reload), Noctalia, DMS and waybar take the wallpaper from it, so
-it follows any scheme. `theme-module.nix` keeps a derivation that recolors the
-record scheme's wallpaper for NixOS; it reads a file in the repository, so it
-needs no import from derivation.
+`theme/current` points at: the scheme's own file, or a PNG it renders from the
+pack's `palette` fact into `~/.cache/oruc/wallpapers/<scheme>-<key>.png`. The
+key hashes the palette, the wallpaper images and lutgen, so a changed input
+renders a new file. One render took 0.05 to 0.07 s in 3 runs on nixos-rog
+(2026-10-31). Plasma, Noctalia, DMS and waybar take the wallpaper from it, so it
+follows any scheme. On Plasma, plasma-manager's startup script `oruc-wallpaper`
+sets it at each login after the panel script, which deletes the desktop's
+wallpaper when it rebuilds the panels, and the reload `wallpaper` sets it at
+each switch. waybar's `oruc-wallpaper.service` restarts swaybg at each switch.
 
 `theme.schemes` in the machine record lists other schemes. Each one, with each
 Plasma look, is a Home Manager variant (`machines/variants.nix`). With Plasma,

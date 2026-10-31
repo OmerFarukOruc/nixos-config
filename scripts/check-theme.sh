@@ -330,19 +330,19 @@ check_plasma() {
 }
 
 check_wallpaper() {
-  local slug=$1 path mtime extension own=
+  local slug=$1 path inode extension own=
   command -v oruc-wallpaper-path >/dev/null || return 0
   path=$(oruc-wallpaper-path) || fail "$slug: oruc-wallpaper-path exited $?"
   for extension in png jpg jpeg webp; do
     [[ $path == /nix/store/*/"$slug.$extension" ]] && own=1
   done
   if [[ -z $own ]]; then
-    [[ $path == "${XDG_CACHE_HOME:-$HOME/.cache}/oruc/wallpapers/$slug.png" ]] ||
+    [[ $path == "${XDG_CACHE_HOME:-$HOME/.cache}/oruc/wallpapers/$slug-"*.png ]] ||
       fail "$slug: oruc-wallpaper-path printed $path"
     file -b "$path" | grep -q '^PNG image data' || fail "$slug: $path is not a PNG"
-    mtime=$(stat -c %Y "$path")
-    oruc-wallpaper-path >/dev/null
-    [[ $(stat -c %Y "$path") == "$mtime" ]] || fail "$slug: a second oruc-wallpaper-path rendered $path again"
+    inode=$(stat -c %i "$path")
+    [[ $(oruc-wallpaper-path) == "$path" && $(stat -c %i "$path") == "$inode" ]] ||
+      fail "$slug: a second oruc-wallpaper-path rendered $path again"
   fi
   if systemctl --user is-active -q plasma-plasmashell.service; then
     for _ in $(seq 25); do
@@ -353,22 +353,35 @@ check_wallpaper() {
   fi
 }
 
+gtk_polarity_applies() {
+  [[ -e $pack/$1/.config/niri/oruc-theme.kdl && -e $pack/$1/.oruc/cursor ]] &&
+    ! systemctl --user is-active -q plasma-plasmashell.service
+}
+
 check_gtk_polarity() {
-  local slug=$1 polarity cursor icons now
-  [[ -e $pack/$slug/.config/niri/oruc-theme.kdl && -e $pack/$slug/.oruc/cursor ]] || return 0
-  ! systemctl --user is-active -q plasma-plasmashell.service || return 0
+  local slug=$1 gtk_before=$2 icons_before=$3 polarity cursor icons gtk expected
+  gtk_polarity_applies "$slug" || return 0
   polarity=$(cat "$pack/$slug/.oruc/polarity")
   cursor=$(cat "$pack/$slug/.oruc/cursor")
   icons=$(cat "$pack/$slug/.oruc/icons")
+  gtk=$(cat "$pack/$slug/.oruc/gtk")
   [[ $(dconf read /org/gnome/desktop/interface/color-scheme) == "'prefer-$polarity'" ]] ||
     fail "$slug: dconf color-scheme is not prefer-$polarity"
   [[ $(dconf read /org/gnome/desktop/interface/cursor-theme) == "'$cursor'" ]] ||
     fail "$slug: dconf cursor-theme is not $cursor"
-  now=$(dconf read /org/gnome/desktop/interface/icon-theme)
-  case $now in
-    "'$icons'") ;;
-    "'Papirus-"* | "'Gruvbox-Plus-"* | "'breeze"*) fail "$slug: dconf icon-theme is $now, not $icons" ;;
+  case $gtk_before in
+    "" | "'adw-gtk3'" | "'adw-gtk3-dark'") expected="'$gtk'" ;;
+    *) expected=$gtk_before ;;
   esac
+  [[ $(dconf read /org/gnome/desktop/interface/gtk-theme) == "$expected" ]] ||
+    fail "$slug: dconf gtk-theme is not $expected"
+  expected=$icons_before
+  if [[ -z $icons_before ]] || sort -u "$pack"/*/.oruc/icons <(printf '%s\n' breeze breeze-dark) |
+    sed "s/.*/'&'/" | grep -qxF -- "$icons_before"; then
+    expected="'$icons'"
+  fi
+  [[ $(dconf read /org/gnome/desktop/interface/icon-theme) == "$expected" ]] ||
+    fail "$slug: dconf icon-theme is not $expected"
 }
 
 check_session() {
@@ -441,6 +454,12 @@ previous=$original
 for slug in "$@"; do
   plasma_before=
   icons_before=
+  gtk_before=
+  dconf_icons_before=
+  if gtk_polarity_applies "$slug"; then
+    gtk_before=$(dconf read /org/gnome/desktop/interface/gtk-theme)
+    dconf_icons_before=$(dconf read /org/gnome/desktop/interface/icon-theme)
+  fi
   if plasma_session "$slug"; then
     plasma_before=$(kdeglobal kdeglobals General ColorScheme)
     icons_before=$(kdeglobal kdeglobals Icons Theme)
@@ -493,7 +512,7 @@ for slug in "$@"; do
   check_vscode "$slug"
   check_session "$slug"
   check_wallpaper "$slug"
-  check_gtk_polarity "$slug"
+  check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then
     holds "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"
   else
