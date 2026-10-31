@@ -36,7 +36,8 @@ scheme's 16 ANSI colours, that the login theme links to the file oruc-theme-root
 writes and that file's text colour is the scheme's base05, or the record
 scheme's for a light scheme, and that oruc-theme-root refuses an unknown scheme
 with exit 64 and changes neither the stored scheme, the console nor the login
-screen. It checks that
+screen. On a Limine host it checks that limine.conf holds the scheme's base00
+as backdrop and term_background, and that every other line stays as it was. It checks that
 oruc-wallpaper-path prints the scheme's own wallpaper from
 assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
 in a Plasma session that the desktop shows it. Outside Plasma, on a host with
@@ -369,6 +370,23 @@ live_console() {
   cat /sys/module/vt/parameters/default_{red,grn,blu}
 }
 
+limine_conf=/boot/limine/limine.conf
+limine_keys='^(backdrop|interface_branding_colour|interface_help_colour|interface_help_colour_bright|term_palette|term_palette_bright|term_foreground|term_background|term_foreground_bright|term_background_bright): '
+
+boot_menu_rest() {
+  /run/wrappers/bin/sudo -n grep -vE "$limine_keys" "$limine_conf" || true
+}
+
+check_boot_menu() {
+  local slug=$1 base00
+  [[ -n $boot_menu_before ]] || return 0
+  base00=$(color "$slug" base00)
+  [[ $(/run/wrappers/bin/sudo -n grep -ciE "^(backdrop|term_background): $base00\$" "$limine_conf") == 2 ]] ||
+    fail "$slug: $limine_conf does not hold the scheme's base00 as backdrop and term_background"
+  [[ $(boot_menu_rest) == "$boot_menu_before" ]] ||
+    fail "$slug: theme changed a line of $limine_conf outside the colour keys"
+}
+
 check_system() {
   local slug=$1 login_text
   [[ -x $theme_root ]] || fail "$slug: this system has no oruc-theme-root"
@@ -507,6 +525,11 @@ for i in 1 2; do
   [[ -s $scratch/nvim$i ]] || fail "Neovim $i did not start a server"
 done
 
+boot_menu_before=
+if /run/wrappers/bin/sudo -n test -e "$limine_conf" 2>/dev/null; then
+  boot_menu_before=$(boot_menu_rest)
+fi
+
 previous=$original
 for slug in "$@"; do
   plasma_before=
@@ -570,6 +593,7 @@ for slug in "$@"; do
   check_vscode "$slug"
   check_session "$slug"
   check_system "$slug"
+  check_boot_menu "$slug"
   check_wallpaper "$slug"
   check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then

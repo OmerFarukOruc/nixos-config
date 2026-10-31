@@ -168,8 +168,8 @@ for every scheme.
 NixOS and Home Manager each import that module with their own scheme:
 
 - NixOS (`nixosModules/theme.nix`) uses `theme.scheme` from the machine record.
-  The boot menu reads it, and so does niri until a Home Manager activation
-  writes its colour file (below). The console and the login screen start from
+  niri reads it until a Home Manager activation writes its colour file
+  (below). The console, the login screen and the Limine boot menu start from
   it and then follow the stored scheme (below).
 - Home Manager (`home-manager/modules/scheme.nix`) uses `theme.scheme` too, so
   its `config.scheme` and `config.oruc.theme` hold the record scheme. Only the
@@ -260,10 +260,10 @@ reuse the generation's pack, and root's Home Manager and the servers get a
 pack with the record scheme alone. `oruc.themeFacts` adds a value per
 scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
 
-The console and the login screen run outside the user session, so
-`nixosModules/theme-root.nix` builds a system pack with each scheme's console
-palette (`vtrgb`) and login screen colours (`sddm.conf.user`), on hosts with a
-desktop. `theme <scheme>` passes the scheme on stdin to `oruc-theme-root`
+The console, the login screen and the boot menu run outside the user session,
+so `nixosModules/theme-root.nix` builds a system pack with each scheme's
+console palette (`vtrgb`), login screen colours (`sddm.conf.user`) and, on a
+Limine host, boot menu colours (`limine`), on hosts with a desktop. `theme <scheme>` passes the scheme on stdin to `oruc-theme-root`
 through `sudo -n`, which a sudo rule allows for the record's user alone. The
 helper stores it in `/var/lib/oruc/theme/scheme`, runs `setvtrgb`, and writes
 `/var/lib/oruc/theme/sddm/jake_the_dog.conf.user`, the file the login theme's
@@ -279,6 +279,19 @@ reports.
 A light scheme's `sddm.conf.user` holds the record's colours, because the
 login form is drawn at 30 % opacity over a dark video. `theme --reapply` does
 not call the helper.
+
+On a Limine host the helper also rewrites the ten colour lines of
+`/boot/limine/limine.conf`, the ones `limine-install.py` writes from
+`boot.loader.limine.style`. It requires each key exactly once and every other
+line unchanged, else it leaves the file as it was, and it replaces the file
+through a rename and syncs it. Each bootloader install writes the record's
+colours, so `boot.loader.limine.extraInstallCommands` runs
+`oruc-theme-root --limine`, which writes the stored scheme's colours again and
+never fails the install. `theme` takes `/run/nixos/switch-to-configuration.lock`
+for up to 60 s before it stores a scheme, so it never edits the file during a
+switch; a switch that starts meanwhile exits with "Could not acquire lock" and
+the next one succeeds. `--limine` skips that lock when `NIXOS_ACTION` is set,
+because then a switch that holds it runs the install.
 
 On Plasma, `theme` then runs `oruc-plasma-live`
 (`home-manager/modules/plasma-looks/default.nix`), which changes the running

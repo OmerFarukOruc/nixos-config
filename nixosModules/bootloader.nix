@@ -6,6 +6,7 @@
 let
   inherit (config.oruc.machine) bootloader biosDevice;
   limine = config.boot.loader.limine;
+  systemThemeValues = import ./system-theme-values.nix { inherit lib; };
   menuGenerationsLikeAngrrKeepLatest =
     config.services.angrr.settings.profile-policies.system.keep-latest-n;
 in
@@ -38,28 +39,10 @@ in
         biosSupport = biosDevice != null;
         biosDevice = lib.mkIf (biosDevice != null) biosDevice;
         maxGenerations = menuGenerationsLikeAngrrKeepLatest;
-        style =
-          let
-            inherit (config) scheme;
-            palette = names: lib.concatMapStringsSep ";" (name: scheme.${name}) names;
-          in
-          {
-            wallpapers = [ ];
-            backdrop = scheme.base00;
-            interface = {
-              brandingColor = scheme.base0A;
-              helpColor = scheme.base0C;
-              helpColorBright = scheme.base09;
-            };
-            graphicalTerminal = {
-              palette = palette (lib.take 8 config.oruc.theme.ansi);
-              brightPalette = palette (lib.drop 8 config.oruc.theme.ansi);
-              foreground = scheme.base06;
-              brightForeground = scheme.base06;
-              background = scheme.base00;
-              brightBackground = scheme.base02;
-            };
-          };
+        style = {
+          wallpapers = [ ];
+        }
+        // systemThemeValues.limineStyle config.scheme;
       };
     })
   ];

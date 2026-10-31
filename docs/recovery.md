@@ -234,6 +234,11 @@ Then run the `nixos-enter`, `NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot`
 lines. The Limine entries then come back after a BIOS update that cleared the
 firmware boot entries.
 
+The install ends with `oruc-theme-root --limine`, which rewrites only the ten
+colour lines of `limine.conf` to the scheme stored in
+`/var/lib/oruc/theme/scheme`. When it fails, it prints why and leaves the
+record's colours; the install still succeeds.
+
 The firmware GPU mode must be Hybrid mode (see `CONTEXT.md`). In Integrated
 mode the NVIDIA driver has no device.
 

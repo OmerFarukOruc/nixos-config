@@ -64,4 +64,27 @@ in
         "g"
         "b"
       ];
+
+  limineStyle =
+    scheme:
+    let
+      slots = consoleSlots scheme;
+      palette = names: lib.concatMapStringsSep ";" (name: scheme.${name}) names;
+    in
+    {
+      backdrop = scheme.base00;
+      interface = {
+        brandingColor = scheme.base0A;
+        helpColor = scheme.base0C;
+        helpColorBright = scheme.base09;
+      };
+      graphicalTerminal = {
+        palette = palette (lib.take 8 slots);
+        brightPalette = palette (lib.drop 8 slots);
+        foreground = scheme.base06;
+        brightForeground = scheme.base06;
+        background = scheme.base00;
+        brightBackground = scheme.base02;
+      };
+    };
 }

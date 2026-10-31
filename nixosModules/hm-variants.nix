@@ -170,8 +170,8 @@ let
       its form is drawn see-through over a dark video.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
-      default ones; it leaves the console and the login screen as they are.
-      The boot menu keeps the scheme of the machine record.'';
+      default ones; it leaves the console, the login screen and the boot menu
+      as they are. The Limine boot menu changes at the next boot.'';
     text = ''
       case ''${1:-} in
         "") echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})" ;;
