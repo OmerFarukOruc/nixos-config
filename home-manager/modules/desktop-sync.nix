@@ -12,7 +12,6 @@ in
 
   home.packages = [
     pkgs.bubblewrap
-    pkgs.python3
     pkgs.mise
     pkgs.jq
   ];

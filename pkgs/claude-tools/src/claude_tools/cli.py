@@ -38,11 +38,18 @@ def complete_words(words: list[str]) -> list[str]:
     return list(sub) if sub else [o for a in ap._actions for o in a.option_strings if o not in ("-h", "--help")]
 
 
+def child_path(path: str) -> str:
+    interpreter_bin = str(Path(sys.base_prefix) / "bin")
+    entries = [p for p in path.split(":") if p != interpreter_bin]
+    local_bin = str(Path.home() / ".local/bin")
+    if local_bin not in entries:
+        entries.insert(0, local_bin)
+    return ":".join(entries)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    local_bin = str(Path.home() / ".local/bin")
-    if local_bin not in os.environ.get("PATH", "").split(":"):
-        os.environ["PATH"] = f"{local_bin}:{os.environ.get('PATH', '')}"
+    os.environ["PATH"] = child_path(os.environ.get("PATH", ""))
     if argv[:1] == ["accounts"]:
         os.execv(ACCOUNTS_TOOL, [str(ACCOUNTS_TOOL), *argv[1:]])
     if argv[:1] == ["--complete-words"]:
