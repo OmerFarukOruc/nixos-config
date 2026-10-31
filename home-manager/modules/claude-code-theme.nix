@@ -4,6 +4,41 @@
   ...
 }:
 let
+  contrast = import ../../nixosModules/contrast.nix { inherit lib; };
+
+  statusline =
+    { scheme, theme }:
+    let
+      rgb = hex: lib.concatMapStringsSep ";" toString (contrast.channels hex);
+      text = {
+        dir = scheme.base02;
+        git = scheme.base09;
+        model = scheme.base0D;
+        account = scheme.base0C;
+        clock = scheme.base0E;
+        cost = scheme.base0F;
+      };
+      bars = {
+        ctx = scheme.base01;
+        five_hour = scheme.base02;
+        seven_day = scheme.base01;
+      };
+      legible = background: color: rgb (contrast.legibleOn scheme [ background ] color);
+    in
+    builtins.toJSON {
+      segments =
+        lib.mapAttrs (_: background: {
+          bg = rgb background;
+          fg = rgb (theme.readableOn background);
+        }) text
+        // lib.mapAttrs (_: background: { bg = rgb background; }) bars;
+      used = lib.mapAttrs (_: background: {
+        low = legible background scheme.base0B;
+        mid = legible background scheme.base0A;
+        high = legible background scheme.base08;
+      }) bars;
+    };
+
   render =
     { scheme, theme }:
     let
@@ -100,5 +135,6 @@ in
   config = lib.mkIf config.programs.claude-code.enable {
     oruc.themeFiles.".claude/themes/scheme.json" = render;
     oruc.themeCopies = [ ".claude/themes/scheme.json" ];
+    oruc.themeFacts.statusline = statusline;
   };
 }

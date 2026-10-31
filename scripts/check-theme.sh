@@ -50,8 +50,9 @@ holds its sidebar colour after each switch, and that `theme` leaves a
 settings.json that does not parse byte-identical and reports the failed
 reload. With --contrast it first checks, for every scheme in the pack, that
 each text colour the VS Code theme draws on an accent background reaches
-4.5:1 against it, and that its muted text and comments reach 4.5:1 on the
-editor and side bar backgrounds.
+4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
+and side bar backgrounds, and that the Claude Code status line's segment
+colours are the scheme's and their text reaches 4.5:1 on them.
 
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.
@@ -142,6 +143,7 @@ holds_required() {
 
 check_contrast() {
   python3 -I - "$pack" <<'PYTHON'
+import json
 import re
 import sys
 from pathlib import Path
@@ -268,14 +270,61 @@ for slug in (pack / "slugs").read_text().split():
     inactive, active = values["editorLineNumber.foreground"], values["editorLineNumber.activeForeground"]
     if active == inactive and inactive != values["editor.foreground"]:
         failures.append(f"{slug}: the active line number looks like the others")
-for line in failures[:20]:
+text_segments = {
+    "dir": "base02", "git": "base09", "model": "base0D", "account": "base0C", "clock": "base0E", "cost": "base0F",
+}
+bar_segments = {"ctx": "base01", "five_hour": "base02", "seven_day": "base01"}
+levels = ("low", "mid", "high")
+
+
+def hex_of(rgb):
+    return "".join(f"{int(part):02x}" for part in rgb.split(";"))
+
+
+def statusline_failures(slug):
+    fact = pack / slug / ".oruc/statusline"
+    if not fact.exists():
+        return [f"{slug}: the pack has no status line fact"]
+    data = json.loads(fact.read_text())
+    yaml = (pack / slug / ".oruc/source.yaml").read_text()
+    found = []
+    for name, slot in {**text_segments, **bar_segments}.items():
+        segment = data.get("segments", {}).get(name, {})
+        scheme = re.search(rf'^\s+{slot}:\s*"#([0-9a-fA-F]{{6}})"', yaml, re.M)
+        if "bg" not in segment:
+            found.append(f"{slug}: the {name} segment has no bg")
+            continue
+        bg = hex_of(segment["bg"])
+        if not scheme or bg != scheme[1].lower():
+            found.append(f"{slug}: the {name} segment is not the scheme's {slot}")
+        if name in text_segments:
+            drawn = {"fg": segment.get("fg")}
+        else:
+            used = data.get("used", {}).get(name, {})
+            drawn = {f"used {level}": used.get(level) for level in levels}
+        for label, value in drawn.items():
+            if value is None:
+                found.append(f"{slug}: the {name} segment has no {label}")
+                continue
+            ratio = contrast(hex_of(value), bg)
+            if ratio < 4.5:
+                found.append(f"{slug}: the {name} segment's {label} {value} is {ratio:.2f}:1")
+    return found
+
+
+statusline = []
+slugs = (pack / "slugs").read_text().split()
+for slug in slugs:
+    statusline += statusline_failures(slug)
+for line in (failures + statusline)[:20]:
     print(f"check-theme: {line}", file=sys.stderr)
-if failures:
-    sys.exit(f"check-theme: {len(failures)} VS Code contrast failures")
+if failures or statusline:
+    sys.exit(f"check-theme: {len(failures)} VS Code and {len(statusline)} status line contrast failures")
 print(
     f"ok contrast: VS Code text in {checked} schemes;"
     f" {skipped} use their own theme and were skipped"
 )
+print(f"ok contrast: the Claude Code status line in {len(slugs)} schemes")
 PYTHON
 }
 
@@ -527,7 +576,7 @@ points_at() {
 }
 
 if [[ -n $contrast ]]; then
-  check_contrast || fail "VS Code contrast"
+  check_contrast || fail "contrast"
 fi
 
 tmux -L "$tmux_socket" new-session -d -s check

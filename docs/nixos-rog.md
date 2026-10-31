@@ -889,9 +889,13 @@ theme tokyo-night-dark
 
 Ghostty, running tmux servers and running Neovim, which `theme` tells to
 reload, take the new colors at once, and so does Claude Code, whose dotfiles
-`settings.json` selects `custom:scheme`. Starship reads its colors at each
-prompt, so it changes in open shells too; fzf and atuin take them at their next
-start, and the Markdown viewer the next time a file opens. A running VS Code
+`settings.json` selects `custom:scheme`. Its status line reads the pack's
+`statusline` fact at its next refresh (30 s at most). Every segment's text
+reaches 4.5:1 on its background in every scheme. The usage bars take the
+scheme's green, yellow and red, each lightened or darkened only as far as
+4.5:1 needs. Starship reads its colors at each prompt, so it changes in open
+shells too; fzf and atuin take them at their next start, and the Markdown
+viewer the next time a file opens. A running VS Code
 takes the new colors at once and its see-through window background at its
 next start. Its text, button text, muted text such as descriptions and line
 numbers, and comments reach 4.5:1 contrast on the editor background in every

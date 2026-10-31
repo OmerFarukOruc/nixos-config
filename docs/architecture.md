@@ -259,6 +259,10 @@ scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
 reuse the generation's pack, and root's Home Manager and the servers get a
 pack with the record scheme alone. `oruc.themeFacts` adds a value per
 scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
+`claude-code-theme.nix` writes `.oruc/statusline`, the segment backgrounds,
+text colours and usage colours that dotfiles' `desktop/claude-code/statusline.sh`
+reads; when the fact is missing or lacks a key, that script keeps its fixed
+colour for it.
 
 The console, the login screen and the boot menu run outside the user session,
 so `nixosModules/theme-root.nix` builds a system pack with each scheme's
@@ -394,6 +398,9 @@ When no color reaches 4.5:1 on both backgrounds, as in brogrammer, whose
 list the keys the renderer changed and the color theme VS Code shows, and
 `scripts/check-theme.sh --contrast` checks them in every scheme that uses this
 theme. The Warm Burnout schemes use their own theme, so the check skips them.
+The same run checks the `statusline` fact of every scheme: each segment
+background is the scheme's slot, and each text and usage colour reaches 4.5:1
+on it.
 
 The pack file `~/.config/oruc/vscode-colors.json` holds `workbench.colorTheme`,
 `window.systemColorTheme` and `workbench.colorCustomizations`, and
