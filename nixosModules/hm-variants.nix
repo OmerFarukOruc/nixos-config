@@ -182,8 +182,8 @@ let
       and a Claude Code that selects custom:scheme take its colours at once; Starship,
       fzf and atuin at their next run, and the Markdown viewer at its next open. On
       Plasma, KDE and GTK 4 apps, the cursor, the icons and the Glass glow change at
-      once, and GTK 3 apps and Kate's editor at their next start. VS Code follows only
-      the schemes in theme.schemes of the machine record, at its next start.
+      once, and GTK 3 apps and Kate's editor at their next start. VS Code changes its
+      colours at once and its see-through window at its next start.
       --reapply points the colour files at the stored scheme again and activates the
       stored Plasma look. The Home Manager service runs it after it activates the
       default ones.
@@ -214,9 +214,9 @@ let
           fi
           "$pointer" --set "$1"
           reload
-          shown="Ghostty, tmux and Neovim"
+          shown="Ghostty, tmux, Neovim and VS Code"
           if live "$look"; then
-            shown="Ghostty, tmux, Neovim, KDE and GTK 4 apps"
+            shown="Ghostty, tmux, Neovim, VS Code, KDE and GTK 4 apps"
           fi
           echo "$shown show $1 now; Starship, fzf and atuin at their next run."
           ;;

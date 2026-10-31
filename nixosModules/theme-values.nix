@@ -1,10 +1,15 @@
 { lib }:
+let
+  contrast = import ./contrast.nix { inherit lib; };
+  iconTheme = import ./icon-theme.nix { inherit lib; };
+in
 scheme:
 let
   isLight = scheme.scheme-variant == "light";
 in
 {
   inherit isLight;
+  warmBurnout = lib.hasPrefix "warm-burnout-" scheme.scheme-slug;
   polarity = if isLight then "light" else "dark";
   rgb =
     slot:
@@ -17,8 +22,9 @@ in
     name = if isLight then "Bibata-Modern-Classic" else "Bibata-Modern-Ice";
     size = 24;
   };
-  icons = (import ./icon-theme.nix { inherit lib; }).name scheme isLight;
+  icons = iconTheme.name scheme isLight;
   gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
+  readableOn = contrast.readableOn scheme;
   ansiNames = [
     "Black"
     "Red"

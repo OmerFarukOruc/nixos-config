@@ -6,72 +6,12 @@
   ...
 }:
 let
-  channels =
-    color:
-    map (i: lib.fromHexString (builtins.substring (2 * i) 2 color)) [
-      0
-      1
-      2
-    ];
-  mix = pct: lib.zipListsWith (a: b: (a * pct + b * (100 - pct) + 50) / 100);
-  mixHex =
-    pct: a: b:
-    lib.concatMapStrings (value: lib.optionalString (value < 16) "0" + lib.toHexString value) (
-      mix pct (channels a) (channels b)
-    );
-
-  linear =
-    let
-      fifthRoot =
-        x: builtins.foldl' (y: _: y - (y * y * y * y * y - x) / (5.0 * y * y * y * y)) 1.0 (lib.range 1 40);
-    in
-    lib.genList (
-      value:
-      let
-        v = value / 255.0;
-      in
-      if v <= 0.03928 then
-        v / 12.92
-      else
-        let
-          u = (v + 0.055) / 1.055;
-          r = fifthRoot u;
-        in
-        u * u * r * r
-    ) 256;
-
-  luminance =
-    rgb:
-    let
-      part = i: builtins.elemAt linear (builtins.elemAt rgb i);
-    in
-    0.2126 * part 0 + 0.7152 * part 1 + 0.0722 * part 2;
-  contrast = la: lb: (lib.max la lb + 0.05) / (lib.min la lb + 0.05);
+  inherit (import ../../../nixosModules/contrast.nix { inherit lib; }) mixHex legibleOn;
 
   themeCss =
     { scheme, theme }:
     let
-      code = luminance (channels scheme.base01);
-      reaching =
-        color: target:
-        let
-          from = channels color;
-          to = channels target;
-        in
-        lib.findFirst (pct: contrast (luminance (mix (100 - pct) from to)) code >= 4.5) null (
-          lib.range 0 100
-        );
-      contrastOn = color: contrast (luminance (channels color)) code;
-      extreme = if contrastOn "000000" > contrastOn "ffffff" then "000000" else "ffffff";
-      onCode =
-        color:
-        let
-          towardFg = reaching color scheme.base05;
-        in
-        if towardFg != null then
-          mixHex (100 - towardFg) color scheme.base05
-        else
-          mixHex (100 - reaching color extreme) color extreme;
+      onCode = legibleOn scheme [ scheme.base01 ];
     in
     ''
       :root {

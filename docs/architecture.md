@@ -203,8 +203,8 @@ runs, against 29 to 46 seconds in 4 runs with one scheme (measured
 
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
-Manager writes, never through a package built with it. Neovim, the VS Code
-window and fzf read their colors from files for this reason. kVitals' package
+Manager writes, never through a package built with it. Neovim, VS Code and fzf
+read their colors from files for this reason. kVitals' package
 defaults and, on a host without Plasma, the cursor keep the record's scheme.
 On a host without Plasma, KDE apps take the icon theme of any scheme from
 `~/.config/kdeglobals` in the pack, while GTK takes the active variant's, so a
@@ -230,15 +230,15 @@ the old pack back, and points `current` at the stored scheme
 (`~/.local/state/oruc/scheme`), or at the record scheme when the pack lacks
 it. `theme <scheme>` replaces the stored scheme through a rename, which is the
 one step that commits a switch, points `current` at it, and then runs
-`oruc.variantReloads` so Ghostty, tmux and Neovim load the new files. Claude
-Code reloads its theme when the file is replaced, but not when a link on its
-path changes target, so its theme file is listed in `oruc.themeCopies`: the
+`oruc.variantReloads` so Ghostty, tmux, Neovim and VS Code load the new files.
+Claude Code reloads its theme when the file is replaced, but not when a link on
+its path changes target, so its theme file is listed in `oruc.themeCopies`: the
 pointer writes it as a regular file and replaces it through a rename each time
 it moves `current`. A renderer runs for every scheme, so it must give a valid file for
 each; the Markdown viewer's code colours move toward black or white when the
 scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
 reuse the generation's pack, and root's Home Manager and the servers get a
-pack with the record scheme alone. `oruc.themeFacts` adds a one-line value per
+pack with the record scheme alone. `oruc.themeFacts` adds a value per
 scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
 
 On Plasma, `theme` then runs `oruc-plasma-live`
@@ -301,19 +301,54 @@ the `warm-burnout` input's pinned commit (github:felipefdl/warm-burnout v1.8.0,
 - In `warm-burnout-light.yaml`, `base02` is the VS Code theme's translucent
   selection drawn over the background.
 
-With either of them,
-`home-manager/modules/theme.nix` also installs that input's own VS Code
-extension and Neovim color scheme in place of the Base16 ones. To move the
+With either of them, VS Code and Neovim use that input's own theme in place of
+the Base16 one; `home-manager/modules/theme.nix` installs both, and
+`theme.warmBurnout` tells the renderers which schemes they are. To move the
 input, change its commit in `flake.nix`, compare the new palette
 (`nvim/lua/warm-burnout/palette.lua`) with the two scheme files, and check that
-the VS Code theme labels and Neovim color scheme names still match
-`home-manager/modules/theme.nix`.
+the VS Code theme labels in `home-manager/modules/vscode.nix` and the Neovim
+color scheme names in `theme.nix` still match.
 
-Every other scheme gets a VS Code theme that `theme.nix` renders from the
-`tinted-vscode` input's pinned `base16` template, and `vscode.nix` rewrites the
-fixed colors in the vibrancy input's stylesheet with the scheme's.
-Evaluation fails when that stylesheet no longer holds a color that
-`vscode.nix` rewrites.
+VS Code follows any scheme without a restart. `vscode.nix` installs one
+extension, `oruc.base16-theme`, whose themes `Oruc Base16 Dark` and
+`Oruc Base16 Light` both read `~/.config/oruc/vscode-theme.json`, a file in
+`oruc.themeCopies` that VS Code watches. Its renderer fills the
+`tinted-vscode` input's pinned `base16` template and changes three kinds of
+text color, with the functions in `nixosModules/contrast.nix`:
+
+- Text on an accent background (`base08` to `base0F`), such as
+  `button.foreground` on `button.background`, takes `theme.readableOn` of that
+  background: `base00` or `base07`, whichever has more contrast, when it
+  reaches 4.5:1, else black or white. The hover backgrounds of those buttons
+  and status bar items move 15 % away from that text, so it stays readable on
+  hover.
+- Text on `base05` takes the normal text color: `base05`, or, when `base05`
+  stays under 4.5:1 on `base00` or `base01` (the editor and side bar
+  backgrounds), `base05` moved toward black or white until it reaches 4.5:1.
+- Muted text on `base02` to `base04`, such as descriptions, placeholders, line
+  numbers and comments, takes a faint level (`base02`, `base03`) or a dim level
+  (`base04`), each moved toward `base05` just far enough to reach 4.5:1. Faint
+  stays dimmer than dim, and dim dimmer than normal text; in the schemes whose
+  normal text is itself close to 4.5:1, the levels fall together. Whitespace
+  marks, rulers and the comment gutter keep their faint scheme color.
+
+When no color reaches 4.5:1 on both backgrounds, as in brogrammer, whose
+`base01` is bright red, only the editor background counts. The facts
+`.oruc/vscode-pairs`, `.oruc/vscode-text` and `.oruc/vscode-label` in the pack
+list the keys the renderer changed and the color theme VS Code shows, and
+`scripts/check-theme.sh --contrast` checks them in every scheme that uses this
+theme. The Warm Burnout schemes use their own theme, so the check skips them.
+
+The pack file `~/.config/oruc/vscode-colors.json` holds `workbench.colorTheme`,
+`window.systemColorTheme` and `workbench.colorCustomizations`, and
+`oruc-code-colors`, Home Manager's own writer for a mutable `settings.json`,
+merges it into that file at each activation and each switch; it leaves a
+`settings.json` that does not parse, or that VS Code changed meanwhile,
+unchanged. `vscode.nix` also rewrites the fixed colors in the vibrancy input's
+stylesheet with the scheme's, in the pack file
+`~/.config/oruc/vscode-vibrancy.json`, which VS Code reads at its start.
+Evaluation fails when that stylesheet no longer holds a color that `vscode.nix`
+rewrites.
 
 `theme.plasmaLook` names the default Plasma look, and a machine with no Plasma session leaves it null. `plasma-look` activates
 another look at run time, with the same variants

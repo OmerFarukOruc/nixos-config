@@ -9,78 +9,13 @@
 }:
 let
   cfg = osConfig.oruc.machine;
-  rawScheme = config.scheme;
-  scheme = config.scheme.withHashtag;
   theme = config.oruc.theme;
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
   hasDesktop = sessions.hasAnyDesktop cfg;
   hasFonts = sessions.hasGraphicalUser cfg;
 
-  warmBurnout = lib.hasPrefix "warm-burnout-";
-  isWarmBurnout = warmBurnout config.oruc.scheme;
-  warmBurnoutVersion = (lib.importJSON "${inputs.warm-burnout}/vscode/package.json").version;
-  warmBurnoutVscode = pkgs.vscode-utils.buildVscodeExtension {
-    pname = "felip3fdl-warm-burnout";
-    version = warmBurnoutVersion;
-    src = inputs.warm-burnout;
-    sourceRoot = "source/vscode";
-    vscodeExtPublisher = "felip3fdl";
-    vscodeExtName = "warm-burnout";
-    vscodeExtUniqueId = "felip3fdl.warm-burnout";
-  };
-  warmBurnoutNvim = pkgs.vimUtils.buildVimPlugin {
-    pname = "warm-burnout";
-    version = warmBurnoutVersion;
-    src = "${inputs.warm-burnout}/nvim";
-  };
-
-  tintedThemeLabel = "Base16 ${rawScheme.scheme-name}";
-  tintedVscode = pkgs.vscode-utils.buildVscodeExtension {
-    pname = "oruc-base16-theme";
-    version = "1.0.0";
-    vscodeExtPublisher = "oruc";
-    vscodeExtName = "base16-theme";
-    vscodeExtUniqueId = "oruc.base16-theme";
-    dontUnpack = true;
-    installPhase = ''
-      mkdir -p "$out/$installPrefix/themes"
-      cp ${
-        pkgs.writeText "package.json" (
-          builtins.toJSON {
-            name = "base16-theme";
-            publisher = "oruc";
-            version = "1.0.0";
-            engines.vscode = "^1.85.0";
-            contributes.themes = [
-              {
-                label = tintedThemeLabel;
-                uiTheme = if theme.isLight then "vs" else "vs-dark";
-                path = "./themes/base16.json";
-              }
-            ];
-          }
-        )
-      } "$out/$installPrefix/package.json"
-      cp ${
-        config.scheme {
-          templateRepo = inputs.tinted-vscode;
-          target = "base16";
-        }
-      } "$out/$installPrefix/themes/base16.json"
-    '';
-  };
-
-  vscodeAnsiColors = lib.listToAttrs (
-    lib.imap0 (
-      index: slot:
-      let
-        row = if index < 8 then "" else "Bright";
-        color = builtins.elemAt theme.ansiNames (lib.mod index 8);
-      in
-      lib.nameValuePair "terminal.ansi${row}${color}" scheme.${slot}
-    ) theme.ansi
-  );
+  warmBurnout = import ./warm-burnout.nix { inherit inputs pkgs; };
 
   kdeColorScheme =
     scheme:
@@ -125,27 +60,15 @@ in
     source-file -q ${tmuxTheme}
   '';
 
-  oruc.vscodeSettings = {
-    "workbench.colorTheme" =
-      if isWarmBurnout then "Warm Burnout ${lib.toSentenceCase theme.polarity}" else tintedThemeLabel;
-    "workbench.colorCustomizations" = {
-      "terminal.foreground" = scheme.base05;
-    }
-    // vscodeAnsiColors;
-    "terminal.integrated.minimumContrastRatio" = 1;
-  };
+  oruc.vscodeSettings."terminal.integrated.minimumContrastRatio" = 1;
 
   programs.atuin.settings.theme.name = "Oruc Base16";
-
-  programs.vscode.profiles.default.extensions = [
-    (if isWarmBurnout then warmBurnoutVscode else tintedVscode)
-  ];
 
   oruc.themeFiles = lib.mkMerge [
     {
       ".config/oruc/nvim-theme.lua" =
-        { scheme, ... }:
-        if warmBurnout scheme.scheme-slug then
+        { scheme, theme }:
+        if theme.warmBurnout then
           "vim.cmd.colorscheme('${scheme.scheme-slug}')"
         else
           "require('base16-colorscheme').setup({ ${
@@ -242,7 +165,7 @@ in
   programs.nvf.settings.vim = {
     startPlugins = [ "base16" ];
     extraPlugins.oruc-theme = {
-      package = warmBurnoutNvim;
+      package = warmBurnout.nvim;
       setup = ''
         local ok, err = pcall(dofile, ${builtins.toJSON nvimTheme})
         if not ok then vim.notify(err, vim.log.levels.WARN) end

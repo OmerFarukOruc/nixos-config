@@ -824,7 +824,12 @@ Ghostty, running tmux servers and running Neovim, which `theme` tells to
 reload, take the new colors at once, and so does Claude Code, whose dotfiles
 `settings.json` selects `custom:scheme`. Starship reads its colors at each
 prompt, so it changes in open shells too; fzf and atuin take them at their next
-start, and the Markdown viewer the next time a file opens.
+start, and the Markdown viewer the next time a file opens. A running VS Code
+takes the new colors at once and its see-through window background at its
+next start. Its text, button text, muted text such as descriptions and line
+numbers, and comments reach 4.5:1 contrast on the editor background in every
+scheme, and on the side bar too where the scheme allows it
+([Theme](architecture.md#theme)).
 
 On Plasma, the KDE colors of running apps, GTK 4 and libadwaita apps such as
 Mission Center, the cursor, the icons and the Glass glow change at once
@@ -838,8 +843,7 @@ icons and GTK theme name follow only the record's scheme and the schemes in
 
 The other apps that follow the scheme take it from a Home Manager variant, so
 they follow only the record's scheme and the schemes in `theme.schemes`
-(`machines/inventory.nix`); for any other scheme they keep the record's. VS Code
-takes its theme extension and its window background at its next start. The
+(`machines/inventory.nix`); for any other scheme they keep the record's. The
 wallpaper of a scheme without a file in `assets/wallpapers` is the default one
 recolored to that scheme ([Theme](architecture.md#theme)). On Plasma,
 `oruc-plasma-wallpaper` sets it again at each activation, so the desktop
@@ -858,7 +862,9 @@ one, apps that follow a variant show the record's colors for a moment then.
 `scripts/check-theme.sh SCHEME...` switches to each scheme, checks the colour
 files and a tmux server and two Neovim instances it starts, and switches back.
 In a running Plasma session it also checks the KDE colors, the dark or light
-set and the Glass glow. `--host nixos-latitude` runs it there.
+set and the Glass glow. It checks VS Code's `settings.json` after each switch,
+and `--contrast` also checks the text contrast of every scheme's VS Code theme.
+`--host nixos-latitude` runs it there.
 
 To give a scheme the apps that follow a variant, add its name to
 `theme.schemes`. A scheme that tinted-theming lacks goes in `assets/schemes`
@@ -986,11 +992,15 @@ sudo nix run nixpkgs#libinput -- debug-events --show-keycodes
 
 `oruc.vscodeSettings` holds the VS Code settings this repository owns.
 `home-manager/modules/vscode.nix` declares it and sets most keys, and
-`home-manager/modules/theme.nix` adds the theme keys. Each switch writes them into
-`~/.config/Code/User/settings.json` over the values there and lists them in
-`settingsSync.ignoredSettings`, so Settings Sync keeps them off Omer's other
-machines. An assertion in the same file fails evaluation when a setting reaches
-the file any other way. Every other key in `settings.json` is Omer's. It
+`home-manager/modules/theme.nix` adds the terminal's contrast key. Each switch
+writes them into `~/.config/Code/User/settings.json` over the values there and
+lists them in `settingsSync.ignoredSettings`, so Settings Sync keeps them off
+Omer's other machines. An assertion in `vscode.nix` fails evaluation when a
+setting reaches the file any other way. The color keys `workbench.colorTheme`,
+`window.systemColorTheme` and `workbench.colorCustomizations` come from the
+stored scheme instead: each switch and each `theme` run merge them from
+`~/.config/oruc/vscode-colors.json`, and the ignore list holds them too. Every
+other key in `settings.json` is Omer's. It
 survives each switch, and Settings Sync uploads it.
 
 - Add a setting that every host needs to `oruc.vscodeSettings`.

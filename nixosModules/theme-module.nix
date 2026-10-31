@@ -23,6 +23,7 @@ in
 
   options.oruc.theme = {
     isLight = readOnly types.bool "Whether the selected scheme is a light variant.";
+    warmBurnout = readOnly types.bool "Whether the selected scheme is warm-burnout-dark or warm-burnout-light, whose VS Code and Neovim themes come from the warm-burnout input.";
     polarity = readOnly (types.enum [
       "dark"
       "light"
@@ -38,6 +39,7 @@ in
       mono = readOnly types.str "Nerd Font family of the shell bars.";
     };
     gtk = readOnly types.str "GTK theme that follows the scheme variant.";
+    readableOn = readOnly (types.functionTo types.str) "The text colour for a background given as six hex digits: base00 or base07 when one reaches 4.5:1 contrast on it, else black or white, as six lowercase hex digits.";
     wallpaper = readOnly types.path "Wallpaper named after the selected scheme in assets/wallpapers, or the default wallpaper recolored with the scheme.";
     ansi = readOnly (types.listOf types.str) "Scheme slots of the 16 ANSI colors: black, red, green, yellow, blue, magenta, cyan, white, then the bright row.";
     ansiNames = readOnly (types.listOf types.str) "Capitalized names of the eight ANSI colors, in the order of each row of ansi.";

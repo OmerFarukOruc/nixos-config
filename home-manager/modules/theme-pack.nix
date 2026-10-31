@@ -14,6 +14,7 @@ let
     inherit inputs lib;
     parse = lib.id;
   };
+  themeValues = import ../../nixosModules/theme-values.nix { inherit lib; };
   catalogue = lib.mapAttrs (
     _: parsed:
     let
@@ -21,7 +22,7 @@ let
     in
     {
       inherit scheme;
-      theme = import ../../nixosModules/theme-values.nix { inherit lib; } scheme;
+      theme = themeValues scheme;
     }
   ) (inScope (import ../../machines/schemes.nix { inherit inputs lib; }));
 
