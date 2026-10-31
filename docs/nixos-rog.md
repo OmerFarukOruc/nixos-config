@@ -26,80 +26,60 @@ day. Repeat the measurement before you rely on it.
 
 ## Updater
 
-On nixos-rog and nixos-desktop, `oruc-auto-update.service` deploys the newest
-`main` to the host (`nixosModules/auto-update.nix`, turned on by
-`oruc.autoUpdate.enable`). nixos-latitude gets `main` from `upgrade` on the host
-or from a manual `./deploy.sh <host> switch`
-([Upgrade a host to main](deploy.md#upgrade-a-host-to-main)). Inputs and apps
-move every night on devbox ([Nightly update](devbox.md#nightly-update)) and in
-an update by hand ([Update by hand](updates.md#update-by-hand)).
+Every host except devbox installs the newest `main` with NixOS's
+`system.autoUpgrade` (`nixosModules/auto-upgrade.nix`, turned on by
+`oruc.autoUpgrade.enable`). `nixos-upgrade.timer` starts `nixos-upgrade.service`
+every hour, with up to 10 minutes of random delay, and `Persistent=true` runs a
+missed hour soon after boot. Before each run, `scripts/upgrade-condition.sh`
+fetches `main` into `/var/lib/nixos-upgrade/repo.git` over git, which needs no
+GitHub token, and the service then runs
+`nixos-rebuild switch --refresh --flake git+file:///var/lib/nixos-upgrade/repo.git`,
+which builds this host's system from that `main` and switches to it. It never
+reboots, and it has none of `deploy.sh`'s rollback timer, session check or SSH
+check. A successful run writes the system and the commit to
+`/var/lib/nixos-upgrade/installed`, which `scripts/lib/running-revision.sh`
+reads, so `scripts/affected-hosts.sh --running` can tell a host that is behind.
+`flake.lock` on `main` moves every 2 hours
+([Update inputs, apps and the kernel](updates.md)), so a new upstream release
+reaches the host within about 3 hours. The run stops after 3 hours
+(`TimeoutStartSec`), and its `MemoryHigh` slows it above 12 GiB.
 
-### Deploy unit
+The service skips a run, without a failure, when:
 
-Every 2 hours on AC power, `oruc-auto-update.service` runs
-`scripts/pull-main.sh` in its own clone of this repository. Its timer adds up
-to 10 minutes of random delay. On battery the service skips the run. Each run:
+- the host is on battery (`ConditionACPower`);
+- `deploy.sh` holds the deploy lock, or a deploy's `deploy-rollback.timer` is
+  pending;
+- `/boot` is not mounted, or has less than 1 GiB free;
+- fetching `main` fails, such as while GitHub cannot be reached;
+- the host runs a `test` deploy, a deploy from a dirty tree, or a commit that
+  `main` lacks, such as a branch deployed for a proof, so the hour does not
+  undo it;
+- installing this `main` failed before; the next `main` runs again;
+- MemAvailable is below 10 GiB, because an evaluation of `main` took 6.9 GiB
+  (journal, 2026-10-23) and two at once filled swap on 2026-10-31.
 
-1. fetches `main`;
-2. stops when the deploy of this `main` failed before, and prints when it
-   failed, its exit status and the first `error:` line of that run;
-3. stops when the host runs `main`, or when `same-system` in the state
-   directory records this commit and the running system;
-4. defers the run while another deploy holds the deploy lock, because two
-   evaluations of 7.2 GB each ran at once on 2026-10-31 and swap filled. It
-   also defers while MemAvailable is below 10 GiB, because the evaluation
-   in the next step took 6.9 GiB (journal, 2026-10-23) and 10 GiB leaves a
-   guessed margin. It also defers while an agent in herdr's default session
-   is working, until the first deferral in a row is 24 hours old, a policy
-   guess. `deferred-since` in the state directory holds the time of that first
-   deferral. A run that cannot read herdr's agents goes on. A run that
-   `upgrade` started skips the memory and agent checks, but not the lock;
-5. stops when `main` builds the system it runs, such as after a docs change,
-   and writes `<commit> <system>` to `same-system`, so the next run on that
-   commit and system skips the evaluation, which took 58 s and 6.9 GiB instead
-   of about 10 s (journal, 2026-10-23);
-6. otherwise deploys `main` with `./deploy.sh <host> switch`.
+`deploy.sh` exits 77 while the service runs, so the two never switch at once.
 
-A desktop notification reports each deploy or failure. A switch leaves the
-desktop shell, the keyring and other user services on their old version.
-`home-manager/README.md` lists them.
-
-A server's [self-deploy](deploy.md#self-deploy-of-a-server) shares this unit's
-definition (`nixosModules/deploy-unit.nix`) and the clone, token and deploy
-steps of the script (`scripts/lib/pull-main.sh`). The notifications and the wait
-for a failed `main` stay in `scripts/pull-main.sh`.
-
-`oruc-auto-update.service` reads a fine-grained GitHub token,
-`github-update-token`, limited to this repository, as a systemd credential. The
-script writes it to a private Nix config file and a private `gh` config under the service's runtime
-directory. Nix's GitHub fetches then stay within the API limit, and
-`deploy.sh` can ask `gh` which pull request merged a running release.
-Child-process environments carry only the file paths. systemd removes the directory after the run. Processes of `oruc`
-can still read the file; this removes the token from inherited environments
-without isolating the service from that user.
-
-To deploy `main` now, run `upgrade` on the host (`nixosModules/upgrade.nix`,
-a command the hosts share). It runs this unit now, prints the unit's log while
-it runs and exits with the run's status. It first creates `deploy-now` in the
-state directory, so that run skips the load check of step 4 and removes the
-file. From nixos-desktop:
+To install `main` now, run `upgrade` on the host (`nixosModules/upgrade.nix`,
+a command every host has). It starts `nixos-upgrade.service`, prints its log
+while it runs and exits with the run's status, or 1 when the run skipped. Its
+run ignores the last three skip reasons above. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade
 ```
 
-To test a change to `scripts/pull-main.sh`, `scripts/lib/pull-main.sh` or
-`nixosModules/deploy-unit.nix`, deploy it to nixos-rog and run `upgrade`.
+A switch leaves the desktop shell, the keyring and other user services on their
+old version. `home-manager/README.md` lists them.
 
-A manual deploy exits 77 while the unit holds the deploy lock, and the unit
-deploys `main` again on top of a generation you restored. To pause the unit on
-the host until the next reboot:
+The service installs `main` again on top of a generation you restored. To pause
+it on the host until the next reboot:
 
 ```sh
 sudo mkdir -p /run/systemd/system.control
-sudo ln -sfn /dev/null /run/systemd/system.control/oruc-auto-update.timer
+sudo ln -sfn /dev/null /run/systemd/system.control/nixos-upgrade.timer
 sudo systemctl daemon-reload
-sudo systemctl stop oruc-auto-update.timer
+sudo systemctl stop nixos-upgrade.timer
 ```
 
 Use a mask, not a stop. An activation can restart a timer that was only
@@ -107,20 +87,16 @@ stopped. `systemctl mask --runtime` does not work here: it writes the mask to
 `/run/systemd/system`, which systemd reads after `/etc/systemd/system`, where
 NixOS keeps the unit (`systemctl show -p UnitPath`). The mask in
 `/run/systemd/system.control` comes first, so
-`systemctl show -p LoadState oruc-auto-update.timer` prints
+`systemctl show -p LoadState nixos-upgrade.timer` prints
 `LoadState=masked`. The mask does not stop a run that is already going. Run
-`systemctl is-active oruc-auto-update.service` and wait until it prints
-`inactive` or `failed` before you restore a generation or deploy by hand. To resume
-before the next reboot, run
-`sudo rm /run/systemd/system.control/oruc-auto-update.timer`,
+`systemctl is-active nixos-upgrade.service` and wait until it prints
+`inactive` or `failed` before you restore a generation or deploy by hand. To
+resume before the next reboot, run
+`sudo rm /run/systemd/system.control/nixos-upgrade.timer`,
 `sudo systemctl daemon-reload` and then
-`sudo systemctl start oruc-auto-update.timer`.
-
-The mask lasts until the next reboot. After the reboot the unit runs again.
-`Persistent=true` runs a missed run soon after boot (on 2026-10-11 it started
-about 2 minutes after boot). Pause the unit again after each reboot, or it may
-deploy `main` before you do. [recovery.md](recovery.md#nixos-rog) uses this
-pause when it pins a generation.
+`sudo systemctl start nixos-upgrade.timer`. After a reboot the timer runs
+again, so pause it again after each reboot. [recovery.md](recovery.md#nixos-rog)
+uses this pause when it pins a generation.
 
 ### Packages no cache holds
 
@@ -137,45 +113,17 @@ an update changes its derivation.
 
 ## Failures and notifications
 
-This table covers the deploy unit on nixos-rog. The exit codes come from
-`deploy.sh`; the [exit-code table in deploy.md](deploy.md#exit-codes) says what
-each one means.
-
-| Event | What happens | Notification |
-| --- | --- | --- |
-| GitHub cannot be reached | The run exits quietly. The next run tries again. | None |
-| MemAvailable is below 10 GiB, or a herdr agent is working | The run exits quietly before the evaluation. The next run tries again. | None |
-| A deferral has lasted 24 hours and memory is below 10 GiB now | The run still defers; busy agents stop deferring it after 24 hours. | "Update waiting", once, until a run passes the check or finds `main` already running |
-| A clone or fetch fails while GitHub answers | It counts as a failure. | Critical |
-| The build of `main` fails on a download, such as GitHub's API limit | The run fails and records nothing against `main`. The next run tries again. | Critical |
-| The deploy fails with 71, 74 or 79 | The next run tries the same `main` again. | Critical |
-| The deploy fails with another status, such as a build that fails on nixos-rog | The unit does not deploy that `main` again until `main` moves. Each run that skips it prints when it failed, its exit status and the first `error:` line of that run. | Critical; after 73, which leaves nixos-rog on the new system with the old boot default, the popup says so |
-| Any other step of the script fails, such as an unset variable | The next run tries again. | Critical |
-| Another deploy's rollback timer is pending (70), or another deploy holds the lock (77) | The run stops without a failure, and before an upload when the timer is pending. The next run tries again. | "Update waiting" from the second run in a row that 77 holds back |
-| nixos-rog runs a release whose files `main` lacks (78) | The run stops without a failure. The next run tries again. | "Update waiting" from the first run that 78 holds back |
-| The run reaches 3 hours | The service stops the run (`TimeoutStartSec`). | Critical |
-| The system shuts down during a run | systemd stops the run. | Critical, when the desktop still shows notifications; the unit waits at most 5 seconds for it |
-| The run ends without reporting, such as a kernel kill for memory or a SIGKILL | `oruc-auto-update-died.service` reads the result systemd gives it. | Critical "Update died" with that result |
-
-A clone or fetch fails while GitHub answers when, for example, the account
-lost access to the repository.
-
-The script's traps report a failed exit and the time limit. A run that ends
-another way skips them, such as a kernel kill for memory (oom-kill, which skips
-the TERM trap too) or a SIGKILL. `oruc-auto-update-died.service`
-(`nixosModules/auto-update.nix`) covers those runs. It stays quiet for the
-results `exit-code` and `timeout`, which the traps already reported. Its popup
-goes through systembus-notify, which `nixosModules/monitoring.nix` turns on.
-
-A stop during `deploy.sh` leaves the rollback timer armed. The timer restores
-the previous system when it fires, at most 420 seconds after the deploy armed
-it. The stopped run records no failed deploy, so the next run tries again.
+A run that fails, such as a build that fails on this host, leaves the host on
+the system it runs. `nixos-upgrade-failed.service` records that `main` in
+`/var/lib/nixos-upgrade/failed`, so the hourly runs skip it until `main` moves,
+and shows a critical "Update failed" popup through systembus-notify, which
+`nixosModules/monitoring.nix` turns on. The first `error:` line is in
+`journalctl -u nixos-upgrade`. `upgrade` tries that `main` again.
 
 ## Secrets
 
-`secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`),
-and the deploy unit's GitHub token (`github-update-token`). sops encrypts the
-file for two recipients, which `.sops.yaml` lists:
+`secrets/nixos-rog.yaml` holds the NextDNS profile ID (`nextdns-profile`).
+sops encrypts the file for two recipients, which `.sops.yaml` lists:
 
 - Omer's shared SSH key, `~/.ssh/id_ed25519_omer`
 - the age key derived from the laptop's SSH host key
@@ -193,45 +141,6 @@ After an edit, run `scripts/check-secrets.sh` on nixos-rog; for
 with the host key, as the host does at boot, and fails when a secret the
 configuration declares has no key in the file or the file holds a key no secret
 declares. It prints key names only.
-
-### Rotate github-update-token
-
-The token does not expire. Rotate it when it may have leaked. GitHub lists it as
-"nixos-rog auto-update". Do the steps in this order, so the laptop keeps a
-working token until the new one is deployed. nixos-desktop's token, "nixos-desktop
-auto-update", is in `secrets/nixos-desktop-github.yaml`; for it, step 2 uses the
-command below, which needs only public keys, and steps 3 and 4 name
-nixos-desktop:
-
-```sh
-read -rs token && printf '%s' "$token" | jq -R '{"github-update-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/nixos-desktop-github.yaml --input-type json --output-type yaml /dev/stdin >secrets/nixos-desktop-github.yaml.new && mv secrets/nixos-desktop-github.yaml.new secrets/nixos-desktop-github.yaml; unset token
-```
-
-
-1. Create the new token on GitHub (Settings, Developer settings, Fine-grained
-   tokens). Set the repository access to this repository only, the permissions
-   Contents and Pull requests to read-only, and no expiration. When the
-   repository moves to a new GitHub repository, edit the token's repository
-   access by hand, because a fine-grained token names its repositories.
-2. From the repository root of a checkout on nixos-rog, write the token into
-   the file without printing it. The command waits for the token on a hidden
-   prompt. `jq -R .` turns the token into the JSON string that `sops set`
-   expects, and sops reads it from stdin, so it never appears in a process list
-   or a file. sops then asks for the shared key's password on the terminal:
-
-   ```sh
-   read -rs token && printf '%s' "$token" | jq -R . | SOPS_AGE_SSH_PRIVATE_KEY_FILE=~/.ssh/id_ed25519_omer nix shell nixpkgs#sops -c sops set --value-stdin secrets/nixos-rog.yaml '["github-update-token"]'; unset token
-   ```
-
-3. Commit the file and land it, then deploy it with
-   `./deploy.sh nixos-rog switch`. [deploy.md](deploy.md) has the rules.
-4. Run `upgrade` on nixos-rog ([Deploy unit](#deploy-unit)). The new token
-   works when the run ends without a GitHub `401` error from Nix. When Nix
-   reports `401`, the new token is wrong or lacks access to this repository,
-   and the laptop holds it. Skip step 5, because the old token still works on
-   GitHub. Create a corrected token, repeat steps 2 to 4 with it, and in step 5
-   delete both the old token and the wrong one.
-5. Delete the old token on the same GitHub page.
 
 ## DNS
 
@@ -336,8 +245,8 @@ nixos-desktop, gets a scope of its own on nixos-rog.
 `scripts/build.sh`, `scripts/check.sh` and `scripts/run-unit-on-rog.sh` under
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
 build of the system and the checks of the git hooks (`devenv.nix`) use it too.
-The deploy unit runs outside heavy; its `MemoryHigh` slows it above 12 GiB
-(`nixosModules/deploy-unit.nix`) but never stops it.
+`nixos-upgrade.service` runs outside heavy; its `MemoryHigh` slows it above
+12 GiB (`nixosModules/auto-upgrade.nix`) but never stops it.
 
 `heavy` follows the contract of infra's `heavy` on devbox. It exports
 `HEAVY_ACTIVE=1`, and a repository script that finds `heavy` on PATH while

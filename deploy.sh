@@ -189,6 +189,13 @@ if ! flock -n 9; then
   cat -- "$state_dir/deploy.owner" 2>/dev/null || true
   exit 0
 fi
+case $(systemctl show -p ActiveState --value nixos-upgrade.service) in
+  activating | active | deactivating | reloading)
+    echo busy
+    echo "nixos-upgrade.service, which installs main"
+    exit 0
+    ;;
+esac
 printf '%s since %s\n' "$owner" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$state_dir/deploy.owner"
 echo locked
 exec cat >/dev/null

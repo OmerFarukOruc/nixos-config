@@ -66,8 +66,7 @@ commit that a person pushes.
 
 The times come from a test clone on 2026-10-23. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
-`ci/build-hosts.sh`. `ci/build-hosts.sh --roots DIR` keeps each system as a
-link in `DIR`, which Nix's garbage collection leaves alone:
+`ci/build-hosts.sh`:
 
 ```sh
 devenv test
@@ -246,14 +245,14 @@ Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
 `machines/inventory.nix` sets `deployed = false`; no host sets it now.
 
-nixos-rog and devbox deploy `main` themselves every 2 hours, through
-the [deploy unit](nixos-rog.md#deploy-unit) and
-[self-deploy](#self-deploy-of-a-server). Leave an affected one to its timer,
-and deploy it by hand only when the change needs proof on that host now, such
-as a new systemd unit or a change on screen. A hand deploy and a timer deploy
-take the same lock, so the one that starts second exits 77
+Every host installs `main` by itself: nixos-desktop, nixos-latitude and
+nixos-rog every hour on AC power ([Updater](nixos-rog.md#updater)), and devbox
+every 2 hours through [self-deploy](#self-deploy-of-a-server). Leave an affected
+host to its timer, and deploy it by hand only when the change needs proof on
+that host now, such as a new systemd unit or a change on screen. A hand deploy
+exits 77 while the timer's run installs `main`, and the timer skips its run
+while a hand deploy holds the lock
 ([One deploy at a time](#one-deploy-at-a-time)).
-nixos-desktop and nixos-latitude have no timer, so deploy each affected one.
 
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it
@@ -290,33 +289,12 @@ on a branch.
 
 ## Upgrade a host to main
 
-Run `upgrade` on a host to bring that host to the newest `main`. On nixos-rog
-and nixos-desktop it runs the [deploy unit](nixos-rog.md#deploy-unit) now, and on a host that
-runs [self-deploy](#self-deploy-of-a-server) it starts that unit. On every other
-host it deploys `main` to that host in these steps:
-
-1. It clones this repository over https into
-   `~/.local/state/nixos-config-upgrade` when the clone is missing. It then
-   fetches `main` and resets the clone to it, which drops any change in the
-   clone, so keep no work there.
-2. When the host runs a clean release whose files match that commit, it prints
-   `<host> already runs main at <commit>.` with the first 12 characters of
-   the commit, and exits 0. A `test` deploy does not count, because it leaves
-   the boot default behind.
-3. Otherwise it runs `./deploy.sh <host> switch` in the clone, so from there
-   its output and [exit codes](#exit-codes) are those of `deploy.sh`. After
-   exit 78 it adds what to do instead of changing the clone.
-
-Before `deploy.sh` starts, `upgrade` exits 2 for any arguments other than
-one `--replace`, 1 when it runs as root, and with Git's status when the clone or
-fetch fails.
-
-`upgrade` runs as your own user, because the releases live in that user's
-home. It never moves an input; inputs move in the nightly update on devbox
-([Nightly update](devbox.md#nightly-update)) or an update by hand
-([Update by hand](updates.md#update-by-hand)). After exit 78, merge the work of the running release into
-`main`, or run `upgrade --replace` once its owner agrees that the deploy may
-drop its files ([Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)).
+Every host except devbox installs the newest `main` by itself every hour with
+NixOS's `system.autoUpgrade` ([Updater](nixos-rog.md#updater)). Run `upgrade`
+on a host to do it now. It starts `nixos-upgrade.service`, or `self-deploy.service`
+on a host that runs [self-deploy](#self-deploy-of-a-server), prints the unit's
+log while it runs and exits with the run's status, or 1 when the run skipped.
+It refuses to start on battery.
 
 `nixos-rebuild` on every host refuses every action except `switch`, `boot` or
 `test` with `--rollback`, `list-generations` and `--help`, and points to
@@ -336,16 +314,12 @@ itself.
 **The deploy timer.** `self-deploy.timer` starts `self-deploy.service` at minute
 30 of every even hour, with up to 10 minutes of random delay. The calendar is in
 UTC, because `nixosModules/common.nix` sets the timezone to Europe/Istanbul.
-Every 2 hours matches nixos-rog's deploy unit
-([Deploy unit](nixos-rog.md#deploy-unit)), so `main` reaches the server within
-2 hours and 10 minutes of a push. The even hours at minute 30 keep a run clear of the
+So `main` reaches the server within 2 hours and 10 minutes of a push. The even hours at minute 30 keep a run clear of the
 02:10 UTC reboot. A run that finds nothing to deploy costs one `git fetch` and
-one evaluation. The service runs `scripts/self-deploy.sh` as root. The unit is
-the one that nixos-rog's deploy unit uses (`nixosModules/deploy-unit.nix`, from
-`nixosModules/auto-update.nix`), and the clone and deploy steps are in
-`scripts/lib/pull-main.sh`. The script only deploys; it moves no input.
-nixos-rog's `scripts/pull-main.sh` is its twin. A failure here is the unit's own
-status and a line at priority err, where nixos-rog shows a desktop notification.
+one evaluation. The service runs `scripts/self-deploy.sh` as root. The unit comes from
+`nixosModules/deploy-unit.nix`, and the clone and deploy steps are in
+`scripts/lib/pull-main.sh`. The script only deploys; it moves no input. A
+failure here is the unit's own status and a line at priority err.
 Each run:
 
 1. fetches `main` into its own clone, `/var/lib/self-deploy/repo`;
@@ -389,8 +363,7 @@ clear the failed state by hand, run
 **Limits.** The unit loads a GitHub token as a credential when the host sets
 `oruc.deploy.self.githubTokenFile`, and `github_config` in
 `scripts/lib/pull-main.sh` writes it to a private `nix.conf` and `gh` config
-under the unit's runtime directory, as nixos-rog's unit does
-([Deploy unit](nixos-rog.md#deploy-unit)). It points `NIX_CONFIG` and
+under the unit's runtime directory. It points `NIX_CONFIG` and
 `GH_CONFIG_DIR` at them. Shell builtins write the files, so the token is never
 in a command line, and the exported variables carry paths only. devbox sets it to its sops
 secret ([Rotate the box's token](devbox.md#rotate-the-boxs-token)).
@@ -405,14 +378,13 @@ A failed download in the evaluation, such as GitHub's API limit or an outage
 after the fetch succeeded, says nothing about `main`. The run fails and writes
 its reason at priority err, records no failed `main`, and the next run tries
 again. While the cause lasts, every run fails the same way, every 2 hours.
-nixos-rog's run does the same for its build. Only an `error:` line that says
+Only an `error:` line that says
 `unable to download` counts, because Nix also prints a warning for each retry of
 a download that later succeeds. Any other error is the fault of `main`
 (`exit_on_download_failure` in `scripts/lib/pull-main.sh`).
 
 **Time and memory limits.** The unit stops a run after 3 hours
-(`TimeoutStartSec` in `nixosModules/deploy-unit.nix`, shared with nixos-rog's
-deploy unit). Without a limit, one hung network call keeps the unit active and
+(`TimeoutStartSec` in `nixosModules/deploy-unit.nix`). Without a limit, one hung network call keeps the unit active and
 the timer never starts it again. The slowest deploy of 119 runs of nixos-rog's
 old updater took 659 s (journal, 2026-10-16 to 2026-10-23), and the rest of the
 3 hours is room for compiling packages that no cache holds. A stop sends the
@@ -447,11 +419,9 @@ deploy since the boot changed them. The test is the one that NixOS's own upgrade
 reboot uses. It compares the kernel modules too, which hold the modules the
 running kernel loads. It skips the night, with a warning at priority warning,
 when the boot default is not the running system (a `test` deploy leaves the boot
-default behind, and a reboot would drop what runs now), or when a deploy or
-devbox's nightly update runs, a deploy holds the lock or has armed a rollback
-timer. A skip exits 0, and the next night
-tries again. It never starts a deploy. A deploy or a nightly update
-that starts within that one minute can still be cut short by the reboot. After
+default behind, and a reboot would drop what runs now), or when a deploy
+runs, a deploy holds the lock or has armed a rollback timer. A skip exits 0, and the next night
+tries again. It never starts a deploy. A deploy that starts within that one minute can still be cut short by the reboot. After
 a deploy cut short, the host boots the previous system, the boot default that
 the deploy had not yet replaced. Limine counts no boot attempts, so a new kernel that does not
 boot leaves the host down until someone opens the provider's console and picks
@@ -472,8 +442,8 @@ long-running agents of omer. A deploy of that host runs as root, whose session
 has none of them, so the list matters only for a deploy as omer.
 
 To pause the deploys on the host until the next reboot, mask
-`self-deploy.timer` in `/run/systemd/system.control` and stop it, as the
-[deploy unit](nixos-rog.md#deploy-unit) of nixos-rog shows, and wait until
+`self-deploy.timer` in `/run/systemd/system.control` and stop it, as
+[Updater](nixos-rog.md#updater) shows for `nixos-upgrade.timer`, and wait until
 `systemctl is-active self-deploy.service` prints `inactive` or `failed`.
 Resume them by running
 `sudo rm /run/systemd/system.control/self-deploy.timer`,
@@ -591,7 +561,7 @@ misbehaves.
 
 ## Exit codes
 
-The table lists every code from 64 to 99 that `deploy.sh` and `scripts/pull-main.sh` set.
+The table lists every code from 64 to 99 that `deploy.sh` sets.
 `nix fmt` runs `scripts/check-exit-codes.sh`, which fails when the table and the
 scripts differ. A failed activation returns the exit status of
 `switch-to-configuration`, such as 4. Other failures exit with other codes,
@@ -607,13 +577,13 @@ such as 1.
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
-| 77 | Another deploy holds the lock on the host. | Unchanged. |
+| 77 | Another deploy holds the lock on the host, or `nixos-upgrade.service` is installing main there. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
 | 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
 
-nixos-rog's deploy unit (`scripts/pull-main.sh`) and a server's self-deploy
-(`scripts/self-deploy.sh`) share `deploy_main` in `scripts/lib/pull-main.sh`.
+A server's self-deploy (`scripts/self-deploy.sh`) calls `deploy_main` in
+`scripts/lib/pull-main.sh`.
 It sorts the exit status of `deploy.sh` into four outcomes:
 
 - **done.** The status is 0, and the host runs `main`.

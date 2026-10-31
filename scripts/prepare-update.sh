@@ -122,7 +122,7 @@ fi
 # cache.numtide.com does not hold their new build yet, or "unknown" when it
 # cannot tell.
 uncached_agents() {
-  local agents plan
+  local agents plan matches
   agents=$(nix eval --impure --raw --expr "
     let pkgs = (builtins.getFlake \"git+file://$PWD\").inputs.llm-agents.packages.\${builtins.currentSystem};
         drv = p: let r = builtins.tryEval p.drvPath; in if r.success then [ r.value ] else [ ];
@@ -138,7 +138,19 @@ uncached_agents() {
       return
     }
   plan+=$(cat "$work/plan.log")
-  grep -Fo -f <(echo "$agents") <<<"$plan" || true
+  matches=$(grep -Fo -f <(echo "$agents") <<<"$plan" | sort -u || true)
+  [[ -z $matches ]] || substitutable <<<"$matches" || echo unknown
+}
+# A derivation with allowSubstitutes = false, such as the buildFHSEnv wrapper
+# of claude-desktop, always builds locally, so no cache ever holds it.
+substitutable() {
+  local drvs
+  mapfile -t drvs
+  ((${#drvs[@]})) || return 0
+  nix derivation show "${drvs[@]}" | jq -r '
+    .derivations // . | to_entries[]
+    | select((.value.structuredAttrs // .value.env).allowSubstitutes | . != false and . != "")
+    | .key | if startswith("/") then . else "/nix/store/" + . end'
 }
 
 mkdir "$work/agents-base"

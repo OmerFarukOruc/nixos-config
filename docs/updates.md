@@ -7,6 +7,20 @@
 - [Spotify and Spicetify](#spotify-and-spicetify)
 - [Apps](#apps)
 
+The `update` workflow (`.github/workflows/update.yml`) runs `ci/update.sh`
+on GitHub every 2 hours. It runs the two steps of
+[Update by hand](#update-by-hand), apps and then inputs, commits each move,
+runs `ci/checks.sh` and `ci/unit-cycles.sh` on it, and pushes to `main` the
+moves that pass. A move that fails a step stays out and turns the run red, and
+GitHub emails the failure. A warning that a move stays out, such as an app
+that does not build or nixpkgs held back, turns the run red too, except the
+one that llm-agents waits for cache.numtide.com, which clears by itself. When `main` moves during the run, the run pushes
+nothing and the next one tries again. Its run summary lists the moves and the
+warnings. `gh workflow run update.yml` starts it now. It builds no host's
+system, so a move that evaluates but fails to build reaches the hosts, which
+keep their system and show "Update failed" ([Updater](nixos-rog.md#updater)).
+Each host installs `main` within the hour after the push.
+
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Grok Bot package, npm and
 `prefetch-npm-deps` through Nix for cf and openchamber-web, and a build for the
@@ -23,8 +37,7 @@ deploy as [deploy.md](deploy.md#deploy-a-change-on-main) describes.
 
 ## Update by hand
 
-devbox runs these steps every night and pushes what passes to `main`
-([Nightly update](devbox.md#nightly-update)). Run them by hand when a move is
+The `update` workflow runs these steps every 2 hours. Run them by hand when a move is
 needed now, on nixos-desktop or nixos-rog, in a worktree on a branch from a
 freshly fetched `origin/main`:
 
@@ -74,7 +87,7 @@ Both modes take the host whose system decides the moves, and need nix, `gh`,
 curl and jq. A move that stays out prints a `warning:` line on
 stderr that names the cause, and the other moves go ahead. An optional fourth
 argument names a file that gets those warnings without the `warning:` prefix;
-the nightly update reads it, because Nix prints its own `warning:` lines on the
+`ci/update.sh` reads it, because Nix prints its own `warning:` lines on the
 same stderr.
 
 A package test that fails in the build of step 3 is a bug. Fix it in

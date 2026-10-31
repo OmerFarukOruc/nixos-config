@@ -91,7 +91,6 @@ in
           includes = [
             "deploy.sh"
             "docs/deploy.md"
-            "scripts/pull-main.sh"
           ];
         };
         theme-drift = {

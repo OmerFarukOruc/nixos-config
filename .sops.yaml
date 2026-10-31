@@ -9,12 +9,12 @@ creation_rules:
       - age:
           - *omer-all-devices
           - *nixos-rog
-  - path_regex: secrets/nixos-desktop(-github)?\.yaml$
+  - path_regex: secrets/nixos-desktop\.yaml$
     key_groups:
       - age:
           - *omer-all-devices
           - *nixos-desktop
-  - path_regex: secrets/devbox(-acme|-github|-github-push|-services|-cliproxy)?\.yaml$
+  - path_regex: secrets/devbox(-acme|-github|-services|-cliproxy)?\.yaml$
     key_groups:
       - age:
           - *omer-all-devices

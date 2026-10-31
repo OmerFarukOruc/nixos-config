@@ -154,7 +154,7 @@ dp_record = machine.succeed(
     "bash -c '. /var/lib/server-test/work/scripts/lib/running-revision.sh; running_revision'"
 ).strip()
 print(f"release record of the running system: {dp_record}")
-assert dp_record == f"{dp_sha} false switch", "the release record of the running system does not name main"
+assert dp_record == f"{dp_sha} false switch detached", "the release record of the running system does not name main"
 assert machine.succeed(f"stat -c %U {dp_state}/releases").strip() == "root", "the release records do not belong to root"
 machine.fail("systemctl is-active --quiet deploy-rollback.timer")
 machine.succeed("findmnt -no FSTYPE /boot | grep -Fx vfat")
@@ -196,14 +196,6 @@ assert dp_system("/run/booted-system/initrd") != dp_system("/run/current-system/
 machine.succeed(f"( flock -n 9 && systemctl start self-deploy-reboot.service ) 9>>{dp_state}/deploy.lock")
 assert "waits for the next night" in machine.succeed("journalctl -u self-deploy-reboot.service -o cat --no-pager -n 6")
 machine.fail("test -e /run/systemd/shutdown/scheduled")
-machine.succeed("systemd-run --no-block -p Type=oneshot --unit=nightly-update.service sleep 600")
-machine.wait_until_succeeds("systemctl show -p ActiveState --value nightly-update.service | grep -Fx activating")
-machine.succeed("systemctl start self-deploy-reboot.service")
-dp_waits = machine.succeed("journalctl -u self-deploy-reboot.service -o cat --no-pager | grep -c 'waits for the next night'")
-assert dp_waits.strip() == "2", "the reboot did not wait for a running nightly update"
-machine.fail("test -e /run/systemd/shutdown/scheduled")
-machine.succeed("systemctl stop nightly-update.service")
-machine.succeed("systemctl reset-failed nightly-update.service")
 machine.succeed("systemctl start self-deploy-reboot.service")
 machine.succeed("test -e /run/systemd/shutdown/scheduled")
 machine.succeed(f"grep -q '^self-deploy-reboot.service since ' {dp_state}/deploy.owner")

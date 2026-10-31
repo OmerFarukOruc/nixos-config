@@ -13,6 +13,8 @@ _:
     HandlePowerKey = "ignore";
   };
 
+  oruc.autoUpgrade.enable = true;
+
   home-manager.users.oruc.imports = [ ./home.nix ];
 
   zramSwap = {

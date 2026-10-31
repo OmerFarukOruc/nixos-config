@@ -96,15 +96,14 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   the user's running services. A deploy that breaks any of them restores the
   previous system, even when the connection drops.
   [`deploy.sh`](deploy.sh)
-- **🔄 Updates that wait for the caches.** Every night devbox moves the inputs
-  and apps, keeps the coding agents where they are until a cache holds their
-  builds, keeps an app only when it builds, and pushes to `main` only what
-  builds on every host. Every 2 hours, nixos-rog and nixos-desktop deploy the
-  newest `main` to themselves.
-  [`scripts/nightly-update.sh`](scripts/nightly-update.sh),
-  [`scripts/prepare-update.sh`](scripts/prepare-update.sh),
-  [`nixosModules/auto-update.nix`](nixosModules/auto-update.nix),
-  [`scripts/pull-main.sh`](scripts/pull-main.sh)
+- **🔄 Updates without anyone at a keyboard.** Every 2 hours a GitHub workflow
+  moves the apps and inputs, keeps the coding agents where they are until a
+  cache holds their builds, keeps an app only when it builds, and pushes to
+  `main` what passes the checks. Every hour each workstation installs the
+  newest `main` with NixOS's `system.autoUpgrade`; `upgrade` does it now.
+  [`.github/workflows/update.yml`](.github/workflows/update.yml),
+  [`ci/update.sh`](ci/update.sh),
+  [`nixosModules/auto-upgrade.nix`](nixosModules/auto-upgrade.nix)
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
   with the age key derived from that host's SSH host key.
   [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
@@ -124,7 +123,7 @@ niri/                  niri config shared by every niri session, with one file p
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
 ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
 devenv.nix             the dev shell, its linters and the git hooks
-scripts/               checks and builds, scripts that act on nixos-rog, update scripts, the deploy unit and the post-deploy check
+scripts/               checks and builds, scripts that act on nixos-rog, update scripts, the server deploy units and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
 deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
@@ -151,7 +150,7 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | --- | --- |
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
-| `upgrade [--replace]` (on any host) | deploy the newest `main` to this host; on nixos-rog run the deploy unit now; `--replace`, on every other host, passes `--replace` to `deploy.sh`, for a rerun after exit 78 |
+| `upgrade` (on any host) | install the newest `main` on this host now |
 | `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
 | `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
 | `scripts/check.sh` | run `ci/checks.sh`, the formatter, lock and flake checks, on a copy of the checkout and list each distinct evaluation warning; `--fix` formats |
@@ -187,7 +186,6 @@ dirty tree and `--replace` to drop a running release's files; [Deploy](docs/depl
 says when to use either flag. Every deploy command can change boot or running
 system state.
 
-`scripts/pull-main.sh` is the deploy unit that `oruc-auto-update.service` runs.
 A server runs `scripts/self-deploy.sh` and `scripts/self-deploy-reboot.sh` from
 its timers to deploy itself and to reboot for a new kernel
 ([Self-deploy of a server](docs/deploy.md#self-deploy-of-a-server)).
@@ -199,10 +197,10 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,
 formatter and output checks, plus each host's system derivation) and
 `ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
-GitHub runs nothing.
-Inputs and apps move every night on devbox
-([Nightly update](docs/devbox.md#nightly-update)), and by hand when someone
-needs a move now ([Update by hand](docs/updates.md#update-by-hand)).
+GitHub runs only the `update` workflow, which moves the apps and inputs every 2
+hours and runs the same checks before it pushes
+([Update inputs, apps and the kernel](docs/updates.md)). Run the update by hand
+when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand)).
 
 ## Docs
 
@@ -213,7 +211,7 @@ needs a move now ([Update by hand](docs/updates.md#update-by-hand)).
 | [Box browser](docs/box-browser.md) | the shared signed-in Chromium for coding agents, the `box-view` command that opens it and its wrapper command |
 | [Updates](docs/updates.md) | the update by hand, the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
-| [nixos-rog](docs/nixos-rog.md) | the deploy unit and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
+| [nixos-rog](docs/nixos-rog.md) | the updater and its failures, secrets, DNS, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |

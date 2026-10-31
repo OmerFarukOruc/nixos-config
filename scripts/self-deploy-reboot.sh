@@ -23,18 +23,15 @@ if [[ $(readlink -f "$profile") != "$(readlink -f "$current")" ]]; then
 fi
 
 deploy_runs() {
-  local unit
-  for unit in self-deploy.service nightly-update.service; do
-    case $(systemctl show -p ActiveState --value "$unit") in
-      activating | active | deactivating | reloading) return 0 ;;
-    esac
-  done
+  case $(systemctl show -p ActiveState --value self-deploy.service) in
+    activating | active | deactivating | reloading) return 0 ;;
+  esac
   systemctl is-active --quiet deploy-rollback.timer
 }
 mkdir -p -- "$state_dir"
 exec 9>>"$state_dir/deploy.lock"
 if ! flock -n 9 || deploy_runs; then
-  warn "A deploy or the nightly update is under way, so the reboot for the new ${differs[*]} waits for the next night."
+  warn "A deploy is under way, so the reboot for the new ${differs[*]} waits for the next night."
   exit 0
 fi
 

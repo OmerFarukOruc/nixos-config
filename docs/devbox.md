@@ -7,7 +7,6 @@
 - [Network and secrets](#network-and-secrets)
 - [Telemetry](#telemetry)
 - [Deploys](#deploys)
-- [Nightly update](#nightly-update)
 - [Web names](#web-names)
 - [Containers](#containers)
 - [Agent runtime](#agent-runtime)
@@ -77,7 +76,7 @@ drops ping.
 
 sops-nix decrypts `secrets/devbox.yaml`,
 `secrets/devbox-acme.yaml`, `secrets/devbox-github.yaml`,
-`secrets/devbox-github-push.yaml`, `secrets/devbox-services.yaml` and
+`secrets/devbox-services.yaml` and
 `secrets/devbox-cliproxy.yaml` while the system activates, with the
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
@@ -266,81 +265,6 @@ The long-running agent units of omer are in `oruc.deploy.sessionIgnore` in
 `configuration.nix`. deploy.sh's session check leaves them out of a deploy as
 omer. A deploy as root, which is every deploy above, checks only root's own
 services.
-
-## Nightly update
-
-`nightly-update.timer` runs `scripts/nightly-update.sh` every night at 21:15
-UTC, up to 10 minutes later, after Nix's garbage collection at 21:00 UTC
-(midnight in the box's time zone). The script runs the steps of
-[Update by hand](updates.md#update-by-hand) in a clone in
-`/var/lib/nightly-update/repo`: it moves the apps, then the inputs, and commits
-each move. The clone has no git hooks, so the script runs their commands
-itself: `nix fmt` before each commit, then `ci/checks.sh`, `ci/unit-cycles.sh`
-without import from derivation and `ci/build-hosts.sh`. A commit that fails
-them is dropped. The build keeps each host's system as a link in
-`/var/lib/nightly-update/roots`, so the garbage collection leaves the last
-night's builds for the next run. The script pushes to `main` what passed. When `main` moved
-during the run, it rebases and runs the checks again; a rebase conflict or a
-push race leaves `main` alone until the next night. The module is
-`nixosModules/nightly-update.nix`.
-
-No VM check runs in the job, because devbox has no KVM (`/dev/kvm` is missing).
-A kernel or initrd that it moves meets the 02:10 UTC reboot unchecked, and the
-units its moves reach are checked only by the deploy
-([What no test covers](#what-no-test-covers)). A run took 51 min 19 s on
-2026-10-30 when the moved kernel needed its NVIDIA and sensor modules built for
-nixos-desktop and nixos-rog, and 23 min 34 s on 2026-10-31 for a nixpkgs move
-that reused the kept builds (`journalctl -u nightly-update`).
-
-The unit runs as the system user `nightly-update` with a 4h30min limit. It
-has no start window, and while it runs the 02:10 UTC reboot
-([Deploys](#deploys)) waits for the next night. A run started in the minute
-after the reboot unit scheduled a reboot is still stopped by that reboot. The timer
-is not `Persistent`, because the box stays on and a missed night waits for the
-next one.
-
-A run that fails a step, or in which `prepare-update.sh` warns that a move
-stays out, opens an issue labelled `nightly-update` with the title `Nightly update failed on main`,
-or comments on it when it is open. The issue names each failed step with its
-exit status and its error line; `journalctl -u nightly-update` has the full
-log. A later run closes the issue when it fails no step, gets no warning from
-`prepare-update.sh`, and pushes or finds nothing to move. A run that pushed
-some moves while another failed comments instead.
-
-Run it now with `sudo systemctl start nightly-update.service`. To run it on
-another branch, run
-`sudo systemctl set-environment NIGHTLY_UPDATE_BRANCH=<branch>` before the start
-and `sudo systemctl unset-environment NIGHTLY_UPDATE_BRANCH` after it. Pause it
-by masking `nightly-update.timer` in `/run/systemd/system.control` and stopping
-it, as the [deploy unit](nixos-rog.md#deploy-unit) of nixos-rog shows, because a
-deploy starts a stopped timer again and `systemctl mask --runtime` does not
-mask a unit that NixOS keeps in `/etc/systemd/system`. Resume it by removing that link, running
-`sudo systemctl daemon-reload` and `sudo systemctl start nightly-update.timer`.
-
-The push and the issue calls use the fine-grained token `github-push-token` in
-`secrets/devbox-github-push.yaml`, which GitHub lists as "devbox nightly
-update". The run can read it the whole time, also while it evaluates the moved
-inputs. A separate push unit would not narrow that, because the inputs that
-pass reach devbox as root with the next deploy, and root reads the token.
-Rotate it like [Rotate the box's token](#rotate-the-boxs-token), with these
-changes:
-
-- Step 1 sets Contents and Issues to read and write.
-- Step 2 writes the other file and key:
-
-  ```sh
-  read -rs token && printf '%s' "$token" | jq -R '{"github-push-token": .}' | nix shell nixpkgs#sops -c sops encrypt --filename-override secrets/devbox-github-push.yaml --input-type json --output-type yaml /dev/stdin >secrets/devbox-github-push.yaml.new && mv secrets/devbox-github-push.yaml.new secrets/devbox-github-push.yaml; unset token
-  ```
-
-- Step 4 checks both permissions on the box without a run. A push with
-  `--dry-run` of a new branch name asks GitHub for write access and creates
-  nothing, and a label edit that keeps the label's color needs Issues write.
-  The new token works when the command prints `[new branch]` and
-  `nightly-update`; a `403` names the missing permission:
-
-  ```sh
-  sudo nix shell nixpkgs#git nixpkgs#gh -c bash -c 'export GH_TOKEN=$(</run/secrets/github-push-token); cd /var/lib/nightly-update/repo && git -c safe.directory="$PWD" -c credential.helper= -c "credential.helper=!gh auth git-credential" push --dry-run origin HEAD:refs/heads/nightly-update-token-check && gh api -X PATCH repos/OmerFarukOruc/nixos-config/labels/nightly-update -f color=d93f0b --jq .name'
-  ```
 
 ## Web names
 
@@ -735,8 +659,7 @@ the store path of one specialisation. `ci/self-deploy/test.py` holds the
 checks. They start `self-deploy.service` against a good main, the same main
 again, a main that breaks sshd (the previous system returns, the unit fails and
 the next run waits for main to move) and a main with another initrd (the reboot
-unit schedules a reboot, and waits while a deploy holds the lock or a nightly
-update runs) and a main
+unit schedules a reboot, and waits while a deploy holds the lock) and a main
 whose evaluation cannot download an input (the unit fails, records no failed
 main, and the next main deploys). They also check the timer calendars, the
 ignore list of the session check, omer's sudo password, the boot entries on the
