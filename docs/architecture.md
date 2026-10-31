@@ -413,6 +413,31 @@ stylesheet with the scheme's, in the pack file
 Evaluation fails when that stylesheet no longer holds a color that `vscode.nix`
 rewrites.
 
+`home-manager/modules/agent-theme.nix` gives Codex a tmTheme
+(`~/.codex/themes/oruc.tmTheme`) and opencode and pi a theme JSON each, all
+named `oruc`. The reloads `codex`, `opencode` and `pi` run
+`agent-theme.py`, which sets `tui.theme`, the ChatGPT app's chrome and code
+theme in `~/.codex/config.toml` (from the pack's `codex` fact), opencode's
+`cli.json` and pi's `settings.json` to that theme, and sends opencode's
+terminal UI `SIGUSR2`, which makes it read its themes again. Each app writes
+that file itself, so the script leaves it alone while the app runs and prints
+`theme: <app> runs`. It finds an app by its executable's path pattern, so a
+process still running from an older store path counts too. A Codex
+`app-server` or opencode `serve` process and its children do not count,
+because such a background server writes the file only for a client.
+`settings_file.py` holds the TOML merge and the write through a temporary file
+that keeps the file's mode, for this script and herdr's.
+
+The ChatGPT app only offers its built-in code themes, listed in
+`codex-code-themes.json` from its 26.1027.30824 bundle. The `codex` fact
+names the one a scheme takes: the one its name matches, such as `catppuccin`
+for the Catppuccin schemes, else the variant of its dark or light kind
+nearest by Oklab distance (`contrast.nix`) over background, text and accent,
+weighted .55, .27 and .18. pi's theme comes only on hosts that set
+`oruc.piTheme`, which `agent-cli.nix` does. grok and gum draw with the
+terminal's 16 colours: dotfiles' grok config selects its `terminal` theme, and
+`agent-theme.nix` points gum's colour variables at ANSI slots.
+
 `theme.plasmaLook` names the default Plasma look, and a machine with no Plasma session leaves it null. `plasma-look` activates
 another look at run time, with the same variants
 ([Plasma looks](nixos-rog.md#plasma-looks)).
@@ -465,7 +490,8 @@ These stay fixed on purpose, and the check does not cover them:
   settings page can still change them. Notification permissions and the theme
   color are managed-only policies, and Brave Sync carries them, so they stay in
   the profile.
-- Grok and Codex themes live outside this repository.
+- The ChatGPT app's code view takes the nearest of its built-in code themes,
+  so its syntax colors are the built-in theme's, not the scheme's.
 - waybar, mako, fuzzel, walker and anyrun follow only the machine record's
   scheme, because they build their colors from `config.scheme` and no host
   selects them.

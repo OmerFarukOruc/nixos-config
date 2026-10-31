@@ -156,8 +156,13 @@ let
       With no argument, prints the active Base16 scheme. --list prints every scheme
       of the installed theme pack, the store path that holds each scheme's colour files.
       SCHEME activates that scheme and keeps it across deploys. Ghostty, tmux, Neovim
-      and a Claude Code that selects custom:scheme take its colours at once; Starship,
-      fzf and atuin at their next run, and the Markdown viewer at its next open. On
+      and a Claude Code that selects custom:scheme take its colours at once, and so
+      do grok and gum, which draw with the terminal's colours, and opencode and pi.
+      The Claude Code status line follows within 30 s, and Codex and the ChatGPT app
+      at their next start; while Codex, the ChatGPT app, opencode or pi runs, the
+      setting that selects the scheme's theme waits for the next switch after it
+      closes. Starship, fzf and atuin change at their next run, and the Markdown
+      viewer at its next open. On
       Plasma, KDE and GTK 4 apps, the cursor, the icons and the Glass glow change at
       once, and GTK 3 apps and Kate's editor at their next start. VS Code changes its
       colours at once and its see-through window at its next start. niri's

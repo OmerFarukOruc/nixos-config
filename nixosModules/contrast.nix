@@ -37,14 +37,58 @@ rec {
 
   contrast = la: lb: (lib.max la lb + 0.05) / (lib.min la lb + 0.05);
 
+  ratio = a: b: contrast (luminance (channels a)) (luminance (channels b));
+
+  mostReadable =
+    background: candidates:
+    lib.foldl' (
+      best: color: if ratio color background > ratio best background then color else best
+    ) (builtins.head candidates) (builtins.tail candidates);
+
+  cbrt =
+    x:
+    if x == 0 then
+      0.0
+    else
+      builtins.foldl' (y: _: y - (y * y * y - x) / (3.0 * y * y)) 1.0 (lib.range 1 40);
+
+  oklab =
+    color:
+    let
+      rgb = map (builtins.elemAt linear) (channels color);
+      r = builtins.elemAt rgb 0;
+      g = builtins.elemAt rgb 1;
+      b = builtins.elemAt rgb 2;
+      l = cbrt (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+      m = cbrt (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+      s = cbrt (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    in
+    [
+      (0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s)
+      (1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s)
+      (0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s)
+    ];
+
+  oklabDistanceSquared =
+    a: b: lib.foldl' builtins.add 0.0 (lib.zipListsWith (x: y: (x - y) * (x - y)) (oklab a) (oklab b));
+
   readableOn =
     scheme: background:
     let
-      on = color: contrast (luminance (channels color)) (luminance (channels background));
-      higher = a: b: if on a >= on b then a else b;
-      fromScheme = higher scheme.base00 scheme.base07;
+      fromScheme = mostReadable background [
+        scheme.base00
+        scheme.base07
+      ];
     in
-    lib.toLower (if on fromScheme >= 4.5 then fromScheme else higher "000000" "ffffff");
+    lib.toLower (
+      if ratio fromScheme background >= 4.5 then
+        fromScheme
+      else
+        mostReadable background [
+          "000000"
+          "ffffff"
+        ]
+    );
 
   mix = pct: lib.zipListsWith (a: b: (a * pct + b * (100 - pct) + 50) / 100);
   mixHex =
@@ -92,8 +136,7 @@ rec {
     scheme: backgrounds:
     let
       lift = legibleOn scheme backgrounds;
-      on =
-        color: contrast (luminance (channels color)) (luminance (channels (builtins.head backgrounds)));
+      on = color: ratio color (builtins.head backgrounds);
       foreground = lift scheme.base05;
       floor = lift scheme.base00;
       capped =

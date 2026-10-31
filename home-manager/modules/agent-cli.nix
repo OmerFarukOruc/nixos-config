@@ -7,6 +7,8 @@
 {
   imports = [ ./worktree-sweep.nix ];
 
+  oruc.piTheme = true;
+
   home.packages = [
     agents.agent-browser
     agents.pi

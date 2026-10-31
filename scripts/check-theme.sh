@@ -54,6 +54,12 @@ each text colour the VS Code theme draws on an accent background reaches
 and side bar backgrounds, and that the Claude Code status line's segment
 colours are the scheme's and their text reaches 4.5:1 on them.
 
+For Codex, opencode and pi it checks that their theme files hold the
+scheme's base00, and that ~/.codex/config.toml, opencode's cli.json and pi's
+settings.json select the oruc theme, with Codex's chrome in the scheme's
+accent and background; while one of them runs, `theme` leaves its settings
+alone and prints a line that this script turns into a skip line.
+
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.
 EOF
@@ -363,6 +369,49 @@ plasma_session() {
   return 1
 }
 
+selects() {
+  local slug=$1 app=$2 err=$3
+  shift 3
+  if grep -qF "theme: $app runs" "$err"; then
+    echo "skip $slug: $app runs, so its settings wait for the next switch"
+  else
+    "$@" || fail "$slug: $app's settings do not select the scheme's theme"
+  fi
+}
+
+codex_selects() {
+  python3 -I - "$HOME/.codex/config.toml" "$pack/$1/.oruc/codex" <<'PYTHON'
+import json
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as f:
+    config = tomllib.load(f)
+with open(sys.argv[2]) as f:
+    fact = json.load(f)
+side = "Dark" if fact["polarity"] == "dark" else "Light"
+desktop = config.get("desktop", {})
+chrome = desktop.get(f"appearance{side}ChromeTheme", {})
+sys.exit(
+    config.get("tui", {}).get("theme") != "oruc"
+    or {key: chrome.get(key) for key in fact["chrome"]} != fact["chrome"]
+    or desktop.get(f"appearance{side}CodeThemeId") != fact["codeTheme"]
+)
+PYTHON
+}
+
+check_agents() {
+  local slug=$1 err=$2
+  holds_required "$slug" .codex/themes/oruc.tmTheme "<string>#$base00</string>"
+  holds_required "$slug" .config/opencode/themes/oruc.json "\"background\":\"#$base00\""
+  selects "$slug" "Codex or the ChatGPT app" "$err" codex_selects "$slug"
+  selects "$slug" opencode "$err" test "$(jq -r .theme.name "$HOME/.config/opencode/cli.json")" = oruc
+  if [[ -e $pack/$slug/.pi/agent/themes/oruc.json ]]; then
+    holds "$slug" .pi/agent/themes/oruc.json "\"pageBg\":\"#$base00\""
+    selects "$slug" pi "$err" test "$(jq -r .theme "$HOME/.pi/agent/settings.json")" = oruc
+  fi
+}
+
 check_plasma() {
   local slug=$1 before=$2 previous=$3 icons_before=$4 now base variant bg icons cursor gtk style preference glow
   now=$(kdeglobal kdeglobals General ColorScheme)
@@ -622,7 +671,11 @@ for slug in "$@"; do
       sleep 0.2
     done
   fi
-  output=$(theme "$slug") || fail "theme $slug exited $?"
+  theme_err=$scratch/theme-$slug.err
+  rc=0
+  output=$(theme "$slug" 2>"$theme_err") || rc=$?
+  cat "$theme_err" >&2
+  ((rc == 0)) || fail "theme $slug exited $rc"
   ! grep -qE '^(Activating|Starting Home Manager activation)' <<<"$output" || fail "theme $slug activated a Home Manager generation"
   points_at "$slug" "theme $slug"
   [[ $(cat "$state/scheme") == "$slug" ]] || fail "theme $slug stored $(cat "$state/scheme")"
@@ -660,6 +713,7 @@ for slug in "$@"; do
   [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
+  check_agents "$slug" "$theme_err"
   check_session "$slug"
   check_system "$slug"
   check_boot_menu "$slug"

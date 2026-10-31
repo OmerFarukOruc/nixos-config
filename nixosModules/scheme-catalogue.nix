@@ -8,13 +8,15 @@ let
 in
 {
   catalogue = lib.mapAttrs (
-    _: parsed:
+    slug: parsed:
     let
       scheme = mkSchemeAttrs parsed;
     in
     {
       inherit scheme;
-      theme = themeValues scheme;
+      theme = themeValues scheme // {
+        inherit slug;
+      };
     }
   ) (import ../machines/schemes.nix { inherit inputs lib; });
 
