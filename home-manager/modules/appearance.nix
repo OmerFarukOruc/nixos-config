@@ -13,6 +13,31 @@ let
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
   dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
+  readFacts = ''
+    facts=${lib.escapeShellArg config.oruc.themeFactsDir}
+    polarity=$(cat "$facts/polarity")
+    cursor=$(cat "$facts/cursor")
+    icons=$(cat "$facts/icons")
+    gtk=$(cat "$facts/gtk")
+
+    dconf_write() {
+      if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
+        dconf write "$@"
+      else
+        ${dbusRunSession} dconf write "$@"
+      fi
+    }
+
+    dconf_gtk_theme_unless_picked() {
+      local now
+      now=$(dconf read /org/gnome/desktop/interface/gtk-theme 2>/dev/null) || now=
+      case $now in
+        "" | "'adw-gtk3'" | "'adw-gtk3-dark'")
+          [[ $now == "'$gtk'" ]] || dconf_write /org/gnome/desktop/interface/gtk-theme "'$gtk'"
+          ;;
+      esac
+    }
+  '';
 
   gtkColors =
     { scheme, ... }:
@@ -79,33 +104,16 @@ let
     ];
     text = ''
       state=${lib.escapeShellArg config.oruc.themeState}
-      facts=${lib.escapeShellArg config.oruc.themeFactsDir}
-      polarity=$(cat "$facts/polarity")
-      cursor=$(cat "$facts/cursor")
-      icons=$(cat "$facts/icons")
-      gtk=$(cat "$facts/gtk")
-
-      dconf_write() {
-        if [[ -v DBUS_SESSION_BUS_ADDRESS ]]; then
-          dconf write "$@"
-        else
-          ${dbusRunSession} dconf write "$@"
-        fi
-      }
+      ${readFacts}
 
       gtk_theme_unless_picked() {
-        local settings=${config.xdg.configHome}/gtk-3.0/settings.ini now
+        local settings=${config.xdg.configHome}/gtk-3.0/settings.ini
         case $(kreadconfig6 --file "$settings" --group Settings --key gtk-theme-name) in
           "" | adw-gtk3 | adw-gtk3-dark)
             kwriteconfig6 --file "$settings" --group Settings --key gtk-theme-name "$gtk"
             ;;
         esac
-        now=$(dconf read /org/gnome/desktop/interface/gtk-theme 2>/dev/null) || now=
-        case $now in
-          "" | "'adw-gtk3'" | "'adw-gtk3-dark'")
-            [[ $now == "'$gtk'" ]] || dconf_write /org/gnome/desktop/interface/gtk-theme "'$gtk'"
-            ;;
-        esac
+        dconf_gtk_theme_unless_picked
       }
 
       icon_theme_unless_picked() {
@@ -140,6 +148,29 @@ let
         dconf_write /org/gnome/desktop/interface/color-scheme "'prefer-$polarity'"
       fi
       icon_theme_unless_picked
+    '';
+  };
+  applyGtkPolarity = pkgs.writeShellApplication {
+    name = "oruc-gtk-polarity";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.dconf
+    ];
+    text = ''
+      ${readFacts}
+      interface=/org/gnome/desktop/interface
+      dconf_gtk_theme_unless_picked
+      dconf_write "$interface/cursor-theme" "'$cursor'"
+      dconf_write "$interface/color-scheme" "'default'"
+      dconf_write "$interface/color-scheme" "'prefer-$polarity'"
+      now=$(dconf read "$interface/icon-theme" 2>/dev/null) || now=
+      case $now in
+        "" | ${
+          lib.concatMapStringsSep " | " (name: lib.escapeShellArg "'${name}'") iconTheme.replaceable
+        })
+          [[ $now == "'$icons'" ]] || dconf_write "$interface/icon-theme" "'$icons'"
+          ;;
+      esac
     '';
   };
 in
@@ -178,12 +209,6 @@ in
     })
 
     (lib.mkIf hasPlasma {
-      oruc.themeFacts = {
-        cursor = { theme, ... }: theme.cursor.name;
-        icons = { theme, ... }: theme.icons;
-        gtk = { theme, ... }: theme.gtk;
-      };
-
       home.packages = [
         pkgs.adw-gtk3
         pkgs.bibata-cursors
@@ -216,6 +241,11 @@ in
 
     (lib.mkIf (hasPlasma || hasNiri) {
       oruc.themeFiles = gtkFiles;
+      oruc.themeFacts = {
+        cursor = { theme, ... }: theme.cursor.name;
+        icons = { theme, ... }: theme.icons;
+        gtk = { theme, ... }: theme.gtk;
+      };
 
       # GTK's automatic font rendering at a fractional scale drops the top pixel
       # row of Inter at libadwaita's caption size (82 %) under the GL and Vulkan
@@ -226,6 +256,11 @@ in
     })
 
     (lib.mkIf hasNiri {
+      oruc.variantReloads.polarity = ''
+        systemctl --user is-active -q plasma-plasmashell.service && exit 0
+        ${lib.getExe applyGtkPolarity}
+      '';
+
       qt = {
         enable = true;
         platformTheme.name = "kde";

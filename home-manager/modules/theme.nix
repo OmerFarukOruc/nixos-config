@@ -9,10 +9,8 @@
 }:
 let
   cfg = osConfig.oruc.machine;
-  theme = config.oruc.theme;
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
-  hasDesktop = sessions.hasAnyDesktop cfg;
   hasFonts = sessions.hasGraphicalUser cfg;
 
   warmBurnout = import ./warm-burnout.nix { inherit inputs pkgs; };
@@ -174,10 +172,6 @@ in
   };
 
   xdg.dataFile = {
-    # An attribute name cannot carry the store path's context.
-    "backgrounds/oruc/${builtins.unsafeDiscardStringContext (builtins.baseNameOf theme.wallpaper)}" =
-      lib.mkIf hasDesktop
-        { source = theme.wallpaper; };
     # Plasma's translucent desktop theme has no colors file of its own, and
     # looking one up on every menu and popup slows them down. Plasma only
     # checks that the file exists and never reads it; the colours come from

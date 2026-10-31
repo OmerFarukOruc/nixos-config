@@ -8,13 +8,13 @@
   ...
 }:
 let
-  inherit (config.oruc.theme) wallpaper;
   themeFile = ".config/dms/oruc-theme.json";
   applyScheme = pkgs.writeShellApplication {
     name = "oruc-dms-scheme";
     runtimeInputs = [
       pkgs.coreutils
       config.programs.dank-material-shell.package
+      config.oruc.wallpaper
     ];
     text = ''
       for _ in $(seq 40); do
@@ -22,6 +22,7 @@ let
         sleep 0.5
       done
       dms ipc call theme "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+      dms ipc call wallpaper set "$(oruc-wallpaper-path)"
     '';
   };
 
@@ -182,11 +183,6 @@ in
       session = {
         locale = "en";
         pinnedApps = import ./pinned-apps.nix;
-      }
-      // {
-        wallpaperPath = toString wallpaper;
-        wallpaperPathDark = toString wallpaper;
-        wallpaperPathLight = toString wallpaper;
       };
     };
   };

@@ -9,7 +9,6 @@
 }:
 let
   isPlasma = sessions.hasDesktop osConfig.oruc.machine "plasma";
-  inherit (config.oruc.theme) wallpaper;
 
   # Panel Colorizer keeps its whole style in one JSON value, globalSettings,
   # and fills every key left out here from its own defaults. Its typed
@@ -326,11 +325,6 @@ in
     '';
 
     programs.plasma = {
-      workspace = {
-        inherit wallpaper;
-        wallpaperFillMode = "preserveAspectCrop";
-      };
-
       panels =
         {
           bar = [

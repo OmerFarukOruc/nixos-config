@@ -126,7 +126,7 @@ let
     }
 
     reload() {
-      :
+      session_env
       ${lib.concatLines (
         lib.mapAttrsToList (name: command: ''
           if ! (
@@ -186,7 +186,8 @@ let
       colours at once and its see-through window at its next start. niri's
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout and mpv at their next start, and the Plasma splash at
-      the next login.
+      the next login. The wallpaper changes at once in Plasma, Noctalia and DMS,
+      and outside Plasma so do the GTK theme, cursor and icons in dconf.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
       default ones.
@@ -204,7 +205,6 @@ let
           if [[ $look != "$default_look" || $row != "$default_scheme" ]]; then
             activate "$look" "$row"
           fi
-          session_env
           reload
           ;;
         *)

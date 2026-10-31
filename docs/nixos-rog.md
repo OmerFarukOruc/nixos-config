@@ -843,17 +843,14 @@ Mission Center, the cursor, the icons and the Glass glow change at once
 Electron app such as Discord; start it again. GTK 3 apps and Kate's editor
 colors change at their next start. On nixos-latitude, which has no Plasma, the
 GTK colors and the KDE colors and icon theme in `~/.config/kdeglobals` follow
-the scheme at each app's next start. niri's cursor follows the scheme's dark or
-light variant, while the GTK cursor, the GTK icons and the GTK theme name
-follow only the record's scheme and the schemes in `theme.schemes`.
+the scheme at each app's next start. In a niri session, niri's cursor and the
+GTK theme, cursor, dark or light preference and icon theme in dconf follow the
+scheme at once.
 
-The other apps that follow the scheme take it from a Home Manager variant, so
-they follow only the record's scheme and the schemes in `theme.schemes`
-(`machines/inventory.nix`); for any other scheme they keep the record's. The
-wallpaper of a scheme without a file in `assets/wallpapers` is the default one
-recolored to that scheme ([Theme](architecture.md#theme)). On Plasma,
-`oruc-plasma-wallpaper` sets it again at each activation, so the desktop
-wallpaper changes with the scheme.
+The wallpaper changes with the scheme in Plasma, Noctalia and DMS. A scheme
+without a file in `assets/wallpapers` gets the default one recolored to it,
+rendered the first time `theme` selects the scheme
+([Theme](architecture.md#theme)).
 
 The login screen, the boot menu, the console and the keyboard's Aura color
 keep the record's scheme. So does Spotify, because Spicetify builds its colors

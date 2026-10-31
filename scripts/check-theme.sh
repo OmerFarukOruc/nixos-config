@@ -29,6 +29,11 @@ it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
+It checks that oruc-wallpaper-path prints the scheme's own wallpaper from
+assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
+in a Plasma session that the desktop shows it. Outside Plasma, on a host with
+niri, it checks dconf's colour preference, cursor and icon theme.
+
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
 settings.json that does not parse byte-identical and reports the failed
@@ -324,6 +329,48 @@ check_plasma() {
   fi
 }
 
+check_wallpaper() {
+  local slug=$1 path mtime extension own=
+  command -v oruc-wallpaper-path >/dev/null || return 0
+  path=$(oruc-wallpaper-path) || fail "$slug: oruc-wallpaper-path exited $?"
+  for extension in png jpg jpeg webp; do
+    [[ $path == /nix/store/*/"$slug.$extension" ]] && own=1
+  done
+  if [[ -z $own ]]; then
+    [[ $path == "${XDG_CACHE_HOME:-$HOME/.cache}/oruc/wallpapers/$slug.png" ]] ||
+      fail "$slug: oruc-wallpaper-path printed $path"
+    file -b "$path" | grep -q '^PNG image data' || fail "$slug: $path is not a PNG"
+    mtime=$(stat -c %Y "$path")
+    oruc-wallpaper-path >/dev/null
+    [[ $(stat -c %Y "$path") == "$mtime" ]] || fail "$slug: a second oruc-wallpaper-path rendered $path again"
+  fi
+  if systemctl --user is-active -q plasma-plasmashell.service; then
+    for _ in $(seq 25); do
+      grep -qxF "Image=file://$path" "$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc" && return 0
+      sleep 0.2
+    done
+    fail "$slug: Plasma's wallpaper is not $path"
+  fi
+}
+
+check_gtk_polarity() {
+  local slug=$1 polarity cursor icons now
+  [[ -e $pack/$slug/.config/niri/oruc-theme.kdl && -e $pack/$slug/.oruc/cursor ]] || return 0
+  ! systemctl --user is-active -q plasma-plasmashell.service || return 0
+  polarity=$(cat "$pack/$slug/.oruc/polarity")
+  cursor=$(cat "$pack/$slug/.oruc/cursor")
+  icons=$(cat "$pack/$slug/.oruc/icons")
+  [[ $(dconf read /org/gnome/desktop/interface/color-scheme) == "'prefer-$polarity'" ]] ||
+    fail "$slug: dconf color-scheme is not prefer-$polarity"
+  [[ $(dconf read /org/gnome/desktop/interface/cursor-theme) == "'$cursor'" ]] ||
+    fail "$slug: dconf cursor-theme is not $cursor"
+  now=$(dconf read /org/gnome/desktop/interface/icon-theme)
+  case $now in
+    "'$icons'") ;;
+    "'Papirus-"* | "'Gruvbox-Plus-"* | "'breeze"*) fail "$slug: dconf icon-theme is $now, not $icons" ;;
+  esac
+}
+
 check_session() {
   local slug=$1 polarity
   polarity=$(cat "$pack/$slug/.oruc/polarity")
@@ -445,6 +492,8 @@ for slug in "$@"; do
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
   check_session "$slug"
+  check_wallpaper "$slug"
+  check_gtk_polarity "$slug"
   if [[ $slug == warm-burnout-* ]]; then
     holds "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"
   else

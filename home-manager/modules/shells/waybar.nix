@@ -8,7 +8,17 @@
 }:
 let
   scheme = config.scheme.withHashtag;
-  inherit (config.oruc.theme) fonts wallpaper;
+  inherit (config.oruc.theme) fonts;
+  showWallpaper = pkgs.writeShellApplication {
+    name = "oruc-waybar-wallpaper";
+    runtimeInputs = [
+      pkgs.swaybg
+      config.oruc.wallpaper
+    ];
+    text = ''
+      exec swaybg -m fill -i "$(oruc-wallpaper-path)"
+    '';
+  };
 in
 {
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "waybar") {
@@ -112,7 +122,7 @@ in
         PartOf = [ "graphical-session.target" ];
       };
       Service = {
-        ExecStart = "${lib.getExe pkgs.swaybg} -m fill -i ${wallpaper}";
+        ExecStart = lib.getExe showWallpaper;
         Restart = "on-failure";
       };
       Install.WantedBy = [ "graphical-session.target" ];

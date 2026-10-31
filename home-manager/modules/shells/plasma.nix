@@ -7,7 +7,16 @@
   ...
 }:
 let
-  inherit (config.oruc.theme) wallpaper;
+  applyWallpaper = pkgs.writeShellApplication {
+    name = "oruc-plasma-wallpaper";
+    runtimeInputs = [
+      pkgs.kdePackages.plasma-workspace
+      config.oruc.wallpaper
+    ];
+    text = ''
+      plasma-apply-wallpaperimage --fill-mode preserveAspectCrop "$(oruc-wallpaper-path)"
+    '';
+  };
 in
 {
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "plasma") {
@@ -24,11 +33,16 @@ in
       };
       Service = {
         Type = "oneshot";
-        ExecStart = "${lib.getExe' pkgs.kdePackages.plasma-workspace "plasma-apply-wallpaperimage"} --fill-mode preserveAspectCrop ${wallpaper}";
+        ExecStart = lib.getExe applyWallpaper;
         Restart = "on-failure";
         RestartSec = 5;
       };
       Install.WantedBy = [ "plasma-workspace.target" ];
     };
+
+    oruc.variantReloads.wallpaper = ''
+      systemctl --user is-active -q plasma-plasmashell.service || exit 0
+      ${lib.getExe applyWallpaper}
+    '';
   };
 }

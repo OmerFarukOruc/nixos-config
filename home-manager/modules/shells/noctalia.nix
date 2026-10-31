@@ -8,13 +8,13 @@
 }:
 let
   theme = config.oruc.theme;
-  inherit (theme) wallpaper;
   palette = ".config/noctalia/palettes/oruc-base16.json";
   applyScheme = pkgs.writeShellApplication {
     name = "oruc-noctalia-scheme";
     runtimeInputs = [
       pkgs.coreutils
       config.programs.noctalia.package
+      config.oruc.wallpaper
     ];
     text = ''
       for _ in $(seq 40); do
@@ -24,6 +24,7 @@ let
       noctalia msg color-scheme-set custom oruc-base16
       noctalia msg config-reload
       noctalia msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+      noctalia msg wallpaper-set "$(oruc-wallpaper-path)"
     '';
   };
 
@@ -180,11 +181,8 @@ in
             action = "lock_and_suspend";
           };
         };
-      }
-      // {
         wallpaper = {
           enabled = true;
-          default.path = toString wallpaper;
           automation.enabled = false;
         };
       };

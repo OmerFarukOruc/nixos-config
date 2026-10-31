@@ -177,9 +177,16 @@ NixOS and Home Manager each import that module with their own scheme:
 
 The wallpaper is the file in `assets/wallpapers` named after the scheme. A scheme
 without one gets `assets/wallpapers/default.png` recolored to the scheme's 16
-colors by lutgen, in a derivation of `theme-module.nix`. The derivation reads a
-file in the repository, so it needs no import from derivation, and the
-recoloring runs in the build of each variant.
+colors by lutgen. In the session, `oruc-wallpaper-path`
+(`home-manager/modules/wallpaper.nix`) prints the wallpaper of the scheme that
+`theme/current` points at: the scheme's own file, or a PNG it renders once from
+the pack's `palette` fact into `~/.cache/oruc/wallpapers/<scheme>.png`. One
+render took 0.05 to 0.07 s in 3 runs on nixos-rog, and its PNG equals the one
+the NixOS derivation builds for the same scheme (`cmp`, 2026-10-31). Plasma (`oruc-plasma-wallpaper`, at
+login and as a reload), Noctalia, DMS and waybar take the wallpaper from it, so
+it follows any scheme. `theme-module.nix` keeps a derivation that recolors the
+record scheme's wallpaper for NixOS; it reads a file in the repository, so it
+needs no import from derivation.
 
 `theme.schemes` in the machine record lists other schemes. Each one, with each
 Plasma look, is a Home Manager variant (`machines/variants.nix`). With Plasma,
@@ -206,11 +213,16 @@ NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, VS Code and fzf
 read their colors from files for this reason. On a host without Plasma, niri
-draws the cursor of the selected scheme's dark or light variant, while the GTK
-cursor setting keeps the record's scheme.
-On a host without Plasma, KDE apps take the icon theme of any scheme from
-`~/.config/kdeglobals` in the pack, while GTK takes the active variant's, so a
-scheme outside `theme.schemes` gives GTK the record scheme's icons.
+draws the cursor of the selected scheme's dark or light variant, and KDE apps
+take its icon theme from `~/.config/kdeglobals` in the pack. Outside a Plasma
+session, the reload `polarity` runs `oruc-gtk-polarity`
+(`home-manager/modules/appearance.nix`), which writes the GTK theme, cursor,
+colour preference and icon theme of the variant to dconf from the pack's facts
+`gtk`, `cursor`, `polarity` and `icons`. It keeps a GTK theme picked by hand
+outside `adw-gtk3` and `adw-gtk3-dark`, and an icon theme outside the
+`replaceable` names of `nixosModules/icon-theme.nix`. Home Manager's GTK module
+writes the record's values to the same dconf keys at each activation, and
+`theme --reapply` then runs the reload again.
 `nixosModules/hm-variants.nix` fails the evaluation when a variant's packages
 differ from the generation's, and names them.
 

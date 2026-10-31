@@ -61,7 +61,6 @@ let
     lib.any (package: lib.any (prefix: lib.hasPrefix prefix (package.name or "")) prefixes) packages;
   isEfiLimine =
     host: host.config.boot.loader.limine.enable && host.config.boot.loader.efi.canTouchEfiVariables;
-  enabledFiles = files: lib.attrNames (lib.filterAttrs (_: file: file.enable) files);
   pieces =
     system:
     let
@@ -91,7 +90,7 @@ let
         "sourcegit"
         "vscode"
       ] home.home.packages;
-      wallpaper = lib.any (lib.hasPrefix "backgrounds/") (enabledFiles home.xdg.dataFile);
+      wallpaper = hasPackage [ "oruc-wallpaper-path" ] home.home.packages;
       xkbLayout = config.services.xserver.xkb.layout != "us";
       tetherTtl = config.boot.kernel.sysctl ? "net.ipv4.ip_default_ttl";
       browserCertificates = home.home.activation ? nssDatabase;

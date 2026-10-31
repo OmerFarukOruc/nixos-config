@@ -24,6 +24,7 @@
     ./modules/theme.nix
     ./modules/variants.nix
     ./modules/vscode.nix
+    ./modules/wallpaper.nix
   ];
 
   xdg.userDirs = {
