@@ -118,7 +118,10 @@ one attribute and does not forbid import from derivation.
 To prove that a package or overlay builds before it lands, run
 `scripts/build.sh [ATTRIBUTE...]`, because the checks above only
 evaluate. It builds each flake attribute in a copy of this checkout and prints
-the output paths. With no attribute it builds nixos-rog's
+the output paths. A package that modules load with `pkgs.callPackage
+../../pkgs/NAME.nix { }` has no flake attribute, so pass its file instead, such
+as `pkgs/claude-tools.nix`; the script builds it with nixos-rog's
+`pkgs.callPackage` and no extra arguments. With no attribute it builds nixos-rog's
 system, which compiles whatever the caches lack. It creates no result link,
 activates nothing, and stops at the first build that fails.
 
@@ -260,15 +263,15 @@ output in that log:
 ```sh
 d=$HOME/Desktop/workspace/worktrees/nixos-config/deploy-<short-sha>
 [ -d "$d" ] || git worktree add -q --detach "$d" <sha>
-log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "deploy exit $rc" >> "$log"; exit $rc; }
+log=$(mktemp /tmp/deploy-<host>.XXXXXX) && echo "$log" && cd "$d" && { ./deploy.sh <host> switch > "$log" 2>&1; rc=$?; echo "exit $rc" >> "$log"; exit $rc; }
 ```
 
 Each run gets its own log, because two agents can deploy the same commit to
 the same host, and the second one exits 77 (see
 [One deploy at a time](#one-deploy-at-a-time)). The task's exit code is the
 deploy's exit code; a command after the block would replace it with its own.
-The log's last line is `deploy exit <code>` however the deploy ends, so a wait
-inside the turn loops until that line appears. On success, the line before it
+The log's last line is `exit <code>` however the deploy ends, so
+`wait-exit <log> <seconds>` ends on it. On success, the line before it
 is `Deployment completed from release <release>.`.
 
 The deploy ships everything on that commit, including other sessions' pushed
