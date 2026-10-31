@@ -923,10 +923,10 @@ The console changes at once, the login screen at its next start and the Limine
 boot menu at the next boot, and all three keep the scheme after a reboot. A
 light scheme leaves the login screen on the record's colors, because it draws
 the form at 30 % opacity over the dark Jake video, where a light scheme's dark
-text loses contrast. The keyboard's Aura light turns static in the scheme's
-base09 at once and at each login; from boot until the login it shows the
-record's color, and `Fn+F4` still picks another effect until the next switch
-or login. Spotify keeps the record's scheme, because Spicetify builds its
+text loses contrast. The keyboard's Aura light on nixos-rog and the case lights
+on nixos-desktop turn static in the scheme's base09 at once and at each login;
+from boot until the login they show the record's color. `Fn+F4` still picks
+another Aura effect until the next switch, login or deploy. Spotify keeps the record's scheme, because Spicetify builds its
 colors into the package, which a switch cannot replace.
 [Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
 lasts across deploys and reboots, and `theme <record's scheme>` goes back.

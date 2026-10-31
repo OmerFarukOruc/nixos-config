@@ -4,6 +4,7 @@
   ...
 }:
 let
+  asusctl = lib.getExe' config.services.asusd.package "asusctl";
   auraColour = {
     r = lib.toInt config.scheme."base09-rgb-r";
     g = lib.toInt config.scheme."base09-rgb-g";
@@ -286,7 +287,7 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
 
   environment.etc."niri/host.kdl".text = ''
     binds {
-        XF86Launch3 { spawn "${lib.getExe' config.services.asusd.package "asusctl"}" "aura" "effect" "--next-mode"; }
+        XF86Launch3 { spawn "${asusctl}" "aura" "effect" "--next-mode"; }
         Mod+Shift+S { screenshot; }
     }
   '';
@@ -297,7 +298,7 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
   boot.blacklistedKernelModules = [ "ucsi_acpi" ];
 
   home-manager.users.oruc = import ../../home-manager/modules/keyboard-light.nix {
-    setColour =
-      colour: "${lib.getExe' config.services.asusd.package "asusctl"} aura effect static -c ${colour}";
+    ready = "busctl --system get-property xyz.ljones.Asusd /xyz/ljones/aura/19b6_3_4 xyz.ljones.Aura LedMode >/dev/null 2>&1";
+    setColour = colour: "${asusctl} aura effect static -c ${colour}";
   };
 }

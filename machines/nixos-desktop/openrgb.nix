@@ -14,6 +14,7 @@
 { pkgs, ... }:
 let
   install = "${pkgs.coreutils}/bin/install -D -m 0644 ${./openrgb-boot.json}";
+  openrgb = "${pkgs.openrgb}/bin/openrgb";
 in
 {
   boot.kernelModules = [
@@ -39,7 +40,7 @@ in
         "${install} /var/lib/openrgb-boot/.config/OpenRGB/profiles/boot.json"
         "${install} /var/lib/openrgb-boot/.config/OpenRGB/Configuration.json"
       ];
-      ExecStart = "${pkgs.openrgb}/bin/openrgb --profile boot";
+      ExecStart = "${openrgb} --profile boot";
     };
   };
 
@@ -48,8 +49,8 @@ in
     {
       imports = [
         (import ../../home-manager/modules/keyboard-light.nix {
-          waitFor = "openrgb-boot.service";
-          setColour = colour: "${pkgs.openrgb}/bin/openrgb -c ${colour}";
+          ready = "systemctl is-active -q openrgb-boot.service";
+          setColour = colour: "${openrgb} -c ${colour}";
         })
       ];
 

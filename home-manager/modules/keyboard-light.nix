@@ -1,7 +1,4 @@
-{
-  setColour,
-  waitFor ? null,
-}:
+{ setColour, ready }:
 {
   config,
   lib,
@@ -16,13 +13,11 @@ let
       pkgs.systemd
     ];
     text = ''
-      ${lib.optionalString (waitFor != null) ''
-        for _ in $(seq 30); do
-          systemctl is-active -q ${waitFor} && break
-          sleep 1
-        done
-      ''}
-      colour=$(cat ${config.oruc.themeFactsDir}/keyboard-light)
+      for _ in $(seq 30); do
+        ${ready} && break
+        sleep 1
+      done
+      colour=$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/keyboard-light"})
       timeout 20 ${setColour "\"$colour\""}
     '';
   };
@@ -30,7 +25,10 @@ in
 {
   oruc.themeFacts.keyboard-light = { scheme, ... }: scheme.base09;
 
-  oruc.variantReloads.keyboard-light = lib.getExe apply;
+  oruc.variantReloads.keyboard-light = ''
+    systemctl --user is-active -q graphical-session.target || exit 0
+    systemctl --user restart oruc-keyboard-light.service
+  '';
 
   systemd.user.services.oruc-keyboard-light = {
     Unit = {
@@ -40,6 +38,7 @@ in
     };
     Service = {
       Type = "oneshot";
+      RemainAfterExit = true;
       ExecStart = lib.getExe apply;
     };
     Install.WantedBy = [ "graphical-session.target" ];

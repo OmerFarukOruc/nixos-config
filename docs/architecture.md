@@ -448,7 +448,9 @@ These stay fixed on purpose, and the check does not cover them:
   from a system file (`machines/nixos-rog/asus.nix`) and `openrgb-boot`
   applies a fixed profile. After the login, `oruc-keyboard-light`
   (`home-manager/modules/keyboard-light.nix`) sets them to the stored scheme's
-  base09, and `theme` does at each switch.
+  base09, and `theme` restarts that unit at each switch while a graphical
+  session runs. Before the login the reload does nothing, so the boot-time
+  `theme --reapply` leaves the record's colour.
 - Brave keeps its synced theme, because a managed theme policy would lock the
   setting and override the synced one. `nixosModules/brave.nix` writes Brave's
   settings as policies, which Brave Origin reads from `/etc/brave/policies`. The

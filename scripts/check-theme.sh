@@ -30,19 +30,20 @@ it also checks that the shell shows the custom palette in the scheme's dark or
 light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
-On nixos-rog it checks that the keyboard's Aura light turns static in the
-scheme's base09 within 5 s. It checks that `theme` activates no Home Manager generation, that it stores the
-scheme in /var/lib/oruc/theme/scheme, that the console palette holds the
-scheme's 16 ANSI colours, that the login theme links to the file oruc-theme-root
-writes and that file's text colour is the scheme's base05, or the record
-scheme's for a light scheme, and that oruc-theme-root refuses an unknown scheme
-with exit 64 and changes neither the stored scheme, the console nor the login
-screen. On a Limine host it checks that limine.conf holds the scheme's base00
-as backdrop and term_background, and that every other line stays as it was. It checks that
-oruc-wallpaper-path prints the scheme's own wallpaper from
-assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
-in a Plasma session that the desktop shows it. Outside Plasma, on a host with
-niri, it checks dconf's colour preference, cursor and icon theme.
+It checks that `theme` activates no Home Manager generation, that it stores
+the scheme in /var/lib/oruc/theme/scheme, that the console palette holds the
+scheme's 16 ANSI colours, that the login theme links to the file
+oruc-theme-root writes and that file's text colour is the scheme's base05, or
+the record scheme's for a light scheme, and that oruc-theme-root refuses an
+unknown scheme with exit 64 and changes neither the stored scheme, the console
+nor the login screen. On a Limine host it checks that limine.conf holds the
+scheme's base00 as backdrop and term_background, and that every other line
+stays as it was. On nixos-rog it checks that the keyboard's Aura light turns
+static in the scheme's base09 within 5 s. It checks that oruc-wallpaper-path
+prints the scheme's own wallpaper from assets/wallpapers, or a PNG it rendered
+once into ~/.cache/oruc/wallpapers, and in a Plasma session that the desktop
+shows it. Outside Plasma, on a host with niri, it checks dconf's colour
+preference, cursor and icon theme.
 
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
