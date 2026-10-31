@@ -31,10 +31,12 @@ light mode, and in a niri session that niri's configuration parses and that
 niri reports a successful reload after the switch.
 
 It checks that `theme` activates no Home Manager generation, that it stores the
-scheme in /var/lib/oruc/theme/scheme, that the console's black is the scheme's
-base00, that the login screen's text colour is the scheme's base05, or the
-record scheme's for a light scheme, and that oruc-theme-root refuses an
-unknown scheme with exit 64 and changes nothing. It checks that
+scheme in /var/lib/oruc/theme/scheme, that the console palette holds the
+scheme's 16 ANSI colours, that the login theme links to the file oruc-theme-root
+writes and that file's text colour is the scheme's base05, or the record
+scheme's for a light scheme, and that oruc-theme-root refuses an unknown scheme
+with exit 64 and changes neither the stored scheme, the console nor the login
+screen. It checks that
 oruc-wallpaper-path prints the scheme's own wallpaper from
 assets/wallpapers, or a PNG it rendered once into ~/.cache/oruc/wallpapers, and
 in a Plasma session that the desktop shows it. Outside Plasma, on a host with
@@ -348,14 +350,33 @@ check_plasma() {
 system_scheme=/var/lib/oruc/theme/scheme
 login_colors=/var/lib/oruc/theme/sddm/jake_the_dog.conf.user
 theme_root=/run/current-system/sw/bin/oruc-theme-root
+sddm_link=/run/current-system/sw/share/sddm/themes/sddm-astronaut-theme/Themes/jake_the_dog.conf.user
+console_slots=(base00 base08 base0B base0A base0D base0E base0C base05 base03 base08 base0B base0A base0D base0E base0C base07)
+
+console_palette() {
+  local slug=$1 slot red green blue reds=() greens=() blues=()
+  for slot in "${console_slots[@]}"; do
+    IFS=, read -r red green blue <<<"$(decimal "$(color "$slug" "$slot")")"
+    reds+=("$red")
+    greens+=("$green")
+    blues+=("$blue")
+  done
+  local IFS=,
+  printf '%s\n' "${reds[*]}" "${greens[*]}" "${blues[*]}"
+}
+
+live_console() {
+  cat /sys/module/vt/parameters/default_{red,grn,blu}
+}
 
 check_system() {
-  local slug=$1 red login_text
+  local slug=$1 login_text
   [[ -x $theme_root ]] || fail "$slug: this system has no oruc-theme-root"
+  [[ $(readlink "$sddm_link") == "$login_colors" ]] ||
+    fail "$slug: the login theme's $sddm_link does not point at $login_colors"
   [[ $(cat "$system_scheme") == "$slug" ]] || fail "$slug: $system_scheme holds $(cat "$system_scheme")"
-  red=$(decimal "$(color "$slug" base00)")
-  [[ $(cut -d, -f1 /sys/module/vt/parameters/default_red) == "${red%%,*}" ]] ||
-    fail "$slug: the console's black is not the scheme's base00"
+  [[ $(live_console) == "$(console_palette "$slug")" ]] ||
+    fail "$slug: the console palette is not the scheme's 16 ANSI colours"
   if [[ $(cat "$pack/$slug/.oruc/polarity") == light ]]; then
     login_text=$(color "$record" base05)
   else
@@ -579,6 +600,8 @@ fi
 echo "ok unknown scheme"
 
 system_mtime=$(stat -c %Y "$system_scheme")
+login_before=$(cat "$login_colors")
+console_before=$(live_console)
 if /run/wrappers/bin/sudo -n "$theme_root" <<<not-a-scheme >/dev/null 2>&1; then
   fail "oruc-theme-root not-a-scheme exited 0"
 else
@@ -586,6 +609,8 @@ else
 fi
 [[ $(stat -c %Y "$system_scheme") == "$system_mtime" && $(cat "$system_scheme") == "$last" ]] ||
   fail "oruc-theme-root not-a-scheme changed $system_scheme"
+[[ $(cat "$login_colors") == "$login_before" && $(live_console) == "$console_before" ]] ||
+  fail "oruc-theme-root not-a-scheme changed the login screen or the console"
 echo "ok unknown system scheme"
 
 kde_before=$(kdeglobal kdeglobals General ColorScheme 2>/dev/null || true)

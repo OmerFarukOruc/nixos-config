@@ -37,7 +37,7 @@ One Base16 colour scheme, a YAML file in tinted-theming or `assets/schemes`, nam
 _Avoid_: theme, palette
 
 **Record scheme**:
-The scheme in `theme.scheme` of a machine's record. A deploy builds it, and the boot menu uses it. The console and the login screen use it until `theme` stores another scheme.
+The scheme in `theme.scheme` of a machine's record. A deploy builds it, and the boot menu uses it. The console uses it until `theme` stores another scheme, and so does the login screen until `theme` stores a dark one.
 _Avoid_: default theme
 
 **Theme pack**:

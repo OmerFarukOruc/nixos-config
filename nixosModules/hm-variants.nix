@@ -195,8 +195,8 @@ let
           look=$(stored_look)
           "$pointer" --set "$1"
           reload
-          ${lib.optionalString (config.oruc.login.colorsFile != null) ''
-            if ! /run/wrappers/bin/sudo -n /run/current-system/sw/bin/oruc-theme-root <<<"$1"; then
+          ${lib.optionalString (config.oruc.themeRoot.command != null) ''
+            if ! /run/wrappers/bin/sudo -n ${config.oruc.themeRoot.command} <<<"$1"; then
               echo "theme: the login screen or console failed" >&2
             fi
           ''}

@@ -9,28 +9,30 @@
 let
   cfg = config.oruc.machine;
   themed = sessions.hasAnyDesktop cfg;
-  themeValues = import ./theme-values.nix { inherit lib; };
+  stateDir = "/var/lib/oruc/theme";
+  colorsFile = "${stateDir}/sddm/jake_the_dog.conf.user";
+  command = "/run/current-system/sw/bin/oruc-theme-root";
   systemThemeValues = import ./system-theme-values.nix { inherit lib; };
-  catalogue = lib.mapAttrs (_: config.lib.base16.mkSchemeAttrs) (
-    import ../machines/schemes.nix { inherit inputs lib; }
-  );
+  shared = import ./scheme-catalogue.nix {
+    inherit inputs lib;
+    inherit (config.lib.base16) mkSchemeAttrs;
+  };
   recordLogin = systemThemeValues.sddmConfUser config.scheme;
-  text = name: builtins.toFile (lib.strings.sanitizeDerivationName name);
 
   pack = pkgs.linkFarm "oruc-system-theme-pack" (
     lib.concatLists (
-      lib.mapAttrsToList (slug: scheme: [
+      lib.mapAttrsToList (slug: entry: [
         {
           name = "${slug}/vtrgb";
-          path = text "vtrgb" (systemThemeValues.vtrgb scheme);
+          path = shared.toFile "vtrgb" (systemThemeValues.vtrgb entry.scheme);
         }
         {
           name = "${slug}/sddm.conf.user";
-          path = text "sddm.conf.user" (
-            if (themeValues scheme).isLight then recordLogin else systemThemeValues.sddmConfUser scheme
+          path = shared.toFile "sddm.conf.user" (
+            if entry.theme.isLight then recordLogin else systemThemeValues.sddmConfUser entry.scheme
           );
         }
-      ]) catalogue
+      ]) shared.catalogue
     )
   );
 
@@ -39,12 +41,13 @@ let
     runtimeInputs = [
       pkgs.coreutils
       pkgs.kbd
+      pkgs.util-linux
     ];
     text = ''
       pack=${pack}
       record=${lib.escapeShellArg cfg.theme.scheme}
-      state=/var/lib/oruc/theme
-      colors_file=${lib.escapeShellArg config.oruc.login.colorsFile}
+      state=${stateDir}
+      colors_file=${colorsFile}
       failed=0
 
       usage() {
@@ -62,6 +65,7 @@ let
 
       write() {
         local tmp
+        mkdir -p "''${2%/*}" || return 1
         tmp=$(mktemp "$2.XXXXXX") || return 1
         if cat "$1" >"$tmp" && chmod 0644 "$tmp" && mv -T "$tmp" "$2"; then
           return 0
@@ -75,7 +79,15 @@ let
         failed=1
       }
 
-      mkdir -p "$state" "''${colors_file%/*}"
+      hold_lock() {
+        mkdir -p "$state"
+        exec 9>"$state/lock"
+        if ! flock -w 60 9; then
+          echo "oruc-theme-root: another run held $state/lock for 60 s" >&2
+          exit 1
+        fi
+      }
+
       case ''${1:-} in
         "")
           slug=
@@ -84,9 +96,11 @@ let
             echo "oruc-theme-root: $slug is not a scheme of the system pack" >&2
             exit 64
           fi
+          hold_lock
           write <(printf '%s\n' "$slug") "$state/scheme" || report "storing the scheme"
           ;;
         --apply)
+          hold_lock
           slug=$(cat "$state/scheme" 2>/dev/null || true)
           in_pack "$slug" || slug=$record
           ;;
@@ -99,28 +113,56 @@ let
   };
 in
 {
-  config = lib.mkIf themed {
-    environment.systemPackages = [ helper ];
-
-    security.sudo.extraRules = [
-      {
-        users = [ cfg.user ];
-        commands = [
-          {
-            command = "/run/current-system/sw/bin/oruc-theme-root";
-            options = [ "NOPASSWD" ];
-          }
-        ];
-      }
-    ];
-
-    systemd.services.oruc-theme-root = {
-      description = "Apply the stored scheme to the console and the login screen";
-      wantedBy = [ "multi-user.target" ];
-      before = [ "display-manager.service" ];
-      after = [ "local-fs.target" ];
-      serviceConfig.Type = "oneshot";
-      script = "${lib.getExe helper} --apply || echo 'oruc-theme-root: --apply failed' >&2";
+  options.oruc.themeRoot = {
+    colorsFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      readOnly = true;
+      description = "File that the login screen reads its colours from, written by oruc-theme-root, or null on a host without a desktop.";
+    };
+    command = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      readOnly = true;
+      description = "Path of oruc-theme-root, which theme runs through sudo with the scheme on stdin, or null on a host without a desktop.";
     };
   };
+
+  config = lib.mkMerge [
+    {
+      oruc.themeRoot = {
+        colorsFile = if themed then colorsFile else null;
+        command = if themed then command else null;
+      };
+    }
+
+    (lib.mkIf themed {
+      environment.systemPackages = [ helper ];
+
+      security.sudo.extraRules = [
+        {
+          users = [ cfg.user ];
+          commands = [
+            {
+              inherit command;
+              options = [ "NOPASSWD" ];
+            }
+          ];
+        }
+      ];
+
+      systemd.services.oruc-theme-root = {
+        description = "Apply the stored scheme to the console and the login screen";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "display-manager.service" ];
+        serviceConfig.Type = "oneshot";
+        script = ''
+          if ${lib.getExe helper} --apply; then
+            rm -f ${stateDir}/apply-failed || true
+          else
+            echo 'oruc-theme-root: --apply failed' >&2
+            echo failed >${stateDir}/apply-failed || true
+          fi
+        '';
+      };
+    })
+  ];
 }

@@ -14,20 +14,14 @@ let
     inherit inputs lib;
     parse = lib.id;
   };
-  themeValues = import ../../nixosModules/theme-values.nix { inherit lib; };
-  catalogue = lib.mapAttrs (
-    _: parsed:
-    let
-      scheme = config.lib.base16.mkSchemeAttrs parsed;
-    in
-    {
-      inherit scheme;
-      theme = themeValues scheme;
-    }
-  ) (inScope (import ../../machines/schemes.nix { inherit inputs lib; }));
+  shared = import ../../nixosModules/scheme-catalogue.nix {
+    inherit inputs lib;
+    inherit (config.lib.base16) mkSchemeAttrs;
+  };
+  catalogue = inScope shared.catalogue;
 
   state = "${config.xdg.stateHome}/oruc";
-  text = name: builtins.toFile (lib.strings.sanitizeDerivationName name);
+  text = shared.toFile;
   pack = pkgs.linkFarm "oruc-theme-pack" (
     [
       {

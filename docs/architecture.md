@@ -268,9 +268,14 @@ through `sudo -n`, which a sudo rule allows for the record's user alone. The
 helper stores it in `/var/lib/oruc/theme/scheme`, runs `setvtrgb`, and writes
 `/var/lib/oruc/theme/sddm/jake_the_dog.conf.user`, the file the login theme's
 `.conf.user` link in the store points at; SDDM reads it at each greeter start.
-At boot, `oruc-theme-root.service` runs `oruc-theme-root --apply` before the
-display manager, which applies the stored scheme, or the record's when none
-is stored. The unit always exits 0, so a failure never rolls back a deploy.
+At boot, before the display manager, and at each switch,
+`oruc-theme-root.service` runs `oruc-theme-root --apply`, which applies the
+stored scheme, or the record's when none is stored. The helper holds
+`/var/lib/oruc/theme/lock` while it reads, stores and applies, so a switch and
+`theme` cannot leave the stored scheme and the applied colours apart. The unit
+always exits 0, so a failure never rolls back a deploy; it writes
+`/var/lib/oruc/theme/apply-failed` instead, which `scripts/verify-nixos-rog.sh`
+reports.
 A light scheme's `sddm.conf.user` holds the record's colours, because the
 login form is drawn at 30 % opacity over a dark video. `theme --reapply` does
 not call the helper.

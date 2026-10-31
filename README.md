@@ -75,8 +75,8 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   at run time. `theme` takes any of the 362 schemes from a theme pack that each
   deploy builds, and every look other than the default is a Home Manager
   specialisation of the same generation; both choices stay across deploys.
-  The console and the login screen follow the scheme too; the boot menu keeps
-  the machine's default scheme.
+  The console follows the scheme too, and so does the login screen for a dark
+  scheme; the boot menu keeps the machine's default scheme.
   A look sets the Plasma style, window decoration, Qt style and KWin effects
   that belong together; Glass and Klassy are the two looks.
   [`machines/variants.nix`](machines/variants.nix),

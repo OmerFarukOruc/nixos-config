@@ -15,3 +15,4 @@ armoury=/sys/class/firmware-attributes/asus-armoury/attributes
 nvidia_dev=$(find_nvidia)
 reapply_failed=${XDG_STATE_HOME:-$HOME/.local/state}/oruc/reapply-failed
 check theme-reapply "no failed theme --reapply" test ! -e "$reapply_failed"
+check theme-root-apply "no failed oruc-theme-root --apply" test ! -e /var/lib/oruc/theme/apply-failed
