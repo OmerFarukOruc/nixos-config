@@ -169,7 +169,8 @@ for every scheme.
 NixOS and Home Manager each import that module with their own scheme:
 
 - NixOS (`nixosModules/theme.nix`) uses `theme.scheme` from the machine record.
-  The login screen, the boot menu, the console and niri read it.
+  The login screen, the boot menu and the console read it, and so does niri
+  until a Home Manager activation writes its colour file (below).
 - Home Manager (`home-manager/modules/scheme.nix`) uses `oruc.scheme`, which
   starts as `theme.scheme`. Every app that Home Manager configures reads
   `config.scheme` and `config.oruc.theme`, never the NixOS values.
@@ -204,8 +205,8 @@ runs, against 29 to 46 seconds in 4 runs with one scheme (measured
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, VS Code and fzf
-read their colors from files for this reason. kVitals' package
-defaults and, on a host without Plasma, the cursor keep the record's scheme.
+read their colors from files for this reason. On a host without Plasma, the
+cursor keeps the record's scheme.
 On a host without Plasma, KDE apps take the icon theme of any scheme from
 `~/.config/kdeglobals` in the pack, while GTK takes the active variant's, so a
 scheme outside `theme.schemes` gives GTK the record scheme's icons.
@@ -230,11 +231,20 @@ the old pack back, and points `current` at the stored scheme
 (`~/.local/state/oruc/scheme`), or at the record scheme when the pack lacks
 it. `theme <scheme>` replaces the stored scheme through a rename, which is the
 one step that commits a switch, points `current` at it, and then runs
-`oruc.variantReloads` so Ghostty, tmux, Neovim and VS Code load the new files.
-Claude Code reloads its theme when the file is replaced, but not when a link on
-its path changes target, so its theme file is listed in `oruc.themeCopies`: the
-pointer writes it as a regular file and replaces it through a rename each time
-it moves `current`. A renderer runs for every scheme, so it must give a valid file for
+`oruc.variantReloads` so Ghostty, tmux, Neovim, VS Code, Noctalia and DMS load
+the new files. A reload exits 0 when its app does not run. Claude Code reloads
+its theme when the file is replaced, but not when a link on its path changes
+target, so its theme file is listed in `oruc.themeCopies`: the pointer writes
+it as a regular file and replaces it through a rename each time it moves
+`current`. DMS and vicinae watch their theme file in the same way. The Plasma
+splash `Splash.qml` is a copy too, because KPackage refuses a file whose real
+path lies outside the look-and-feel folder ("Path traversal attempt detected"
+in the journal), which left the splash blank while Home Manager linked it into
+the store. niri reads the record's colours from `/etc/niri/theme.kdl` and then
+`~/.config/niri/oruc-theme.kdl` from the pack, an `optional` include that it
+watches, so the later file wins at once. kVitals takes its text, warning and
+critical colours from the KDE colours: `pkgs/kvitals.nix` points its threshold
+colours at `Kirigami.Theme`. A renderer runs for every scheme, so it must give a valid file for
 each; the Markdown viewer's code colours move toward black or white when the
 scheme's foreground cannot reach 4.5:1 on the code background. Specialisations
 reuse the generation's pack, and root's Home Manager and the servers get a

@@ -29,41 +29,46 @@ let
   noAutoSuspend.AutoSuspendAction = 0;
 
   splashId = "oruc.splash";
-  scheme = config.scheme.withHashtag;
+  splashFile = ".local/share/plasma/look-and-feel/${splashId}/contents/splash/Splash.qml";
   # ksplashqml sets `stage` from 1 to 5 while the session starts, and quits at 6.
-  splashQml = ''
-    import QtQuick
+  splashQml =
+    { scheme, ... }:
+    let
+      color = scheme.withHashtag;
+    in
+    ''
+      import QtQuick
 
-    Rectangle {
-        id: root
-        color: "${scheme.base00}"
+      Rectangle {
+          id: root
+          color: "${color.base00}"
 
-        property int stage: 0
+          property int stage: 0
 
-        Rectangle {
-            id: track
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: Math.round(parent.height * 0.62)
-            width: Math.min(Math.round(parent.width * 0.25), 480)
-            height: 6
-            radius: height / 2
-            color: "${scheme.base01}"
+          Rectangle {
+              id: track
+              anchors.horizontalCenter: parent.horizontalCenter
+              y: Math.round(parent.height * 0.62)
+              width: Math.min(Math.round(parent.width * 0.25), 480)
+              height: 6
+              radius: height / 2
+              color: "${color.base01}"
 
-            Rectangle {
-                height: parent.height
-                radius: parent.radius
-                color: "${scheme.base0D}"
-                width: Math.round(parent.width * Math.min(root.stage, 5) / 5)
-                Behavior on width {
-                    NumberAnimation {
-                        duration: 600
-                        easing.type: Easing.OutCubic
-                    }
-                }
-            }
-        }
-    }
-  '';
+              Rectangle {
+                  height: parent.height
+                  radius: parent.radius
+                  color: "${color.base0D}"
+                  width: Math.round(parent.width * Math.min(root.stage, 5) / 5)
+                  Behavior on width {
+                      NumberAnimation {
+                          duration: 600
+                          easing.type: Easing.OutCubic
+                      }
+                  }
+              }
+          }
+      }
+    '';
 in
 {
   imports = [ inputs.plasma-manager.homeModules.plasma-manager ];
@@ -256,8 +261,9 @@ in
           Description = "Splash screen in the colors of the Base16 scheme";
         };
       };
-      "plasma/look-and-feel/${splashId}/contents/splash/Splash.qml".text = splashQml;
     };
+    oruc.themeFiles.${splashFile} = splashQml;
+    oruc.themeCopies = [ splashFile ];
 
     home.packages = lib.mkIf (osConfig.oruc.login.video != null) [
       (pkgs.callPackage ../../pkgs/smart-video-wallpaper.nix { })

@@ -23,6 +23,12 @@ that neither run changes the running session's KDE colour scheme, and that
 the pack is a GC root. It prints a skip line for each scheme whose Plasma
 checks cannot run.
 
+For Noctalia, DMS, rofi, vicinae, niri, wlogout, mpv and the Plasma splash it
+checks that each file holds the scheme's colour. While Noctalia or DMS runs,
+it also checks that the shell shows the custom palette in the scheme's dark or
+light mode, and in a niri session that niri still answers after it reads the
+new colours.
+
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
 settings.json that does not parse byte-identical and reports the failed
@@ -315,6 +321,38 @@ check_plasma() {
   fi
 }
 
+check_session() {
+  local slug=$1 polarity
+  polarity=$(cat "$pack/$slug/.oruc/polarity")
+  holds "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
+  holds "$slug" .config/dms/oruc-theme.json "\"#$base00\""
+  holds "$slug" .local/share/rofi/themes/custom.rasi "background-color: #$base00;"
+  holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "background = \"#$base00\""
+  holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "variant = \"$polarity\""
+  holds "$slug" .config/niri/oruc-theme.kdl "active-color \"#$base0D\""
+  holds "$slug" .config/wlogout/style.css "border-color: #$base0D;"
+  holds "$slug" .config/mpv/script-opts/modernz.conf "seekbarfg_color=#$base0D"
+  holds "$slug" .config/mpv/oruc-colors.conf "osd-color=#$base05"
+  holds "$slug" .local/share/plasma/look-and-feel/oruc.splash/contents/splash/Splash.qml "color: \"#$base00\""
+  if systemctl --user is-active -q noctalia.service; then
+    holds_required "$slug" .config/noctalia/palettes/oruc-base16.json "\"#$base00\""
+    [[ $(noctalia msg color-scheme-get) == "custom oruc-base16" ]] ||
+      fail "$slug: Noctalia shows $(noctalia msg color-scheme-get), not custom oruc-base16"
+    [[ $(noctalia msg theme-mode-get) == "$polarity" ]] ||
+      fail "$slug: Noctalia's mode is $(noctalia msg theme-mode-get), not $polarity"
+  fi
+  if systemctl --user is-active -q dms.service; then
+    holds_required "$slug" .config/dms/oruc-theme.json "\"#$base00\""
+    [[ -f $HOME/.config/dms/oruc-theme.json && ! -L $HOME/.config/dms/oruc-theme.json ]] ||
+      fail "$slug: ~/.config/dms/oruc-theme.json is not a regular file"
+    [[ $(dms ipc call theme getMode) == "$polarity" ]] || fail "$slug: DMS's mode is not $polarity"
+  fi
+  if niri msg version >/dev/null 2>&1; then
+    holds_required "$slug" .config/niri/oruc-theme.kdl "active-color \"#$base0D\""
+    niri msg focused-output >/dev/null || fail "$slug: niri msg focused-output exited $?"
+  fi
+}
+
 points_at() {
   [[ $(readlink "$state/theme/current") == "pack/$1" ]] ||
     fail "$2: theme/current is $(readlink "$state/theme/current"), not pack/$1"
@@ -382,6 +420,7 @@ for slug in "$@"; do
   [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
+  check_session "$slug"
   if [[ $slug == warm-burnout-* ]]; then
     holds "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"
   else

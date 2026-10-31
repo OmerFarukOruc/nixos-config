@@ -14,6 +14,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-0MMYebgVREd7M8RBa25Jme3iM+vMJyULf3YrAo5hvqg=";
   };
 
+  postPatch = ''
+    substituteInPlace contents/ui/models/MetricStore.qml \
+      --replace-fail 'import QtQuick' $'import QtQuick\nimport org.kde.kirigami as Kirigami' \
+      --replace-fail 'root.config.warningColor, root.config.criticalColor' 'Kirigami.Theme.neutralTextColor, Kirigami.Theme.negativeTextColor'
+  '';
+
   dontConfigure = true;
   dontBuild = true;
 

@@ -99,36 +99,10 @@ in
                 }
             }
           '';
-          "niri/theme.kdl".text =
-            let
-              scheme = config.scheme.withHashtag;
-            in
-            ''
-              layout {
-                  focus-ring {
-                      active-color "${scheme.base0D}"
-                      inactive-color "${scheme.base03}"
-                      urgent-color "${scheme.base08}"
-                  }
-                  border {
-                      active-color "${scheme.base0D}"
-                      inactive-color "${scheme.base03}"
-                      urgent-color "${scheme.base08}"
-                  }
-                  insert-hint {
-                      color "${scheme.base0D}80"
-                  }
-              }
-
-              overview {
-                  backdrop-color "${scheme.base00}"
-              }
-
-              cursor {
-                  xcursor-theme "${theme.cursor.name}"
-                  xcursor-size ${toString theme.cursor.size}
-              }
-            '';
+          "niri/theme.kdl".text = import ./niri-theme.nix {
+            inherit (config) scheme;
+            inherit theme;
+          };
         }
         (lib.listToAttrs (
           map (

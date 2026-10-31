@@ -2,48 +2,59 @@
   config,
   lib,
   osConfig,
-  pkgs,
   inputs,
   sessions,
   ...
 }:
 let
-  scheme = config.scheme.withHashtag;
-  theme = config.oruc.theme;
-  inherit (theme) wallpaper;
+  inherit (config.oruc.theme) wallpaper;
+  themeFile = ".config/dms/oruc-theme.json";
+  polarity = "${config.oruc.themeState}/theme/current/.oruc/polarity";
 
-  dmsMode = {
-    name = "Base16 ${config.scheme.scheme-name}";
-    surface = scheme.base00;
-    surfaceText = scheme.base05;
-    surfaceVariant = scheme.base01;
-    surfaceVariantText = scheme.base04;
-    background = scheme.base00;
-    backgroundText = scheme.base05;
-    outline = scheme.base03;
-    surfaceContainer = scheme.base01;
-    surfaceContainerHigh = scheme.base02;
-    surfaceContainerHighest = scheme.base03;
-    primary = scheme.base0D;
-    secondary = scheme.base0A;
-    primaryText = scheme.base00;
-    primaryContainer = scheme.base02;
-    surfaceTint = scheme.base0C;
-    error = scheme.base08;
-    warning = scheme.base09;
-    info = scheme.base0B;
-    matugen_type = "scheme-tonal-spot";
-  };
-  dmsTheme = (pkgs.formats.json { }).generate "oruc-base16-dms.json" {
-    dark = dmsMode;
-    light = dmsMode;
-  };
+  dmsMode =
+    { scheme, ... }:
+    let
+      color = scheme.withHashtag;
+    in
+    {
+      name = "Base16 ${scheme.scheme-name}";
+      surface = color.base00;
+      surfaceText = color.base05;
+      surfaceVariant = color.base01;
+      surfaceVariantText = color.base04;
+      background = color.base00;
+      backgroundText = color.base05;
+      outline = color.base03;
+      surfaceContainer = color.base01;
+      surfaceContainerHigh = color.base02;
+      surfaceContainerHighest = color.base03;
+      primary = color.base0D;
+      secondary = color.base0A;
+      primaryText = color.base00;
+      primaryContainer = color.base02;
+      surfaceTint = color.base0C;
+      error = color.base08;
+      warning = color.base09;
+      info = color.base0B;
+      matugen_type = "scheme-tonal-spot";
+    };
 in
 {
   imports = [ inputs.dms.homeModules.dank-material-shell ];
 
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "dms") {
     oruc.shellServices.dms = "dms";
+    oruc.themeFiles.${themeFile} =
+      args:
+      builtins.toJSON {
+        dark = dmsMode args;
+        light = dmsMode args;
+      };
+    oruc.themeCopies = [ themeFile ];
+    oruc.variantReloads.dms = ''
+      systemctl --user is-active -q dms.service || exit 0
+      ${lib.getExe config.programs.dank-material-shell.package} ipc call theme "$(<${lib.escapeShellArg polarity})"
+    '';
     # dms-open hands a page or link to the DMS app picker, which runs only in
     # niri. Plasma once picked it for an HTML file, and the open failed.
     xdg.mimeApps.associations.removed = lib.genAttrs [
@@ -59,10 +70,10 @@ in
       settings = {
         currentThemeName = "custom";
         currentThemeCategory = "custom";
-        customThemeFile = toString dmsTheme;
+        customThemeFile = "~/${themeFile}";
         runDmsMatugenTemplates = false;
-        iconThemeDark = theme.icons;
-        iconThemeLight = theme.icons;
+        iconThemeDark = "System Default";
+        iconThemeLight = "System Default";
         weatherEnabled = false;
         showWeather = false;
         showDock = true;

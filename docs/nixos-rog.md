@@ -829,7 +829,13 @@ takes the new colors at once and its see-through window background at its
 next start. Its text, button text, muted text such as descriptions and line
 numbers, and comments reach 4.5:1 contrast on the editor background in every
 scheme, and on the side bar too where the scheme allows it
-([Theme](architecture.md#theme)).
+([Theme](architecture.md#theme)). In niri, the focus ring and borders change at
+once, and so do Noctalia and DMS, which `theme` tells to reload and to switch
+to the scheme's dark or light mode; `theme` also selects the scheme's palette
+in Noctalia when another palette was picked there. rofi and vicinae take the
+colors at their next open, wlogout and mpv at their next start, and the Plasma
+splash at the next login. kVitals in the Plasma panel draws its text, warning
+and critical values in the KDE colors, so it changes with them.
 
 On Plasma, the KDE colors of running apps, GTK 4 and libadwaita apps such as
 Mission Center, the cursor, the icons and the Glass glow change at once
@@ -847,9 +853,9 @@ they follow only the record's scheme and the schemes in `theme.schemes`
 wallpaper of a scheme without a file in `assets/wallpapers` is the default one
 recolored to that scheme ([Theme](architecture.md#theme)). On Plasma,
 `oruc-plasma-wallpaper` sets it again at each activation, so the desktop
-wallpaper changes with the scheme. The Plasma splash loads at the next login.
+wallpaper changes with the scheme.
 
-The login screen, the boot menu, the console, niri and the keyboard's Aura color
+The login screen, the boot menu, the console and the keyboard's Aura color
 keep the record's scheme. So does Spotify, because Spicetify builds its colors
 into the package, which a variant cannot replace. The login form assumes a dark
 record scheme, because it draws the form at 30 % opacity over the dark Jake

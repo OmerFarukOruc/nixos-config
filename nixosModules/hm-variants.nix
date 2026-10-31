@@ -183,11 +183,14 @@ let
       fzf and atuin at their next run, and the Markdown viewer at its next open. On
       Plasma, KDE and GTK 4 apps, the cursor, the icons and the Glass glow change at
       once, and GTK 3 apps and Kate's editor at their next start. VS Code changes its
-      colours at once and its see-through window at its next start.
+      colours at once and its see-through window at its next start. niri's
+      focus ring, Noctalia and DMS change at once; rofi and vicinae at their
+      next open, wlogout and mpv at their next start, and the Plasma splash at
+      the next login.
       --reapply points the colour files at the stored scheme again and activates the
       stored Plasma look. The Home Manager service runs it after it activates the
       default ones.
-      The login screen, the boot menu, the console and niri keep the scheme of the
+      The login screen, the boot menu and the console keep the scheme of the
       machine record.'';
     text = ''
       case ''${1:-} in

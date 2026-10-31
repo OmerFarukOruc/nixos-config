@@ -32,10 +32,6 @@ let
   # stays out of the profile. So the settings are also the package's defaults
   # (contents/config/main.xml), which the copy reads for a key not yet written.
   # Only the keys that differ from kVitals' own defaults are here.
-  # kVitals colors its own text, so the top bar's accent color reaches it only
-  # through fontColor. Its threshold colors still take precedence.
-  # warningColor is base09 and criticalColor base08, as in the other warning
-  # and error states.
   kvitalsSettings = {
     pinnedMetrics = "cpu/usage,bat/percentage,cpu/freq,cpu/temp,ram/used,uptime/uptime";
     layoutType = "vertical";
@@ -45,10 +41,6 @@ let
     enableThresholdColors = true;
     labelOpacity = 0.5;
     separatorOpacity = 1;
-    useCustomColors = true;
-    fontColor = config.scheme.withHashtag.base0D;
-    warningColor = config.scheme.withHashtag.base09;
-    criticalColor = config.scheme.withHashtag.base08;
   }
   // lib.optionalAttrs (osConfig.oruc.machine.gpu == "hybrid") {
     gpuSelection = "gpu1";
@@ -77,14 +69,9 @@ let
             xmlstarlet ed -L -N k=http://www.kde.org/standards/kcfg/1.0 -u "${entry}" -v ${text} "$xml"
             [ "$(xmlstarlet sel -N k=http://www.kde.org/standards/kcfg/1.0 -t -v "${entry}" "$xml")" = ${text} ]
           ''
-        ) packageDefaults
+        ) kvitalsSettings
       );
   });
-  packageDefaults = kvitalsSettings // {
-    fontColor = osConfig.scheme.withHashtag.base0D;
-    warningColor = osConfig.scheme.withHashtag.base09;
-    criticalColor = osConfig.scheme.withHashtag.base08;
-  };
 
   allCorners = value: {
     topLeft = value;

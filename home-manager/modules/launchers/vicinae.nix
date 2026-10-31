@@ -1,5 +1,4 @@
 {
-  config,
   lib,
   osConfig,
   pkgs,
@@ -10,8 +9,37 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "vicinae";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = config.scheme.withHashtag;
-  inherit (config.oruc.theme) isLight;
+  themeFile = ".local/share/vicinae/themes/oruc-base16.toml";
+  renderTheme =
+    { scheme, theme }:
+    let
+      color = scheme.withHashtag;
+    in
+    ''
+      [meta]
+      version = 1
+      name = "Oruc Base16"
+      description = "Selected Base16 scheme"
+      variant = "${theme.polarity}"
+      inherits = "vicinae-${theme.polarity}"
+
+      [colors.core]
+      background = "${color.base00}"
+      foreground = "${color.base05}"
+      secondary_background = "${color.base01}"
+      border = "${color.base03}"
+      accent = "${color.base0D}"
+
+      [colors.accents]
+      blue = "${color.base0D}"
+      green = "${color.base0B}"
+      magenta = "${color.base0E}"
+      orange = "${color.base09}"
+      purple = "${color.base0E}"
+      red = "${color.base08}"
+      yellow = "${color.base0A}"
+      cyan = "${color.base0C}"
+    '';
   commands = {
     app = "exec ${lib.getExe pkgs.vicinae} toggle";
     command = "exec ${lib.getExe pkgs.vicinae} deeplink vicinae://launch/system/run";
@@ -41,34 +69,8 @@ in
           light.name = "oruc-base16";
         };
       };
-      themes.oruc-base16 = {
-        meta = {
-          version = 1;
-          name = "Oruc Base16";
-          description = "Selected Base16 scheme";
-          variant = if isLight then "light" else "dark";
-          inherits = if isLight then "vicinae-light" else "vicinae-dark";
-        };
-        colors = {
-          core = {
-            background = scheme.base00;
-            foreground = scheme.base05;
-            secondary_background = scheme.base01;
-            border = scheme.base03;
-            accent = scheme.base0D;
-          };
-          accents = {
-            blue = scheme.base0D;
-            green = scheme.base0B;
-            magenta = scheme.base0E;
-            orange = scheme.base09;
-            purple = scheme.base0E;
-            red = scheme.base08;
-            yellow = scheme.base0A;
-            cyan = scheme.base0C;
-          };
-        };
-      };
     };
+    oruc.themeFiles.${themeFile} = renderTheme;
+    oruc.themeCopies = [ themeFile ];
   };
 }

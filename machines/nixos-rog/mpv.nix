@@ -5,7 +5,44 @@
   ...
 }:
 let
-  scheme = config.scheme.withHashtag;
+  modernzColors =
+    { scheme, ... }:
+    let
+      color = scheme.withHashtag;
+    in
+    lib.generators.toKeyValue { } {
+      osc_color = color.base00;
+      window_title_color = color.base05;
+      window_controls_color = color.base05;
+      windowcontrols_close_hover = color.base08;
+      windowcontrols_max_hover = color.base0A;
+      windowcontrols_min_hover = color.base0B;
+      title_color = color.base05;
+      cache_info_color = color.base05;
+      seekbar_cache_color = color.base03;
+      seekbarfg_color = color.base0D;
+      seekbarbg_color = color.base02;
+      seek_handle_color = color.base0D;
+      seek_handle_border_color = color.base05;
+      time_color = color.base05;
+      chapter_title_color = color.base05;
+      side_buttons_color = color.base05;
+      middle_buttons_color = color.base05;
+      playpause_color = color.base05;
+      held_element_color = color.base03;
+      hover_effect_color = color.base0D;
+      thumbnail_box_color = color.base01;
+      thumbnail_box_outline = color.base03;
+      nibble_color = color.base0D;
+      nibble_current_color = color.base05;
+      ab_loop_color = color.base0C;
+    };
+  osdColors =
+    { scheme, ... }:
+    lib.generators.toKeyValue { } {
+      osd-color = scheme.withHashtag.base05;
+      osd-border-color = scheme.withHashtag.base00;
+    };
 
   # Opening the RTX 4070 wakes it, and the Vulkan loader opens every driver it
   # finds, VA-API the first render node. Plain mpv sees only the Radeon's
@@ -61,36 +98,13 @@ in
       cscale = "ewa_lanczossharp";
       hwdec = "vulkan-copy,vaapi-copy";
       osc = false;
-      osd-color = scheme.base05;
-      osd-border-color = scheme.base00;
+      include = "~/.config/mpv/oruc-colors.conf";
     };
-    scriptOpts.modernz = {
-      osc_color = scheme.base00;
-      window_title_color = scheme.base05;
-      window_controls_color = scheme.base05;
-      windowcontrols_close_hover = scheme.base08;
-      windowcontrols_max_hover = scheme.base0A;
-      windowcontrols_min_hover = scheme.base0B;
-      title_color = scheme.base05;
-      cache_info_color = scheme.base05;
-      seekbar_cache_color = scheme.base03;
-      seekbarfg_color = scheme.base0D;
-      seekbarbg_color = scheme.base02;
-      seek_handle_color = scheme.base0D;
-      seek_handle_border_color = scheme.base05;
-      time_color = scheme.base05;
-      chapter_title_color = scheme.base05;
-      side_buttons_color = scheme.base05;
-      middle_buttons_color = scheme.base05;
-      playpause_color = scheme.base05;
-      held_element_color = scheme.base03;
-      hover_effect_color = scheme.base0D;
-      thumbnail_box_color = scheme.base01;
-      thumbnail_box_outline = scheme.base03;
-      nibble_color = scheme.base0D;
-      nibble_current_color = scheme.base05;
-      ab_loop_color = scheme.base0C;
-    };
+  };
+
+  oruc.themeFiles = {
+    ".config/mpv/script-opts/modernz.conf" = modernzColors;
+    ".config/mpv/oruc-colors.conf" = osdColors;
   };
 
   home.packages = [

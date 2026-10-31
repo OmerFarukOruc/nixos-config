@@ -13,6 +13,7 @@ layout {
 }
 
 include "/etc/niri/theme.kdl"
+include optional=true "~/.config/niri/oruc-theme.kdl"
 
 include "/etc/niri/host.kdl"
 

@@ -1,5 +1,4 @@
 {
-  config,
   lib,
   osConfig,
   pkgs,
@@ -10,8 +9,28 @@ let
   cfg = osConfig.oruc.machine;
   selected = sessions.hasAnyDesktop cfg && cfg.launcher == "rofi";
   helpers = import ./helpers.nix { inherit lib pkgs; };
-  scheme = config.scheme.withHashtag;
-  rasi = config.lib.formats.rasi;
+  themeFile = ".local/share/rofi/themes/custom.rasi";
+  renderTheme =
+    { scheme, ... }:
+    let
+      color = scheme.withHashtag;
+    in
+    ''
+      * {
+      background-color: ${color.base00};
+      border-color: ${color.base0D};
+      foreground-color: ${color.base05};
+      selected-normal-background: ${color.base02};
+      selected-normal-foreground: ${color.base07};
+      }
+
+      window {
+      border: 2;
+      border-radius: 10;
+      padding: 12;
+      width: 42%;
+      }
+    '';
   commands = {
     app = "exec ${lib.getExe pkgs.rofi} -show drun";
     command = "exec ${lib.getExe pkgs.rofi} -show run";
@@ -26,21 +45,8 @@ in
     programs.rofi = {
       enable = true;
       settings.terminal = helpers.terminal;
-      theme = {
-        "*" = {
-          background-color = rasi.mkLiteral scheme.base00;
-          foreground-color = rasi.mkLiteral scheme.base05;
-          border-color = rasi.mkLiteral scheme.base0D;
-          selected-normal-background = rasi.mkLiteral scheme.base02;
-          selected-normal-foreground = rasi.mkLiteral scheme.base07;
-        };
-        window = {
-          border = 2;
-          border-radius = 10;
-          padding = 12;
-          width = rasi.mkLiteral "42%";
-        };
-      };
+      theme = "custom";
     };
+    oruc.themeFiles.${themeFile} = renderTheme;
   };
 }

@@ -6,45 +6,51 @@
   ...
 }:
 let
-  scheme = config.scheme.withHashtag;
   theme = config.oruc.theme;
-  inherit (theme) isLight wallpaper;
+  inherit (theme) wallpaper;
+  noctalia = lib.getExe config.programs.noctalia.package;
+  palette = ".config/noctalia/palettes/oruc-base16.json";
+  polarity = "${config.oruc.themeState}/theme/current/.oruc/polarity";
 
-  ansiRow =
-    offset:
-    lib.listToAttrs (
-      lib.imap0 (
-        index: name:
-        lib.nameValuePair (lib.toLower name) scheme.${builtins.elemAt theme.ansi (offset + index)}
-      ) theme.ansiNames
-    );
-  terminalPalette = {
-    foreground = scheme.base05;
-    background = scheme.base00;
-    cursor = scheme.base05;
-    cursorText = scheme.base00;
-    selectionFg = scheme.base05;
-    selectionBg = scheme.base02;
-    normal = ansiRow 0;
-    bright = ansiRow 8;
-  };
-  noctaliaMode = {
-    mPrimary = scheme.base0D;
-    mOnPrimary = scheme.base00;
-    mSecondary = scheme.base0A;
-    mOnSecondary = scheme.base00;
-    mTertiary = scheme.base0E;
-    mOnTertiary = scheme.base00;
-    mError = scheme.base08;
-    mOnError = scheme.base00;
-    mSurface = scheme.base00;
-    mOnSurface = scheme.base05;
-    mSurfaceVariant = scheme.base01;
-    mOnSurfaceVariant = scheme.base04;
-    mOutline = scheme.base03;
-    mShadow = scheme.base00;
-    terminal = terminalPalette;
-  };
+  noctaliaMode =
+    { scheme, theme }:
+    let
+      color = scheme.withHashtag;
+      ansiRow =
+        offset:
+        lib.listToAttrs (
+          lib.imap0 (
+            index: name:
+            lib.nameValuePair (lib.toLower name) color.${builtins.elemAt theme.ansi (offset + index)}
+          ) theme.ansiNames
+        );
+    in
+    {
+      mPrimary = color.base0D;
+      mOnPrimary = color.base00;
+      mSecondary = color.base0A;
+      mOnSecondary = color.base00;
+      mTertiary = color.base0E;
+      mOnTertiary = color.base00;
+      mError = color.base08;
+      mOnError = color.base00;
+      mSurface = color.base00;
+      mOnSurface = color.base05;
+      mSurfaceVariant = color.base01;
+      mOnSurfaceVariant = color.base04;
+      mOutline = color.base03;
+      mShadow = color.base00;
+      terminal = {
+        foreground = color.base05;
+        background = color.base00;
+        cursor = color.base05;
+        cursorText = color.base00;
+        selectionFg = color.base05;
+        selectionBg = color.base02;
+        normal = ansiRow 0;
+        bright = ansiRow 8;
+      };
+    };
 in
 {
   config = lib.mkIf (sessions.hasShell osConfig.oruc.machine "noctalia") {
@@ -58,7 +64,6 @@ in
         theme = {
           source = "custom";
           custom_palette = "oruc-base16";
-          mode = if isLight then "light" else "dark";
         };
         lockscreen = {
           enabled = false;
@@ -168,10 +173,18 @@ in
           automation.enabled = false;
         };
       };
-      customPalettes.oruc-base16 = {
-        dark = noctaliaMode;
-        light = noctaliaMode;
-      };
     };
+    oruc.themeFiles.${palette} =
+      args:
+      builtins.toJSON {
+        dark = noctaliaMode args;
+        light = noctaliaMode args;
+      };
+    oruc.variantReloads.noctalia = ''
+      systemctl --user is-active -q noctalia.service || exit 0
+      ${noctalia} msg color-scheme-set custom oruc-base16
+      ${noctalia} msg config-reload
+      ${noctalia} msg theme-mode-set "$(<${lib.escapeShellArg polarity})"
+    '';
   };
 }

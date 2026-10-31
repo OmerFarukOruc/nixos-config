@@ -73,7 +73,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   switches the Base16 scheme and `plasma-look klassy` switches the Plasma look
   at run time. Every pair of look and scheme other than the default is a Home
   Manager specialisation of the same generation, and the choice stays across
-  deploys. The login screen, boot menu, console and niri keep the machine's
+  deploys. The login screen, boot menu and console keep the machine's
   default scheme. A look sets the
   Plasma style, window decoration, Qt style and KWin effects that belong
   together; Glass and Klassy are the two looks.
