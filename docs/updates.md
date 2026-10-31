@@ -90,6 +90,30 @@ argument names a file that gets those warnings without the `warning:` prefix;
 `ci/update.sh` reads it, because Nix prints its own `warning:` lines on the
 same stderr.
 
+On nixos-desktop and nixos-rog, neither Nix nor the shell holds a GitHub
+token, so a run soon hits GitHub's unauthenticated API limit. Nix then keeps an
+input where it is with only an `HTTP error 403` warning, and `update-app.sh`
+keeps an app. Run either mode with both tokens the `update` workflow passes,
+Nix's access token and `GH_TOKEN`:
+`GH_TOKEN="$(gh auth token)" NIX_CONFIG="access-tokens = github.com=$(gh auth token)"`.
+
+To prove a change to the inputs mode on an input that moves, put back the
+`flake.lock` of a commit whose root nixpkgs differs from `main`'s. A lock that
+differs from `main` only in llm-agents moves nothing before `eval_error`,
+because `move-inputs.sh` skips llm-agents and it moves later.
+This prints each candidate and its root nixpkgs, `HEAD` last:
+
+```sh
+for c in $(git log --format=%h -n 6 -- flake.lock | sed 's/$/^/') HEAD; do
+  printf '%s %s\n' "$c" "$(git show "${c}:flake.lock" | jq -r '.nodes[.nodes.root.inputs.nixpkgs].locked.rev[0:7]')"
+done
+git show <candidate>:flake.lock > flake.lock
+```
+
+Run the script under `bash -x` and check that the trace calls `eval_error`.
+The changes file can stay empty, because the move can land on exactly
+`main`'s lock and the file lists differences from `main`.
+
 A package test that fails in the build of step 3 is a bug. Fix it in
 `overlays/` before the push, as [Nixpkgs](../AGENTS.md#nixpkgs) describes. A
 passing rerun does not clear it, because the test can fail again on the next
