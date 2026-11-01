@@ -62,9 +62,9 @@ commit that a person pushes.
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the staged tree, under `heavy` where it exists | 190 to 224 s with a warm store in 3 runs (2026-10-23) |
+| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the staged tree, under `heavy` where it exists | 196 to 201 s with a warm store in 3 runs at load 19 to 26 (2026-11-01) |
 
-The times come from a test clone on 2026-10-23. The same checks run with one
+The times come from a test clone on 2026-11-01. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
 `ci/build-hosts.sh`:
 
@@ -76,10 +76,12 @@ devenv tasks run ci
 The hooks see the staged tree, because prek sets unstaged edits aside while a
 hook runs. The checked tree is the pushed one only when you committed
 everything staged and the push sends `HEAD`, so commit everything before you
-push. No hook builds a host's system. The deploy builds it on the target
-and changes nothing when the build fails, so a commit that does not build for
-another host fails only at that host's next deploy. `devenv tasks run ci`
-builds them all before a push.
+push. No hook builds a host's system. Every host installs `main` by itself
+every hour ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit
+that does not build for a host fails that host's hourly install each hour
+until a fix lands; the host keeps its system and shows "Update failed"
+([Updater](nixos-rog.md#updater)). `devenv tasks run ci` builds them all
+before a push.
 
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never
@@ -89,8 +91,8 @@ connection to GitHub before the pre-push hook runs and holds it open, and GitHub
 closes it when it stays idle. A push whose hook took 420 s failed without
 keepalives and passed with them (2026-10-23). So `home-manager/modules/git.nix`
 sets `core.sshCommand` to `ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10`.
-Ten missed keepalives, 300 s, end the connection, which is more than the 190 to
-224 s that the pre-push checks took on nixos-rog.
+Ten missed keepalives, 300 s, end the connection, which is more than the 196 to
+201 s that the pre-push checks took on nixos-rog.
 
 A worktree gets the hooks from the shared `.git/hooks`, but their config is a
 link that the devenv shell writes. Until `direnv allow <worktree>` and a first
@@ -224,13 +226,16 @@ runs it evaluates both from GitHub, so this step needs no worktree. It runs
 one `nix eval` per host, under `heavy` where the host has it, because `heavy`
 (`home-manager/modules/heavy.nix`) caps the memory of each evaluation. One
 evaluation per host stays under that cap. Three systems in one evaluation did
-not, and systemd-oomd killed it. nixos-rog
-took 70 to 90 seconds (measured on 2026-10-15), and nixos-desktop about 160
-seconds for one revision (2026-10-24). The host that runs the script keeps
-each commit's result in `${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts/`,
-so the `--running` check after the deploy, and the next push's comparison with
-this commit, skip that evaluation when they run on the same host. From the main
-checkout, run:
+not, and systemd-oomd killed it. The two commits evaluate at the same time,
+each in its own `heavy` scope, so two evaluations run at once. In the pre-push
+check on nixos-rog, devbox took 13 s, nixos-desktop 44 s, nixos-latitude 38 s
+and nixos-rog 57 s (2026-11-01). The host that runs the script keeps each
+commit's result in `${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts/`,
+and `ci/checks.sh` stores the same result for the commit it checks when the
+tree has no uncommitted change (`scripts/lib/host-systems.sh`). So after a push
+from this host, the comparison with the pushed commit, the `--running` check
+after the deploy, and the next push's comparison skip that evaluation. From the
+main checkout, run:
 
 ```sh
 git fetch origin

@@ -338,12 +338,17 @@ With the combined `nix flake check`, `ci/checks.sh` peaked at 10.0 GiB.
 `ci/checks.sh` peaked at 8.5 GiB. `ci/unit-cycles.sh` peaked at 4.9 GiB with one
 host at a time. `devenv test` peaked at 8.8 GiB.
 
+On 2026-11-01, the same measurement gave 5.31 GiB for `ci/checks.sh` and
+2.58 GiB for `ci/unit-cycles.sh` with one host at a time, and 7.85 GiB and
+3.68 GiB with two at a time, with no `high` or `max` event in either.
+
 `ci/checks.sh` checks each host's derivation type and
-`drvPath` in a separate process, so the evaluator releases its heap between
-hosts. `nix fmt` checks the formatter; the output gate rejects new output kinds
-or formatter systems until their coverage is added. `ci/unit-cycles.sh` also
-evaluates hosts one at a time. Adding a host therefore does not keep another
-host's evaluator heap in either check. The limits in
+`drvPath` in a separate process, so the evaluator releases its heap when the
+host is done. `nix fmt` checks the formatter; the output gate rejects new
+output kinds or formatter systems until their coverage is added. Both checks
+run two host evaluations at a time (`EACH_HOST_JOBS` in
+`scripts/lib/each-host.sh`), so a new host adds one evaluator heap only while
+it runs, and at most two heaps share the scope's `MemoryHigh`. The limits in
 `home-manager/modules/heavy.nix` stay unchanged.
 
 ## Power and heat
