@@ -13,10 +13,16 @@ let
   hasNiri = sessions.hasDesktop cfg "niri";
   hasPlasma = sessions.hasDesktop cfg "plasma";
   dbusRunSession = "${pkgs.dbus}/bin/dbus-run-session --dbus-daemon=${pkgs.dbus}/bin/dbus-daemon";
-  readFacts = ''
+  iconsDir = "${config.xdg.dataHome}/icons";
+  readCursor = ''
     facts=${lib.escapeShellArg config.oruc.themeFactsDir}
-    polarity=$(cat "$facts/polarity")
     cursor=$(cat "$facts/cursor")
+    read -ra pointer <"$facts/pointer-cursor"
+    [[ ! -e ${iconsDir}/''${pointer[0]}/index.theme ]] || cursor=''${pointer[0]}
+  '';
+  readFacts = ''
+    ${readCursor}
+    polarity=$(cat "$facts/polarity")
     icons=$(cat "$facts/icons")
     gtk=$(cat "$facts/gtk")
   '';
@@ -176,6 +182,67 @@ let
       esac
     '';
   };
+  pointerCursor = pkgs.writeShellApplication {
+    name = "oruc-pointer-cursor";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.util-linux
+      (pkgs.callPackage ../../pkgs/oruc-cursor.nix { })
+    ]
+    ++ lib.optional hasPlasma pkgs.kdePackages.plasma-workspace;
+    text = ''
+      state=${lib.escapeShellArg config.oruc.themeState}
+      icons=${iconsDir}
+      mkdir -p "$icons" "$state/theme"
+      exec 9>"$state/theme/pointer-cursor.lock"
+      flock 9
+      find "$icons" -maxdepth 1 -name '.oruc-cursor.*' -exec rm -rf -- {} +
+      ${readCursor}
+      name=''${pointer[0]}
+      status=0
+      if [[ ! -e $icons/$name/index.theme ]]; then
+        work=$(mktemp -d "$icons/.oruc-cursor.XXXXXX")
+        if oruc-cursor-build "$work/$name" "$name" "''${pointer[@]:1:3}"; then
+          rm -rf -- "''${icons:?}/$name"
+          mv -T "$work/$name" "$icons/$name"
+          cursor=$name
+        else
+          echo "theme: cursor build failed" >&2
+          status=1
+        fi
+        rm -rf -- "''${work:?}"
+      fi
+      [[ $cursor != "$name" ]] || touch "$icons/$name"
+      find "$icons" -maxdepth 1 -name 'Oruc-Cursor-*' -printf '%T@ %p\n' |
+        sort -rn | tail -n +${toString (keptCursors + 1)} | cut -d' ' -f2- |
+        while IFS= read -r old; do rm -rf -- "$old"; done
+      ${lib.optionalString hasNiri ''
+        kdl=${config.xdg.configHome}/niri/oruc-cursor.kdl
+        mkdir -p "''${kdl%/*}"
+        printf 'cursor {\n    xcursor-theme "%s"\n    xcursor-size ${toString theme.cursor.size}\n}\n' "$cursor" >"$kdl.oruc-tmp"
+        mv -T "$kdl.oruc-tmp" "$kdl"
+      ''}
+      if systemctl --user is-active -q plasma-plasmashell.service; then
+        ${
+          if hasPlasma then
+            "plasma-apply-cursortheme \"$cursor\" --size ${toString theme.cursor.size}"
+          else
+            ":"
+        }
+      else
+        ${if hasNiri then lib.getExe applyGtkPolarity else ":"}
+      fi
+      exit "$status"
+    '';
+  };
+  keptCursors = 2;
+  cursorBuilder = lib.concatStringsSep " " [
+    (builtins.hashFile "sha256" ../../pkgs/oruc-cursor.nix)
+    pkgs.bibata-cursors.version
+    pkgs.resvg.version
+    pkgs.python3Packages.clickgen.version
+  ];
 in
 {
   options.oruc.applyPolarity = lib.mkOption {
@@ -245,6 +312,14 @@ in
       oruc.themeFiles = gtkFiles;
       oruc.themeFacts = {
         cursor = { theme, ... }: theme.cursor.name;
+        pointer-cursor =
+          { scheme, ... }:
+          let
+            colours = "${scheme.base05} ${scheme.base00} ${scheme.base0D}";
+            build = builtins.substring 0 8 (builtins.hashString "sha256" "${colours} ${cursorBuilder}");
+          in
+          "Oruc-Cursor-${scheme.slug}-${build} ${colours}\n";
+        replaceable-icons = _: lib.concatLines iconTheme.replaceable;
         icons = { theme, ... }: theme.icons;
         gtk = { theme, ... }: theme.gtk;
       };
@@ -255,6 +330,14 @@ in
       # desktop's hinting and antialiasing instead. GTK on Wayland reads it
       # through the settings portal, which ignores gtk-4.0/settings.ini.
       dconf.settings."org/gnome/desktop/interface".font-rendering = "manual";
+    })
+
+    (lib.mkIf (hasPlasma || hasNiri) {
+      home.packages = [ pointerCursor ];
+      oruc.variantReloads.pointer-cursor = ''
+        systemctl --user is-active -q graphical-session.target || exit 0
+        systemd-run --user --no-block --collect --quiet ${lib.getExe pointerCursor}
+      '';
     })
 
     (lib.mkIf hasNiri {

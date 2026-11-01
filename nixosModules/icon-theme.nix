@@ -1,14 +1,17 @@
 { lib }:
 let
   gruvbox = "Gruvbox-Plus";
-  other = "Papirus";
+  papirus = "Papirus";
+  folders = import ./papirus-folders.nix { inherit lib; };
+  variant = isLight: if isLight then "Light" else "Dark";
 in
 {
   name =
     scheme: isLight:
-    "${if lib.hasPrefix "gruvbox-" scheme.slug then gruvbox else other}-${
-      if isLight then "Light" else "Dark"
-    }";
+    if lib.hasPrefix "gruvbox-" scheme.slug then
+      "${gruvbox}-${variant isLight}"
+    else
+      folders.themeName (folders.nearest scheme.base0D) (variant isLight);
 
   replaceable = [
     "breeze"
@@ -22,11 +25,13 @@ in
       ])
       [
         gruvbox
-        other
-      ];
+        papirus
+      ]
+  ++ folders.names;
 
   packages = pkgs: [
     pkgs.papirus-icon-theme
+    (folders.package pkgs)
     pkgs.gruvbox-plus-icons
     pkgs.fluent-icon-theme
     pkgs.morewaita-icon-theme

@@ -205,13 +205,33 @@ boot activates the default look first, so the Home Manager service then runs
 NixOS installs only the generation's own packages, so a specialisation
 cannot change one. A color therefore reaches an app through a file that Home
 Manager writes, never through a package built with it. Neovim, VS Code and fzf
-read their colors from files for this reason. On a host without Plasma, niri
-draws the cursor of the selected scheme's dark or light variant, and KDE apps
-take its icon theme from `~/.config/kdeglobals` in the pack. Outside a Plasma
-session, the reload `polarity` runs `oruc-gtk-polarity`
-(`home-manager/modules/appearance.nix`), which writes the GTK theme, cursor,
-colour preference and icon theme of the variant to dconf from the pack's facts
-`gtk`, `cursor`, `polarity` and `icons`. It keeps a GTK theme picked by hand
+read their colors from files for this reason. KDE apps take the scheme's icon
+theme from `~/.config/kdeglobals` in the pack.
+
+The pointer cursor is Bibata Modern recoloured per scheme: base05 fills it,
+base00 outlines it and base0D draws the busy circle. The reload
+`pointer-cursor` starts `oruc-pointer-cursor` (`appearance.nix`) through
+`systemd-run`, which renders the theme named by the pack's fact
+`pointer-cursor`, `Oruc-Cursor-<slug>-<hash>`, into `~/.local/share/icons`
+with `pkgs/oruc-cursor.nix` the first time it is used. The hash covers the
+three colours, the builder file and the versions of Bibata, resvg and
+clickgen, so a changed palette or builder gets a new theme. On a host with
+niri it writes the name to `~/.config/niri/oruc-cursor.kdl`, which
+`niri/config.kdl` includes after the record's cursor, on every run, so a niri
+login after a switch made in Plasma shows it too. It then applies the theme
+with `plasma-apply-cursortheme` in a Plasma session, or through
+`oruc-gtk-polarity` outside Plasma. A build took 7 s on nixos-rog
+(2026-11-01) and holds 28 MB, so the script keeps the two most recently used
+themes and removes older ones. The reload exits at once while
+`graphical-session.target` is inactive, as after a deploy at boot, and a login
+applies the built theme. `oruc-polarity` and `oruc-gtk-polarity` apply the
+recoloured theme when it is built, else the fact `cursor`, so a login keeps
+it. A failed build prints `theme: cursor build failed` to the user journal and
+applies the fact `cursor`. Outside a Plasma session, the reload `polarity`
+runs `oruc-gtk-polarity` (`home-manager/modules/appearance.nix`), which writes
+the GTK theme, cursor, colour preference and icon theme of the variant to
+dconf from the pack's facts `gtk`, `pointer-cursor` or `cursor`, `polarity`
+and `icons`. It keeps a GTK theme picked by hand
 outside `adw-gtk3` and `adw-gtk3-dark`, and an icon theme outside the
 `replaceable` names of `nixosModules/icon-theme.nix`. Home Manager's GTK module
 writes the record's values to the same dconf keys at each activation, and
@@ -315,8 +335,9 @@ session:
   changes nothing.
 - **Dark or light set.** `oruc-polarity` (`home-manager/modules/appearance.nix`)
   gives the session the cursor, GTK 3 theme name and dconf `color-scheme` of
-  the scheme's variant, which the pack holds as the facts `cursor`, `gtk` and
-  `polarity`, but keeps a GTK theme picked in System Settings. It does this at
+  the scheme's variant, which the pack holds as the facts `gtk` and
+  `polarity`, and the scheme's recoloured cursor once built, else the fact
+  `cursor`, but keeps a GTK theme picked in System Settings. It does this at
   each login and when the variant changed, and records the variant in
   `~/.local/state/oruc/theme/polarity`. Otherwise it sets `color-scheme` to
   `default` and back, so GTK 4 apps load `oruc-colors.css` again. On every run
@@ -528,14 +549,18 @@ These stay fixed on purpose, and the check does not cover them:
 - Web pages and Electron app interiors follow only the dark or light variant,
   through the desktop portal.
 - niri's hotkey overlay, screenshot UI and error banner.
-- The Bibata cursor (the variant follows the scheme), and the icons of wlogout.
-- The icons. `nixosModules/icon-theme.nix` picks Gruvbox Plus for a gruvbox
-  scheme and Papirus for every other scheme, each in the dark or light form of
-  the scheme. It also installs Fluent, MoreWaita and Colloid (orange accent,
+- The icons of wlogout.
+- The icons other than folders. `nixosModules/icon-theme.nix` picks Gruvbox
+  Plus for a gruvbox scheme, whose folders already match, and for every other
+  scheme `Papirus-Oruc-<colour>-<Dark|Light>` from
+  `nixosModules/papirus-folders.nix`: a theme that inherits Papirus-Dark or
+  Papirus-Light and links its folder icons to Papirus's own folders in one of
+  its 25 colours, the one nearest to base0D in OKLab with lightness counted at
+  a quarter, because the folder icons keep their own shade. It also installs Fluent, MoreWaita and Colloid (orange accent,
   default and Gruvbox folders) to pick by hand in System Settings. On Plasma a
   theme picked there stays through `theme` switches and logins, until System
-  Settings selects Papirus-Dark, Papirus-Light, Gruvbox-Plus-Dark,
-  Gruvbox-Plus-Light, Breeze or Breeze Dark again. Colloid's
+  Settings selects a Papirus, Papirus-Oruc, Gruvbox Plus, Breeze or Breeze
+  Dark theme again. Colloid's
   Catppuccin set is left out, because its orange folders use the Gruvbox
   orange (`#fe8019`) in Colloid's `install.sh`.
 - The Breeze desktop theme SVGs (their colors come from kdeglobals at run time)

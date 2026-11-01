@@ -11,9 +11,12 @@ colour file under $HOME resolves into it, that each file holds the colour of
 the slot its app uses, and that a tmux server and two Neovim instances started
 before the switch show the new colours. On a host with Plasma whose desktop
 session runs, it also checks that the session's KDE colour scheme moved to the
-other of its A and B copies with the scheme's background, that the cursor,
-GTK theme and colour preference follow the scheme's dark or light variant, that
-the icon theme is the scheme's or stays as picked in System Settings, that the
+other of its A and B copies with the scheme's background, that the GTK theme
+and colour preference follow the scheme's dark or light variant, that the
+cursor becomes the scheme's recoloured Bibata within 60 s, with base05 as the
+24 px arrow's fill, that the icon theme is the scheme's or stays as picked in
+System Settings, that a Papirus-Oruc icon theme links its folders to the
+Papirus colour its name gives, that the
 look keeps its Plasma style, and that the Glass glow has the
 scheme's blue. The expected colours come from the scheme's YAML in the pack.
 It also checks that an unknown scheme exits 64 and changes nothing, that
@@ -43,7 +46,8 @@ static in the scheme's base09 within 5 s. It checks that oruc-wallpaper-path
 prints the scheme's own wallpaper from assets/wallpapers, or a PNG it rendered
 once into ~/.cache/oruc/wallpapers, and in a Plasma session that the desktop
 shows it. Outside Plasma, on a host with niri, it checks dconf's colour
-preference, cursor and icon theme.
+preference, recoloured cursor and icon theme, and that niri's oruc-cursor.kdl
+names that cursor.
 
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
@@ -150,6 +154,74 @@ mpv_reads_colors() {
     grep -qiF "Setting option '$option' = '#$colour'" <<<"$log" ||
       fail "$slug: mpv does not read $option #$colour from ~/$key"
   done
+}
+
+recoloured_cursor() {
+  local slug=$1 name
+  read -r name _ <"$pack/$slug/.oruc/pointer-cursor"
+  for _ in $(seq 120); do
+    [[ -e $HOME/.local/share/icons/$name/index.theme ]] && break
+    sleep 0.5
+  done
+  [[ -e $HOME/.local/share/icons/$name/index.theme ]] ||
+    fail "$slug: ~/.local/share/icons/$name was not built within 60 s"
+  printf '%s\n' "$name"
+}
+
+waits_for() {
+  local want=$1
+  shift
+  for _ in $(seq 40); do
+    [[ $("$@") == "$want" ]] && return 0
+    sleep 0.5
+  done
+  return 1
+}
+
+check_niri_cursor() {
+  local slug=$1 cursor=$2
+  [[ -e $pack/$slug/.config/niri/oruc-theme.kdl ]] || return 0
+  grep -qF "xcursor-theme \"$cursor\"" "$HOME/.config/niri/oruc-cursor.kdl" ||
+    fail "$slug: ~/.config/niri/oruc-cursor.kdl does not name $cursor"
+}
+
+check_cursor_frame() {
+  local slug=$1 name=$2 fill
+  fill=$(
+    python3 -I - "$HOME/.local/share/icons/$name/cursors/left_ptr" <<'PYTHON'
+import collections
+import struct
+import sys
+
+data = open(sys.argv[1], "rb").read()
+count = struct.unpack("<I", data[12:16])[0]
+for i in range(count):
+    _, size, position = struct.unpack("<III", data[16 + 12 * i : 28 + 12 * i])
+    if size == 24:
+        width, height = struct.unpack("<II", data[position + 16 : position + 24])
+        pixels = struct.unpack(f"<{width * height}I", data[position + 36 : position + 36 + 4 * width * height])
+        opaque = collections.Counter(p & 0xFFFFFF for p in pixels if p >> 24 == 0xFF)
+        print(f"{opaque.most_common(1)[0][0]:06x}")
+        break
+PYTHON
+  )
+  [[ $fill == "$base05" ]] || fail "$slug: the 24 px arrow of $name is filled with $fill, not base05 $base05"
+}
+
+check_folder_icons() {
+  local slug=$1 icons=$2 colour dir name
+  [[ $icons == Papirus-Oruc-* ]] || return 0
+  colour=${icons#Papirus-Oruc-}
+  colour=${colour%-*}
+  for dir in "$HOME/.nix-profile/share/icons" "/etc/profiles/per-user/$USER/share/icons"; do
+    [[ -e $dir/$icons/index.theme ]] || continue
+    for name in folder inode-directory; do
+      [[ $(readlink -f "$dir/$icons/48x48/places/$name.svg") == */folder-"$colour".svg ]] ||
+        fail "$slug: $icons/48x48/places/$name.svg does not resolve to folder-$colour.svg"
+    done
+    return 0
+  done
+  fail "$slug: the icon theme $icons is not installed"
 }
 
 holds_required() {
@@ -510,14 +582,17 @@ check_plasma() {
   [[ $bg == "$(decimal "$base00")"* ]] || fail "$slug: the KDE window background is $bg, not $(decimal "$base00")"
   variant=$(sed -nE 's/^variant:[[:space:]]*"?([a-z]+)"?.*/\1/p' "$pack/$slug/.oruc/source.yaml")
   icons=$(<"$pack/$slug/.oruc/icons")
-  if [[ -n $icons_before && $icons_before != breeze && $icons_before != breeze-dark ]] &&
-    ! grep -qxF "$icons_before" "$pack"/*/.oruc/icons; then
+  if [[ -n $icons_before ]] && ! grep -qxF -- "$icons_before" "$pack/$slug/.oruc/replaceable-icons"; then
     icons=$icons_before
   fi
-  cursor=$(<"$pack/$slug/.oruc/cursor")
+  cursor=$(recoloured_cursor "$slug")
   gtk=$(<"$pack/$slug/.oruc/gtk")
   [[ $(kdeglobal kdeglobals Icons Theme) == "$icons" ]] || fail "$slug: the icon theme is not $icons"
-  [[ $(kdeglobal kcminputrc Mouse cursorTheme) == "$cursor" ]] || fail "$slug: the cursor is not $cursor"
+  check_folder_icons "$slug" "$icons"
+  waits_for "$cursor" kdeglobal kcminputrc Mouse cursorTheme ||
+    fail "$slug: the cursor is $(kdeglobal kcminputrc Mouse cursorTheme), not $cursor"
+  check_cursor_frame "$slug" "$cursor"
+  check_niri_cursor "$slug" "$cursor"
   [[ $(dconf read /org/gnome/desktop/interface/gtk-theme) == "'$gtk'" ]] || fail "$slug: the GTK theme is not $gtk"
   case $base in
     OrucBase16Glass) style=oruc-glass ;;
@@ -637,13 +712,16 @@ check_gtk_polarity() {
   local slug=$1 gtk_before=$2 icons_before=$3 polarity cursor icons gtk expected replaceable
   gtk_polarity_applies "$slug" || return 0
   polarity=$(cat "$pack/$slug/.oruc/polarity")
-  cursor=$(cat "$pack/$slug/.oruc/cursor")
+  cursor=$(recoloured_cursor "$slug")
   icons=$(cat "$pack/$slug/.oruc/icons")
   gtk=$(cat "$pack/$slug/.oruc/gtk")
   [[ $(dconf read /org/gnome/desktop/interface/color-scheme) == "'prefer-$polarity'" ]] ||
     fail "$slug: dconf color-scheme is not prefer-$polarity"
-  [[ $(dconf read /org/gnome/desktop/interface/cursor-theme) == "'$cursor'" ]] ||
+  waits_for "'$cursor'" dconf read /org/gnome/desktop/interface/cursor-theme ||
     fail "$slug: dconf cursor-theme is not $cursor"
+  check_cursor_frame "$slug" "$cursor"
+  check_niri_cursor "$slug" "$cursor"
+  check_folder_icons "$slug" "$icons"
   case $gtk_before in
     "" | "'adw-gtk3'" | "'adw-gtk3-dark'") expected="'$gtk'" ;;
     *) expected=$gtk_before ;;
@@ -651,7 +729,7 @@ check_gtk_polarity() {
   [[ $(dconf read /org/gnome/desktop/interface/gtk-theme) == "$expected" ]] ||
     fail "$slug: dconf gtk-theme is not $expected"
   expected=$icons_before
-  replaceable=$(sort -u "$pack"/*/.oruc/icons <(printf '%s\n' breeze breeze-dark) | sed "s/.*/'&'/")
+  replaceable=$(sed "s/.*/'&'/" "$pack/$slug/.oruc/replaceable-icons")
   if [[ -z $icons_before ]] || grep -qxF -- "$icons_before" <<<"$replaceable"; then
     expected="'$icons'"
   fi

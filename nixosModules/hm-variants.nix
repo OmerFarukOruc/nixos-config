@@ -163,8 +163,9 @@ let
       setting that selects the scheme's theme waits for the next switch after it
       closes. Starship, fzf and atuin change at their next run, and the Markdown
       viewer at its next open. On
-      Plasma, KDE and GTK 4 apps, the cursor, the icons and the Glass glow change at
-      once, and GTK 3 apps and Kate's editor at their next start. VS Code changes its
+      Plasma, KDE and GTK 4 apps, the icons with their folder colour and the Glass
+      glow change at once, and GTK 3 apps and Kate's editor at their next start.
+      The cursor changes at once, or about 7 s later the first time a scheme is used. VS Code changes its
       colours at once and its see-through window at its next start. niri's
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout, mpv, Konsole, Thunderbird, SourceGit and jadx at their

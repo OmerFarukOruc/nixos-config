@@ -82,14 +82,7 @@ let
         0.55 * contrast.oklabDistanceSquared scheme.base00 variant.background
         + 0.27 * contrast.oklabDistanceSquared scheme.base05 variant.foreground
         + 0.18 * contrast.oklabDistanceSquared scheme.base0D variant.accent;
-      scored = map (variant: {
-        inherit (variant) id;
-        score = score variant;
-      }) offered;
-      nearest = lib.foldl' (
-        best: next:
-        if next.score < best.score || (next.score == best.score && next.id < best.id) then next else best
-      ) (builtins.head scored) (builtins.tail scored);
+      nearest = contrast.minBy score (lib.sort (a: b: a.id < b.id) offered);
     in
     if named != null then named.id else nearest.id;
 

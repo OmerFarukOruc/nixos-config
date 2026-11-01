@@ -69,8 +69,25 @@ rec {
       (0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s)
     ];
 
-  oklabDistanceSquared =
-    a: b: lib.foldl' builtins.add 0.0 (lib.zipListsWith (x: y: (x - y) * (x - y)) (oklab a) (oklab b));
+  oklabDistanceSquaredWeighted =
+    weights: a: b:
+    lib.foldl' builtins.add 0.0 (
+      lib.zipListsWith (weight: d: weight * d * d) weights (
+        lib.zipListsWith builtins.sub (oklab a) (oklab b)
+      )
+    );
+
+  oklabDistanceSquared = oklabDistanceSquaredWeighted [
+    1
+    1
+    1
+  ];
+
+  minBy =
+    score: candidates:
+    lib.foldl' (best: next: if score next < score best then next else best) (builtins.head candidates) (
+      builtins.tail candidates
+    );
 
   readableOn =
     scheme: background:
