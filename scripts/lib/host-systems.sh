@@ -7,6 +7,15 @@ HOST_SYSTEM_EXPR='h: {
   kind = h.config.oruc.machine.kind or null;
 }'
 
+fetch_inputs() {
+  local flake=$1
+  shift
+  nix flake prefetch-inputs "$@" --quiet "$flake" || {
+    echo "The inputs of $flake could not be fetched." >&2
+    return 1
+  }
+}
+
 host_names() {
   local flake=$1 names
   shift
@@ -29,6 +38,12 @@ valid_host_systems() {
   jq -e 'type == "object" and length > 0
     and all(.[]; (.drv | type) == "string" and (.out | type) == "string")' \
     >/dev/null 2>&1
+}
+
+stored_host_systems() {
+  local file
+  file=$(host_systems_file "$1")
+  [[ -s $file ]] && valid_host_systems <"$file" && cat "$file"
 }
 
 store_host_systems() {

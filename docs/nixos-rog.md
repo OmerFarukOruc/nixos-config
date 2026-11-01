@@ -351,6 +351,15 @@ run two host evaluations at a time (`PARALLEL_EACH_JOBS` in
 it runs, and at most two heaps share the scope's `MemoryHigh`. The limits in
 `home-manager/modules/heavy.nix` stay unchanged.
 
+Before the parallel evaluations start, both checks fetch every flake input in
+one process (`fetch_inputs` in `scripts/lib/host-systems.sh`), and so does
+`scripts/affected-hosts.sh` for each commit without a stored result. On
+2026-11-01 a push failed with `getting Git object ...: object not found` after
+two host evaluations each unpacked the same new input into Nix's Git cache.
+Three runs that evaluated two hosts with that input missing from the store did
+not reproduce it, so the cause is not confirmed, and the single fetch only
+keeps the parallel evaluations from fetching.
+
 ## Power and heat
 
 Seven services share the laptop's power settings. Each setting has one owner:

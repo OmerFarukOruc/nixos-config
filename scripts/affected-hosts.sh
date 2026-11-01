@@ -110,13 +110,8 @@ done | jq -s add
 REMOTE
 }
 
-cached_systems() {
-  local file json
-  file=$(host_systems_file "$1")
-  if [[ -s $file ]] && valid_host_systems <"$file"; then
-    cat "$file"
-    return
-  fi
+evaluated_systems() {
+  local json
   json=$(systems "$1") || return 1
   if ! valid_host_systems <<<"$json"; then
     echo "The evaluation of $1 printed no systems." >&2
@@ -133,13 +128,20 @@ fi
 systems_dir=$(mktemp -d)
 trap 'rm -rf -- "$systems_dir"' EXIT
 systems_of() {
-  cached_systems "$1" >"$systems_dir/$1"
+  evaluated_systems "$1" >"$systems_dir/$1"
 }
 commits=("$sha")
 if ! $running && [[ $parent != "$sha" ]]; then
   commits+=("$parent")
 fi
-parallel_each systems_of "${commits[@]}"
+pending=()
+for commit in "${commits[@]}"; do
+  if ! stored_host_systems "$commit" >"$systems_dir/$commit"; then
+    fetch_inputs "github:$repo/$commit" --no-update-lock-file
+    pending+=("$commit")
+  fi
+done
+parallel_each systems_of "${pending[@]}"
 new=$(<"$systems_dir/$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
 not_deployed() {

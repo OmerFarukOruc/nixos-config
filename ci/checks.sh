@@ -67,6 +67,7 @@ host_systems() {
   local flake=. revision names hosts systems
   revision=$(nix flake metadata "${nix_opts[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
   [[ -z $revision ]] || flake="git+file://$PWD?rev=$revision"
+  fetch_inputs "$flake" "${nix_opts[@]}" --no-write-lock-file || return 1
   names=$(host_names "$flake" "${nix_opts[@]}") || return 1
   mapfile -t hosts <<<"$names"
   parallel_each host_system "${hosts[@]}" || return 1

@@ -37,6 +37,7 @@ check_host() {
   echo "$host: no ordering cycle"
 }
 
+fetch_inputs . --no-write-lock-file
 names=$(host_names .)
 mapfile -t hosts <<<"$names"
 parallel_each check_host "${hosts[@]}"
