@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
-. scripts/lib/each-host.sh
+. scripts/lib/parallel-each.sh
 # shellcheck source=/dev/null
 . scripts/lib/host-systems.sh
 
@@ -42,31 +42,31 @@ flake_outputs() {
 }
 
 host_system() {
+  local rc=0
   echo "$1"
-  nix eval "${nix_opts[@]}" --json --no-write-lock-file ".#nixosConfigurations.$1" --apply "
+  nix eval "${nix_opts[@]}" --json --no-write-lock-file "$flake#nixosConfigurations.$1" --apply "
     h:
       let toplevel = h.config.system.build.toplevel; in
       if builtins.isAttrs toplevel && (toplevel.type or null) == \"derivation\"
-      then { \"$1\" = ($(host_system_apply)) h; }
+      then { \"$1\" = ($HOST_SYSTEM_EXPR) h; }
       else throw \"The host toplevel must be a derivation.\"
-  " >"$records/$1.json"
+  " >"$records/$1.json" 2>"$records/$1.err" || rc=$?
+  cat "$records/$1.err" >&2
+  ((rc == 0)) || echo "$1: the evaluation failed." >&2
+  return "$rc"
 }
 
 host_systems() {
-  local names hosts systems revision
-  names=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
-    --apply builtins.attrNames | jq -r '.[]') || return 1
-  [[ -n $names ]] || {
-    echo "The flake defines no host." >&2
-    return 1
-  }
-  mapfile -t hosts <<<"$names"
-  each_host host_system "${hosts[@]}" || return 1
-  systems=$(cd "$records" && jq -c -s add "${hosts[@]/%/.json}") || return 1
+  local flake=. revision names hosts systems
   revision=$(nix flake metadata "${nix_opts[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
-  if [[ -n $revision ]] && ! store_host_systems "$revision" "$systems"; then
+  [[ -z $revision ]] || flake="git+file://$PWD?rev=$revision"
+  names=$(host_names "$flake" "${nix_opts[@]}") || return 1
+  mapfile -t hosts <<<"$names"
+  parallel_each host_system "${hosts[@]}" || return 1
+  [[ -n $revision ]] || return 0
+  systems=$(cd "$records" && jq -c -s add "${hosts[@]/%/.json}") || return 1
+  store_host_systems "$revision" "$systems" ||
     echo "scripts/affected-hosts.sh will evaluate $revision again: its systems could not be stored." >&2
-  fi
 }
 
 box_browser() {

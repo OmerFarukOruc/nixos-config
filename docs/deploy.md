@@ -62,7 +62,7 @@ commit that a person pushes.
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the staged tree, under `heavy` where it exists | 196 to 201 s with a warm store in 3 runs at load 19 to 26 (2026-11-01) |
+| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, under `heavy` where it exists | 196 to 201 s with a warm store in 3 runs at load 19 to 26 (2026-11-01) |
 
 The times come from a test clone on 2026-11-01. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
@@ -73,15 +73,22 @@ devenv test
 devenv tasks run ci
 ```
 
-The hooks see the staged tree, because prek sets unstaged edits aside while a
-hook runs. The checked tree is the pushed one only when you committed
-everything staged and the push sends `HEAD`, so commit everything before you
-push. No hook builds a host's system. Every host installs `main` by itself
-every hour ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit
-that does not build for a host fails that host's hourly install each hour
-until a fix lands; the host keeps its system and shows "Update failed"
-([Updater](nixos-rog.md#updater)). `devenv tasks run ci` builds them all
-before a push.
+The hooks check the working tree. prek sets unstaged edits aside while a hook
+runs only when something is staged, and then the hooks check the staged tree.
+The checked tree is the pushed one only when everything is committed and the
+push sends `HEAD`, so commit everything before you push. When Nix reports a
+clean tree, `ci/checks.sh` evaluates that commit (`git+file://...?rev=`) and
+stores each host's system for `scripts/affected-hosts.sh`; with uncommitted
+changes it stores nothing.
+
+No hook builds a host's system. Every host installs `main` by itself every
+hour ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit that does
+not build for a host fails that host's next hourly install. The host keeps its
+system, records that `main` as failed and skips it in the hourly runs until
+`main` moves, and a host with a desktop shows "Update failed"
+([Failures and notifications](nixos-rog.md#failures-and-notifications)).
+`upgrade` tries that `main` again. `devenv tasks run ci` builds every host's
+system before a push.
 
 The gate exists only where the devenv shell loaded. Every host installs
 devenv, and direnv fails in a checkout where it is missing. A clone that never

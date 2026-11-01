@@ -22,6 +22,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
 . scripts/lib/host-systems.sh
+# shellcheck source=/dev/null
+. scripts/lib/parallel-each.sh
 
 usage="usage: $0 [--running] [REV | OLD..REV]"
 running=false
@@ -95,7 +97,7 @@ on_host() {
 }
 
 systems() {
-  on_host "$this_host" "github:$repo/$1" "$(host_system_apply)" <<'REMOTE'
+  on_host "$this_host" "github:$repo/$1" "$HOST_SYSTEM_EXPR" <<'REMOTE'
 set -eo pipefail
 nix=(nix)
 if command -v heavy >/dev/null; then nix=(heavy nix); fi
@@ -128,21 +130,24 @@ if ! $running && [[ -z $old_rev ]] && ! parent=$(git rev-parse --verify -q "$sha
   echo "$sha has no parent to compare with." >&2
   exit 1
 fi
-if ! $running; then
-  old_file=$(mktemp)
-  trap 'rm -f -- "$old_file"' EXIT
-  cached_systems "$parent" >"$old_file" &
-  old_pid=$!
+systems_dir=$(mktemp -d)
+trap 'rm -rf -- "$systems_dir"' EXIT
+systems_of() {
+  cached_systems "$1" >"$systems_dir/$1"
+}
+commits=("$sha")
+if ! $running && [[ $parent != "$sha" ]]; then
+  commits+=("$parent")
 fi
-new=$(cached_systems "$sha")
+parallel_each systems_of "${commits[@]}"
+new=$(<"$systems_dir/$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
 not_deployed() {
   [[ $(jq -r --arg h "$1" '.[$h].deployed' <<<"$new") == false ]]
 }
 
 if ! $running; then
-  wait "$old_pid"
-  old=$(<"$old_file")
+  old=$(<"$systems_dir/$parent")
   for host in "${hosts[@]}"; do
     if not_deployed "$host"; then
       printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"

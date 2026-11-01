@@ -2,18 +2,26 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
-. scripts/lib/each-host.sh
+. scripts/lib/parallel-each.sh
+# shellcheck source=/dev/null
+. scripts/lib/host-systems.sh
 
 check_host() {
   local host=$1 paths units systemd rc=0 analysis
   paths=$(nix build --no-link --print-out-paths --impure \
     --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd) ||
     {
-      echo "$host: the units do not build; Nix's error is above."
+      echo "$host: the units do not build."
       return 1
     }
-  units=$(grep -- '-system-units$' <<<"$paths")
-  systemd=$(grep -v -- '-system-units$' <<<"$paths")
+  units=$(grep -- '-system-units$' <<<"$paths") || {
+    echo "$host: the build printed no unit folder."
+    return 1
+  }
+  systemd=$(grep -v -- '-system-units$' <<<"$paths") || {
+    echo "$host: the build printed no systemd package."
+    return 1
+  }
   # systemd-analyze exits 0 also when it finds a cycle, so only its message
   # counts; any other status means it did not check.
   # --man=no: a unit's man page lookup fails where man is not on PATH.
@@ -29,6 +37,6 @@ check_host() {
   echo "$host: no ordering cycle"
 }
 
-names=$(nix eval --json --no-write-lock-file .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]')
+names=$(host_names .)
 mapfile -t hosts <<<"$names"
-each_host check_host "${hosts[@]}"
+parallel_each check_host "${hosts[@]}"

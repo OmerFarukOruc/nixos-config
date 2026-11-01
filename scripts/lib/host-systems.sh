@@ -1,11 +1,21 @@
-# shellcheck shell=bash
-host_system_apply() {
-  echo 'h: {
-    drv = h.config.system.build.toplevel.drvPath;
-    out = h.config.system.build.toplevel.outPath;
-    deployed = h.config.oruc.machine.deployed or true;
-    deployLogin = h.config.oruc.machine.deployLogin or null;
-  }'
+# shellcheck shell=bash disable=SC2034 # ci/checks.sh and scripts/affected-hosts.sh read HOST_SYSTEM_EXPR
+HOST_SYSTEM_EXPR='h: {
+  drv = h.config.system.build.toplevel.drvPath;
+  out = h.config.system.build.toplevel.outPath;
+  deployed = h.config.oruc.machine.deployed or true;
+  deployLogin = h.config.oruc.machine.deployLogin or null;
+}'
+
+host_names() {
+  local flake=$1 names
+  shift
+  names=$(nix eval "$@" --json --no-write-lock-file "$flake#nixosConfigurations" --apply builtins.attrNames |
+    jq -r '.[]') || return 1
+  [[ -n $names ]] || {
+    echo "The flake defines no host." >&2
+    return 1
+  }
+  printf '%s\n' "$names"
 }
 
 host_systems_file() {
