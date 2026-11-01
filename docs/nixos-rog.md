@@ -838,7 +838,7 @@ plasma-look klassy
 
 The color scheme, the panels, the Plasma style and the KWin effects load at
 the next login. A live color scheme change can crash Electron apps such as
-Discord, so neither `plasma-look` nor a deploy changes it; only
+Vesktop, so neither `plasma-look` nor a deploy changes it; only
 [`theme`](#switch-the-scheme) does.
 The choice lasts across deploys and reboots, because the Home Manager service
 (`home-manager-oruc.service`) runs `theme --reapply` after it activates the
@@ -932,7 +932,7 @@ on nixos-desktop turn static in the scheme's base09 at once and at each login;
 from boot until the login they show the record's color. `Fn+F4` still picks
 another Aura effect until the next switch, login or deploy. Spotify takes the
 scheme at its next start. Telegram follows once it has loaded the palette: type
-`loadcolors` in Telegram's chat search box and pick
+open Telegram's Settings, type `loadcolors` with no text field focused, and pick
 `~/.config/oruc/oruc.tdesktop-palette`; it then repaints at each switch.
 [Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
 lasts across deploys and reboots, and `theme <record's scheme>` goes back.

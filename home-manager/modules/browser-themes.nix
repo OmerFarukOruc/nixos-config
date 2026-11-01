@@ -8,14 +8,11 @@
 }:
 let
   pywalfoxId = "pywalfox@frewacom.org";
-  pywalfoxStart = pkgs.writeShellScript "pywalfox-start" ''
-    exec ${lib.getExe' pkgs.pywalfox-native "pywalfox"} start
-  '';
   pywalfoxHost = pkgs.writeTextDir "lib/mozilla/native-messaging-hosts/pywalfox.json" (
     builtins.toJSON {
       name = "pywalfox";
       description = "Pywalfox native host";
-      path = "${pywalfoxStart}";
+      path = lib.getExe' pkgs.pywalfox-native "pywalfox";
       type = "stdio";
       allowed_extensions = [ pywalfoxId ];
     }
@@ -48,23 +45,22 @@ let
       pywalfox update
     '';
   };
-  gtkMode.extensions.theme.system_theme = 1;
+  qtMode = 2;
+  gtkMode = 1;
+  systemTheme.extensions.theme = {
+    id = "";
+    system_theme = if sessions.hasDesktop osConfig.oruc.machine "plasma" then qtMode else gtkMode;
+  };
   chromiumPreferences = dir: {
     path = "${config.xdg.configHome}/${dir}/Default/Preferences";
     format = "json";
-    values = gtkMode;
+    values = systemTheme;
     create = false;
   };
 in
 {
-  options.oruc.firefox = lib.mkOption {
-    type = lib.types.package;
-    readOnly = true;
-    default = firefox;
-    description = "Firefox with the Pywalfox add-on and its native host, which take the stored scheme's 16 colours.";
-  };
-
   config = lib.mkIf (sessions.hasGraphicalUser osConfig.oruc.machine) {
+    home.packages = [ firefox ];
     oruc.themeFacts.pywal-colors =
       { scheme, theme }: builtins.toJSON (map (slot: "#${scheme.${slot}}") theme.ansi);
     oruc.variantReloads.pywalfox = lib.getExe pywalfox;

@@ -95,9 +95,7 @@ let
   };
   # Skipped without a graphical user. They stay in the list below, and the list
   # is filtered, so that the order of the packages on a desktop stays as it is.
-  inherit (config.oruc) firefox;
   desktopPackages = [
-    firefox
     pkgs.nerd-fonts.caskaydia-cove
     pkgs.sourcegit
     brave
@@ -143,7 +141,6 @@ in
     ++ [
       brave
       chrome
-      firefox
       grok
       opencode
     ]

@@ -473,7 +473,8 @@ OBS's accents use too). Vencord's `enabledThemes` lists it. Vencord watches the
 folder, so Vesktop repaints at once. The same module renders Telegram's palette
 `~/.config/oruc/oruc.tdesktop-palette` from `telegram-palette.txt`, which gives
 each colour key of Telegram's default palette a Base16 slot, a 15 % tint of an
-accent into base00 (`tint:`), the readable text on an accent (`on:`), or
+accent into base00 (`tint:`), the readable text on an accent (`on:`), an
+accent moved toward black or white until that text reads on it (`fill:`), or
 Telegram's own colour for its always-dark media viewer, call and toast screens.
 Telegram watches a palette it loaded from a file, so it repaints at each
 switch once it has loaded this one.
@@ -482,12 +483,15 @@ switch once it has loaded this one.
 a policy that installs it, and its native host. The reload `pywalfox` writes
 `~/.cache/wal/colors.json` from the pack's `pywal-colors` fact and
 `oruc-wallpaper-path`, sets Pywalfox's dark or light mode and tells a running
-Firefox to read the colours again. Brave, Brave (WARP) and Chromium draw with
-the GTK theme, because their `Preferences` set `extensions.theme.system_theme`
-to 1, which `oruc-app-settings` writes while the browser is closed; Chrome
-already has it. `spicetify.nix` builds Spotify with Spicetify and links its
-`Apps/xpui/colors.css` to the pack's `~/.config/spicetify/colors.css` through
-the theme pointer, so Spotify takes the stored scheme at its next start.
+Firefox to read the colours again. Brave, Brave (WARP) and Chromium follow the
+desktop's colours, because their `Preferences` set
+`extensions.theme.system_theme` to Qt (2) on a host with Plasma, whose KDE
+colours they then follow at once, and to GTK (1) elsewhere, whose colours
+apply at their next start; `oruc-app-settings` writes it, with an empty
+`extensions.theme.id`, which Chromium requires for that mode, while the
+browser is closed. `spicetify.nix` builds Spotify with Spicetify and links its
+`Apps/xpui/colors.css` to the pack's `spicetify-colors.css` fact through the
+theme pointer, so Spotify takes the stored scheme at its next start.
 
 The ChatGPT app only offers its built-in code themes, listed in
 `codex-code-themes.json` from its 26.1027.30824 bundle. The `codex-settings` fact
@@ -542,7 +546,7 @@ These stay fixed on purpose, and the check does not cover them:
   session runs. Before the login the reload does nothing, so the boot-time
   `theme --reapply` leaves the record's colour.
 - Brave on other devices keeps its synced theme colour; on these PCs Brave
-  draws with the GTK theme instead. `nixosModules/brave.nix` writes Brave's
+  draws with the desktop's Qt or GTK colours instead. `nixosModules/brave.nix` writes Brave's
   settings as policies, which Brave Origin reads from `/etc/brave/policies`. The
   recommended policies set the values a new profile starts with, and the
   settings page can still change them. Notification permissions and the theme

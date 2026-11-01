@@ -169,10 +169,10 @@ let
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
       next open, wlogout, mpv, Konsole, Thunderbird, SourceGit and jadx at their
       next start, the Cursor editor, Obsidian, OBS, Vesktop, Firefox and a Telegram
-      that loaded the oruc palette at once, Spotify, Brave and Chromium at their
-      next start, and the Plasma
-      splash at the next login. While SourceGit, jadx, OBS, Obsidian or the Cursor
-      editor runs, the settings it writes itself wait like Codex's: the Cursor
+      that loaded the oruc palette at once, Spotify at its next start, and the Plasma
+      splash at the next login. Brave and Chromium take the desktop's colours from
+      the first switch made while they are closed. While SourceGit, jadx, OBS,
+      Obsidian or the Cursor editor runs, the settings it writes itself wait like Codex's: the Cursor
       editor lists the theme and Obsidian enables its snippet after that, and OBS
       switches between its dark and light theme at its next start. The wallpaper changes at once in Plasma, Noctalia and DMS,
       and outside Plasma so do the GTK theme, cursor and icons in dconf. Keyboard

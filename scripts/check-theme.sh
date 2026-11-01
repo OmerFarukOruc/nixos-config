@@ -53,13 +53,13 @@ each text colour the VS Code theme draws on an accent background reaches
 4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
 and side bar backgrounds, that the Claude Code status line's segment colours
 are the scheme's and their text reaches 4.5:1 on them, and that OBS's text on
-its accent colours, SourceGit's badge and conflict text, and Vesktop's text on
-its accent fills reach 4.5:1.
+its accent colours, SourceGit's badge and conflict text, and the text Vesktop
+and Telegram draw on their accent fills reach 4.5:1.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
 Vesktop, Telegram, Spotify and the Cursor editor it checks that their theme
-files hold the scheme's base00, that Spotify's colors.css links into the
-theme pointer, that Pywalfox's colors.json lists the scheme's 16 colours in
+files hold the scheme's base00, that Spotify's colors.css links to the
+pointer's spicetify-colors.css fact, that Pywalfox's colors.json lists the scheme's 16 colours in
 order, and that the Cursor editor's settings.json selects the Oruc Base16
 theme of the scheme's dark or light variant. `oruc-app-settings --check` then
 checks that every settings file the switch sets, such as ~/.codex/config.toml,
@@ -328,6 +328,26 @@ def statusline_failures(slug):
 
 
 obs_var = re.compile(r"^\s*--([a-z_0-9]+): #([0-9a-fA-F]{6});", re.M)
+telegram_var = re.compile(r"^([A-Za-z0-9_]+): #([0-9a-f]{6});", re.M)
+
+
+def telegram_pairs(colors):
+    pairs = [
+        ("windowFgActive", "windowBgActive"),
+        ("sideBarBadgeFg", "sideBarBadgeBg"),
+        ("sideBarBadgeFg", "sideBarBadgeBgMuted"),
+        ("searchedTextCurrentMatchFg", "searchedTextCurrentMatchBg"),
+    ]
+    for key in colors:
+        if re.fullmatch(r"historyPeer\dUserpicBg2?", key):
+            pairs.append(("windowFgActive", key))
+        elif key.startswith("settingsIconBg"):
+            pairs.append(("settingsIconFg", key))
+        elif re.fullmatch(r"premiumButtonBg\d", key):
+            pairs.append(("premiumButtonFg", key))
+    return pairs
+
+
 vesktop_var = re.compile(r"^\s*--([a-z0-9-]+): #([0-9a-f]{6}) !important;", re.M)
 vesktop_pairs = [
     ("control-primary-text-default", "control-primary-background-default"),
@@ -363,6 +383,13 @@ def app_failures(slug):
             ratio = contrast(basic[text][-6:], basic[background][-6:])
             if ratio < 4.5:
                 found.append(f"{slug}: SourceGit {text} on {background} is {ratio:.2f}:1")
+    telegram = pack / slug / ".config/oruc/oruc.tdesktop-palette"
+    if telegram.exists():
+        colors = dict(telegram_var.findall(telegram.read_text()))
+        for text, background in telegram_pairs(colors):
+            ratio = contrast(colors[text], colors[background])
+            if ratio < 4.5:
+                found.append(f"{slug}: Telegram {text} on {background} is {ratio:.2f}:1")
     vesktop = pack / slug / ".config/vesktop/themes/oruc.css"
     if vesktop.exists():
         block = vesktop.read_text().rsplit(".visual-refresh {", 1)[1]
@@ -385,14 +412,14 @@ for line in (failures + statusline + apps)[:20]:
 if failures or statusline or apps:
     sys.exit(
         f"check-theme: {len(failures)} VS Code, {len(statusline)} status line"
-        f" and {len(apps)} OBS, SourceGit or Vesktop contrast failures"
+        f" and {len(apps)} OBS, SourceGit, Vesktop or Telegram contrast failures"
     )
 print(
     f"ok contrast: VS Code text in {checked} schemes;"
     f" {skipped} use their own theme and were skipped"
 )
 print(f"ok contrast: the Claude Code status line in {len(slugs)} schemes")
-print(f"ok contrast: OBS, SourceGit and Vesktop accent text in {len(slugs)} schemes")
+print(f"ok contrast: OBS, SourceGit, Vesktop and Telegram accent text in {len(slugs)} schemes")
 PYTHON
 }
 
@@ -446,11 +473,12 @@ check_app_settings() {
   holds "$slug" .config/oruc/cursor-colors.json "\"Oruc Base16 $side\""
   holds "$slug" .config/vesktop/themes/oruc.css "--base00: #$base00;"
   holds "$slug" .config/oruc/oruc.tdesktop-palette "windowBg: #$base00;"
-  holds "$slug" .config/spicetify/colors.css "--spice-main: #$base00;"
-  if command -v spotify >/dev/null && [[ -e $pack/$slug/.config/spicetify/colors.css ]]; then
+  if command -v spotify >/dev/null && [[ -e $pack/$slug/.oruc/spicetify-colors.css ]]; then
     line=$(readlink "$(dirname "$(readlink -f "$(command -v spotify)")")/Apps/xpui/colors.css")
-    [[ $line == "$state/theme/current/.config/spicetify/colors.css" ]] ||
+    [[ $line == "$state/theme/current/.oruc/spicetify-colors.css" ]] ||
       fail "$slug: Spotify's colors.css links to $line"
+    grep -qiF -- "--spice-main: #$base00;" "$line" ||
+      fail "$slug: Spotify's colors.css does not hold base00"
   fi
   if [[ -e $pack/$slug/.oruc/pywal-colors ]]; then
     [[ $(jq -r '.colors | keys_unsorted | join(" ")' "${XDG_CACHE_HOME:-$HOME/.cache}/wal/colors.json") == "$(printf 'color%d ' $(seq 0 15) | sed 's/ $//')" ]] ||

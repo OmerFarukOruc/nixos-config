@@ -22,6 +22,8 @@ let
               contrast.mixHex 15 scheme.${lib.removePrefix "tint:" base} scheme.base00
             else if lib.hasPrefix "on:" base then
               theme.readableOn scheme.${lib.removePrefix "on:" base}
+            else if lib.hasPrefix "fill:" base then
+              contrast.fillBehind (theme.readableOn scheme.base0D) 0 scheme.${lib.removePrefix "fill:" base}
             else
               scheme.${base};
         in

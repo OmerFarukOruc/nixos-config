@@ -13,7 +13,6 @@ let
   };
   spicePkgs = inputs.spicetify-nix.legacyPackages.${system};
   spicetify = config.programs.spicetify;
-  colorsFile = ".config/spicetify/colors.css";
   roles = scheme: {
     text = scheme.base05;
     subtext = scheme.base04;
@@ -54,14 +53,14 @@ let
   contrast = import ../../nixosModules/contrast.nix { inherit lib; };
   spotify = spicetify.spicedSpotify.overrideAttrs (old: {
     postInstall = old.postInstall + ''
-      ln -sfT ${lib.escapeShellArg "${config.oruc.themeState}/theme/current/${colorsFile}"} "$out/share/spotify/Apps/xpui/colors.css"
+      ln -sfT ${lib.escapeShellArg "${config.oruc.themeFactsDir}/spicetify-colors.css"} "$out/share/spotify/Apps/xpui/colors.css"
     '';
   });
 in
 {
   imports = [ inputs.spicetify-nix.homeManagerModules.spicetify ];
 
-  oruc.themeFiles.${colorsFile} = colors;
+  oruc.themeFacts."spicetify-colors.css" = colors;
   home.packages = [ spotify ] ++ spicetify.theme.extraPkgs;
 
   programs.spicetify = {

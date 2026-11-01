@@ -20,7 +20,7 @@ let
       if [[ ! -L "${braveDir}/SingletonLock" ]]; then
         mkdir -p "$(dirname "$prefs")"
         [[ -s $prefs ]] || echo '{}' >"$prefs"
-        jq '.webrtc.ip_handling_policy = "disable_non_proxied_udp" | .extensions.theme.system_theme = 1' "$prefs" >"$prefs.new"
+        jq '.webrtc.ip_handling_policy = "disable_non_proxied_udp"' "$prefs" >"$prefs.new"
         mv "$prefs.new" "$prefs"
       fi
       exec brave-origin --user-data-dir="${braveDir}" --proxy-server=${proxy} "$@"
