@@ -395,6 +395,19 @@ Facts that matter when you change or measure them:
 - Each profile's limits in `machines/nixos-rog/cpu-limits.nix` are 70 °C in
   power-saver, 80 °C with a 4.0 GHz top clock in balanced and 85 °C in
   performance. Power-saver and performance keep each core's own top clock.
+- The kernel's ACPI processor driver keeps a second top clock for each CPU, the
+  `thermal_req` of `drivers/acpi/processor_thermal.c`. Each time a `Processor`
+  cooling device gets a state, even 0, the driver stores the policy's
+  `cpuinfo_max_freq` of that moment, less 20 % for each cooling step, for every
+  CPU of the package. With boost off, as in power-saver, state 0 stores the 2.0
+  GHz base clock, and turning boost on later does not raise it, so the CPUs stay
+  at 2.0 GHz in every profile until a cooling device gets a state again. On
+  2026-11-01 the laptop resumed from suspend in power-saver at 09:54, switched
+  to performance at 11:08 and stayed at 2.0 GHz; `scaling_max_freq` read
+  2000000, and a write of the top clock read back 2000000. `oruc-cpu-limits`
+  writes each `Processor` cooling device's state back to it before it sets the
+  top clock, so the driver stores the current `cpuinfo_max_freq` with the step
+  the device had when the unit read it.
 - Tctl, the CPU temperature the limit acts on, is `k10temp` `temp1`; `acpitz`
   `temp1` shows the same value.
 - The firmware takes the power limits in `machines/nixos-rog/asus.nix` only

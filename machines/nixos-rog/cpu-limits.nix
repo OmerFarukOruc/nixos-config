@@ -63,8 +63,13 @@ assert lib.assertMsg (
     script = ''
       declare -A temps=(${bashMap "tempC"}) tops=(${bashMap "maxKHz"})
       apply() {
-        local temp=''${temps[$1]} max=''${tops[$1]} policy khz
+        local temp=''${temps[$1]} max=''${tops[$1]} policy khz cdev
         ryzenadj --tctl-temp="$temp" >/dev/null
+        for cdev in /sys/class/thermal/cooling_device*; do
+          if [[ $(<"$cdev/type") == Processor ]]; then
+            cat "$cdev/cur_state" >"$cdev/cur_state"
+          fi
+        done
         for policy in /sys/devices/system/cpu/cpufreq/policy*; do
           khz=$max
           [[ $max == top ]] && khz=$(<"$policy/cpuinfo_max_freq")
