@@ -1,8 +1,14 @@
 { lib }:
+let
+  digits = lib.stringToCharacters "0123456789abcdefABCDEF";
+  digitPairs = lib.concatMap (high: map (low: high + low) digits) digits;
+  hexValues = lib.genAttrs (digits ++ digitPairs) lib.fromHexString;
+  hexBytes = lib.genList (value: lib.optionalString (value < 16) "0" + lib.toHexString value) 256;
+in
 rec {
   channels =
     color:
-    map (i: lib.fromHexString (builtins.substring (2 * i) 2 color)) [
+    map (i: hexValues.${builtins.substring (2 * i) 2 color}) [
       0
       1
       2
@@ -110,9 +116,7 @@ rec {
   mix = pct: lib.zipListsWith (a: b: (a * pct + b * (100 - pct) + 50) / 100);
   mixHex =
     pct: a: b:
-    lib.concatMapStrings (value: lib.optionalString (value < 16) "0" + lib.toHexString value) (
-      mix pct (channels a) (channels b)
-    );
+    lib.concatMapStrings (builtins.elemAt hexBytes) (mix pct (channels a) (channels b));
 
   legibleOn =
     scheme: backgrounds: color:
@@ -184,7 +188,10 @@ rec {
         "000000"
         "ffffff"
       ];
-      readable = pct: ratio text (mixHex pct color target) >= 4.5;
+      on = contrast (luminance (channels text));
+      from = channels color;
+      to = channels target;
+      readable = pct: on (luminance (mix pct from to)) >= 4.5;
       pct = lib.findFirst readable 0 (lib.reverseList (lib.range 0 100));
     in
     lib.toLower (mixHex (lib.max 0 (pct - steps)) color target);
