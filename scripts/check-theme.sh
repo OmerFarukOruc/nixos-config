@@ -57,13 +57,15 @@ its accent colours, SourceGit's badge and conflict text, and Vesktop's text on
 its accent fills reach 4.5:1.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
-Vesktop and the Cursor editor it checks that their theme files hold the
-scheme's base00, and that the Cursor editor's settings.json selects the Oruc
-Base16 theme of the scheme's dark or light variant. `oruc-app-settings --check` then checks
-that every settings file the switch sets, such as ~/.codex/config.toml or
-jadx's gui.json, holds the scheme's values; while an app that writes its own
-settings runs, the switch leaves them alone, and the script prints a skip
-line for it.
+Vesktop, Telegram, Spotify and the Cursor editor it checks that their theme
+files hold the scheme's base00, that Spotify's colors.css links into the
+theme pointer, that Pywalfox's colors.json lists the scheme's 16 colours in
+order, and that the Cursor editor's settings.json selects the Oruc Base16
+theme of the scheme's dark or light variant. `oruc-app-settings --check` then
+checks that every settings file the switch sets, such as ~/.codex/config.toml,
+Brave's Preferences or jadx's gui.json, holds the scheme's values; while an
+app that writes its own settings runs, the switch leaves them alone, and the
+script prints a skip line for it.
 
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.
@@ -443,6 +445,19 @@ check_app_settings() {
   holds "$slug" ".config/obs-studio/themes/Oruc$side.ovt" "--grey7: #$base00"
   holds "$slug" .config/oruc/cursor-colors.json "\"Oruc Base16 $side\""
   holds "$slug" .config/vesktop/themes/oruc.css "--base00: #$base00;"
+  holds "$slug" .config/oruc/oruc.tdesktop-palette "windowBg: #$base00;"
+  holds "$slug" .config/spicetify/colors.css "--spice-main: #$base00;"
+  if command -v spotify >/dev/null && [[ -e $pack/$slug/.config/spicetify/colors.css ]]; then
+    line=$(readlink "$(dirname "$(readlink -f "$(command -v spotify)")")/Apps/xpui/colors.css")
+    [[ $line == "$state/theme/current/.config/spicetify/colors.css" ]] ||
+      fail "$slug: Spotify's colors.css links to $line"
+  fi
+  if [[ -e $pack/$slug/.oruc/pywal-colors ]]; then
+    [[ $(jq -r '.colors | keys_unsorted | join(" ")' "${XDG_CACHE_HOME:-$HOME/.cache}/wal/colors.json") == "$(printf 'color%d ' $(seq 0 15) | sed 's/ $//')" ]] ||
+      fail "$slug: ~/.cache/wal/colors.json does not list color0 to color15 in order"
+    [[ $(jq -r .colors.color0 "${XDG_CACHE_HOME:-$HOME/.cache}/wal/colors.json") == "#$base00" ]] ||
+      fail "$slug: Pywalfox's color0 is not the scheme's base00"
+  fi
   [[ ! -e $pack/$slug/.config/oruc/cursor-colors.json ]] ||
     [[ $(jq -r '.["workbench.colorTheme"]' "${XDG_CONFIG_HOME:-$HOME/.config}/Cursor/User/settings.json") == "Oruc Base16 $side" ]] ||
     fail "$slug: the Cursor editor's settings.json does not select Oruc Base16 $side"

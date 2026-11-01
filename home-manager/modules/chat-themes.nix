@@ -2,6 +2,34 @@
 let
   contrast = import ../../nixosModules/contrast.nix { inherit lib; };
   vesktopTheme = ".config/vesktop/themes/oruc.css";
+  telegramPalette = ".config/oruc/oruc.tdesktop-palette";
+  telegramRoles = map (lib.splitString " ") (
+    lib.filter (line: line != "") (lib.splitString "\n" (builtins.readFile ./telegram-palette.txt))
+  );
+  telegram =
+    { scheme, theme }:
+    let
+      colorOf =
+        role:
+        let
+          parts = lib.splitString "/" role;
+          base = builtins.head parts;
+          alpha = lib.concatStrings (builtins.tail parts);
+          value =
+            if lib.hasPrefix "#" base then
+              lib.removePrefix "#" base
+            else if lib.hasPrefix "tint:" base then
+              contrast.mixHex 15 scheme.${lib.removePrefix "tint:" base} scheme.base00
+            else if lib.hasPrefix "on:" base then
+              theme.readableOn scheme.${lib.removePrefix "on:" base}
+            else
+              scheme.${base};
+        in
+        "#${lib.toLower value}${alpha}";
+    in
+    lib.concatMapStrings (
+      row: "${builtins.elemAt row 0}: ${colorOf (builtins.elemAt row 1)};\n"
+    ) telegramRoles;
   vesktop =
     { scheme, theme }:
     let
@@ -80,8 +108,14 @@ let
     '';
 in
 {
-  oruc.themeFiles.${vesktopTheme} = vesktop;
-  oruc.themeCopies = [ vesktopTheme ];
+  oruc.themeFiles = {
+    ${vesktopTheme} = vesktop;
+    ${telegramPalette} = telegram;
+  };
+  oruc.themeCopies = [
+    vesktopTheme
+    telegramPalette
+  ];
 
   programs.vesktop = {
     enable = true;

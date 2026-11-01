@@ -911,7 +911,7 @@ and critical values in the KDE colors, so it changes with them.
 On Plasma, the KDE colors of running apps, GTK 4 and libadwaita apps such as
 Mission Center, the cursor, the icons and the Glass glow change at once
 ([Theme](architecture.md#theme)). A live color scheme change can crash an
-Electron app such as Discord; start it again. GTK 3 apps and Kate's editor
+Electron app; start it again. GTK 3 apps and Kate's editor
 colors change at their next start. On nixos-latitude, which has no Plasma, the
 GTK colors and the KDE colors and icon theme in `~/.config/kdeglobals` follow
 the scheme at each app's next start. In a niri session, niri's cursor and the
@@ -930,8 +930,10 @@ the form at 30 % opacity over the dark Jake video, where a light scheme's dark
 text loses contrast. The keyboard's Aura light on nixos-rog and the case lights
 on nixos-desktop turn static in the scheme's base09 at once and at each login;
 from boot until the login they show the record's color. `Fn+F4` still picks
-another Aura effect until the next switch, login or deploy. Spotify keeps the record's scheme, because Spicetify builds its
-colors into the package, which a switch cannot replace.
+another Aura effect until the next switch, login or deploy. Spotify takes the
+scheme at its next start. Telegram follows once it has loaded the palette: type
+`loadcolors` in Telegram's chat search box and pick
+`~/.config/oruc/oruc.tdesktop-palette`; it then repaints at each switch.
 [Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
 lasts across deploys and reboots, and `theme <record's scheme>` goes back.
 On a host without Plasma, each deploy and boot writes the record's GTK

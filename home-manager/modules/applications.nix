@@ -95,8 +95,9 @@ let
   };
   # Skipped without a graphical user. They stay in the list below, and the list
   # is filtered, so that the order of the packages on a desktop stays as it is.
+  inherit (config.oruc) firefox;
   desktopPackages = [
-    pkgs.firefox
+    firefox
     pkgs.nerd-fonts.caskaydia-cove
     pkgs.sourcegit
     brave
@@ -104,6 +105,8 @@ let
   ];
 in
 {
+  imports = [ ./browser-themes.nix ];
+
   home.packages = lib.subtractLists (lib.optionals (!hasScreen) desktopPackages) (
     with pkgs;
     [
@@ -112,7 +115,6 @@ in
       curl
       fd
       file
-      firefox
       gitleaks
       infisical
       jq
@@ -141,6 +143,7 @@ in
     ++ [
       brave
       chrome
+      firefox
       grok
       opencode
     ]

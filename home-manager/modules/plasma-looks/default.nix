@@ -144,7 +144,7 @@ in
         "applications:SourceGit.desktop"
         "applications:code.desktop"
         "applications:com.anthropic.Claude.desktop"
-        "applications:discord.desktop"
+        "applications:vesktop.desktop"
         "applications:org.telegram.desktop.desktop"
         "applications:spotify.desktop"
       ];

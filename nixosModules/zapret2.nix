@@ -11,7 +11,7 @@ let
     "microsoftonline.com"
     "microsoft.com"
   ];
-  discord = [
+  discordHosts = [
     "discord.com"
     "discord.gg"
     "discord.media"
@@ -46,7 +46,7 @@ in
       http = {
         priority = 1;
         hosts.autodetect = autodetect;
-        hosts.include = discord;
+        hosts.include = discordHosts;
         hosts.exclude = microsoft;
         parameters = [
           "--filter-tcp=80"
@@ -59,7 +59,7 @@ in
       tls = {
         priority = 2;
         hosts.autodetect = autodetect;
-        hosts.include = discord;
+        hosts.include = discordHosts;
         hosts.exclude = microsoft;
         parameters = [
           "--filter-tcp=443"
@@ -70,7 +70,7 @@ in
       };
       quic = {
         priority = 3;
-        hosts.include = discord;
+        hosts.include = discordHosts;
         hosts.exclude = microsoft;
         parameters = [
           "--filter-udp=443"

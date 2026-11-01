@@ -1,6 +1,7 @@
 {
+  config,
   inputs,
-  osConfig,
+  lib,
   pkgs,
   ...
 }:
@@ -11,13 +12,60 @@ let
     config.allowUnfree = true;
   };
   spicePkgs = inputs.spicetify-nix.legacyPackages.${system};
-  inherit (osConfig) scheme;
+  spicetify = config.programs.spicetify;
+  colorsFile = ".config/spicetify/colors.css";
+  roles = scheme: {
+    text = scheme.base05;
+    subtext = scheme.base04;
+    nav-active-text = scheme.base0D;
+    main = scheme.base00;
+    main-elevated = scheme.base01;
+    highlight = scheme.base01;
+    highlight-elevated = scheme.base02;
+    sidebar = scheme.base00;
+    player = scheme.base00;
+    card = scheme.base01;
+    shadow = scheme.base00;
+    selected-row = scheme.base05;
+    main-secondary = scheme.base01;
+    button = scheme.base0D;
+    button-secondary = scheme.base03;
+    button-active = scheme.base0D;
+    button-disabled = scheme.base02;
+    nav-active = scheme.base01;
+    play-button = scheme.base0D;
+    tab-active = scheme.base01;
+    notification = scheme.base02;
+    notification-error = scheme.base08;
+    playback-bar = scheme.base03;
+    misc = scheme.base05;
+  };
+  colors =
+    { scheme, ... }:
+    let
+      css = lib.concatStrings (
+        lib.mapAttrsToList (name: color: ''
+          --spice-${name}: #${color};
+          --spice-rgb-${name}: ${lib.concatMapStringsSep "," toString (contrast.channels color)};
+        '') (roles scheme)
+      );
+    in
+    ":root {\n${css}}\n";
+  contrast = import ../../nixosModules/contrast.nix { inherit lib; };
+  spotify = spicetify.spicedSpotify.overrideAttrs (old: {
+    postInstall = old.postInstall + ''
+      ln -sfT ${lib.escapeShellArg "${config.oruc.themeState}/theme/current/${colorsFile}"} "$out/share/spotify/Apps/xpui/colors.css"
+    '';
+  });
 in
 {
   imports = [ inputs.spicetify-nix.homeManagerModules.spicetify ];
 
+  oruc.themeFiles.${colorsFile} = colors;
+  home.packages = [ spotify ] ++ spicetify.theme.extraPkgs;
+
   programs.spicetify = {
-    enable = true;
+    enable = false;
     spotifyPackage = pinned.spotify;
     spicetifyPackage = pinned.spicetify-cli;
     # Marketplace refuses to install themes while this theme is set, because
@@ -29,28 +77,6 @@ in
           transition: none !important;
         }
       '';
-    };
-    customColorScheme = {
-      text = scheme.base05;
-      subtext = scheme.base04;
-      nav-active-text = scheme.base0D;
-      main = scheme.base00;
-      sidebar = scheme.base00;
-      player = scheme.base00;
-      card = scheme.base01;
-      shadow = scheme.base00;
-      main-secondary = scheme.base01;
-      button = scheme.base0D;
-      button-secondary = scheme.base03;
-      button-active = scheme.base0D;
-      button-disabled = scheme.base02;
-      nav-active = scheme.base01;
-      play-button = scheme.base0D;
-      tab-active = scheme.base01;
-      notification = scheme.base02;
-      notification-error = scheme.base08;
-      playback-bar = scheme.base03;
-      misc = scheme.base05;
     };
     enabledSnippets = with spicePkgs.snippets; [
       # keep-sorted start

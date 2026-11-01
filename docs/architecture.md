@@ -462,14 +462,32 @@ the theme list and the `dark` flag only at start, so a switch between a dark
 and a light scheme changes its icons at its next start.
 
 `home-manager/modules/chat-themes.nix`, which the workstation profile imports,
-installs Vesktop, a Discord client that loads Vencord themes. Its pack theme
+installs Vesktop in place of the Discord app; Vesktop is a Discord client that
+loads Vencord themes. Its pack theme
 `~/.config/vesktop/themes/oruc.css` is Stylix's Discord theme
 (`vesktop-colors.nix`, MIT) followed by a block that sets Discord's text
 variables from the scheme's text roles, whatever Discord's own dark or light
 setting is, and its accent fills to the scheme's accent moved toward black or
 white until that text reaches 4.5:1 on them (`contrast.nix` `fillBehind`, which
 OBS's accents use too). Vencord's `enabledThemes` lists it. Vencord watches the
-folder, so Vesktop repaints at once.
+folder, so Vesktop repaints at once. The same module renders Telegram's palette
+`~/.config/oruc/oruc.tdesktop-palette` from `telegram-palette.txt`, which gives
+each colour key of Telegram's default palette a Base16 slot, a 15 % tint of an
+accent into base00 (`tint:`), the readable text on an accent (`on:`), or
+Telegram's own colour for its always-dark media viewer, call and toast screens.
+Telegram watches a palette it loaded from a file, so it repaints at each
+switch once it has loaded this one.
+
+`home-manager/modules/browser-themes.nix` gives Firefox the Pywalfox add-on, as
+a policy that installs it, and its native host. The reload `pywalfox` writes
+`~/.cache/wal/colors.json` from the pack's `pywal-colors` fact and
+`oruc-wallpaper-path`, sets Pywalfox's dark or light mode and tells a running
+Firefox to read the colours again. Brave, Brave (WARP) and Chromium draw with
+the GTK theme, because their `Preferences` set `extensions.theme.system_theme`
+to 1, which `oruc-app-settings` writes while the browser is closed; Chrome
+already has it. `spicetify.nix` builds Spotify with Spicetify and links its
+`Apps/xpui/colors.css` to the pack's `~/.config/spicetify/colors.css` through
+the theme pointer, so Spotify takes the stored scheme at its next start.
 
 The ChatGPT app only offers its built-in code themes, listed in
 `codex-code-themes.json` from its 26.1027.30824 bundle. The `codex-settings` fact
@@ -515,8 +533,6 @@ These stay fixed on purpose, and the check does not cover them:
 - The Breeze desktop theme SVGs (their colors come from kdeglobals at run time)
   and the Glass Qt style.
 - The print stylesheet of the Markdown viewer.
-- Spotify follows only the machine record's scheme, because Spicetify builds
-  the colors into its package.
 - The keyboard's Aura color and nixos-desktop's case lights follow the
   machine record's scheme from boot until the login, because asusd reads it
   from a system file (`machines/nixos-rog/asus.nix`) and `openrgb-boot`
@@ -525,13 +541,12 @@ These stay fixed on purpose, and the check does not cover them:
   base09, and `theme` restarts that unit at each switch while a graphical
   session runs. Before the login the reload does nothing, so the boot-time
   `theme --reapply` leaves the record's colour.
-- Brave keeps its synced theme, because a managed theme policy would lock the
-  setting and override the synced one. `nixosModules/brave.nix` writes Brave's
+- Brave on other devices keeps its synced theme colour; on these PCs Brave
+  draws with the GTK theme instead. `nixosModules/brave.nix` writes Brave's
   settings as policies, which Brave Origin reads from `/etc/brave/policies`. The
   recommended policies set the values a new profile starts with, and the
   settings page can still change them. Notification permissions and the theme
-  color are managed-only policies, and Brave Sync carries them, so they stay in
-  the profile.
+  color are managed-only policies, and Brave Sync carries them.
 - The ChatGPT app's code view takes the nearest of its built-in code themes,
   so its syntax colors are the built-in theme's, not the scheme's.
 - waybar, mako, fuzzel, walker and anyrun follow only the machine record's

@@ -118,7 +118,6 @@ in
       # keep-sorted start
       deskflow
       devenv
-      discord
       kdePackages.ark
       kdePackages.dolphin
       kdePackages.kio-extras

@@ -4,5 +4,5 @@
   "code"
   "org.kde.dolphin"
   "spotify"
-  "discord"
+  "vesktop"
 ]

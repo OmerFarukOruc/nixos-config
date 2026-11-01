@@ -85,7 +85,7 @@
     "applications:slack.desktop"
     "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
     "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
-    "applications:discord.desktop"
+    "applications:vesktop.desktop"
     "applications:org.telegram.desktop.desktop"
     "applications:spotify.desktop"
     "applications:md.obsidian.Obsidian.desktop"

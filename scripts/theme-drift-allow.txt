@@ -1,1 +1,2 @@
 home-manager/modules/vesktop-colors.nix	Stylix's Discord CSS matches Discord's own fixed icon colours in its selectors
+home-manager/modules/telegram-palette.txt	Telegram's own fixed colours for its always-dark media viewer, call and toast screens
