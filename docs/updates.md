@@ -19,6 +19,9 @@ nothing and the next one tries again. Its run summary lists the moves and the
 warnings. `gh workflow run update.yml` starts it now. It builds no host's
 system, so a move that evaluates but fails to build reaches the hosts, which
 keep their system and show "Update failed" ([Updater](nixos-rog.md#updater)).
+Such a move also stops every later push, because the pre-push hook builds each
+workstation's system ([Check before you deploy](deploy.md#check-before-you-deploy)),
+until a push that fixes the build lands.
 Each host installs `main` within the hour after the push.
 
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and

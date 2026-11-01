@@ -62,7 +62,7 @@ commit that a person pushes.
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, under `heavy` where it exists | 196 to 201 s with a warm store in 3 runs at load 19 to 26 (2026-11-01) |
+| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, under `heavy` where it exists | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
 
 The times come from a test clone on 2026-11-01. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
@@ -81,9 +81,16 @@ clean tree, `ci/checks.sh` evaluates that commit (`git+file://...?rev=`) and
 stores each host's system for `scripts/affected-hosts.sh`; with uncommitted
 changes it stores nothing.
 
-No hook builds a host's system. Every host installs `main` by itself every
-hour ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit that does
-not build for a host fails that host's next hourly install. The host keeps its
+The pre-push hook runs `ci/checks.sh`, which builds each workstation's system
+from the `drvPath` it evaluated, so a writer script that fails shellcheck or
+flake8 in a workstation's system stops the push. It builds no other host's
+system: devbox's is only evaluated, and the `update` workflow runs
+`ci/checks.sh --evaluate-only`, so its GitHub runner builds no system. A move
+from that workflow that does not build therefore stops every later push until a
+push fixes the build ([Update inputs, apps and the kernel](updates.md)).
+Every host installs `main` by itself every hour
+([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit that does not
+build for a host fails that host's next hourly install. The host keeps its
 system, records that `main` as failed and skips it in the hourly runs until
 `main` moves, and a host with a desktop shows "Update failed"
 ([Failures and notifications](nixos-rog.md#failures-and-notifications)).
@@ -98,8 +105,8 @@ connection to GitHub before the pre-push hook runs and holds it open, and GitHub
 closes it when it stays idle. A push whose hook took 420 s failed without
 keepalives and passed with them (2026-10-23). So `home-manager/modules/git.nix`
 sets `core.sshCommand` to `ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10`.
-Ten missed keepalives, 300 s, end the connection, which is more than the 196 to
-201 s that the pre-push checks took on nixos-rog.
+Ten missed keepalives in a row, 300 s, end the connection, so the connection
+holds for a hook of any length while GitHub answers the keepalives.
 
 A worktree gets the hooks from the shared `.git/hooks`, but their config is a
 link that the devenv shell writes. Until `direnv allow <worktree>` and a first
@@ -124,8 +131,9 @@ and copies the changed files back before it checks. `eval.sh` evaluates
 one attribute and does not forbid import from derivation.
 
 To prove that a package or overlay builds before it lands, run
-`scripts/build.sh [ATTRIBUTE...]`, because the checks above only
-evaluate. It builds each flake attribute in a copy of this checkout and prints
+`scripts/build.sh [ATTRIBUTE...]`, because the checks above build only each
+workstation's system, so devbox's system and a package that no workstation
+uses stay unbuilt. It builds each flake attribute in a copy of this checkout and prints
 the output paths. A package that modules load with `pkgs.callPackage
 ../../pkgs/NAME.nix { }` has no flake attribute, so pass its file instead, such
 as `pkgs/claude-tools.nix`; the script builds it with nixos-rog's
@@ -137,14 +145,16 @@ activates nothing, and stops at the first build that fails.
 scripts/build.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
 ```
 
-These checks prove only that evaluation succeeds. The deploy builds the
-candidate on the target in step 5 and changes nothing there when the build
+These checks prove that each host's system evaluates and that each
+workstation's system builds. The deploy builds the candidate on the target in step 5 and changes nothing there when the build
 fails. The checks do not prove that the hardware and services work after
 activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
 `ci/checks.sh` validates the flake's output kinds and formatter, then checks each
-host's system derivation type and `drvPath` in a separate process. It also
+host's system derivation type and `drvPath` in a separate process. It then
+builds each workstation's system from those `drvPath`s, unless
+`--evaluate-only` is given, as the `update` workflow does. It also
 evaluates a workstation with the box browser forced on (`ci/box-browser.nix`),
 to check the display's command line, and a bare server record (`ci/server.nix`),
 to check what the schema accepts and rejects.

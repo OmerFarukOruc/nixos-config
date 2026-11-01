@@ -4,6 +4,7 @@ HOST_SYSTEM_EXPR='h: {
   out = h.config.system.build.toplevel.outPath;
   deployed = h.config.oruc.machine.deployed or true;
   deployLogin = h.config.oruc.machine.deployLogin or null;
+  kind = h.config.oruc.machine.kind or null;
 }'
 
 host_names() {

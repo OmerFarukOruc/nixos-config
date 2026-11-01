@@ -6,6 +6,13 @@ cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
 . scripts/lib/host-systems.sh
 
+build_workstations=true
+if (($# > 1)) || { (($# == 1)) && [[ $1 != --evaluate-only ]]; }; then
+  echo "usage: $0 [--evaluate-only]" >&2
+  exit 2
+fi
+(($# == 0)) || build_workstations=false
+
 nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
 records=$(mktemp -d)
@@ -67,6 +74,17 @@ host_systems() {
   systems=$(cd "$records" && jq -c -s add "${hosts[@]/%/.json}") || return 1
   store_host_systems "$revision" "$systems" ||
     echo "scripts/affected-hosts.sh will evaluate $revision again: its systems could not be stored." >&2
+}
+
+workstation_builds() {
+  local list outputs
+  list=$(jq -r '.[] | select(.kind == "workstation") | "\(.drv)^out"' "$records"/*.json) || return 1
+  [[ -n $list ]] || {
+    echo "No host record is a workstation, so there is nothing to build."
+    return 0
+  }
+  mapfile -t outputs <<<"$list"
+  nix build --no-link "${outputs[@]}"
 }
 
 box_browser() {
@@ -145,6 +163,9 @@ check "lock files" lock_files
 check formatting nix fmt "${nix_opts[@]}" --no-update-lock-file -- --ci
 check "flake outputs" flake_outputs
 check "host systems" host_systems
+if $build_workstations; then
+  check "workstation builds" workstation_builds
+fi
 echo
 check "box browser feature" box_browser
 echo

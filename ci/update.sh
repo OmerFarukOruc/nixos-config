@@ -9,7 +9,7 @@ failed=()
 warned=false
 
 gate() {
-  ci/checks.sh && NIX_CONFIG="${NIX_CONFIG:-}"$'\n''allow-import-from-derivation = false' ci/unit-cycles.sh
+  ci/checks.sh --evaluate-only && NIX_CONFIG="${NIX_CONFIG:-}"$'\n''allow-import-from-derivation = false' ci/unit-cycles.sh
 }
 
 drop() {

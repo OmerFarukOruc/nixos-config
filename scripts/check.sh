@@ -9,14 +9,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fix=false
-case ${1:-} in
-  --fix) fix=true ;;
-  "") ;;
-  *)
-    echo "usage: $0 [--fix]" >&2
-    exit 2
-    ;;
-esac
+if (($# > 1)) || { (($# == 1)) && [[ $1 != --fix ]]; }; then
+  echo "usage: $0 [--fix]" >&2
+  exit 2
+fi
+(($# == 0)) || fix=true
 
 # shellcheck source=/dev/null
 . scripts/lib/work-copy.sh

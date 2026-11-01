@@ -60,7 +60,7 @@ window, then close the viewer. The session stays in the profile.
 ## Check
 
 `ci/checks.sh` evaluates the module in devbox's system. `ci/box-browser.nix` forces
-the feature on for nixos-desktop too, and `ci/checks.sh` builds that system's
+the feature on for nixos-desktop too, and `ci/checks.sh` evaluates that system's
 `drvPath`, checks the unit names and checks the display's command line. The check
 does not start the units; run `box-browser status` on the host after the first
 deploy.
