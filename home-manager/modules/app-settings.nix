@@ -49,6 +49,11 @@ let
         default = false;
         description = "Write the file even while the app runs, for a file the app only reads.";
       };
+      lock = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "A Chromium-style SingletonLock, a symlink to <host>-<pid>; the file waits only while it names another host or a running process of the app.";
+      };
     };
   };
 

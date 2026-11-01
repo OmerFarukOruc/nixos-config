@@ -431,9 +431,13 @@ leaves that file alone while the app runs and prints `theme: <app> runs`;
 an entry marked `live` is a file the app only reads, written at once. It finds
 an app by its executable's package name and path in any store path, or a
 command line pattern for one started by an interpreter, so a process still
-running from an older store path counts too. A Codex `app-server` or opencode `serve` process and its
-children do not count, because such a background server writes the file only
-for a client. The tool compares parsed values, so an app that writes the same
+running from an older store path counts too. A Codex `app-server` or opencode
+`serve` process and its children do not count, because such a background
+server writes the file only for a client. A file with a `lock` waits only while
+that Chromium `SingletonLock` names another host or a running process of the
+app, so each browser profile waits on its own lock, a closed Brave (WARP)
+profile changes while Brave runs, and a lock left by a crash holds nothing. The
+tool compares parsed values, so an app that writes the same
 settings in its own layout leaves nothing to change. It reports a file it
 cannot parse and still writes the others. `oruc-app-settings --check` exits 1
 when a file's values differ from what the stored scheme sets. `settings_file.py` holds the TOML merge and the

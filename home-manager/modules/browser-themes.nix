@@ -53,6 +53,7 @@ let
   };
   chromiumPreferences = dir: {
     path = "${config.xdg.configHome}/${dir}/Default/Preferences";
+    lock = "${config.xdg.configHome}/${dir}/SingletonLock";
     format = "json";
     values = systemTheme;
     create = false;

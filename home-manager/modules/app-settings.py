@@ -1,9 +1,11 @@
 import configparser
+import functools
 import io
 import json
 import os
 import re
 import signal
+import socket
 import sys
 
 import tomlkit
@@ -231,22 +233,53 @@ def report(failures):
         print(f"oruc-app-settings: {failure}", file=sys.stderr)
 
 
+def lock_held(lock, pids):
+    try:
+        target = os.readlink(lock)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    host, _, pid = target.rpartition("-")
+    if host != socket.gethostname():
+        return True
+    return pid.isdigit() and int(pid) in pids()
+
+
+def waiter(app):
+    @functools.cache
+    def pids():
+        return {pid for pid, _ in app_processes(app)}
+
+    def waits(entry):
+        if entry["live"]:
+            return False
+        if entry["lock"]:
+            return lock_held(entry["lock"], pids)
+        return bool(pids())
+
+    return waits
+
+
 def apply(app, current):
     failures = []
+    waits = waiter(app)
     live = [entry for entry in app["files"] if entry["live"]]
     later = [entry for entry in app["files"] if not entry["live"]]
     for _, path, new in updates(app, live, current, failures):
         replace(path, new)
-    waiting = updates(app, later, current, failures)
-    if waiting and app_processes(app):
+    held = False
+    for entry, path, new in updates(app, later, current, failures):
+        if waits(entry):
+            held = True
+        else:
+            replace(path, new)
+    if held:
         print(
             f"theme: {app['label']} runs, so its colours change"
             " at the next theme switch after it closes",
             file=sys.stderr,
         )
-    else:
-        for _, path, new in waiting:
-            replace(path, new)
     if app.get("terminalSignal"):
         number = signal.Signals[app["terminalSignal"]["name"]]
         for pid, argv in app_processes(app):
@@ -263,15 +296,16 @@ def check(spec, current):
     failed = False
     for name, app in sorted(spec["apps"].items()):
         failures = []
+        waits = waiter(app)
         stale = updates(app, app["files"], current, failures)
-        waits = any(not entry["live"] for entry, _, _ in stale)
-        runs = waits and bool(app_processes(app))
-        for entry, path, _ in stale:
-            if not (runs and not entry["live"]):
-                failures.append(f"{path} is not set")
+        decided = [(path, waits(entry)) for entry, path, _ in stale]
+        held = [path for path, wait in decided if wait]
+        failures += [
+            f"{path} is not set" for path, wait in decided if not wait
+        ]
         report(failures)
         failed = failed or bool(failures)
-        if runs:
+        if held:
             print(f"skip {name}: {app['label']} runs, so its settings wait")
         elif not failures:
             print(f"ok {name} settings")

@@ -65,7 +65,8 @@ theme of the scheme's dark or light variant. `oruc-app-settings --check` then
 checks that every settings file the switch sets, such as ~/.codex/config.toml,
 Brave's Preferences or jadx's gui.json, holds the scheme's values; while an
 app that writes its own settings runs, the switch leaves them alone, and the
-script prints a skip line for it.
+script prints a skip line for it. A browser waits per profile, so a closed
+profile must hold the values while another profile runs.
 
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.
