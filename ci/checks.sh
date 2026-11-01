@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=/dev/null
+. scripts/lib/each-host.sh
+# shellcheck source=/dev/null
+. scripts/lib/host-systems.sh
 
 nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
-trap 'rm -f -- "$log"' EXIT
+records=$(mktemp -d)
+trap 'rm -rf -- "$log" "$records"' EXIT
 
 check() {
   local name=$1
@@ -36,24 +41,32 @@ flake_outputs() {
   }
 }
 
+host_system() {
+  echo "$1"
+  nix eval "${nix_opts[@]}" --json --no-write-lock-file ".#nixosConfigurations.$1" --apply "
+    h:
+      let toplevel = h.config.system.build.toplevel; in
+      if builtins.isAttrs toplevel && (toplevel.type or null) == \"derivation\"
+      then { \"$1\" = ($(host_system_apply)) h; }
+      else throw \"The host toplevel must be a derivation.\"
+  " >"$records/$1.json"
+}
+
 host_systems() {
-  local hosts host
-  hosts=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
+  local names hosts systems revision
+  names=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations \
     --apply builtins.attrNames | jq -r '.[]') || return 1
-  [[ -n $hosts ]] || {
+  [[ -n $names ]] || {
     echo "The flake defines no host." >&2
     return 1
   }
-  for host in $hosts; do
-    echo "$host"
-    nix eval "${nix_opts[@]}" --raw --no-write-lock-file \
-      ".#nixosConfigurations.$host.config.system.build.toplevel" --apply '
-        toplevel:
-          if builtins.isAttrs toplevel && (toplevel.type or null) == "derivation"
-          then toplevel.drvPath
-          else throw "The host toplevel must be a derivation."
-      ' >/dev/null || return 1
-  done
+  mapfile -t hosts <<<"$names"
+  each_host host_system "${hosts[@]}" || return 1
+  systems=$(cd "$records" && jq -c -s add "${hosts[@]/%/.json}") || return 1
+  revision=$(nix flake metadata "${nix_opts[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
+  if [[ -n $revision ]] && ! store_host_systems "$revision" "$systems"; then
+    echo "scripts/affected-hosts.sh will evaluate $revision again: its systems could not be stored." >&2
+  fi
 }
 
 box_browser() {

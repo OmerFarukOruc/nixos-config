@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# shellcheck source=/dev/null
+. scripts/lib/each-host.sh
 
 check_host() {
   local host=$1 paths units systemd rc=0 analysis
@@ -27,11 +29,6 @@ check_host() {
   echo "$host: no ordering cycle"
 }
 
-hosts=$(nix eval --json --no-write-lock-file .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]')
-status=0
-# Wait outside check_host so errexit stays active inside the host check.
-for host in $hosts; do
-  check_host "$host" &
-  wait "$!" || status=1
-done
-exit "$status"
+names=$(nix eval --json --no-write-lock-file .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]')
+mapfile -t hosts <<<"$names"
+each_host check_host "${hosts[@]}"
