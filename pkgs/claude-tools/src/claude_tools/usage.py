@@ -243,7 +243,8 @@ def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: 
         except Exception as e:
             result.append(failed_entry(n, old.get(n), e))
     partial = any(n not in only for n in dirs) if only else False
-    data = {"version": 1, "host": me, "updated": data.get("updated", 0) if partial else now(), "accounts": result,
+    oldest = min([at, *((old[n].get("checked") or 0) for n in keep)])
+    data = {"version": 1, "host": me, "updated": data.get("updated", 0) if partial else oldest, "accounts": result,
             "hosts": [f.result() for f in reads] if not only else data.get("hosts", [])}
     write_json(settings.usage_cache, data)
     return data
