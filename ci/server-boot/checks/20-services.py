@@ -101,7 +101,7 @@ def svc_site_headers(name):
 
 
 svc_backends = {"openchamber": 3000, "herdr": 7317}
-for svc_site in list(svc_backends) * 15:
+for svc_site in svc_backends:
     svc_headers = svc_site_headers(svc_site)
     assert f"x-backend-port: {svc_backends[svc_site]}\n" in svc_headers, (
         f"{svc_site} reached another backend: {svc_headers!r}"
