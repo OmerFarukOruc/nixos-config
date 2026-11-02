@@ -721,7 +721,9 @@ plasma-manager builds the panels from `home-manager/modules/plasma-panels.nix`:
 a floating top bar of three islands and the dock for the glass look, or a top
 bar and the dock for the klassy look. In the floating bar, Panel Colorizer draws
 each run of widgets that panel spacers separate on one background, so one
-colorizer styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers` in
+colorizer styles the whole bar. The dock's launchers are `oruc.plasma.dockLaunchers`:
+the shared list in `home-manager/profiles/personal.nix`, which both PCs use, and
+nixos-rog's ROG Control Center launcher appended last in
 `machines/nixos-rog/home.nix`. The dock's task manager and
 the glass look's launcher come from the macOS Tahoe theme (the `mac-tahoe`
 flake input). The task manager is Plasma's own with notification badges and
@@ -975,7 +977,8 @@ Tailscale, and both run the same Deskflow build from this flake.
 
 On nixos-rog:
 
-- The `app-org.deskflow.deskflow` user service in `machines/nixos-rog/home.nix`
+- The `app-org.deskflow.deskflow` user service of
+  `home-manager/modules/deskflow.nix`, with `oruc.deskflow.role = "client"`,
   starts the client at a Plasma login only. Its name carries Deskflow's app ID,
   so Plasma's remote control notice names Deskflow instead of "An
   unidentifiable application". A Wayland client types through the remote desktop
@@ -1006,14 +1009,14 @@ On nixos-rog:
 
 On nixos-desktop:
 
-- The `app-org.deskflow.deskflow` user service in
-  `machines/nixos-desktop/home.nix` starts the server at a Plasma login, with
+- The same user service, with `oruc.deskflow.role = "server"` in
+  `machines/nixos-desktop/home.nix`, starts the server at a Plasma login, with
   the same `RefuseManualStart`, `RefuseManualStop` and exit 5 rules as the
   client. Deskflow on Wayland reads the keyboard and mouse through the input
   capture portal, so the server starts at a Plasma login, and the unit name
   gives the portal the app ID, as on nixos-rog.
-- Home Manager writes the server mode, the screen links file (`deskflowLayout`
-  in `machines/nixos-desktop/home.nix`, which puts nixos-rog left of
+- Home Manager writes the server mode, the screen links file (`layout`
+  in `home-manager/modules/deskflow.nix`, which puts nixos-rog left of
   nixos-desktop's screen), the log setting and one `[computer_<name>]` group for
   each machine into `Deskflow.conf`.
   Deskflow 1.27 reads the computers from those groups and skips a `screens`
