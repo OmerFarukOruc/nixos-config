@@ -20,9 +20,38 @@ let
 in
 {
   imports = [
+    ./workstation.nix
+    ../modules/desktop-sync.nix
+    ../modules/heavy.nix
+    ../modules/box-view.nix
+    ../modules/sshfs-devbox.nix
+    ../modules/via-devbox-launchers.nix
+    ../modules/warp-launchers.nix
+    ../modules/deskflow.nix
     ../modules/agent-cli.nix
     ../modules/app-themes.nix
     ../modules/playwright.nix
+  ];
+
+  oruc.plasma.dockLaunchers = [
+    "preferred://filemanager"
+    "applications:io.missioncenter.MissionCenter.desktop"
+    "preferred://browser"
+    "applications:com.mitchellh.ghostty.desktop"
+    "applications:SourceGit.desktop"
+    "applications:code.desktop"
+    "applications:chatgpt.desktop"
+    "applications:com.anthropic.Claude.desktop"
+    "applications:grok-bot.desktop"
+    "applications:openchamber.desktop"
+    "applications:cursor.desktop"
+    "applications:slack.desktop"
+    "applications:brave-ompifgpmddkgmclendfeacglnodjjndh-Default.desktop"
+    "applications:brave-hnpfjngllnobngcgfapefoaidbinmjnm-Default.desktop"
+    "applications:vesktop.desktop"
+    "applications:org.telegram.desktop.desktop"
+    "applications:spotify.desktop"
+    "applications:md.obsidian.Obsidian.desktop"
   ];
 
   oruc.cursorEditor = true;
