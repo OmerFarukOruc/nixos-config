@@ -372,7 +372,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   again after a server restart, and moves each named agent whose session
   transcript ends in a usage limit error to another account. A run fails when
   an agent could not move, when a recorded agent could not start again, or
-  when herdr's server did not start. The log names the agent and the reason:
+  when herdr's server did not start. The log names the agent, or the step that
+  failed, and the reason:
   `journalctl --user -u claude-tools-limit-switch.service` and
   `~/.local/state/claude-tools/limit-switch/events.log`.
 - `home.nix` also installs the agents' CLIs (`home-manager/modules/agent-cli.nix`,

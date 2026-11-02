@@ -98,7 +98,7 @@ taken() { is_main "$1" || profile_folder "$1" >/dev/null 2>&1; }
 
 new_folder() {
   local d i=2
-  d="$(profile_dir "$1")" || return 1
+  d="$HOME/.claude-$1"
   while [[ -e "$d" ]]; do d="$HOME/.claude-$1-$i"; i=$((i + 1)); done
   echo "$d"
 }
@@ -165,8 +165,8 @@ sync_config() {
     return
   fi
   if in_use "$1"; then
-    echo "  config: skipped, a claude session runs with this account; close it and run update again"
-    return 1
+    echo "  config: skipped, a claude session runs with this account; close it and run claude-tools accounts update"
+    return 3
   fi
   trap claude_config_unlock_all EXIT
   claude_config_lock "$f" || { trap - EXIT; return 1; }
@@ -238,10 +238,10 @@ ensure_folder() {
   if dir="$(profile_folder "$name" 2>/dev/null)"; then
     echo "$dir already exists; linking again" >&2
   else
-    dir="$(new_folder "$name")" || return 1
-    mkdir -p "$dir"
-    chmod 700 "$dir"
-    echo "$name" > "$dir/$marker"
+    dir="$(new_folder "$name")"
+    mkdir -p "$dir" || return 1
+    chmod 700 "$dir" || return 1
+    echo "$name" > "$dir/$marker" || return 1
   fi
   link_shared "$dir" || true
   echo "$dir"
@@ -255,7 +255,7 @@ cmd_add() {
     echo "log in with the $name account in the browser window that opens"
     CLAUDE_CONFIG_DIR="$dir" claude auth login
   fi
-  sync_config "$dir"
+  sync_config "$dir" || (( $? == 3 ))
   echo "done; use it with: claude --account $name"
 }
 
@@ -346,7 +346,7 @@ cmd_login() {
     return 1
   fi
   echo "✓ $name: $got"
-  [[ -z "$dir" ]] || sync_config "$dir" || true
+  [[ -z "$dir" ]] || sync_config "$dir" || (( $? == 3 ))
   "$tools" usage --account "$name" --quiet || true
 }
 

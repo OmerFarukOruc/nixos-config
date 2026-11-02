@@ -232,18 +232,18 @@ def refresh(settings: Settings, dirs: dict[str, str], only: list[str], max_age: 
     wait([*reads, *(f for n, f in checks.items() if n not in old)])
     wait([f for n, f in checks.items() if n in old], None if deadline is None else max(0.0, deadline - time.time()))
     pool.shutdown(wait=False, cancel_futures=True)
-    result = []
+    result, oldest = [], at
     for n in dirs:
         f = checks.get(n)
         if f is None or n in old and (f.cancelled() or not f.done()):
             result.append(old[n])
+            oldest = min(oldest, old[n].get("checked") or 0)
             continue
         try:
             result.append({"name": n, **f.result()})
         except Exception as e:
             result.append(failed_entry(n, old.get(n), e))
     partial = any(n not in only for n in dirs) if only else False
-    oldest = min([at, *((old[n].get("checked") or 0) for n in keep)])
     data = {"version": 1, "host": me, "updated": data.get("updated", 0) if partial else oldest, "accounts": result,
             "hosts": [f.result() for f in reads] if not only else data.get("hosts", [])}
     write_json(settings.usage_cache, data)

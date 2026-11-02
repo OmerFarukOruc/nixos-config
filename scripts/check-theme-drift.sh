@@ -3,7 +3,8 @@
 # the scheme (config.scheme, or oruc.theme.ansi). A line is flagged when it has
 #   - #RRGGBB or #RRGGBBAA (#000000 and #00000000 carry no hue and pass),
 #   - rgb(, rgba(, hsl(, hsla(, oklch( or oklab( followed by a digit or a dot,
-#   - a 24-bit terminal color code, 38;2;R;G;B or 48;2;R;G;B,
+#   - a 24-bit terminal color code (38;2;R;G;B, 48;2;R;G;B) or a 256-color one
+#     outside the 16 ANSI slots (38;5;N, 48;5;N with N from 16),
 #   - #RGB or #RGBA, in *.css files only. Elsewhere a 3-digit anchor such as
 #     #fix is not a color.
 # A line that holds 'theme-drift-ok: <reason>' passes. A file that matches an
@@ -22,7 +23,7 @@ allow_file=scripts/theme-drift-allow.txt
 
 hex='(?<![\w&])#(?!0{6}(?:0{2})?(?!\w))(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6})(?!\w)'
 fn='\b(?:rgba?|hsla?|oklch|oklab)\(\s*[0-9.]'
-sgr='(?<![\d;])[34]8;2;\d{1,3};\d{1,3};\d{1,3}(?!\d)'
+sgr='(?<![\d:])[34]8;(?:2;\d{1,3};\d{1,3};\d{1,3}|5;(?:1[6-9]|[2-9]\d|1\d\d|2[0-4]\d|25[0-5]))(?!\d)'
 short='(?<![\w&])#(?:[0-9A-Fa-f]{4}|[0-9A-Fa-f]{3})(?!\w)'
 
 status=0

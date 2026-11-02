@@ -9,7 +9,6 @@ from claude_tools.selection import BLOCKED, RESERVE, order, span
 from claude_tools.store import now
 from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, login_left, visible
 
-ROW_BG = "100"
 PICKED, CANCELLED, REFRESH = range(3)
 KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
 MOVES = {b"\x1b[A": -1, b"\x1bOA": -1, b"k": -1, b"\x1b[B": 1, b"\x1bOB": 1, b"j": 1, b"\t": 1}
@@ -77,8 +76,6 @@ class Picker:
         tags = self.tags(cards, name, e)
         line = " " + head + ("   " + "  ".join(tags) if tags else "")
         line += " " * max(0, width - visible(line))
-        if sel and self.color:
-            line = f"\033[{ROW_BG}m" + line.replace("\033[0m", f"\033[0m\033[{ROW_BG}m") + "\033[0m"
         return line
 
     def detail(self, name: str, width: int) -> list[str]:

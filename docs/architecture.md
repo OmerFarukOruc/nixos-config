@@ -566,7 +566,8 @@ another look at run time, with the same variants
 `scripts/check-theme-drift.sh` runs inside `nix fmt` and fails on a fixed color
 in a tracked file: `#RRGGBB`, `#RRGGBBAA` (and `#RGB` in CSS), or a number
 inside `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` or `oklab(`, or a 24-bit
-terminal color code (`38;2;R;G;B`, `48;2;R;G;B`). `#000000` and
+terminal color code (`38;2;R;G;B`, `48;2;R;G;B`) or a 256-color one outside the
+16 ANSI slots (`38;5;N`, `48;5;N` with N from 16). `#000000` and
 `#00000000` pass, because black and full transparency carry no hue. A line that
 holds `theme-drift-ok: <reason>` passes. A file listed in
 `scripts/theme-drift-allow.txt` (`path-or-glob`, a tab, a reason) passes, and
