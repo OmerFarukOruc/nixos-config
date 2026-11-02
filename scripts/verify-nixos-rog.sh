@@ -33,8 +33,9 @@ profile, the fan curves and asus-armoury limits of each platform profile, the
 Plasma panel widgets and KWin effects of each Plasma look, the microphone node
 and the HushMic model) come from
 /etc/oruc/verify-facts, which the deployed system writes
-(nixosModules/verify-facts.nix). The Plasma checks use the look that
-plasma-look stored, or the default look. The KWin effects are checked only in
+(nixosModules/verify-facts.nix). The Plasma checks use the look
+that plasma-look prints as active, which is the stored look when it still
+exists and the default look otherwise. The KWin effects are checked only in
 a Plasma session that started after the current system and the last
 plasma-look; an older session is listed as manual.
 
@@ -119,7 +120,14 @@ finish() {
 trap finish EXIT
 rog_pick_host
 
+plasma_look=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" plasma-look 2>/dev/null | sed -n 's/^active: //p' || true)
+if [[ ! $plasma_look =~ ^[a-z0-9]+$ ]]; then
+  record plasma-look fail "plasma-look on $ROG_HOST printed no active look; the Plasma checks cannot pick their facts"
+  plasma_look=none
+fi
+
 remote_prelude=$(
+  printf 'plasma_look=%s\n' "$plasma_look"
   cat <<'PRELUDE'
 facts=/etc/oruc/verify-facts
 if [[ ! -r $facts ]]; then
@@ -135,7 +143,6 @@ for fact in low_battery_percent nvidia_version wifi \
   fi
 done
 plasma_look_file=$HOME/.local/state/oruc/plasma-look
-plasma_look=$(cat "$plasma_look_file" 2>/dev/null || echo "${plasma_look_default:-}")
 if [[ $plasma_look =~ ^[a-z0-9]+$ ]]; then
   widgets_fact=plasma_widgets_$plasma_look
   effects_fact=kwin_effects_$plasma_look
@@ -185,9 +192,6 @@ remote_checks() {
 
 widget_icon_tsv=
 widget_icon_ok=0
-plasma_look=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" \
-  'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
-[[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
 panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
 have_panels=false
 have_defaults=false

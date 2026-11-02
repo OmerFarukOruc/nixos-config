@@ -28,8 +28,6 @@ set -euo pipefail
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
-mic=alsa_input.pci-0000_66_00.6.analog-stereo
-
 die() {
   echo "$1" >&2
   exit "${2:-1}"
@@ -64,6 +62,9 @@ rog_run() {
   shift
   rog_ssh_session "$@" <<<"$script"
 }
+
+mic=$(rog_run 'sed -n "s/^mic_node=//p" /etc/oruc/verify-facts')
+[[ -n $mic ]] || die "/etc/oruc/verify-facts on $ROG_HOST has no mic_node; deploy a system that writes it" 3
 
 lib='node_id() {
   pw-dump | jq -r --arg n "$1" \
