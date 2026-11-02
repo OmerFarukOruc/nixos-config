@@ -63,10 +63,29 @@ ensure_dns() {
   fi
 }
 
-replaced=()
+image_id() {
+  docker image inspect --format '{{.Id}}' "$1"
+}
+
+keep_previous() {
+  local tag="localhost/cliproxy-previous/$1:latest" older
+  older=$(image_id "$tag" 2>/dev/null || true)
+  docker tag "$2" "$tag" || return
+  echo "cliproxy-up: $1: the previous image $2 stays as $tag"
+  if [ -n "$older" ] && [ "$older" != "$2" ]; then
+    docker rmi "$older" >/dev/null 2>&1 || true
+  fi
+}
+
+if [ -z "${CLIPROXY_TS_AUTHKEY:-}" ]; then
+  unset COMPOSE_PROFILES
+  echo "cliproxy-up: CLIPROXY_TS_AUTHKEY empty, share sidecar skipped" >&2
+fi
+
+declare -A replaced=()
 case "${1:-}" in
   stop)
-    exec docker compose stop
+    COMPOSE_PROFILES=share exec docker compose stop
     ;;
   update)
     if ! docker compose pull; then
@@ -75,14 +94,19 @@ case "${1:-}" in
     if ! build_tls_proxy --pull; then
       echo "cliproxy-up: warning: the tls-proxy build failed, keeping the local image" >&2
     fi
-    for c in $(docker compose ps -a -q); do
-      read -r image running <<<"$(docker inspect --format '{{.Config.Image}} {{.Image}}' "$c")"
-      if [ "$(docker image inspect --format '{{.Id}}' "$image")" != "$running" ]; then
-        replaced+=("$running")
+    containers=$(docker compose ps -a -q)
+    for c in $containers; do
+      read -r name image running <<<"$(docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' "$c")"
+      pulled=$(image_id "$image")
+      if [ "$pulled" != "$running" ]; then
+        echo "cliproxy-up: ${name#/}: $image moves from $running to $pulled"
+        replaced[${name#/}]=$running
       fi
     done
-    if [ "${#replaced[@]}" = 0 ] && [ -n "$(docker compose ps -a -q cliproxy)" ]; then
-      echo "cliproxy-up: the containers already use the local images"
+    expected=$(docker compose config --services | sort)
+    started=$(docker compose ps --services --status running | sort)
+    if [ "${#replaced[@]}" = 0 ] && [ -n "$expected" ] && [ "$expected" = "$started" ]; then
+      echo "cliproxy-up: the containers run and already use the local images"
       ensure_dns
       exit 0
     fi
@@ -130,10 +154,6 @@ else
   echo "cliproxy-up: no Cloudflare DNS token, $CLIPROXY_PUBLIC_HOST left out of the tls-proxy" >&2
 fi
 
-if [ -z "${CLIPROXY_TS_AUTHKEY:-}" ]; then
-  unset COMPOSE_PROFILES
-  echo "cliproxy-up: CLIPROXY_TS_AUTHKEY empty, share sidecar skipped" >&2
-fi
 docker compose up -d
 if [ -z "${CLIPROXY_TS_AUTHKEY:-}" ]; then
   docker rm -f cliproxy-share cliproxy-tls-proxy >/dev/null 2>&1 || true
@@ -141,8 +161,11 @@ fi
 
 ensure_dns
 
+for container in "${!replaced[@]}"; do
+  keep_previous "$container" "${replaced[$container]}" ||
+    echo "cliproxy-up: warning: could not keep the previous image of $container" >&2
+done
 if [ "${#replaced[@]}" -gt 0 ]; then
-  docker rmi "${replaced[@]}" >/dev/null 2>&1 || true
   docker image prune -f --filter label=dev.risoluto.cliproxy.build-stage=tls-proxy >/dev/null || true
 fi
 

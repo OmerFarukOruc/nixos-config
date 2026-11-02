@@ -429,7 +429,17 @@ before its config exists.
   on the box.
 - `cliproxy-update.timer` reloads the unit daily at 04:30 Istanbul time. The
   reload pulls the CLIProxyAPI and Tailscale images, rebuilds `tls-proxy`, and
-  recreates the containers whose image changed.
+  recreates the containers whose image changed. When a container of the stack
+  is stopped or missing, the reload starts the whole stack again, as a start
+  does. The images float (`env.public`, `tls-proxy/Dockerfile`), so the reload
+  logs each image id it replaces and its successor to
+  `journalctl --user -u cliproxy.service`, and tags the replaced image
+  `localhost/cliproxy-previous/<container>:latest` until the next replacement.
+  To go back to it, stop `cliproxy-update.timer`, which stays stopped until the
+  next login or Home Manager activation. Then tag the previous image in
+  Podman's store with the name `env.public` gives, such as
+  `podman tag localhost/cliproxy-previous/cliproxy:latest docker.io/eceasy/cli-proxy-api:latest`,
+  and restart `cliproxy.service`. A start pulls no image that exists locally.
 - OAuth token files stay in `~/.local/state/fleet/cliproxy/auths`, because the
   app owns that store. The logs, the sidecar's Tailscale state and Caddy's
   certificates are under `~/.local/state/fleet/cliproxy` too.
