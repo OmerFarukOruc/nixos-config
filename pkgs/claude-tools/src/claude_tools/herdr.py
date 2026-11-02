@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
 import time
 from collections.abc import Callable
@@ -10,6 +11,54 @@ from claude_tools.errors import Failed, HerdrError
 from claude_tools.settings import Settings
 
 SERVER_WAIT_S = 30
+REQUEST_TIMEOUT_S = 30
+
+
+def session_of(agent: dict) -> str | None:
+    return (agent.get("agent_session") or {}).get("value")
+
+
+class Stream:
+    def __init__(self, conn: socket.socket, method: str):
+        self.conn = conn
+        self.method = method
+        self.buffer = b""
+
+    def messages(self, timeout: float) -> list[dict]:
+        self.conn.settimeout(timeout)
+        try:
+            chunk = self.conn.recv(1 << 16)
+        except TimeoutError:
+            return []
+        except OSError as e:
+            raise HerdrError(f"herdr {self.method}: {e}") from e
+        if not chunk:
+            raise HerdrError(f"herdr {self.method}: the server closed the connection", "closed")
+        *lines, self.buffer = (self.buffer + chunk).split(b"\n")
+        out = []
+        for raw in lines:
+            if not raw.strip():
+                continue
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise HerdrError(f"herdr {self.method}: not JSON: {raw[:200]!r}") from e
+            if "error" in msg:
+                code = (msg["error"] or {}).get("code")
+                raise HerdrError(f"herdr {self.method}: {code}", code)
+            out.append(msg)
+        return out
+
+    def answer(self) -> dict:
+        deadline = time.monotonic() + REQUEST_TIMEOUT_S
+        while (left := deadline - time.monotonic()) > 0:
+            for msg in self.messages(left):
+                if "result" in msg:
+                    return msg["result"]
+        raise HerdrError(f"herdr {self.method}: no answer in {REQUEST_TIMEOUT_S} s")
+
+    def close(self) -> None:
+        self.conn.close()
 
 
 class Herdr:
@@ -18,7 +67,35 @@ class Herdr:
         self.session = settings.herdr_session
         self.cmd = [settings.herdr, *(["--session", self.session] if self.session else [])]
         base = settings.home / ".config/herdr"
-        self.socket = str(base / "sessions" / self.session / "herdr.sock" if self.session else base / "herdr.sock")
+        if self.session:
+            self.socket = str(base / "sessions" / self.session / "herdr.sock")
+        else:
+            self.socket = settings.herdr_socket or str(base / "herdr.sock")
+
+    def connect(self, method: str, params: dict) -> socket.socket:
+        conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            conn.settimeout(REQUEST_TIMEOUT_S)
+            conn.connect(self.socket)
+            conn.sendall((json.dumps({"id": method, "method": method, "params": params}) + "\n").encode())
+        except OSError as e:
+            conn.close()
+            raise HerdrError(f"herdr {method}: {e}") from e
+        return conn
+
+    def request(self, method: str, params: dict | None = None) -> dict:
+        with self.connect(method, params or {}) as conn:
+            return Stream(conn, method).answer()
+
+    def subscribe(self, subscriptions: list[dict]) -> Stream:
+        conn = self.connect("events.subscribe", {"subscriptions": subscriptions})
+        stream = Stream(conn, "events.subscribe")
+        try:
+            stream.answer()
+        except Failed:
+            conn.close()
+            raise
+        return stream
 
     def __call__(self, *args: str, check: bool = True) -> dict:
         try:

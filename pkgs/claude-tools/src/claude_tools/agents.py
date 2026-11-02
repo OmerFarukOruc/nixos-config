@@ -20,12 +20,16 @@ FREED_WAIT_S = 30
 EXIT_DIALOG = "❯ 1. Exit and stop tasks"
 
 
+def environ(p: Path) -> dict[str, str]:
+    return dict(x.split("=", 1) for x in (p / "environ").read_bytes().decode().split("\0") if "=" in x)
+
+
 def processes(comms: tuple[str, ...]) -> Iterator[tuple[Path, dict[str, str]]]:
     for p in Path("/proc").iterdir():
         try:
             if not p.name.isdigit() or (p / "comm").read_text().strip() not in comms:
                 continue
-            env = dict(x.split("=", 1) for x in (p / "environ").read_bytes().decode().split("\0") if "=" in x)
+            env = environ(p)
         except OSError:
             continue
         yield p, env
@@ -68,9 +72,16 @@ class Agents:
         self.log = event_log(settings)
 
     def in_pane(self, comms: tuple[str, ...], pane: str) -> Iterator[tuple[Path, dict[str, str]]]:
-        for p, env in processes(comms):
-            if env.get("HERDR_PANE_ID") == pane and env.get("HERDR_SOCKET_PATH") == self.herdr.socket:
-                yield p, env
+        info = self.herdr("pane", "process-info", "--pane", pane)["result"]["process_info"]
+        for proc in info.get("foreground_processes") or []:
+            if proc.get("name") not in comms:
+                continue
+            p = Path(f"/proc/{proc['pid']}")
+            try:
+                env = environ(p)
+            except OSError:
+                continue
+            yield p, env
 
     def claude_process(self, pane: str) -> tuple[int, list[str], str]:
         for p, env in self.in_pane(CLAUDE, pane):

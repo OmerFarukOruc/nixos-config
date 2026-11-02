@@ -9,11 +9,11 @@ from datetime import datetime
 from claude_tools.accounts import account_of, read_accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
 from claude_tools.errors import Failed
+from claude_tools.herdr import session_of
 from claude_tools.limits import find_limit
 from claude_tools.selection import hold_limit, next_account
 from claude_tools.settings import Settings
 from claude_tools.store import locked, read_json, write_json
-from claude_tools.transcripts import session_of
 
 COOLDOWN = 300
 ENDED_KEEP = 30 * 86400

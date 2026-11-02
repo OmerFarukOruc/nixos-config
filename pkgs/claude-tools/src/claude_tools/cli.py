@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from claude_tools.commands import agent, limit_switch, orch, rotate, usage
+from claude_tools.commands import agent, limit_switch, rotate, usage
 from claude_tools.errors import Failed
 from claude_tools.settings import ACCOUNTS_TOOL, Settings
 
@@ -19,7 +19,6 @@ def parser() -> argparse.ArgumentParser:
     rotate.add_parser(sub)
     limit_switch.add_parser(sub)
     agent.add_parser(sub)
-    orch.add_parser(sub)
     return ap
 
 

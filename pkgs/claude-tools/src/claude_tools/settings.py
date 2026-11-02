@@ -17,9 +17,9 @@ class Settings:
     state: Path
     config: Path
     runtime: Path
-    inbox: Path
     herdr: str
     herdr_session: str
+    herdr_socket: str
     herdr_pane: str
     config_dir: str
     pick: bool
@@ -36,9 +36,9 @@ class Settings:
             state=state,
             config=home / ".config/claude-tools",
             runtime=Path(env.get("XDG_RUNTIME_DIR") or f"/tmp/claude-tools-{os.getuid()}") / "claude-tools",
-            inbox=Path(env.get("CLAUDE_TOOLS_INBOX") or state / "orch/inbox.log"),
             herdr=shutil.which("herdr") or "/usr/local/bin/herdr",
             herdr_session=env.get("CLAUDE_TOOLS_HERDR_SESSION", ""),
+            herdr_socket=env.get("HERDR_SOCKET_PATH", ""),
             herdr_pane=env.get("HERDR_PANE_ID", ""),
             config_dir=env.get("CLAUDE_CONFIG_DIR", ""),
             pick=env.get("CLAUDE_TOOLS_PICK") != "0",

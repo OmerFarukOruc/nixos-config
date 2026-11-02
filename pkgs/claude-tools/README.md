@@ -10,12 +10,11 @@
 | `usage` | the usage cards, the cache, `--order` |
 | `rotate` | runs `claude` with the account picker and moves a session at a usage limit |
 | `limit-switch` | moves herdr agents at a usage limit and starts them again after a herdr restart |
-| `agent start\|stop\|peek` | named Claude agents in herdr tabs |
-| `orch notify\|watch` | notices between agents and their orchestrator |
+| `agent start\|stop\|watch` | named Claude agents in herdr tabs, and the lines that wake their orchestrator |
 
 ## Package layout
 
-- `src/claude_tools`: the Python package, stdlib only. `cli.py` builds the argument parser from each command module's `add_parser`, and prints the completion words from it. `commands/` holds one module per command with its workflow, and the modules beside it hold what several commands share: `settings.py` (paths and environment, read once per run), `accounts.py`, `usage.py` (reading and caching usage), `selection.py` (the account order), `terminal.py` and `picker.py` (cards and the account list), `herdr.py`, `agents.py` (Claude and codex processes in herdr panes), `transcripts.py`, `limits.py` and `inbox.py`.
+- `src/claude_tools`: the Python package, stdlib only. `cli.py` builds the argument parser from each command module's `add_parser`, and prints the completion words from it. `commands/` holds one module per command with its workflow, and the modules beside it hold what several commands share: `settings.py` (paths and environment, read once per run), `accounts.py`, `usage.py` (reading and caching usage), `selection.py` (the account order), `terminal.py` and `picker.py` (cards and the account list), `herdr.py` (the herdr CLI and its socket), `agents.py` (Claude and codex processes in herdr panes), `watch.py` (`agent watch`) and `limits.py`.
 - `libexec/`: `claude-accounts`, which `claude-tools accounts` runs with the rest of its arguments; `login-browser`, the `BROWSER` of a login; `config-lock.sh`, the `.claude.json` lock that `claude-accounts` sources. They stay bash because the lock reads a file's birth time with `stat`, which Python 3.14 cannot read.
 - `share/claude-tools.sh`: the `claude` shell function and the completion of `claude-tools`, for zsh and bash. Home Manager's zsh sources it.
 - `pkgs/claude-tools.nix` builds the package with `buildPythonApplication` and writes the store paths in place of `@libexec@` in `settings.py` and of `@bin@` in `claude-accounts` and `claude-tools.sh`.
@@ -31,7 +30,6 @@
 | `~/.local/state/claude-tools/limits.json` | the accounts held back after a usage limit, shared by `rotate` and `limit-switch` |
 | `~/.local/state/claude-tools/rotate` | `events.log` of `rotate` |
 | `~/.local/state/claude-tools/limit-switch` | `agents.json`, `switched.json`, `restore-failed.json`, `events.log` and `events.log.1` of `limit-switch` |
-| `~/.local/state/claude-tools/orch` | the inbox `inbox.log`, its `.offset` and `.watcher` files, and `notes/` |
 | `~/.config/claude-tools/resume/NAME` | the resume message for agent NAME |
 | `$XDG_RUNTIME_DIR/claude-tools/rotate/ID-PID.json` | the limit handshake between `rotate` and the StopFailure hook |
 
@@ -40,7 +38,6 @@
 | `CLAUDE_TOOLS_DATA` | the folder with `accounts.json` and `account-prefs.json` |
 | `CLAUDE_TOOLS_CACHE` | the cache folder |
 | `CLAUDE_TOOLS_STATE` | the state folder |
-| `CLAUDE_TOOLS_INBOX` | the orchestrator inbox; `agent start` passes it on to the agent it starts |
 | `CLAUDE_TOOLS_HERDR_SESSION` | a herdr session other than the default one |
 | `CLAUDE_TOOLS_PICK=0` | `rotate` starts on the first account without the list |
 | `CLAUDE_TOOLS_PLAIN=1` | the `claude` function runs plain `claude`; agents that `limit-switch` and `agent start` start get it |
@@ -102,9 +99,9 @@ An extra account's name is the content of its `.claude-profile` file, or `<folde
 
 ## Agents and the orchestrator
 
-- `agent start NAME --cwd DIR` opens a tab named NAME in the caller's workspace with `--no-focus`, so the view of whoever looks at herdr stays where it is. With `CLAUDE_TOOLS_HERDR_SESSION` the tab opens in that session's own workspace, because the caller's pane id belongs to its own session. The brief goes as one prompt that names the file, so a long brief never goes through argv. `--permission-mode` waits until the footer shows the mode before the brief goes out, because a mode switched by keypresses after start raced the brief once. When `CLAUDE_TOOLS_INBOX` is set, the tab gets it through `herdr tab create --env`, so the agent's plain `orch notify` lands in its orchestrator's inbox. When the caller has no `CLAUDE_TOOLS_INBOX`, the agent gets whatever the herdr server's environment holds. A name whose agent just exited is waited for, since herdr frees it a moment later. When any step fails after the tab exists, the agent that started is stopped and the tab is closed, so the same command can run again.
-- `agent peek` reads the last answer from the session transcript, because the screen can miss an answer on Claude's alternate screen (the dotfiles checkout's `desktop/reference/headless-clis/herdr.md`).
-- `orch watch` reads a word that starts with `-` as an option and never as its regex, because a watcher that took it as a name pattern would print the unread notices and move the shared offset, so the orchestrator's own watcher would lose them. One watcher runs per inbox, and it prints every notice in the inbox whatever its regex. A new one stops the older one only when the lock holder's command line runs the same program with `orch watch` and the same `NAME-REGEX`, so re-arming a Monitor works. It exits 1 and leaves the holder running when the regex differs, because the replaced watcher's orchestrator would lose its notices to this one; its message names the holder's pid, which you stop only if it is yours. It also refuses to start next to any other holder. Each orchestrator therefore sets `CLAUDE_TOOLS_INBOX` to a file of its own run.
+- `agent start NAME --cwd DIR` opens a tab named NAME in the caller's workspace with `--no-focus`, so the view of whoever looks at herdr stays where it is. With `CLAUDE_TOOLS_HERDR_SESSION` the tab opens in that session's own workspace, because the caller's pane id belongs to its own session. The brief goes as one prompt that names the file, so a long brief never goes through argv. `--permission-mode` waits until the footer shows the mode before the brief goes out, because a mode switched by keypresses after start raced the brief once. A name whose agent just exited is waited for, since herdr frees it a moment later. When any step fails after the tab exists, the agent that started is stopped and the tab is closed, so the same command can run again.
+- `agent watch NAME-REGEX` follows herdr's own agent events over its socket instead of polling. herdr sends `pane.agent_status_changed` only for a pane named in the subscription, so the watcher subscribes to the pane of each matching agent, and to the topology events (`pane.agent_detected`, `pane.updated`, `pane.moved`, `pane.closed`, `pane.exited`, `tab.closed`, `workspace.closed`), after which it reads `agent.list` again and subscribes anew when the set of panes changed. Closing a tab or a workspace sends only `tab.closed` or `workspace.closed`, not `pane.closed`. A turn is finished when the status in the pushed events goes from `working` or `blocked` to `idle` or `done`, the same rule herdr uses for `completion_seq`. The events count, because herdr clears `completion_seq` at the next state change, so a read after a quick next turn shows none. When the watcher missed events, such as during a lost connection, it counts a turn when `completion_seq` changed between two reads; it compares with `!=`, because a restarted server numbers from 0 again. herdr does not replay events from before a subscription, so the watcher prints each matching agent's state at start. An `events_lost` or `pane_not_found` answer makes it read and subscribe again at once; any other error prints an `ALERT` and it tries again every 5 s. An agent whose session id changed under the same name prints as a new agent. It reads no screen or transcript: the orchestrator reads an agent with `herdr agent read`, which collects the history of Claude's alternate screen for an idle agent (herdr 0.8.0 and later).
+- An agent sends a question or a result to its orchestrator with `herdr agent prompt`, as the dotfiles checkout's `desktop/reference/headless-clis/herdr.md` describes; claude-tools keeps no inbox.
 
 ## Config lock
 
@@ -147,11 +144,11 @@ Keep these true in every change:
 
 ## Tests
 
-The end-to-end tests in `tests/` run on devbox against real Claude accounts and a real herdr server, each in its own herdr session or tmux server. Run them from a nixos-config checkout against the installed command, for example `pkgs/claude-tools/tests/orch-e2e.sh "$(dirname "$(readlink -f "$(command -v claude-tools)")")"`; each prints `PASS` and exits 0.
+The end-to-end tests in `tests/` run on devbox against real Claude accounts and a real herdr server, each in its own herdr session or tmux server. Run them from a nixos-config checkout against the installed command, for example `pkgs/claude-tools/tests/agent-e2e.sh "$(dirname "$(readlink -f "$(command -v claude-tools)")")"`; each prints `PASS` and exits 0.
 
 - `limit-switch-e2e.sh`: a switch held back while every other account is held, a switch, a scan that leaves an agent without a limit alone, a scan that holds and moves an agent whose screen shows a limit message, a scan that holds nothing after an old one, the restore after a server stop, and `resume`.
 - `rotate-e2e.sh`: the account picker and its accounts.json list, the exit codes of `rotate`, a move after a limit, the wait while no account is free, and a prompt typed during that wait.
-- `orch-e2e.sh`: `agent start`, `agent stop`, `agent peek`, `orch notify`, `orch watch`, a watcher that replaces another one of the same regex, refuses to replace one of another regex, or refuses next to a foreign lock holder, and the `CLAUDE_TOOLS_INBOX` an agent starts with.
+- `agent-e2e.sh`: `agent start` with a relative `--cwd` and a running name, `agent stop` of a running and of an exited agent, and `agent watch` started before the agent, through a question that blocks it, a pane moved to another workspace, a watcher restart that missed a turn, the agent leaving through `agent stop` and through a closed tab, and a herdr server that stops and starts again.
 
 The picker step reads a usage cache and a hold file that the test writes from the real cache with changed numbers, so it proves how the picker shows and orders those records, not how `usage` and `rotate` write them. The move and wait steps write the hook's flag file themselves, with a made-up session limit message, on accounts that have room, so they prove the hold, the account choice after a fresh reading, the wait and the resume, not the hook or a real limit. The limit-switch scan steps ask the agent to print a made-up limit message, so `scan` reads it off the real screen, but no real limit stands behind it.
 

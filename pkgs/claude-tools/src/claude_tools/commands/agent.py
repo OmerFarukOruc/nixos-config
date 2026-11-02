@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 import time
@@ -10,15 +9,15 @@ from pathlib import Path
 from claude_tools.accounts import accounts, config_dir_of
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
 from claude_tools.errors import Failed, NoProcess
+from claude_tools.herdr import Herdr
 from claude_tools.settings import Settings
-from claude_tools.transcripts import answer_of, session_of, status_line
+from claude_tools.watch import watch
 
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 MODE_FOOTERS = {"acceptEdits": "accept edits on", "auto": "auto mode on", "bypassPermissions": "bypass permissions on",
                 "manual": "manual mode on", "dontAsk": "", "plan": "plan mode on"}
 MODE_WAIT_S = 15
 NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
-PEEK_LINES = 20
 
 
 def agent_name(text: str) -> str:
@@ -37,12 +36,6 @@ def brief_file(text: str) -> Path:
     if not Path(text).is_file():
         raise argparse.ArgumentTypeError(f"{text} is not a file")
     return Path(text)
-
-
-def line_count(text: str) -> int:
-    if not text.isdigit():
-        raise argparse.ArgumentTypeError(f"{text!r} is not a line count")
-    return int(text)
 
 
 def permission_flags(mode: str | None) -> list[str]:
@@ -82,10 +75,8 @@ def start(settings: Settings, a: argparse.Namespace) -> None:
         raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it")
     config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
     where = caller(settings, ag)
-    inbox_set = bool(os.environ.get("CLAUDE_TOOLS_INBOX"))
-    inbox_env = ["--env", f"CLAUDE_TOOLS_INBOX={settings.inbox.absolute()}"] if inbox_set else []
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
-                       *(["--workspace", where["workspace_id"]] if where else []), *inbox_env)["result"]
+                       *(["--workspace", where["workspace_id"]] if where else []))["result"]
     tab, pane = created["tab"]["tab_id"], created["root_pane"]["pane_id"]
     try:
         flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
@@ -136,23 +127,8 @@ def stop(settings: Settings, a: argparse.Namespace) -> None:
         ag.herdr("tab", "close", agent["tab_id"])
 
 
-def peek(settings: Settings, a: argparse.Namespace) -> None:
-    ag = Agents(settings)
-    data = ag.herdr("agent", "get", a.name, check=False)
-    if "result" not in data:
-        raise Failed(f"herdr agent get: {(data.get('error') or {}).get('code', 'no answer')}")
-    agent = data["result"]["agent"]
-    answer = answer_of(agent, settings.home)
-    out = [f"{a.name}: {agent.get('agent_status')}"]
-    if answer is not None:
-        out += [f"status: {status_line(answer) or 'none'}", f"--- last answer, last {a.lines} lines ---",
-                *answer.splitlines()[-a.lines:]]
-    else:
-        screen = ag.herdr.screen(a.name, "visible")
-        out += [f"status: {status_line(screen) or 'none'}",
-                f"--- no transcript text for session {session_of(agent)}; visible screen, last {a.lines} lines ---",
-                *[ln for ln in screen.splitlines() if ln.strip()][-a.lines:]]
-    print("\n".join(out))
+def follow(settings: Settings, a: argparse.Namespace) -> None:
+    watch(Herdr(settings), a.names, a.host)
 
 
 def run(settings: Settings, a: argparse.Namespace) -> int:
@@ -165,15 +141,13 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
 
 
 def add_parser(sub: argparse._SubParsersAction) -> None:
-    ap = sub.add_parser("agent", help="start, stop or peek at a named Claude agent in herdr")
+    ap = sub.add_parser("agent", help="start, stop or watch named Claude agents in herdr")
     cmds = ap.add_subparsers(dest="cmd", required=True)
     st = cmds.add_parser("start", help="start a named Claude agent in its own herdr tab",
                          description="Start a named Claude agent in its own herdr tab, in the caller's workspace, "
                                      "without moving anyone's focus. It runs with --dangerously-skip-permissions "
-                                     "and gets one prompt that names the brief file. When CLAUDE_TOOLS_INBOX is set, "
-                                     "the agent gets it too, so its plain `claude-tools orch notify` reaches the "
-                                     "caller's inbox. On a failure after the tab exists, the agent stops and the "
-                                     "tab closes, so the command can run again.")
+                                     "and gets one prompt that names the brief file. On a failure after the tab "
+                                     "exists, the agent stops and the tab closes, so the command can run again.")
     st.add_argument("name", type=agent_name)
     st.add_argument("--cwd", required=True, type=folder)
     st.add_argument("--account", help="an account name or a CLAUDE_CONFIG_DIR folder; default: the caller's account")
@@ -190,11 +164,16 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                                      "is named NAME and has one pane.")
     sp.add_argument("name")
     sp.set_defaults(action=stop)
-    pk = cmds.add_parser("peek", help="print an agent's state, last STATUS: line and last answer",
-                         description="Print the agent's state, its last STATUS: or NEED: line, and the last LINES "
-                                     "lines of its last answer from the session transcript, or of the visible "
-                                     "screen when there is no transcript text.")
-    pk.add_argument("name")
-    pk.add_argument("lines", nargs="?", type=line_count, default=PEEK_LINES)
-    pk.set_defaults(action=peek)
+    wt = cmds.add_parser("watch", help="print one line when a named agent finishes a turn, blocks or leaves",
+                         description="Follow herdr's agent events and print one line when an agent whose name "
+                                     "NAME-REGEX matches finishes a turn, waits at a question or approval, turns "
+                                     "unknown, appears, is replaced by an agent with another session, or leaves, so "
+                                     "a Monitor on it wakes the orchestrator. It prints each matching agent's state "
+                                     "at start.")
+    wt.add_argument("names", metavar="NAME-REGEX",
+                    help="must match a whole agent name, so agents outside it, such as reviewer subagents, do not "
+                         "wake the orchestrator")
+    wt.add_argument("--host", action="store_true",
+                    help="also print when load, swap use or /tmp inode use crosses its limit and when it recovers")
+    wt.set_defaults(action=follow)
     ap.set_defaults(run=run)
