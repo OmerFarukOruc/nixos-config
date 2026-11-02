@@ -5,7 +5,6 @@ import subprocess
 import time
 from collections.abc import Callable
 from datetime import datetime
-from pathlib import Path
 
 from claude_tools.accounts import account_of, read_accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
@@ -185,20 +184,9 @@ class Switcher:
                             "session": sid, "config_dir": config_dir, "args": argv[1:]}
         self.save("agents.json", next_record(record, agents, server, failed, time.time()))
 
-    def limit_of(self, a: dict) -> tuple[str, int, str] | None:
-        session = session_of(a)
-        if not session:
-            return None
-        try:
-            config_dir = self.agents.claude_process(a["pane_id"])[2]
-        except Failed:
-            return None
-        hit = recorded_limit(Path(config_dir) if config_dir else self.settings.home / ".claude", session)
-        return (*hit, config_dir) if hit else None
-
-    def move_limited(self, name: str, hit: tuple[str, int, str], local: dict[str, str]) -> None:
-        text, said, config_dir = hit
-        current = account_of(config_dir, local, self.settings.home)
+    def move_limited(self, a: dict, hit: tuple[str, int], local: dict[str, str]) -> None:
+        name, (text, said) = a["name"], hit
+        current = account_of(self.agents.claude_process(a["pane_id"])[2], local, self.settings.home)
         try:
             held = hold_limit(self.settings, current, text, said)
         except (OSError, subprocess.SubprocessError, ValueError) as e:
@@ -219,12 +207,13 @@ class Switcher:
                 continue
             if switched.get(name, 0) > time.time() - COOLDOWN:
                 continue
-            hit = self.limit_of(a)
+            session = session_of(a)
+            hit = session and recorded_limit(self.settings.home / ".claude/projects", session)
             if not hit:
                 continue
             try:
                 local = local or read_accounts(self.settings.accounts_file).local
-                self.move_limited(name, hit, local)
+                self.move_limited(a, hit, local)
             except Failed as e:
                 failed += 1
                 self.log(f"{name}: switch failed: {e}")

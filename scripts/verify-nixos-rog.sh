@@ -100,9 +100,26 @@ mkdir -p -- "$(dirname "$report")"
 ssh_opts=(-o ConnectTimeout=15 -o BatchMode=yes)
 results=$(mktemp)
 work=$(mktemp -d)
-trap 'rm -rf -- "$results" "$work"' EXIT
-
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
+
+write_report() {
+  jq -Rn --arg host "$host" --arg time "$stamp" \
+    --arg revision "$(git -C "$repo_dir" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)" '
+    [inputs | split("\t") | {name: .[0], status: .[1], detail: .[2]}] as $checks
+    | {host: $host, time: $time, revision: $revision, checks: $checks,
+       failed: [$checks[] | select(.status == "fail") | .name]}' <"$results" >"$report"
+}
+
+reported=false
+finish() {
+  local status=$?
+  if [[ $reported == false ]]; then
+    record verify-script fail "the script stopped early with exit $status; the checks before it are in this report"
+    write_report && printf 'Report: %s\n' "$report"
+  fi
+  rm -rf -- "$results" "$work"
+}
+trap finish EXIT
 
 remote_prelude=$(
   cat <<'PRELUDE'
@@ -174,11 +191,14 @@ plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
 panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
-panels_fetched=false
+have_panels=false
+have_defaults=false
 mkdir -p "$work/widget-defaults"
 # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null &&
-  ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
+if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null; then
+  have_panels=true
+fi
+if [[ $have_panels == true ]] && ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
 set -euo pipefail
 out=$(mktemp -d)
 trap 'rm -rf -- "$out"' EXIT
@@ -194,9 +214,9 @@ done
 tar -c -C "$out" .
 REMOTE
 then
-  panels_fetched=true
+  have_defaults=true
 fi
-if [[ $panels_fetched == true ]] &&
+if [[ $have_defaults == true ]] &&
   widget_icon_tsv=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --icons "$work/expected.json" "$work/widget-defaults"); then
   widget_icon_ok=1
 fi
@@ -228,7 +248,7 @@ case $build in
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
-    if [[ $panels_fetched == true ]] &&
+    if [[ $have_defaults == true ]] &&
       ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
       differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" "$work/widget-defaults" 2>&1) || compared=$?
     else
@@ -244,16 +264,8 @@ case $build in
 esac
 
 launchers=()
-# shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/launchers.json" 2>/dev/null; then
-  mapfile -t launchers < <(python3 -I -c '
-import json, sys
-for panel in json.load(open(sys.argv[1])):
-    for widget in panel["widgets"]:
-        for launcher in ((widget.get("config") or {}).get("General") or {}).get("launchers") or []:
-            if launcher.startswith("applications:"):
-                print(launcher.removeprefix("applications:"))
-' "$work/launchers.json")
+if [[ $have_panels == true ]]; then
+  mapfile -t launchers < <(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --launchers "$work/expected.json")
 fi
 if ((${#launchers[@]} == 0)); then
   record dock-launchers-installed manual "no applications: launcher in $host's $panels_json"
@@ -322,17 +334,17 @@ REMOTE
   fi
 fi
 
-if [[ $suspend == true ]] && ! before=$(ssh "${ssh_opts[@]}" "$host" \
-  'cat /sys/power/suspend_stats/success; sudo -n systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"' 2>"$work/suspend-start.err"); then
-  record suspend-three-cycles fail "could not start the suspend cycles on $host: $(paste -sd ' ' "$work/suspend-start.err")"
-  suspend=false
-fi
-
-if [[ $suspend == true ]]; then
+suspend_cycles() {
+  local before after_resume reason tries=30 interval=10
+  if ! before=$(ssh "${ssh_opts[@]}" "$host" \
+    'cat /sys/power/suspend_stats/success; sudo -n systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"' 2>"$work/suspend-start.err"); then
+    record suspend-three-cycles fail "could not start the suspend cycles on $host: $(paste -sd ' ' "$work/suspend-start.err")"
+    return
+  fi
   after_resume=$(
     cat <<'REMOTE'
 set -euo pipefail
-missing() { echo "$1" >&2; exit 1; }
+missing() { echo "$1"; exit 1; }
 suspends=$(( $(cat /sys/power/suspend_stats/success) - before ))
 (( suspends >= 3 )) || missing "$suspends of 3 suspends succeeded"
 [[ $(cat "/sys/class/net/$wifi/operstate") == up ]] || missing "Wi-Fi $wifi is not up"
@@ -340,21 +352,18 @@ suspends=$(( $(cat /sys/power/suspend_stats/success) - before ))
 [[ $(cpu_limits) == "$(expected_cpu_limits "$(powerprofilesctl get)")" ]] || missing "the CPU limits differ from the profile's"
 REMOTE
   )
-  resumed=false
-  last_error=
-  for _ in {1..30}; do
-    sleep 10
-    if last_error=$(printf 'before=%s\n%s\n' "$before" "$after_resume" | remote 2>&1 >/dev/null); then
-      resumed=true
-      break
+  for ((try = 1; try <= tries; try++)); do
+    sleep "$interval"
+    if reason=$(printf 'before=%s\n%s\n' "$before" "$after_resume" | remote 2>/dev/null); then
+      record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present, CPU limits of the profile"
+      return
     fi
   done
-  if [[ $resumed == true ]]; then
-    record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present, CPU limits of the profile"
-  else
-    last_error=${last_error:-the check printed no reason}
-    record suspend-three-cycles fail "after 300 s: ${last_error//$'\n'/; }"
-  fi
+  record suspend-three-cycles fail "after $((tries * interval)) s: ${reason:-no answer from $host}"
+}
+
+if [[ $suspend == true ]]; then
+  suspend_cycles
 fi
 
 for manual in \
@@ -365,11 +374,8 @@ for manual in \
   record "${manual%%:*}" manual "${manual#*:}"
 done
 
-jq -Rn --arg host "$host" --arg time "$stamp" \
-  --arg revision "$(git -C "$repo_dir" rev-parse --short=12 HEAD)" '
-  [inputs | split("\t") | {name: .[0], status: .[1], detail: .[2]}] as $checks
-  | {host: $host, time: $time, revision: $revision, checks: $checks,
-     failed: [$checks[] | select(.status == "fail") | .name]}' <"$results" >"$report"
+write_report
+reported=true
 
 jq -r '.checks[] | "\(.status)\t\(.name)\t\(.detail)"' "$report"
 printf 'Report: %s\n' "$report"

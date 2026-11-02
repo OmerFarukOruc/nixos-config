@@ -49,9 +49,10 @@ account() {
 }
 session() { h agent get "$name" | jq -r '.result.agent.agent_session.value'; }
 ask() { h agent prompt "$name" "$1" --wait --timeout 180000 >/dev/null; }
+transcript() { ls ~/.claude/projects/*/"$sid".jsonl; }
 transcript_shows() {
   local t out
-  t=$(ls ~/.claude/projects/*/"$sid".jsonl)
+  t=$(transcript)
   for _ in $(seq 30); do
     out=$(jq -rs "$1" "$t") && grep -q "${@:2}" <<<"$out" && return 0
     sleep 2
@@ -81,7 +82,7 @@ check_prompted() {
 }
 inject_limit() {
   local t parent
-  t=$(ls ~/.claude/projects/*/"$sid".jsonl)
+  t=$(transcript)
   parent=$(jq -rs '[.[] | select(.uuid)] | last | .uuid' "$t")
   jq -cn --arg text "$1" --arg sid "$sid" --arg cwd "$dir" --arg uuid "$(cat /proc/sys/kernel/random/uuid)" \
     --arg parent "$parent" --arg ts "$(date -u +%FT%T.000Z)" \

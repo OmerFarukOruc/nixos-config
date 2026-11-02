@@ -2,6 +2,7 @@
 
 usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC [DEFAULTS]
        python3 -I plasma-panel-settings.py --icons EXPECTED.json DEFAULTS
+       python3 -I plasma-panel-settings.py --launchers EXPECTED.json
 
 EXPECTED.json is /etc/oruc/verify-plasma-panels/LOOK.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
@@ -22,6 +23,8 @@ compared there too.
 
 --icons prints WIDGET<TAB>ICON for each widget of EXPECTED.json that has an
 icon: its declared General icon, else the icon default in DEFAULTS.
+--launchers prints the desktop file ID of each applications: launcher that a
+widget of EXPECTED.json declares.
 """
 
 import json
@@ -281,22 +284,34 @@ def compare(panels, groups, defaults):
     return problems
 
 
-def print_icons(expected, defaults_dir):
+def general_settings(expected):
     with open(expected, encoding="utf-8") as panels:
         for panel in json.load(panels):
             for widget in panel["widgets"]:
-                general = (widget.get("config") or {}).get("General") or {}
-                icon = general.get("icon") or ""
-                xml = os.path.join(defaults_dir, widget["name"], "main.xml")
-                if not icon and os.path.isfile(xml):
-                    icon = icon_default(xml)
-                if icon:
-                    print(widget["name"] + "\t" + icon)
+                yield widget["name"], (widget.get("config") or {}).get("General") or {}
+
+
+def print_icons(expected, defaults_dir):
+    for name, general in general_settings(expected):
+        xml = os.path.join(defaults_dir, name, "main.xml")
+        icon = general.get("icon") or (icon_default(xml) if os.path.isfile(xml) else "")
+        if icon:
+            print(name + "\t" + icon)
+
+
+def print_launchers(expected):
+    for _, general in general_settings(expected):
+        for launcher in general.get("launchers") or []:
+            if launcher.startswith("applications:"):
+                print(launcher.removeprefix("applications:"))
 
 
 def main():
-    if len(sys.argv) == 4 and sys.argv[1] == "--icons":
+    if sys.argv[1:2] == ["--icons"] and len(sys.argv) == 4:
         print_icons(sys.argv[2], sys.argv[3])
+        return 0
+    if sys.argv[1:2] == ["--launchers"] and len(sys.argv) == 3:
+        print_launchers(sys.argv[2])
         return 0
     if len(sys.argv) not in (3, 4):
         print(__doc__.split("\n\n")[1], file=sys.stderr)

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from claude_tools.store import locked, now, read_json, write_json
+from claude_tools.usage import epoch
 
 NO_RESET_WAIT = 3600
 TRANSCRIPT_TAIL = 256 * 1024
@@ -21,7 +23,8 @@ RESET = re.compile(
 
 def last_assistant(transcript: Path) -> dict | None:
     with transcript.open("rb") as f:
-        f.seek(max(0, f.seek(0, 2) - TRANSCRIPT_TAIL))
+        size = f.seek(0, os.SEEK_END)
+        f.seek(max(0, size - TRANSCRIPT_TAIL))
         lines = f.read().splitlines()
     for line in reversed(lines):
         try:
@@ -33,24 +36,22 @@ def last_assistant(transcript: Path) -> dict | None:
     return None
 
 
-def recorded_limit(config_dir: Path, session: str) -> tuple[str, int] | None:
+def recorded_limit(projects: Path, session: str) -> tuple[str, int] | None:
     """The limit message and its time when the session's last reply is Claude Code's usage limit error."""
-    for transcript in config_dir.glob(f"projects/*/{session}.jsonl"):
-        try:
-            entry = last_assistant(transcript)
-        except OSError:
-            continue
-        if not entry or entry.get("isApiErrorMessage") is not True:
-            continue
-        content = (entry.get("message") or {}).get("content") or []
-        text = " ".join(c["text"] for c in content if isinstance(c, dict) and isinstance(c.get("text"), str))
-        try:
-            said = int(datetime.fromisoformat(entry["timestamp"]).timestamp())
-        except (KeyError, TypeError, ValueError):
-            continue
-        if LIMIT.search(text) or MODEL_LIMIT.search(text):
-            return text.strip(), said
-    return None
+    transcript = next(projects.glob(f"*/{session}.jsonl"), None)
+    try:
+        entry = last_assistant(transcript) if transcript else None
+    except OSError:
+        return None
+    if not entry or entry.get("isApiErrorMessage") is not True:
+        return None
+    try:
+        text = " ".join(c.get("text") or "" for c in entry["message"]["content"]).strip()
+        if not (LIMIT.search(text) or MODEL_LIMIT.search(text)):
+            return None
+        return text, epoch(entry["timestamp"])
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
 
 
 def parse_reset(text: str, at: int, window: int) -> int | None:

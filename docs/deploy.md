@@ -31,12 +31,6 @@ lost its Wi-Fi for about 6 minutes
 after about 6 minutes, and report the host as the blocker only when it is
 still unreachable. A host offline for longer, such as one that is powered off,
 gets no retry; report that it still runs an older system.
-`scripts/affected-hosts.sh --running` lists each host whose running system
-differs from `main`, such as one that was offline at the last deploy, so run it
-before you end a session that deployed. For a host that is behind, it lists the
-commits the host lacks. A host that is behind only by commits that another
-session or the `update` workflow pushed is left to its timer: report it and
-leave it.
 
 This guide uses these terms:
 
@@ -148,8 +142,8 @@ These checks prove that each host's system evaluates and that each
 workstation's system builds. The deploy builds the candidate on the target in
 step 5, and a failed build leaves the running system as it was and the
 candidate release on the target
-([When a deploy fails](#when-a-deploy-fails)). The checks do not prove that the hardware and services work after
-activation. To read the last deployed source on the target, run
+([When a deploy fails](#when-a-deploy-fails)). The checks do not prove that the
+hardware and services work after activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
 `ci/checks.sh` validates the flake's output kinds and formatter, then checks each
@@ -276,6 +270,13 @@ that host now, such as a new systemd unit or a change on screen. A hand deploy
 exits 77 while the timer's run installs `main`, and the timer skips its run
 while a hand deploy holds the lock
 ([One deploy at a time](#one-deploy-at-a-time)).
+
+`scripts/affected-hosts.sh --running` lists each host whose running system
+differs from `main`, such as one that was offline at the last deploy, so run it
+before you end a session that deployed. For a host that is behind, it lists the
+commits the host lacks. A host that is behind only by commits that another
+session or the `update` workflow pushed is left to its timer: report it and
+leave it.
 
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it
