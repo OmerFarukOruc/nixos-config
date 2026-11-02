@@ -197,7 +197,9 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 you deploy](docs/deploy.md#check-before-you-deploy) lists what they check.
 GitHub runs only the `update` workflow, which moves the apps and inputs every 2
 hours and runs the same checks, without the workstation builds, before it pushes
-([Update inputs, apps and the kernel](docs/updates.md)). Run the update by hand
+([Update inputs, apps and the kernel](docs/updates.md)), and Dependabot, which
+opens a pull request when an action of that workflow has a new release
+([Workflow actions](docs/updates.md#workflow-actions)). Run the update by hand
 when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand)).
 
 ## Docs

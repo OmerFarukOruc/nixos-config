@@ -6,6 +6,7 @@
 - [Release tags](#release-tags)
 - [Spotify and Spicetify](#spotify-and-spicetify)
 - [Apps](#apps)
+- [Workflow actions](#workflow-actions)
 
 The `update` workflow (`.github/workflows/update.yml`) runs `ci/update.sh`
 on GitHub every 2 hours. It runs the two steps of
@@ -257,3 +258,15 @@ as their own commit, so a failing input move does not hold them back
 When an app's update check fails, the app stays where it is. Examples are an
 unreadable feed or index, or a feed file that is not the one the package
 downloads. Each run prints the error as a warning until a check succeeds.
+
+## Workflow actions
+
+`.github/workflows/update.yml` pins each action to a commit with its version in
+a comment. Dependabot (`.github/dependabot.yml`) checks those pins every week
+and opens one pull request that moves every action with a new release. GitHub runs no
+check on this repository, so land that pull request from a workstation instead
+of with the merge button: fetch its branch, rebase it on `origin/main` and run
+`git push origin HEAD:main`, so the pre-push gate runs. Dependabot closes the
+pull request once `main` holds the new pins. Only the GitHub runner runs the
+actions, so run `gh workflow run update.yml` after the push and check that the
+run passes.
