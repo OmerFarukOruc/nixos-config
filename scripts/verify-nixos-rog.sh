@@ -17,7 +17,11 @@ Usage: scripts/verify-nixos-rog.sh [-h] [--suspend [--while-in-use]] [--lan-ip A
 --lan-ip       the laptop's Wi-Fi address, to check that SSH does not answer
                on the LAN; tailscale0 is the only way in.
 --report FILE  where to write the JSON report (default: a timestamped file
-               under ~/.local/state/nixos-config-verify/).
+               under ~/.local/state/nixos-config-verify/). The report's
+               revision and dirty fields name the revision the laptop runs,
+               as scripts/affected-hosts.sh --running reads it ("unknown"
+               and null when the laptop holds no deploy or upgrade record);
+               checkout and checkout_dirty name this checkout.
 
 Every run switches the laptop through power-saver, balanced and performance,
 for a few seconds each, to check that the fan curves, asus-armoury limits and
@@ -100,11 +104,18 @@ results=$(mktemp)
 work=$(mktemp -d)
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
 
+revision=unknown
+dirty=null
+checkout=$(git -C "$repo_dir" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+checkout_dirty=false
+[[ -z $(git -C "$repo_dir" status --porcelain 2>/dev/null) ]] || checkout_dirty=true
+
 write_report() {
-  jq -Rn --arg host "$ROG_HOST" --arg time "$stamp" \
-    --arg revision "$(git -C "$repo_dir" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)" '
+  jq -Rn --arg host "$ROG_HOST" --arg time "$stamp" --arg revision "$revision" --argjson dirty "$dirty" \
+    --arg checkout "$checkout" --argjson checkout_dirty "$checkout_dirty" '
     [inputs | split("\t") | {name: .[0], status: .[1], detail: .[2]}] as $checks
-    | {host: $host, time: $time, revision: $revision, checks: $checks,
+    | {host: $host, time: $time, revision: $revision, dirty: $dirty,
+       checkout: $checkout, checkout_dirty: $checkout_dirty, checks: $checks,
        failed: [$checks[] | select(.status == "fail") | .name]}' <"$results" >"$report"
 }
 
@@ -119,6 +130,17 @@ finish() {
 }
 trap finish EXIT
 rog_pick_host
+
+running=$({
+  cat "$repo_dir/scripts/lib/running-revision.sh"
+  echo running_revision
+} | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s || true)
+read -r running_sha running_dirty _ <<<"$running" || true
+if [[ -n $running_sha ]]; then
+  revision=${running_sha:0:12}
+  dirty=false
+  [[ $running_dirty != true ]] || dirty=true
+fi
 
 plasma_look=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" plasma-look 2>/dev/null | sed -n 's/^active: //p' || true)
 if [[ ! $plasma_look =~ ^[a-z0-9]+$ ]]; then
