@@ -263,8 +263,7 @@ commit you pushed. With one commit, `scripts/affected-hosts.sh <sha>` compares
 it with its parent.
 
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
-or `not-deployed` needs no deploy; `not-deployed` is a host whose record in
-`machines/inventory.nix` sets `deployed = false`; no host sets it now.
+needs no deploy.
 
 Every host installs `main` by itself every hour, the PCs only on AC power
 ([Updater](nixos-rog.md#updater)), and devbox reboots at night for a new kernel

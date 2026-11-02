@@ -81,8 +81,8 @@ workstation_builds() {
   local list outputs
   list=$(jq -r '.[] | select(.kind == "workstation") | "\(.drv)^out"' "$records"/*.json) || return 1
   [[ -n $list ]] || {
-    echo "No host record is a workstation, so there is nothing to build."
-    return 0
+    echo "No host record has kind workstation, so the check builds nothing." >&2
+    return 1
   }
   mapfile -t outputs <<<"$list"
   nix build --no-link "${outputs[@]}"

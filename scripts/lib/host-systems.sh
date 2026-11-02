@@ -2,9 +2,7 @@
 HOST_SYSTEM_EXPR='h: {
   drv = h.config.system.build.toplevel.drvPath;
   out = h.config.system.build.toplevel.outPath;
-  deployed = h.config.oruc.machine.deployed or true;
-  deployLogin = h.config.oruc.machine.deployLogin or null;
-  kind = h.config.oruc.machine.kind or null;
+  inherit (h.config.oruc.machine) deployLogin kind;
 }'
 
 fetch_inputs() {

@@ -4,14 +4,13 @@
 # Without --running it compares each host's system at REV with the system at
 # OLD, or at REV^ without OLD. A push of several commits needs OLD, the main
 # the push landed on. STATUS is affected, which means the host needs a deploy
-# of REV, unchanged, or not-deployed for a host whose machine record sets
-# deployed = false, one that does not run this configuration yet.
+# of REV, or unchanged.
 # With --running it compares the system each host runs with REV's system.
 # STATUS is current, behind (the release the host runs is an ancestor of REV;
 # DETAIL lists the subjects of the commits it lacks, so the reader can tell
 # whose merges they are), other (the host runs a release that is not an
-# ancestor of REV, one from a dirty tree, or one with no release record),
-# unreachable, or not-deployed.
+# ancestor of REV, one from a dirty tree, or one with no release record), or
+# unreachable.
 # REV defaults to origin/main and must be pushed, because this host evaluates
 # it from GitHub. This host keeps each commit's systems in
 # ${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts, one file per commit
@@ -144,17 +143,10 @@ done
 parallel_each systems_of "${pending[@]}"
 new=$(<"$systems_dir/$sha")
 mapfile -t hosts < <(jq -r 'keys[]' <<<"$new")
-not_deployed() {
-  [[ $(jq -r --arg h "$1" '.[$h].deployed' <<<"$new") == false ]]
-}
 
 if ! $running; then
   old=$(<"$systems_dir/$parent")
   for host in "${hosts[@]}"; do
-    if not_deployed "$host"; then
-      printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"
-      continue
-    fi
     before=$(jq -r --arg h "$host" '.[$h].drv // "none"' <<<"$old")
     after=$(jq -r --arg h "$host" '.[$h].drv' <<<"$new")
     if [[ $before == "$after" ]]; then
@@ -167,10 +159,6 @@ if ! $running; then
 fi
 
 for host in "${hosts[@]}"; do
-  if not_deployed "$host"; then
-    printf '%s\tnot-deployed\tthe record sets deployed = false\n' "$host"
-    continue
-  fi
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
   if ! state=$(
     {
