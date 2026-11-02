@@ -11,7 +11,9 @@ colour file under $HOME resolves into it, that each file holds the colour of
 the slot its app uses, and that a tmux server and two Neovim instances started
 before the switch show the new colours. On a host with Plasma whose desktop
 session runs, it also checks that the session's KDE colour scheme moved to the
-other of its A and B copies with the scheme's background, that the GTK theme
+other of its A and B copies with the scheme's background, or kept its copy
+when the scheme ran again and that copy already held the pack's colours, that
+the copy it runs holds the pack's colours, that the GTK theme
 and colour preference follow the scheme's dark or light variant, that the
 cursor becomes the scheme's recoloured Bibata within 60 s, with base05 as the
 24 px arrow's fill, that the icon theme is the scheme's or stays as picked in
@@ -311,16 +313,25 @@ check_app_settings() {
   done <"$scratch/apps-$slug"
 }
 
+kde_copy_current() {
+  local base=${2%[AB]} colors
+  colors=$pack/$1/.local/share/oruc/kde/${2%[AB]}.colors
+  [[ -f $colors ]] || fail "$1: the pack has no $colors"
+  sed -e "s/^ColorScheme=.*/ColorScheme=$2/" -e "s/^Name=.*/& ${2#"$base"}/" "$colors" |
+    cmp -s - "${XDG_DATA_HOME:-$HOME/.local/share}/color-schemes/$2.colors"
+}
+
 check_plasma() {
-  local slug=$1 before=$2 previous=$3 icons_before=$4 now base variant bg icons cursor gtk style preference glow
+  local slug=$1 before=$2 previous=$3 icons_before=$4 before_current=$5 now base variant bg icons cursor gtk style preference glow
   now=$(kdeglobal kdeglobals General ColorScheme)
   base=${before%[AB]}
-  if [[ $slug == "$previous" && $before == "${base}"[AB] ]]; then
+  if [[ $slug == "$previous" && $before == "${base}"[AB] && -n $before_current ]]; then
     [[ $now == "$before" ]] || fail "$slug: theme applied the KDE colours of the scheme that ran again, as $now"
   else
     [[ $now != "$before" && ($now == "${base}A" || $now == "${base}B") ]] ||
       fail "$slug: the KDE colour scheme is $now after $before"
   fi
+  kde_copy_current "$slug" "$now" || fail "$slug: the KDE copy $now does not hold the pack's colours"
   bg=$(kdeglobal kdeglobals Colors:Window BackgroundNormal)
   [[ $bg == "$(decimal "$base00")"* ]] || fail "$slug: the KDE window background is $bg, not $(decimal "$base00")"
   variant=$(sed -nE 's/^variant:[[:space:]]*"?([a-z]+)"?.*/\1/p' "$pack/$slug/.oruc/source.yaml")
@@ -558,6 +569,7 @@ fi
 previous=$original
 for slug in "$@"; do
   plasma_before=
+  plasma_current=
   icons_before=
   gtk_before=
   dconf_icons_before=
@@ -567,6 +579,9 @@ for slug in "$@"; do
   fi
   if plasma_session "$slug"; then
     plasma_before=$(kdeglobal kdeglobals General ColorScheme)
+    if [[ $plasma_before == *[AB] ]] && kde_copy_current "$slug" "$plasma_before"; then
+      plasma_current=1
+    fi
     icons_before=$(kdeglobal kdeglobals Icons Theme)
   fi
   if niri msg version >/dev/null 2>&1; then
@@ -617,7 +632,7 @@ for slug in "$@"; do
       grep -qF oruc-colors.css "$HOME/.config/$gtkDir/gtk.css" || fail "$slug: ~/.config/$gtkDir/gtk.css does not import oruc-colors.css"
     done
   fi
-  [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before"
+  [[ -z $plasma_before ]] || check_plasma "$slug" "$plasma_before" "$previous" "$icons_before" "$plasma_current"
   holds "$slug" .claude/themes/scheme.json "rgb($(decimal "$base00"))"
   check_vscode "$slug"
   check_app_settings "$slug"
