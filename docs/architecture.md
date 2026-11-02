@@ -626,8 +626,7 @@ These stay fixed on purpose, and the check does not cover them:
   recommended policies set the values a new profile starts with, and the
   settings page can still change them. Notification permissions and the theme
   color are managed-only policies, and Brave Sync carries them, so they stay
-  in the profile. The one managed policy, `IdleDetectionAllowedForUrls`, lets
-  Teams use the Idle Detection API, a permission that does not sync.
+  in the profile. The module sets no managed policy.
 - The ChatGPT app's code view takes the nearest of its built-in code themes,
   so its syntax colors are the built-in theme's, not the scheme's.
 
