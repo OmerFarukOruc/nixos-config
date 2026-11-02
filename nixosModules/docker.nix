@@ -11,9 +11,13 @@ lib.mkIf config.oruc.machine.features.docker {
       enable = true;
       dates = "weekly";
     };
-    daemon.settings.builder.gc = {
-      enabled = true;
-      defaultMaxUsedSpace = "80GB";
+    daemon.settings = {
+      builder.gc = {
+        enabled = true;
+        defaultMaxUsedSpace = "80GB";
+      };
+      ip = "127.0.0.1";
+      default-network-opts.bridge."com.docker.network.bridge.host_binding_ipv4" = "127.0.0.1";
     };
   };
   # Interfaces made after boot, such as Docker's veths and bridges, get no IPv6

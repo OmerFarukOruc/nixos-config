@@ -56,7 +56,13 @@ sets it the same way.
 `nixosModules/tailscale.nix` enables Tailscale on every host and keeps the
 firewall closed except for tailscale0 and Tailscale's UDP port. A check fails the
 evaluation when a host opens a port or trusts another interface. A server also
-drops ping.
+drops ping. Rootful Docker on a workstation forwards a published port with its
+own nftables rules, which `networking.firewall` does not filter, so
+`nixosModules/docker.nix` binds a published port to 127.0.0.1 unless the
+container names an address, as `-p 0.0.0.0:8080:80` does. `ip` sets that for
+the default bridge and `default-network-opts` for each user-defined network,
+such as a Compose project's, made after the setting. A network made before it
+keeps 0.0.0.0 until `docker compose down` or `docker network rm` removes it.
 
 `nixosModules/server-access.nix` adds these to a server:
 
