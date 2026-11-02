@@ -20,8 +20,16 @@ Shared NixOS policy lives in `nixosModules/`. Active host files live in
 turns itself on from the machine record. It reads `kind`, `gpu` or a
 `features.*` switch, or it asks the `sessions` helpers (the module argument that
 `nixosModules/machine.nix` passes) which desktops and shells the machine offers.
-A new module goes in one of the two import lists and gates its own config on the
-record.
+A module that every host or every workstation wants goes in one of the two
+import lists and gates its own config on the record. A module that only some
+hosts want is imported from those hosts' files in `machines/<host>/`, so the
+other hosts do not get it. `nixos-desktop` and `nixos-rog` import `envfs.nix`,
+`nextdns.nix`, `nixpkgs-clone.nix`, `via-devbox.nix`, `warp.nix` and
+`zapret2.nix`; `nixos-rog` imports `zapret2.nix` from its own
+`machines/nixos-rog/zapret2.nix`, which sets the Wi-Fi uplink. `devbox` imports
+`envfs.nix`, `agent-runtime.nix`, `rootless-containers.nix` and
+`tailnet-web.nix`, and `nixos-latitude` imports none. A third workstation that
+wants one of them adds that import line to its own files.
 
 A machine of kind `server` gets none of the workstation modules. Each of them
 gates on `kind == "workstation"`, on a feature, on the machine's `gpu`
@@ -59,15 +67,12 @@ installs its BIOS stage on that disk, so one disk is laid out for either
 firmware; devbox's VM test boots it through BIOS only.
 
 `machines/inventory.nix` holds one value per machine for the typed
-`oruc.machine` option that `nixosModules/machine.nix` declares. A record holds:
-
-- the host name, the login user, system, kind, form factor, GPU class and battery flag
-- the boot loader, and for Limine the disk that also gets its BIOS stage
-- the kernel profile and the Base16 scheme
-- the login sessions, described in [Login sessions](#login-sessions)
-- the launcher
-- the idle and touchpad settings
-- optional service gates
+`oruc.machine` option that `nixosModules/machine.nix` declares. `schema.nix`
+lists every field with its default and description. The fields a new host most
+needs are `deployLogin` (the user `deploy.sh` logs in as; a server sets `root`),
+`autoLogin` (the display manager logs the user in at boot) and
+`theme.plasmaLook` (the Plasma look a login starts with, null without a Plasma
+session). The `sessions` field is described in [Login sessions](#login-sessions).
 
 The other files in `machines/` define what a record may hold:
 
@@ -149,6 +154,8 @@ These rules follow from the list:
   alone stays inert. To build the host, add a
   `nixosConfigurations.<name>` block in the same file, with `hostModules` that
   name `machines/<name>/configuration.nix` and `hardware-configuration.nix`.
+  The host's `configuration.nix` imports each opt-in module it wants
+  ([Inventory](#inventory)).
 - **A launcher.** Add it to `launcherSpecs` in `machines/selectors.nix` and
   create `home-manager/modules/launchers/<name>.nix`. `launchers/default.nix`
   imports a file for each name in `selectors.nix`.
