@@ -644,10 +644,11 @@ in daily use:
 - **The night reboot.** No test reboots for a kernel change or checks the
   window; the assertion in `nixosModules/auto-upgrade.nix` only ties the
   window to the time zone.
-- **deploy.sh's own checks on devbox.** No test runs deploy.sh's rollback after
-  a switch that breaks sshd, the session check's ignore list
-  (`oruc.deploy.sessionIgnore`), or the Limine entries a deploy writes, and
-  nothing checks that omer's sudo asks for a password.
+- **deploy.sh's own checks on devbox.** The `deploy-script` VM check runs the
+  rollback, the session check's ignore list and the boot entries on a VM that
+  deploys to itself ([Test deploy.sh in a VM](deploy.md#test-deploysh-in-a-vm)).
+  No test deploys to devbox over SSH as root, and nothing checks that omer's
+  sudo asks for a password.
 
 ## Streamed desktop CPU
 

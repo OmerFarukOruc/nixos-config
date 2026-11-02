@@ -7,6 +7,7 @@
 - [Deploy to a server](#deploy-to-a-server)
 - [What the deploy does](#what-the-deploy-does)
 - [Exit codes](#exit-codes)
+- [Test deploy.sh in a VM](#test-deploysh-in-a-vm)
 - [One deploy at a time](#one-deploy-at-a-time)
 - [Dirty trees and other checkouts](#dirty-trees-and-other-checkouts)
 - [Release records and cleanup](#release-records-and-cleanup)
@@ -535,6 +536,32 @@ such as 1.
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
 | 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
+
+## Test deploy.sh in a VM
+
+The flake check `deploy-script` (`ci/deploy-script.nix`) runs `deploy.sh` in
+a NixOS VM test, as a user with sudo who deploys to the VM itself, the way
+`./deploy.sh nixos-rog test` runs on nixos-rog. It needs KVM, so it builds on
+the host that runs `scripts/build.sh`:
+
+```sh
+scripts/build.sh .#checks.x86_64-linux.deploy-script
+```
+
+The VM boots with Limine on a separate ESP, and its specialisations are the
+candidates; each phase commits a `flake.nix` whose system is one of them.
+`ci/deploy-script/test.py` deploys a good system and checks that it runs, is
+the boot default and is the current release. It then checks exit 77 under a
+held lock, exit 70 under a pending rollback timer, exit 80 for an ordering
+cycle, the rollback after a system that breaks sshd, exit 75 and the rollback
+when a user service breaks while one that `oruc.deploy.sessionIgnore` names is
+left out, exit 73 with the good system back as boot default when the boot
+loader install fails, and exit 78 for a checkout that lacks a file of the
+running release, then `--replace`.
+
+The check does not cover a deploy over SSH, a dropped connection (exit 76),
+exits 71, 72, 74 and 79, the `deployLogin` lookup, or dix. Nix caches a pass
+until the test or `deploy.sh` changes, and `ci/checks.sh` only evaluates it.
 
 ## One deploy at a time
 

@@ -118,6 +118,7 @@
           inherit inputs;
           host = box;
         }
+        // import ./ci/deploy-script.nix { inherit inputs; }
         // import ./ci/scheme-catalogue.nix { inherit inputs; };
     };
 }

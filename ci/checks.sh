@@ -148,12 +148,12 @@ server_record() {
   }
 }
 
-server_boot() {
+vm_tests() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
     --apply 'checks: builtins.mapAttrs (_: test: test.drvPath) checks') || return 1
-  jq -e 'keys | contains(["devbox-boot-bios"])' <<<"$out" >/dev/null || {
-    echo "The flake checks lack the boot test of devbox: $(jq -c keys <<<"$out")" >&2
+  jq -e 'keys | contains(["devbox-boot-bios", "deploy-script"])' <<<"$out" >/dev/null || {
+    echo "The flake checks lack the boot test of devbox or the deploy.sh test: $(jq -c keys <<<"$out")" >&2
     return 1
   }
 }
@@ -172,7 +172,7 @@ check "box browser feature" box_browser
 echo
 check "server record" server_record
 echo
-check "server boot tests" server_boot
+check "VM tests" vm_tests
 echo
 check "scheme catalogue" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.scheme-catalogue
 echo
