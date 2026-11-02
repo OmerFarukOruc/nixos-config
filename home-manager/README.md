@@ -38,9 +38,9 @@ owns Ctrl-R and does not take Up.
 
 ## Updates
 
-On every host, every switch, manual or automatic, leaves the desktop shell, the
-keyring, the Bluetooth applet and the idle service (swayidle) on their old
-version (`X-SwitchMethod = "keep-old"` in `home-manager/modules/session-scope.nix`),
+On a host with a niri session (nixos-latitude and nixos-rog), every switch,
+manual or automatic, leaves the desktop shell, the keyring, the Bluetooth applet
+and the idle service (swayidle) on their old version (`X-SwitchMethod = "keep-old"` in `home-manager/modules/session-scope.nix`),
 so an update does not restart the panel while you work. The next login starts
 the new version. Open apps keep their old version until you restart them, and a
 new kernel runs after the next boot.

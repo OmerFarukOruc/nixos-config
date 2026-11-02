@@ -278,7 +278,12 @@ one step that commits a switch, points `current` at it, and then runs
 the new files. A reload exits 0 when its app does not run. `theme --reapply`
 runs the reloads too, and `noctalia.service` and `dms.service` run their reload
 script when they start, because each shell keeps its dark or light mode in its
-own state, which no Home Manager file sets. Claude Code reloads
+own state, which no Home Manager file sets. For DMS that state cannot hold the
+mode at all: `home-manager/modules/shells/dms.nix` sets `settings` and `session`,
+so Home Manager links `~/.config/dms/settings.json` and
+`~/.local/state/dms/session.json` into the store, read-only. DMS then stores no
+mode, wallpaper or pinned app, and the start-time script sets the mode again
+each time. Claude Code reloads
 its theme when the file is replaced, but not when a link on its path changes
 target, so its theme file is listed in `oruc.themeCopies`: the pointer writes
 it as a regular file and replaces it through a rename each time it moves

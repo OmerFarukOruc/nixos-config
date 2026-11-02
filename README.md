@@ -45,7 +45,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
 | Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |
-| Launcher | Rofi and the macOS Tahoe launcher on nixos-rog, Vicinae on nixos-latitude |
+| Launcher | Rofi and the macOS Tahoe launcher on nixos-rog, Rofi on nixos-desktop, Vicinae on nixos-latitude |
 | Terminal | Ghostty |
 | Login shell | zsh with oh-my-zsh and Starship |
 | Editors | VS Code, and Neovim through nvf |
