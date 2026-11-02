@@ -11,10 +11,6 @@ let
   buttonSeparation = 1.3;
   button = contrast.raisedSurface scheme scheme.base00 buttonSeparation;
   buttonAlternate = contrast.raisedSurface scheme button buttonSeparation;
-  text = contrast.legibleOn scheme [
-    scheme.base00
-    button
-  ] scheme.base05;
   # KDE reads a fourth number as the alpha, from 0 (clear) to 255 (opaque).
   # The Glass Qt style draws windows with these backgrounds, and the Glass
   # KWin effect blurs what shows through.
@@ -24,11 +20,13 @@ let
       backgroundNormal,
       backgroundAlternate,
       foregroundNormal,
+      foregroundAlsoOn ? [ ],
       accentText ? null,
       groupTranslucent ? false,
     }:
     let
       accent = color: if accentText == null then color else accentText;
+      foreground = contrast.legibleOn scheme ([ backgroundNormal ] ++ foregroundAlsoOn) foregroundNormal;
     in
     ''
       BackgroundAlternate=${
@@ -42,7 +40,7 @@ let
       ForegroundLink=${rgb (accent scheme.base0D)}
       ForegroundNegative=${rgb scheme.base08}
       ForegroundNeutral=${rgb scheme.base09}
-      ForegroundNormal=${rgb foregroundNormal}
+      ForegroundNormal=${rgb foreground}
       ForegroundPositive=${rgb scheme.base0B}
       ForegroundVisited=${rgb (accent scheme.base0E)}
     '';
@@ -72,7 +70,8 @@ in
   ${group {
     backgroundNormal = button;
     backgroundAlternate = buttonAlternate;
-    foregroundNormal = text;
+    foregroundNormal = scheme.base05;
+    foregroundAlsoOn = [ scheme.base00 ];
   }}
   [Colors:Complementary]
   ${group {
@@ -116,7 +115,8 @@ in
   ${group {
     backgroundNormal = scheme.base00;
     backgroundAlternate = scheme.base01;
-    foregroundNormal = text;
+    foregroundNormal = scheme.base05;
+    foregroundAlsoOn = [ button ];
     groupTranslucent = translucent;
   }}
   [General]

@@ -225,6 +225,11 @@ in
       readOnly = true;
       description = "Path of oruc-theme-root, which theme runs through sudo with the scheme on stdin, or null on a host without a desktop.";
     };
+    pack = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      readOnly = true;
+      description = "Store path with each scheme's console palette, login screen colours and Limine colours under <slug>/, which oruc-theme-root reads, or null on a host without a desktop.";
+    };
     bootMenu = lib.mkOption {
       type = lib.types.bool;
       readOnly = true;
@@ -237,6 +242,7 @@ in
       oruc.themeRoot = {
         colorsFile = if themed then colorsFile else null;
         command = if themed then command else null;
+        pack = if themed then pack else null;
         bootMenu = themed && limine;
       };
     }

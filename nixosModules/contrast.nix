@@ -124,9 +124,12 @@ rec {
     scheme: background: separation:
     let
       toward = pct: mixHex (100 - pct) background scheme.base05;
-      pct = lib.findFirst (pct: ratio (toward pct) background >= separation) 100 (lib.range 0 100);
+      pct = lib.findFirst (pct: ratio (toward pct) background >= separation) null (lib.range 0 100);
     in
-    lib.toLower (toward pct);
+    if pct == null then
+      throw "raisedSurface: base05 ${scheme.base05} stays under ${toString separation}:1 against ${background}"
+    else
+      lib.toLower (toward pct);
 
   legibleOn =
     scheme: backgrounds: color:

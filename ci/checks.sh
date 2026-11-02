@@ -176,6 +176,8 @@ check "VM tests" vm_tests
 echo
 check "scheme catalogue" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.scheme-catalogue
 echo
+check "theme contrast" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.theme-contrast
+echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)
 if [[ -z $warnings ]]; then

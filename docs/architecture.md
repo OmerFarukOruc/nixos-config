@@ -429,6 +429,11 @@ on it. GTK's accent, destructive, success, warning and error colours, KDE's
 selection, tmux's current window, Noctalia's and DMS's accents and the login
 screen's button and highlight draw their text in `theme.textOn` of the
 fill they sit on, and the same run checks that it reaches 4.5:1 in every scheme.
+It also checks each KDE colour group's text on its own background, the Window
+text on the Button background and the Button text on the Window background at
+4.5:1, in both the opaque and the Glass scheme. The `theme-contrast` flake
+check, which `ci/checks.sh` builds before each push, runs the same checks
+(`scripts/lib/theme-contrast.py`) on nixos-rog's theme pack.
 
 The pack file `~/.config/oruc/vscode-colors.json` holds `workbench.colorTheme`,
 `window.systemColorTheme` and `workbench.colorCustomizations`, and
@@ -527,9 +532,12 @@ Button background, and the active tab title and toolbar icons with the Window
 text. `plasma-looks/kde-color-scheme.nix` therefore mixes base00 toward base05
 until the Button background reaches 1.3:1 against base00 (`contrast.nix`
 `raisedSurface`; 1.3:1 is Catppuccin Mocha's surface0, which Catppuccin's own
-KDE scheme uses for buttons), and lifts the Button and Window text to 4.5:1 on
-both with `legibleOn`. With base01 as the Button background, Mocha's active
-tab differed from the tab strip by 1.07:1. `spicetify.nix` builds Spotify with Spicetify and links its
+KDE scheme uses for buttons). Each KDE colour group lifts its text to 4.5:1 on
+its own background with `legibleOn`, the Window text also on the Button
+background and the Button text also on the Window background. `raisedSurface`
+fails the evaluation when base05 cannot reach 1.3:1 against the surface below.
+With base01 as the Button background, Mocha's active tab differed from the tab
+strip by 1.07:1. `spicetify.nix` builds Spotify with Spicetify and links its
 `Apps/xpui/colors.css` to the pack's `spicetify-colors.css` fact through the
 theme pointer, so Spotify takes the stored scheme at its next start.
 

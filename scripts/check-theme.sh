@@ -63,7 +63,10 @@ its accent colours, SourceGit's badge and conflict text, the text Vesktop
 and Telegram draw on their accent fills, the text on GTK's accent,
 destructive, success, warning and error colours, on KDE's selection, on
 tmux's current window, on Noctalia's and DMS's accent colours, and on the
-login screen's button and highlight reach 4.5:1.
+login screen's button and highlight reach 4.5:1. It also checks that each
+KDE colour group's text reaches 4.5:1 on its own background, the Window text
+also on the Button background and the Button text also on the Window
+background, in the opaque and the Glass scheme.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
 Vesktop, Telegram, Spotify and the Cursor editor it checks that their theme

@@ -119,6 +119,10 @@
           host = box;
         }
         // import ./ci/deploy-script.nix { inherit inputs; }
-        // import ./ci/scheme-catalogue.nix { inherit inputs; };
+        // import ./ci/scheme-catalogue.nix { inherit inputs; }
+        // import ./ci/theme-contrast.nix {
+          inherit inputs;
+          host = inventory.nixosConfigurations.nixos-rog;
+        };
     };
 }

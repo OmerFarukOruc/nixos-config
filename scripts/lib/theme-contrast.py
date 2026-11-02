@@ -254,13 +254,48 @@ def app_failures(slug):
 
 gtk_var = re.compile(r"^@define-color ([a-z_]+_color) #([0-9a-fA-F]{6});", re.M)
 gtk_fills = ("accent", "destructive", "success", "warning", "error")
-kde_selection = re.compile(r"^\[Colors:Selection\]\n(.*?)(?=^\[)", re.M | re.S)
-kde_key = re.compile(r"^([A-Za-z]+)=(\d+),(\d+),(\d+)$", re.M)
-kde_text = ("ForegroundNormal", "ForegroundActive", "ForegroundLink", "ForegroundVisited")
-kde_files = (".local/share/oruc/kde/OrucBase16.colors", ".config/kdeglobals")
+kde_group = re.compile(r"^(\[Colors:[^\n]*)\n(.*?)(?=^\[|\Z)", re.M | re.S)
+kde_key = re.compile(r"^([A-Za-z]+)=(\d+),(\d+),(\d+)(?:,\d+)?$", re.M)
+kde_selection_text = ("ForegroundNormal", "ForegroundActive", "ForegroundLink", "ForegroundVisited")
+kde_required = ("[Colors:Button]", "[Colors:Selection]", "[Colors:Window]")
+kde_schemes = (".local/share/oruc/kde/OrucBase16.colors", ".local/share/oruc/kde/OrucBase16Glass.colors")
+kde_globals = ".config/kdeglobals"
 tmux_style = re.compile(r'^set -g ([a-z-]+) "fg=#([0-9a-fA-F]{6}),bg=#([0-9a-fA-F]{6})', re.M)
 noctalia_fills = ("Primary", "Secondary", "Tertiary", "Error")
 sddm_pairs = (("LoginButtonTextColor", "LoginButtonBackgroundColor"), ("HighlightTextColor", "HighlightBackgroundColor"))
+
+
+def kde_missing(groups):
+    missing = [name for name in kde_required if name not in groups]
+    for name, group in groups.items():
+        keys = ("ForegroundNormal", "BackgroundNormal")
+        if name == "[Colors:Selection]":
+            keys = kde_selection_text + ("BackgroundNormal", "BackgroundAlternate")
+        missing += [f"{name} {key}" for key in keys if key not in group]
+    return missing
+
+
+def kde_failures(slug, kde_file):
+    app = f"KDE {kde_file.name}"
+    groups = {
+        name: {key: "".join(f"{int(c):02x}" for c in rgb) for key, *rgb in kde_key.findall(body)}
+        for name, body in kde_group.findall(kde_file.read_text())
+    }
+    missing = kde_missing(groups)
+    if missing:
+        return [f"{slug}: {app} sets no {', '.join(missing)}"]
+    found = []
+    selection = groups["[Colors:Selection]"]
+    for text in kde_selection_text:
+        for background in ("BackgroundNormal", "BackgroundAlternate"):
+            found += weak(slug, app, f"Selection {text}", background, selection[text], selection[background])
+    for name, group in groups.items():
+        if name != "[Colors:Selection]":
+            found += weak(slug, app, f"{name} ForegroundNormal", "BackgroundNormal", group["ForegroundNormal"], group["BackgroundNormal"])
+    window, button = groups["[Colors:Window]"], groups["[Colors:Button]"]
+    found += weak(slug, app, "Window ForegroundNormal", "Button BackgroundNormal", window["ForegroundNormal"], button["BackgroundNormal"])
+    found += weak(slug, app, "Button ForegroundNormal", "Window BackgroundNormal", button["ForegroundNormal"], window["BackgroundNormal"])
+    return found
 
 
 def desktop_failures(slug):
@@ -271,13 +306,11 @@ def desktop_failures(slug):
         for fill in gtk_fills:
             text, background = f"{fill}_fg_color", f"{fill}_bg_color"
             found += weak(slug, "GTK", text, background, gtk[text], gtk[background])
-    kde_file = next((pack / slug / name for name in kde_files if (pack / slug / name).exists()), None)
-    if kde_file:
-        selection = kde_selection.search(kde_file.read_text())
-        keys = {key: "".join(f"{int(c):02x}" for c in rgb) for key, *rgb in kde_key.findall(selection[1])}
-        for text in kde_text:
-            for background in ("BackgroundNormal", "BackgroundAlternate"):
-                found += weak(slug, "KDE", f"Selection {text}", background, keys[text], keys[background])
+    kde_files = [pack / slug / name for name in kde_schemes if (pack / slug / name).exists()]
+    if not kde_files and (pack / slug / kde_globals).exists():
+        kde_files = [pack / slug / kde_globals]
+    for kde_file in kde_files:
+        found += kde_failures(slug, kde_file)
     tmux_file = pack / slug / ".config/tmux/oruc-theme.conf"
     if tmux_file.exists():
         styles = {style: (fg, bg) for style, fg, bg in tmux_style.findall(tmux_file.read_text())}

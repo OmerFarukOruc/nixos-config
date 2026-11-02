@@ -964,7 +964,9 @@ files and a tmux server and two Neovim instances it starts, and switches back.
 In a running Plasma session it also checks the KDE colors, the dark or light
 set and the Glass glow. It checks VS Code's `settings.json` after each switch,
 and `--contrast` also checks, in every scheme, the text contrast of the VS Code
-theme, the Claude Code status line, and the text each app draws on an accent.
+theme, the Claude Code status line, the KDE colours, and the text each app
+draws on an accent. The `theme-contrast` flake check runs the same contrast
+checks on the built pack before each push.
 `--host nixos-latitude` runs it there.
 
 A scheme that tinted-theming lacks goes in `assets/schemes`
