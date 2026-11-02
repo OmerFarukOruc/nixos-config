@@ -43,7 +43,8 @@ Package power comes from `intel-rapl` (the CPU's energy counters). Reading
 `/sys/class/powercap/intel-rapl:0/energy_uj` needs root. The readings below
 use three 10-second windows.
 
-- On battery, idle package power was about 2.7 W with waybar and mako, and with
+- On battery, idle package power was about 2.7 W with waybar and mako, a shell
+  this repository has since removed, and with
   the DankMaterialShell (DMS) shell.
 - On AC with the screen on, idle package power was 4.2 W with DMS and 3.9 W
   with Noctalia, measured back to back in one session. nixos-latitude runs

@@ -89,6 +89,9 @@ niri.
 
 By default, on battery, the screen dims after 2 minutes and turns off after 5.
 On AC it does neither. The screen never locks, and the machine never suspends.
+The dim step touches only `/sys/class/backlight/*_b*`, which matches
+`amdgpu_bl*` and `intel_backlight` and skips `nvidia_0`. On a hybrid laptop
+`nvidia_0` comes first, and touching it wakes the RTX 4070.
 
 ## Login sessions
 
@@ -185,11 +188,11 @@ luminosity so `#000000` stays black. In the session, `oruc-wallpaper-path`
 pack's `palette` fact into `~/.cache/oruc/wallpapers/<scheme>-<key>.png`. The
 key hashes the palette, the `default.png` path and lutgen, so a changed input
 renders a new file. One render took 0.05 to 0.07 s in 3 runs on nixos-rog
-(2026-10-31). Plasma, Noctalia, DMS and waybar take the wallpaper from it, so it
+(2026-10-31). Plasma, Noctalia and DMS take the wallpaper from it, so it
 follows any scheme. On Plasma, plasma-manager's startup script `oruc-wallpaper`
 sets it at each login after the panel script, which deletes the desktop's
 wallpaper when it rebuilds the panels, and the reload `wallpaper` sets it at
-each switch. waybar's `oruc-wallpaper.service` restarts swaybg at each switch.
+each switch.
 
 Each Plasma look is a Home Manager variant (`machines/variants.nix`). The
 row of `theme.plasmaLook` is the Home Manager generation, and each other look
@@ -591,9 +594,6 @@ These stay fixed on purpose, and the check does not cover them:
   color are managed-only policies, and Brave Sync carries them.
 - The ChatGPT app's code view takes the nearest of its built-in code themes,
   so its syntax colors are the built-in theme's, not the scheme's.
-- waybar, mako, fuzzel, walker and anyrun follow only the machine record's
-  scheme, because they build their colors from `config.scheme` and no host
-  selects them.
 
 ## Secrets
 

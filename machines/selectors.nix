@@ -5,14 +5,11 @@ let
   };
 
   launcherSpecs = {
-    anyrun.desktops = [ "niri" ];
-    fuzzel.desktops = [ "niri" ];
     rofi.desktops = [
       "niri"
       "plasma"
     ];
     vicinae.desktops = [ "niri" ];
-    walker.desktops = [ "niri" ];
   };
 
   kernelSpecs = {
@@ -42,7 +39,6 @@ let
     dms.desktops = [ "niri" ];
     noctalia.desktops = [ "niri" ];
     plasma.desktops = [ "plasma" ];
-    waybar.desktops = [ "niri" ];
   };
 
   plasmaLookNames = [
