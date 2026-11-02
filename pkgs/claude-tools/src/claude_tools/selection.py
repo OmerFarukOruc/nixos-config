@@ -155,7 +155,8 @@ def hold_limit(settings: Settings, name: str, text: str, said: int | None = None
     at = now()
     until, reason = parse_limit(text, said or at) or (None, "limit")
     if until is None:
-        entry = by_name(locked_refresh(settings, [name], None)).get(name, {})
+        usable = name in accounts(settings.accounts_file)
+        entry = by_name(locked_refresh(settings, [name], None)).get(name, {}) if usable else {}
         until, reason = full_window(entry, at) or (at + NO_RESET_WAIT, f"{reason} with no full window")
     if until <= at:
         return None
