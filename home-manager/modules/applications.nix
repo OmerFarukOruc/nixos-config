@@ -136,6 +136,7 @@ in
       codex
       cursor-agent
       herdr
+      herdr-core
       # keep-sorted end
     ])
     ++ [
@@ -144,7 +145,10 @@ in
       grok
       opencode
     ]
-    ++ lib.optional hasDesktop xdgOpen
+    ++ lib.optionals hasDesktop [
+      agents.herdr-app
+      xdgOpen
+    ]
   );
 
   programs.mcp = {
