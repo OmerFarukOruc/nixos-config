@@ -1,31 +1,20 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
 
+from claude_tools.display import login_left, window_view
+from claude_tools.display import tone as tone_name
 from claude_tools.limits import WINDOWS
 from claude_tools.selection import span
 from claude_tools.store import now
 
-AMBER_FROM_PERCENT, RED_FROM_PERCENT = 70, 90
 GREEN, AMBER, RED, ACCENT, DIM, BOLD = "32", "33", "31", "34", "2", "1"
-RESET_SLACK = 30
+TONE_CODES = {"green": GREEN, "amber": AMBER, "red": RED}
 ANSI = re.compile(r"\033\[[0-9;]*m")
 
 
 def visible(text: str) -> int:
     return len(ANSI.sub("", text))
-
-
-def pace(used: float, resets_at: int | None, window: int, at: int) -> float | None:
-    if not resets_at or not 0 < resets_at - at <= window:
-        return None
-    return used - (1 - (resets_at - at) / window) * 100
-
-
-def login_left(t: int) -> str:
-    left = t - now()
-    return span(max(0, left)) if left < 86400 else f"{left // 86400} d"
 
 
 class Cards:
@@ -38,7 +27,7 @@ class Cards:
 
     @staticmethod
     def tone(used: float) -> str:
-        return GREEN if used < AMBER_FROM_PERCENT else AMBER if used < RED_FROM_PERCENT else RED
+        return TONE_CODES[tone_name(used)]
 
     def bar_cells(self, used: float, stale: bool) -> str:
         cells = min(max(used, 0), 100) / 100 * self.bar
@@ -49,27 +38,24 @@ class Cards:
         return self.c("━" * full + ("╸" if half else ""), *tone) + self.c("─" * track, DIM)
 
     def pace_mark(self, w: dict, length: int, at: int, wide: bool) -> str:
-        d = pace(w["used"], w.get("resets_at"), length, at)
+        v = window_view(w, length, at)
+        d = v["pace"]
         if d is None:
             return " " * 6 if wide else " "
-        if d > 5:
-            return self.c(f"▲{d:+4.0f}%" if wide else "▲", AMBER if d < 20 else RED)
-        if d < -5:
-            return self.c(f"▽{d:+4.0f}%" if wide else "▽", GREEN)
+        if v["pace_state"] == "ahead":
+            return self.c(f"▲{d:+4d}%" if wide else "▲", AMBER if d < 20 else RED)
+        if v["pace_state"] == "behind":
+            return self.c(f"▽{d:+4d}%" if wide else "▽", GREEN)
         return self.c("≈     " if wide else "≈", DIM)
 
     def window_row(self, label: str, w: dict | None, length: int, at: int, stale: bool) -> str:
         head = "    " + self.c(f"{label:<7}", DIM)
         if not w:
             return head + self.c("─" * self.bar, DIM) + "  " + self.c("no weekly limit", DIM)
-        used, t = w["used"], w.get("resets_at")
+        used = w["used"]
         pct = self.c(f"{used:4.0f}%", self.tone(used), *((DIM,) if stale else ()))
-        if not t:
-            reset = "not started"
-        else:
-            left = max(0, t + RESET_SLACK - now())
-            clock = datetime.fromtimestamp(t + RESET_SLACK).astimezone().strftime("%H:%M" if left < 86400 else "%a %H:%M")
-            reset = f"resets {span(left)} · {clock}"
+        v = window_view(w, length, at)
+        reset = f"resets {v['reset_in']} · {v['reset_clock']}" if v["resets_at"] else "not started"
         return f"{head}{self.bar_cells(used, stale)} {pct}  {self.pace_mark(w, length, at, True)}  {self.c(reset, DIM)}"
 
     def window_rows(self, a: dict, at: int, stale: bool) -> list[str]:

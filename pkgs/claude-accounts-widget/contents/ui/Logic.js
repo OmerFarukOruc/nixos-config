@@ -7,7 +7,6 @@ var accountsCommand = "@claudeTools@/bin/claude-tools accounts"
 var pollCommand = "sh -c '" + usageCommand + " --json --cached'"
 var refreshCommand = "sh -c '" + usageCommand + " --json --max-age 60'"
 
-// Returns null for a name or host that the shell could read as more than a word.
 function loginCommand(name, host) {
     if (!namePattern.test(name || ""))
         return null
@@ -27,11 +26,11 @@ function usedOf(w) {
     return (w && w.used !== null && w.used !== undefined) ? Number(w.used) : null
 }
 
-function maxUsed(a) {
+function fullest(a) {
     var f = usedOf(a.five_hour), s = usedOf(a.seven_day)
     if (f === null && s === null)
         return null
-    return Math.max(f === null ? 0 : f, s === null ? 0 : s)
+    return s === null || (f !== null && f >= s) ? a.five_hour : a.seven_day
 }
 
 function listedNames(data) {
@@ -41,7 +40,6 @@ function listedNames(data) {
     return names
 }
 
-// The account claude-tools rotate would start on: the first of claude-tools usage's order that nothing blocks.
 function bestAccount(data) {
     var listed = listedNames(data)
     var order = (data && data.order) || []
@@ -50,9 +48,9 @@ function bestAccount(data) {
         if (order[i].group === "blocked" || !listed[order[i].name])
             continue
         for (var j = 0; j < list.length; j++) {
-            var u = list[j].name === order[i].name ? maxUsed(list[j]) : null
-            if (u !== null)
-                return { account: list[j], used: u }
+            var w = list[j].name === order[i].name ? fullest(list[j]) : null
+            if (w)
+                return { account: list[j], used: Number(w.used), tone: w.tone }
         }
     }
     return null
@@ -79,45 +77,22 @@ function anyNeedsLogin(data) {
     return false
 }
 
-function duration(secs) {
-    if (secs <= 0)
-        return "now"
-    var m = Math.floor(secs / 60)
-    var d = Math.floor(m / 1440)
-    m -= d * 1440
-    var h = Math.floor(m / 60)
-    m -= h * 60
-    if (d > 0)
-        return d + "d " + h + "h"
-    if (h > 0)
-        return h + "h " + m + "m"
-    return Math.max(m, 1) + "m"
-}
-
-// Used percent minus the elapsed percent of the window at the reading time, as claude-tools usage and the status line
-// compute it; null when the reset time does not fall inside the window.
-function pace(win, length, at) {
-    var u = usedOf(win)
-    if (u === null || !win.resets_at || !length)
-        return null
-    var left = win.resets_at - at
-    if (left <= 0 || left > length)
-        return null
-    return u - (1 - left / length) * 100
-}
-
-function paceText(d) {
-    if (d === null)
+function paceText(w) {
+    if (!w || w.pace_state === null || w.pace_state === undefined)
         return ""
-    if (d > 5)
-        return "▲ +" + Math.round(d) + "%"
-    if (d < -5)
-        return "▽ " + Math.round(d) + "%"
+    if (w.pace_state === "ahead")
+        return "▲ +" + w.pace + "%"
+    if (w.pace_state === "behind")
+        return "▽ " + w.pace + "%"
     return "≈"
 }
 
-function weekdayTime(ts) {
-    return Qt.formatDateTime(new Date(ts * 1000), "ddd HH:mm")
+function resetText(w, weekday) {
+    if (!w || w.reset_in === null || w.reset_in === undefined)
+        return "no data"
+    if (w.reset_in === "now")
+        return "resets now"
+    return weekday ? w.reset_clock : "in " + w.reset_in
 }
 
 function age(ts, now) {
@@ -133,15 +108,8 @@ function age(ts, now) {
     return Math.floor(h / 24) + " d ago"
 }
 
-function loginEnds(ts, now) {
-    if (ts === null || ts === undefined)
-        return ""
-    var left = ts - now
-    if (left <= 0)
-        return "login expired"
-    if (left >= 86400)
-        return "login ends in " + Math.floor(left / 86400) + " d"
-    return "login ends in " + duration(left)
+function loginLeft(login) {
+    return login.login_left ? "login left: " + login.login_left : ""
 }
 
 function stateText(state) {

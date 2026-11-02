@@ -10,13 +10,10 @@ RowLayout {
 
     property string title
     property var win: null
-    property real now: 0
     property bool weekday: false
-    property int length: 0
-    property real checked: 0
 
     readonly property var used: Logic.usedOf(win)
-    readonly property var pace: Logic.pace(win, length, checked || now)
+    readonly property var paceState: win ? win.pace_state : null
 
     spacing: Kirigami.Units.smallSpacing
 
@@ -28,6 +25,7 @@ RowLayout {
 
     UsageBar {
         used: row.used
+        tone: row.win ? row.win.tone : ""
         Layout.fillWidth: true
         Layout.alignment: Qt.AlignVCenter
     }
@@ -38,25 +36,17 @@ RowLayout {
         Layout.preferredWidth: Kirigami.Units.gridUnit * 2.5
     }
 
-    // ▲ uses the window faster than an even spread to the reset, ▽ has room to spare.
     PlasmaComponents3.Label {
-        text: Logic.paceText(row.pace)
-        color: row.pace === null || Math.abs(row.pace) <= 5 ? Kirigami.Theme.textColor
-             : row.pace > 5 ? Kirigami.Theme.neutralTextColor : Kirigami.Theme.positiveTextColor
-        opacity: row.pace === null || Math.abs(row.pace) <= 5 ? 0.7 : 1
+        text: Logic.paceText(row.win)
+        color: row.paceState === "ahead" ? Kirigami.Theme.neutralTextColor
+             : row.paceState === "behind" ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.textColor
+        opacity: row.paceState === "ahead" || row.paceState === "behind" ? 1 : 0.7
         horizontalAlignment: Text.AlignRight
         Layout.preferredWidth: Kirigami.Units.gridUnit * 3
     }
 
     PlasmaComponents3.Label {
-        text: {
-            if (!row.win || row.win.resets_at === null || row.win.resets_at === undefined)
-                return "no data"
-            if (row.win.resets_at <= row.now)
-                return "resets now"
-            return row.weekday ? Logic.weekdayTime(row.win.resets_at)
-                               : "in " + Logic.duration(row.win.resets_at - row.now)
-        }
+        text: Logic.resetText(row.win, row.weekday)
         opacity: 0.7
         horizontalAlignment: Text.AlignRight
         Layout.preferredWidth: Kirigami.Units.gridUnit * 6

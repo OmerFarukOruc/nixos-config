@@ -122,7 +122,6 @@ Item {
                     }
                     AccountRow {
                         account: accountItem.modelData
-                        now: full.now
                         Layout.fillWidth: true
                         onLoginRequested: (name, host) => full.loginRequested(name, host)
                     }

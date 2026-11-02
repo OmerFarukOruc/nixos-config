@@ -36,6 +36,7 @@ Item {
         anchors.margins: Kirigami.Units.smallSpacing
         implicitHeight: Kirigami.Units.smallSpacing * 2
         used: compact.best ? compact.best.used : null
+        tone: compact.best ? compact.best.tone : ""
         visible: compact.best !== null
     }
 

@@ -9,7 +9,6 @@ ColumnLayout {
     id: item
 
     property var account
-    property real now: 0
 
     signal loginRequested(string name, string host)
 
@@ -42,19 +41,13 @@ ColumnLayout {
     WindowRow {
         title: "5 h"
         win: item.account.five_hour
-        now: item.now
-        length: 5 * 3600
-        checked: item.account.checked || 0
         Layout.fillWidth: true
     }
 
     WindowRow {
         title: "7 d"
         win: item.account.seven_day
-        now: item.now
         weekday: true
-        length: 7 * 86400
-        checked: item.account.checked || 0
         Layout.fillWidth: true
     }
 
@@ -65,10 +58,7 @@ ColumnLayout {
             required property var modelData
             title: modelData.label
             win: modelData
-            now: item.now
             weekday: true
-            length: 7 * 86400
-            checked: item.account.checked || 0
             Layout.fillWidth: true
         }
     }
@@ -103,7 +93,7 @@ ColumnLayout {
                     acctState: login.modelData.state
                 }
                 PlasmaComponents3.Label {
-                    text: Logic.loginEnds(login.modelData.login_expires_at, item.now)
+                    text: Logic.loginLeft(login.modelData)
                     opacity: 0.7
                     visible: text !== ""
                 }

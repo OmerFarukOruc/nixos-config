@@ -10,6 +10,7 @@ from datetime import datetime
 
 from claude_tools.accounts import accounts
 from claude_tools.agents import sessions
+from claude_tools.display import annotate
 from claude_tools.errors import Failed
 from claude_tools.selection import GROUPS, ranked, startable
 from claude_tools.settings import Settings
@@ -62,7 +63,8 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
     data = load_cache(settings) if a.cached else locked_refresh(settings, a.account, a.max_age)
     if a.json:
         readings = by_name(data)
-        print(json.dumps({**data, "combined": combined(data, settings.accounts_file),
+        print(json.dumps({**data, "accounts": [annotate(a) for a in data.get("accounts", [])],
+                          "combined": [annotate(a) for a in combined(data, settings.accounts_file)],
                           "order": [{"name": n, "group": GROUPS[g], "why": why}
                                     for n, g, why in ranked(settings, readings, list(readings))]}, indent=1))
     elif not a.quiet:

@@ -5,6 +5,7 @@ Item {
     id: bar
 
     property var used: null
+    property string tone: ""
 
     readonly property bool known: used !== null && used !== undefined
     readonly property real clamped: known ? Math.max(0, Math.min(100, Number(used))) : 0
@@ -23,8 +24,8 @@ Item {
         width: Math.max(parent.height, parent.width * bar.clamped / 100)
         height: parent.height
         radius: height / 2
-        color: bar.clamped >= 90 ? Kirigami.Theme.negativeTextColor
-             : bar.clamped >= 70 ? Kirigami.Theme.neutralTextColor
+        color: bar.tone === "red" ? Kirigami.Theme.negativeTextColor
+             : bar.tone === "amber" ? Kirigami.Theme.neutralTextColor
              : Kirigami.Theme.positiveTextColor
     }
 }
