@@ -111,8 +111,10 @@ need their own login. Behavior below was observed on nixos-rog on 2026-10-10.
 - **gh SSH key.** Skip the key that gh offers to generate during login, because
   the shared key `~/.ssh/id_ed25519_omer` is already on GitHub.
 - **Codex.** Run `codex login --device-auth`.
-- **Claude Code.** `~/.claude` takes `claude auth login`. Each extra account has
-  its own folder and takes `CLAUDE_CONFIG_DIR=~/.claude-<name> claude auth login`.
+- **Claude Code.** `~/.claude` takes `claude auth login`. Log in each extra
+  account that `accounts.json` lists with `claude-tools accounts login NAME`,
+  which makes its folder, links the shared config and checks that the login
+  got the organization `accounts.json` names.
   Do not copy a `.credentials.json` from another machine, because Claude Code
   rotates the refresh token on use and the first refresh on one machine logs
   the other out. The account folder layout is in `pkgs/claude-tools/README.md`.
