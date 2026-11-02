@@ -15,7 +15,8 @@
 # it from GitHub. This host keeps each commit's systems in
 # ${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts, one file per commit
 # and Nix version, so a later call for the same commit on this host skips its
-# evaluation; delete the file to evaluate again. Exits 1 when an evaluation or
+# evaluation; delete the file to evaluate again. OLD and REV must be 3941e78 or
+# later, whose machine records define deployLogin. Exits 1 when an evaluation or
 # a Git lookup fails, 2 for a usage error.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -112,7 +113,11 @@ REMOTE
 
 evaluated_systems() {
   local json
-  json=$(systems "$1") || return 1
+  json=$(systems "$1") || {
+    git merge-base --is-ancestor 3941e78 "$1" 2>/dev/null ||
+      echo "$1 is older than 3941e78, the first commit whose machine records define deployLogin, so this script cannot evaluate it." >&2
+    return 1
+  }
   if ! valid_host_systems <<<"$json"; then
     echo "The evaluation of $1 printed no systems." >&2
     return 1

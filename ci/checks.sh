@@ -150,11 +150,13 @@ server_record() {
 cache_copies() {
   local want have file status=0
   want=$(nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file .#nixosConfigurations --apply '
-    hosts: builtins.concatMap (host: host.config.nix.settings.extra-substituters
-      ++ host.config.nix.settings.extra-trusted-public-keys) (builtins.attrValues hosts)
+    hosts: builtins.concatMap (host: let s = host.config.nix.settings; in
+      map (v: "extra-substituters " + v) s.extra-substituters
+      ++ map (v: "extra-trusted-public-keys " + v) s.extra-trusted-public-keys) (builtins.attrValues hosts)
   ' | jq -r '.[]' | LC_ALL=C sort -u) || return 1
   for file in docs/install-nixos-desktop.md docs/install-nixos-latitude.md .github/workflows/update.yml; do
-    have=$(sed -nE "s/^ *extra-(substituters|trusted-public-keys) = //p" "$file" | tr -d "'" | tr ' ' '\n' | LC_ALL=C sort -u)
+    have=$(sed -nE "s/^ *(extra-(substituters|trusted-public-keys)) = (.*)/\1 \3/p" "$file" | tr -d "'" |
+      awk '{for (i = 2; i <= NF; i++) print $1, $i}' | LC_ALL=C sort -u)
     [[ $have == "$want" ]] && continue
     echo "$file differs from the hosts' nix.settings (<: only the hosts set it, >: only $file has it):" >&2
     diff <(echo "$want") <(echo "$have") | grep '^[<>]' >&2 || true

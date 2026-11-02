@@ -2,7 +2,6 @@
 # shellcheck source=/dev/null
 . scripts/lib/rog-host.sh
 COPY_SSH=(ssh "${SSH_OPTS[@]}")
-COPY_RSYNC=(rsync -e "${COPY_SSH[*]}")
 # A local run starts without the caller's Git variables, as an SSH login does.
 # A git hook exports GIT_DIR and GIT_INDEX_FILE, and with them the copy's
 # git add would write to the caller's index.
@@ -208,7 +207,7 @@ copy_open() {
   trap 'copy_run_light <<<"rm -rf -- \"\$1\"" || true' EXIT
 
   git ls-files -co --exclude-standard -z |
-    "${COPY_RSYNC[@]}" -a --from0 --ignore-missing-args --files-from=- ./ "$(copy_path)"
+    "${SSH_RSYNC[@]}" -a --from0 --ignore-missing-args --files-from=- ./ "$(copy_path)"
   # A git flake, like a checkout. Without git add, Nix would leave the new
   # files out of it.
   copy_run_light <<'REMOTE'

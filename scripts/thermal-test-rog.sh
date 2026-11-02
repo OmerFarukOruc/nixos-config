@@ -122,10 +122,7 @@ trap restore EXIT
 trap 'exit 130' INT TERM HUP
 
 status=0
-# shellcheck disable=SC2029
-ssh "${SSH_OPTS[@]}" "$ROG_HOST" \
-  "bash -s -- $(printf '%q ' "$profile" "$ppt" "$threads" "$seconds" "$load" "$script_blob" "${curves[@]}")" <<'REMOTE' |
-set -euo pipefail
+rog_ssh_session "$profile" "$ppt" "$threads" "$seconds" "$load" "$script_blob" "${curves[@]}" <<'REMOTE' |
 profile=$1 ppt=$2 threads=$3 seconds=$4 load=$5 script_blob=$6
 shift 6
 cpu_load=false gpu_load=false

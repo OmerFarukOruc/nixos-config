@@ -17,21 +17,41 @@ let
       propagatedBuildInputs = [ ];
       installPhase = "touch $out";
     });
-  overlayPatches = lib.filterAttrs (
-    file: _:
-    lib.hasSuffix ".nix" file
-    &&
-      builtins.length (
-        builtins.split "postPatch|fetchpatch|\\.patch[^a-z_]" (builtins.readFile ../overlays/${file})
-      ) > 1
-  ) (builtins.readDir ../overlays);
-  unlisted = lib.filter (file: !patched ? ${lib.removeSuffix ".nix" file}) (
-    lib.attrNames overlayPatches
-  );
+  unchecked = {
+    deskflow = "it only drops the patches of libportal, which libportal 0.10.0 already contains";
+    nvidia-driver = "it patches the driver version that file pins, which no nixpkgs move changes";
+  };
+  patchingFiles =
+    lib.filter
+      (
+        file:
+        lib.hasSuffix ".nix" file
+        &&
+          builtins.length (
+            builtins.split "(pre|post)(Unpack|Patch)|patches = |fetchpatch|\\.(patch|diff)([^a-z_]|$)" (
+              builtins.readFile file
+            )
+          ) > 1
+      )
+      (
+        lib.concatMap lib.filesystem.listFilesRecursive [
+          ../overlays
+          ../home-manager
+          ../nixosModules
+          ../machines
+        ]
+      );
+  unlisted = lib.filter (
+    file:
+    let
+      name = lib.removeSuffix ".nix" file;
+    in
+    !(patched ? ${name} || unchecked ? ${name})
+  ) (map baseNameOf patchingFiles);
 in
 {
   patches =
     assert lib.assertMsg (unlisted == [ ])
-      "ci/patches.nix: add the package that ${lib.concatStringsSep ", " unlisted} patches to `patched`.";
+      "ci/patches.nix: list the package that ${lib.concatStringsSep ", " unlisted} patches in `patched`, or the file in `unchecked` with the reason.";
     rog.linkFarm "patches" (builtins.mapAttrs patchOnly patched);
 }

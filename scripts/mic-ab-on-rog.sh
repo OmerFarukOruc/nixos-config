@@ -62,7 +62,7 @@ mkdir -p "$out"
 rog_run() {
   local script=$1
   shift
-  ssh "${SSH_OPTS[@]}" "$ROG_HOST" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
+  rog_ssh_session "$@" <<<"$script"
 }
 
 lib='node_id() {
@@ -87,7 +87,7 @@ remote=$made
 
 # wpctl prints its usage to stdout when the node is missing, so only a number
 # shows that the microphone exists.
-volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$2}"' "$mic")
+volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$2}"' "$mic" || true)
 [[ $volume =~ ^[0-9]+\.[0-9]+$ ]] || die "$mic is missing on $ROG_HOST" 3
 original_volume=$volume
 
@@ -114,7 +114,7 @@ done
 
 notify() {
   printf '%s  %s\n' "$(date +%T)" "$1"
-  rog_run 'DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus busctl --user call \
+  rog_run 'busctl --user call \
     org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications \
     Notify susssasa{sv}i mic-ab 0 audio-input-microphone "Microphone test" "$1" 0 1 suppress-sound b true 10000' \
     "$1" >/dev/null || true
@@ -159,7 +159,7 @@ else
   notify "A/B test done. You can stop."
 fi
 
-rsync -a -e "ssh ${SSH_OPTS[*]}" "$ROG_HOST:$remote/" "$out/"
+"${SSH_RSYNC[@]}" -a "$ROG_HOST:$remote/" "$out/"
 hushmic_status=$(rog_run 'hushmic status --json 2>/dev/null || echo null')
 preset=$(rog_run 'grep -h "^lastLoadedInputPreset=" ~/.config/easyeffects/db/easyeffectsrc || true')
 

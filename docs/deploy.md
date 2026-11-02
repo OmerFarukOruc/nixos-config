@@ -265,7 +265,8 @@ scripts/affected-hosts.sh <old>..<sha>
 
 `<old>` is the `origin/main` you rebased onto before the push, and `<sha>` the
 commit you pushed. With one commit, `scripts/affected-hosts.sh <sha>` compares
-it with its parent.
+it with its parent. It cannot evaluate a commit older than 3941e78, the first
+one whose machine records define `deployLogin`.
 
 Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 needs no deploy.
