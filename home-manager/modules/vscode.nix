@@ -389,9 +389,7 @@ let
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.jq ];
     postPatch = (old.postPatch or "") + ''
       runtimeEntry="$out/lib/vscode/${appOut}/${runtimeDir}/index.cjs"
-      # VS Code 1.140 and newer create the window in mainImpl.js.
       windowFile="${appOut}/mainImpl.js"
-      [[ -f $windowFile ]] || windowFile="${appOut}/main.js"
       chmod u+w resources/app "${appOut}" "${appOut}/main.js" "$windowFile" \
         "${appOut}/vs/code/electron-browser/workbench" "${appOut}/${workbench}"
 
