@@ -372,15 +372,16 @@ short, because the reboot takes no deploy lock; the host then boots the boot
 default, the new `main`.
 Limine counts no boot attempts, so a new kernel that does not boot leaves the
 host down until someone opens the provider's console and picks the previous
-entry from Limine's menu; nothing reports it. For devbox,
-[recovery.md](recovery.md#devbox) has that console path and when it may be used.
+entry from Limine's menu. On devbox, the SigNoz rule `Devbox stopped reporting`
+alerts about 22 minutes after the last host metric (statuslantern-scraper
+`deploy/signoz/README.md`), and [recovery.md](recovery.md#devbox) has the console path and when it may be used.
 
 **Who sees a failure.** devbox has no desktop, so a failed run shows no popup.
 It leaves `nixos-upgrade.service` failed, which `systemctl --failed` lists, and
 the host ships the unit's journal lines at priority info and above to SigNoz
-(`oruc.telemetry.journalUnits`). The SigNoz alert rules live in
-statuslantern-scraper's `deploy/signoz/alerts/`, and none of them reads this
-unit yet, so until one does only someone on the host sees a failure.
+(`oruc.telemetry.journalUnits`). The SigNoz rule `Devbox update failed` in
+statuslantern-scraper's `deploy/signoz/alerts/` alerts on systemd's
+`nixos-upgrade.service: Failed with result` line.
 
 **The session check.** SSH can still answer while a switch broke the desktop.
 The deploy user's running services form the session check of step 10 below,

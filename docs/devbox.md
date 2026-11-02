@@ -311,10 +311,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   SigNoz, including the line of omer's systemd about the failure
   ([Telemetry](#telemetry)). The failure line is the signal an alert rule can
   use. The SigNoz alert rules live in statuslantern-scraper's
-  `deploy/signoz/alerts/`, and none reads these lines yet. The rule waits for
-  the first NixOS deploy to ship them, as for
-  `nixos-upgrade.service` failures, so until then
-  only someone on the host sees the failed state.
+  `deploy/signoz/alerts/`, and none reads these lines yet, so only someone on
+  the host sees the failed state. `Devbox update failed` there reads the same
+  kind of line for `nixos-upgrade.service`.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
   `DOCKER_HOST`, the docker CLI and its Compose plugin. `podman.service`, which
