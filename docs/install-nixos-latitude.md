@@ -46,7 +46,7 @@ the LAN.
    enables neither flakes nor this repository's binary caches. `NIX_CONFIG`
    turns both on, so the CachyOS kernel downloads instead of compiling on the
    live system. The keys are copies of the ones in `nixosModules/kernel.nix`
-   and `nixosModules/common.nix`.
+   and `nixosModules/common.nix`, and `ci/checks.sh` fails when a copy differs.
 
    ```
    export NIX_CONFIG='experimental-features = nix-command flakes

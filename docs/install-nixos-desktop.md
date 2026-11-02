@@ -88,7 +88,7 @@ what you keep first. Before you start, have these ready:
 5. Download the commit and install. `NIX_CONFIG` turns on flakes and this
    repository's caches, so the CachyOS kernel downloads instead of compiling;
    the keys are copies of the ones in `nixosModules/kernel.nix` and
-   `nixosModules/common.nix`.
+   `nixosModules/common.nix`, and `ci/checks.sh` fails when a copy differs.
 
    ```
    export NIX_CONFIG='experimental-features = nix-command flakes

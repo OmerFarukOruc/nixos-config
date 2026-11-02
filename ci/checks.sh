@@ -148,6 +148,23 @@ server_record() {
   }
 }
 
+cache_copies() {
+  local values file value status=0
+  values=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations --apply '
+    hosts: builtins.concatMap (host: host.config.nix.settings.extra-substituters
+      ++ host.config.nix.settings.extra-trusted-public-keys) (builtins.attrValues hosts)
+  ' | jq -r 'unique[]') || return 1
+  for file in docs/install-nixos-desktop.md docs/install-nixos-latitude.md .github/workflows/update.yml; do
+    while IFS= read -r value; do
+      grep -qF -- "$value" "$file" || {
+        echo "$file lacks $value, which the hosts' nix.settings sets." >&2
+        status=1
+      }
+    done <<<"$values"
+  done
+  return "$status"
+}
+
 vm_tests() {
   local out
   out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
@@ -173,6 +190,8 @@ echo
 check "server record" server_record
 echo
 check "VM tests" vm_tests
+echo
+check "binary cache copies" cache_copies
 echo
 check "scheme catalogue" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.scheme-catalogue
 echo
