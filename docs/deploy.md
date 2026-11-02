@@ -179,7 +179,9 @@ hardware and services work after activation. To read the last deployed source on
    checks that it gets no workstation piece, keeps its access setup (sshd on
    port 2222 by public key, Tailscale SSH, only Tailscale's UDP port) and the
    Limine fields of its record, and that a streamed desktop adds only its own
-   pieces. It checks what the schema accepts and rejects, and that
+   pieces. It checks that the Tailscale-only firewall assertion fails for each of
+   six ways to open a port (TCP or UDP ports and ranges, a trusted interface and a
+   per-interface port), what the schema accepts and rejects, and that
    nixos-desktop and nixos-rog keep the fallback copy of their EFI binary.
 9. `VM tests`: the flake still defines the `devbox-boot-bios` and
    `deploy-script` VM checks. It evaluates them and runs neither.
