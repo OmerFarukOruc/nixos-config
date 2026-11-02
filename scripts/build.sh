@@ -6,8 +6,8 @@
 # package file such as pkgs/claude-tools.nix, which modules reach only through
 # callPackage; the file is built with nixos-rog's pkgs.callPackage and no extra
 # arguments. A file that takes an argument pkgs lacks, such as src, exits 2 and
-# names a system build that proves it instead. With none it builds .#nixosConfigurations.nixos-rog.config.system.build.toplevel,
-# which compiles whatever the caches lack. The build creates no result link and
+# names a system build that proves it instead. With no ATTRIBUTE it builds
+# .#nixosConfigurations.nixos-rog.config.system.build.toplevel, which compiles whatever the caches lack. The build creates no result link and
 # activates nothing, and the outputs stay in this host's store until garbage
 # collection. It stops at the first attribute that fails, with that build's
 # exit status.

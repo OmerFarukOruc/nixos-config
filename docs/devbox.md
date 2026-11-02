@@ -151,8 +151,8 @@ outage loses nothing that the retry window covers.
   The lines of user units ship under the same `service.name` through
   `journalUserUnits`, which lists exact names, because a glob matches nothing
   there. This box lists `docker.service`, `cliproxy.service` and
-`cliproxy-update.service`; `cliproxy-up.sh` prints no share host name, because
-that name is a secret. A line carries `_SYSTEMD_USER_UNIT`
+  `cliproxy-update.service`; `cliproxy-up.sh` prints no share host name,
+  because that name is a secret. A line carries `_SYSTEMD_USER_UNIT`
   when the unit wrote it and `USER_UNIT` when the user's systemd wrote it about
   the unit, such as a start or the failure after a start limit, and both carry
   `_UID`. The receiver has no `--user-unit` option, and that option would read
@@ -548,8 +548,8 @@ only. The same module's memory-pressure kill does run here: systemd-oomd
 watches the slices of omer's user manager, and
 `memory-pressure-snapshot.service` writes a process snapshot to
 `~/.local/state/oom-snapshots/` when pressure rises
-([Out of memory](recovery.md#out-of-memory)). `/tmp` stays on the disk, loses files untouched for 7 days, and
-keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
+([Out of memory](recovery.md#out-of-memory)). `/tmp` stays on the disk, loses
+files untouched for 7 days, and keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
 
 ## Boot test in a VM
 
@@ -583,8 +583,9 @@ Python namespace, so give a variable or a function a name that only your file
 uses. Test values for a new sops key go in
 `ci/server-boot/secrets.yaml`, under the key the host reads.
 `ci/server-boot/modules/sops.nix` points every secret that names its own
-`sopsFile` on the host at the test file, so a new key needs nothing else. A NixOS module that only the test machine loads,
-such as a stub of an external service, goes in `ci/server-boot/modules/`.
+`sopsFile` on the host at the test file, so a new key needs nothing else. A
+NixOS module that only the test machine loads, such as a stub of an external
+service, goes in `ci/server-boot/modules/`.
 
 `ci/server-boot/modules/sops.nix` gives the test machine a sops file with test
 values under the real key names, encrypted for an SSH key that the build makes,

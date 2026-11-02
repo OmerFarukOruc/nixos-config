@@ -70,8 +70,8 @@ def tel_records(file):
             batch = tel_json.loads(line)
         except tel_json.JSONDecodeError as err:
             raise AssertionError(
-                f"{file} holds a line that is not JSON ({err.msg} at byte {err.pos} of a"
-                f" {len(line)}-byte line, {len(out)} bytes in the file):"
+                f"{file} holds a line that is not JSON ({err.msg} at character {err.pos} of a"
+                f" {len(line)}-character line, {len(out)} characters in the file):"
                 f" {line[max(0, err.pos - 200):err.pos + 200]!r}"
             ) from err
         for resource_logs in batch.get("resourceLogs", []):

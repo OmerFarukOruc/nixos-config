@@ -137,9 +137,10 @@ as `pkgs/claude-tools.nix`; the script builds it with nixos-rog's
 `pkgs.callPackage` and no extra arguments. A file that takes an argument
 nixos-rog's pkgs lack, such as the `src` of `pkgs/stay-green.nix` or the
 `claudeTools` of `pkgs/claude-accounts-widget.nix`, exits 2 with that
-argument's name; build a system that uses it instead. With no attribute it builds nixos-rog's
-system, which compiles whatever the caches lack. It creates no result link,
-activates nothing, and stops at the first build that fails.
+argument's name; build a system that uses it instead. With no attribute the
+script builds nixos-rog's system, which compiles whatever the caches lack. The
+script creates no result link, activates nothing, and stops at the first build
+that fails.
 
 ```sh
 scripts/build.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
