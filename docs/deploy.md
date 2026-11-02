@@ -19,16 +19,14 @@ lists the aliases. A server is the exception, because its deploys log in as
 root ([Deploy to a server](#deploy-to-a-server)).
 
 Every deploy command in this guide can change boot or running system state.
-Omer's request for a change also approves its deploy. After the change reaches
-`main`, run `./deploy.sh <host> switch` for each host it affects without
-asking again. A host is affected when its system `drvPath` differs between the
-pushed change and the `main` it landed on. Before the push, print both as
-[AGENTS.md](../AGENTS.md#lookups) describes. After the push,
-`scripts/affected-hosts.sh <old>..<sha>` compares the two
-([Deploy a change on main](#deploy-a-change-on-main)). When a host is unreachable,
-read its line in `tailscale status`. A line without `offline`, or with
-`offline, last seen` under about 6 minutes ago, can be a short outage: on
-2026-09-21 nixos-latitude lost its Wi-Fi for about 6 minutes
+Omer's request for a change also approves its deploy. Every host installs
+`main` by itself within the hour, so a change on `main` needs a deploy by hand
+only when it needs proof on a host now;
+[Deploy a change on main](#deploy-a-change-on-main) says which hosts and how.
+When a host you deploy by hand is unreachable, read its line in
+`tailscale status`. A line without `offline`, or with `offline, last seen`
+under about 6 minutes ago, can be a short outage: on 2026-09-21 nixos-latitude
+lost its Wi-Fi for about 6 minutes
 ([nixos-latitude.md](nixos-latitude.md#operation)). Retry the deploy once
 after about 6 minutes, and report the host as the blocker only when it is
 still unreachable. A host offline for longer, such as one that is powered off,
@@ -36,8 +34,9 @@ gets no retry; report that it still runs an older system.
 `scripts/affected-hosts.sh --running` lists each host whose running system
 differs from `main`, such as one that was offline at the last deploy, so run it
 before you end a session that deployed. For a host that is behind, it lists the
-commits the host lacks; a host behind only by another session's pushes is that
-session's to deploy.
+commits the host lacks. A host that is behind only by commits that another
+session or the `update` workflow pushed is left to its timer: report it and
+leave it.
 
 This guide uses these terms:
 
@@ -146,8 +145,10 @@ scripts/build.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
 ```
 
 These checks prove that each host's system evaluates and that each
-workstation's system builds. The deploy builds the candidate on the target in step 5 and changes nothing there when the build
-fails. The checks do not prove that the hardware and services work after
+workstation's system builds. The deploy builds the candidate on the target in
+step 5, and a failed build leaves the running system as it was and the
+candidate release on the target
+([When a deploy fails](#when-a-deploy-fails)). The checks do not prove that the hardware and services work after
 activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
@@ -406,8 +407,8 @@ The deploy runs these steps in order:
 3. It copies the source-controlled files to a new release, the candidate.
 4. It stops before it changes anything when a rollback timer from an earlier
    run is still pending (exit 70).
-5. It builds the candidate on the target. When the build fails, nothing on the
-   target changes.
+5. It builds the candidate on the target. When the build fails, the running
+   system stays as it was, and the candidate release stays for inspection.
 6. It prints dix's comparison of the running and the new system. A failed
    comparison does not stop the deploy.
 7. It checks that the candidate's units hold no ordering cycle, which would
@@ -521,7 +522,7 @@ such as 1.
 | --- | --- | --- |
 | 64 | The command line is wrong: an unknown option, a wrong number of arguments, an invalid host name or an invalid action. | Unchanged. |
 | 65 | The Git tree is dirty, and the command has no `--allow-dirty`. | Unchanged. |
-| 70 | A rollback timer from an earlier deploy is still pending. | Unchanged. |
+| 70 | A rollback timer from an earlier deploy is still pending. | System unchanged; the candidate release stays. |
 | 71 | The deploy could not arm the rollback timer. | Nothing activated. |
 | 72 | The rollback ran before the deploy stopped the rollback timer, so the target is not on the candidate. | Previous system restored by the rollback timer. |
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
