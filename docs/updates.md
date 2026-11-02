@@ -10,7 +10,7 @@
 The `update` workflow (`.github/workflows/update.yml`) runs `ci/update.sh`
 on GitHub every 2 hours. It runs the two steps of
 [Update by hand](#update-by-hand), apps and then inputs, commits each move,
-runs `ci/checks.sh` and `ci/unit-cycles.sh` on it, and pushes to `main` the
+runs `ci/gate.sh --evaluate-only` on it, and pushes to `main` the
 moves that pass. A move that fails a step stays out and turns the run red, and
 GitHub emails the failure. A warning that a move stays out, such as an app
 that does not build or nixpkgs held back, turns the run red too, except the

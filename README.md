@@ -153,9 +153,9 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `./deploy.sh nixos-rog` | build, activate, confirm and make it the boot default |
 | `./deploy.sh nixos-rog test` | activate until the next reboot only |
 | `upgrade` (on any host) | install the newest `main` on this host now |
-| `devenv test` | run the pre-push checks, `ci/checks.sh` and `ci/unit-cycles.sh`, without a push |
+| `devenv test` | run the pre-push checks, `ci/gate.sh` (`ci/checks.sh`, then `ci/unit-cycles.sh`), without a push |
 | `devenv tasks run ci` | run those checks and build every host's system with `ci/build-hosts.sh` |
-| `scripts/check.sh` | run `ci/checks.sh`, the checks of the pre-push hook, on a copy of the checkout and list each distinct evaluation warning; `--fix` formats |
+| `scripts/check.sh` | run `ci/gate.sh`, the checks of the pre-push hook, on a copy of the checkout and list each distinct evaluation warning; `--fix` formats |
 
 <details>
 <summary>More commands</summary>
@@ -193,10 +193,10 @@ system state.
 helpers that other scripts source. Nobody runs these by hand.
 
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:
-`nix fmt` before the commit, and before the push `ci/checks.sh` (the lock,
-formatter and output checks, each host's system derivation, and a build of
-each workstation's system) and
-`ci/unit-cycles.sh`, which checks each host's units for an ordering cycle.
+`nix fmt` before the commit, and before the push `ci/gate.sh`, which runs
+`ci/checks.sh` (the lock, formatter and output checks, each host's system
+derivation, and a build of each workstation's system) and `ci/unit-cycles.sh`,
+which checks each host's units for an ordering cycle.
 GitHub runs only the `update` workflow, which moves the apps and inputs every 2
 hours and runs the same checks, without the workstation builds, before it pushes
 ([Update inputs, apps and the kernel](docs/updates.md)). Run the update by hand

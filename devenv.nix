@@ -26,18 +26,10 @@ in
       pass_filenames = false;
       always_run = true;
     };
-    checks = {
+    gate = {
       enable = true;
-      name = "ci/checks.sh";
-      entry = heavy "ci/checks.sh";
-      pass_filenames = false;
-      always_run = true;
-      stages = [ "pre-push" ];
-    };
-    unit-cycles = {
-      enable = true;
-      name = "ci/unit-cycles.sh";
-      entry = heavy "ci/unit-cycles.sh";
+      name = "ci/gate.sh";
+      entry = heavy "ci/gate.sh";
       pass_filenames = false;
       always_run = true;
       stages = [ "pre-push" ];
@@ -45,21 +37,15 @@ in
   };
 
   tasks = {
-    "ci:checks" = {
-      exec = heavy "ci/checks.sh";
+    "ci:gate" = {
+      exec = heavy "ci/gate.sh";
       cwd = config.devenv.root;
-      before = [ "devenv:enterTest" ];
-    };
-    "ci:unit-cycles" = {
-      exec = heavy "ci/unit-cycles.sh";
-      cwd = config.devenv.root;
-      after = [ "ci:checks" ];
       before = [ "devenv:enterTest" ];
     };
     "ci:build-hosts" = {
       exec = heavy "ci/build-hosts.sh";
       cwd = config.devenv.root;
-      after = [ "ci:unit-cycles" ];
+      after = [ "ci:gate" ];
     };
   };
 }

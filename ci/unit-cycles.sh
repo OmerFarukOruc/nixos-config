@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 
 check_host() {
   local host=$1 paths units systemd rc=0 analysis
-  paths=$(nix build --no-link --print-out-paths --impure \
+  paths=$(nix build --no-link --print-out-paths --impure --option allow-import-from-derivation false \
     --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd) ||
     {
       echo "$host: the units do not build."

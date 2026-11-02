@@ -56,7 +56,7 @@ commit that a person pushes.
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, under `heavy` where it exists | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
+| pre-push | `ci/gate.sh` (`ci/checks.sh`, then `ci/unit-cycles.sh`) on the working tree, under `heavy` where it exists | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
 
 The times come from a test clone on 2026-11-01. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
@@ -79,7 +79,7 @@ The pre-push hook runs `ci/checks.sh`, which builds each workstation's system
 from the `drvPath` it evaluated, so a writer script that fails shellcheck or
 flake8 in a workstation's system stops the push. It builds no other host's
 system: devbox's is only evaluated, and the `update` workflow runs
-`ci/checks.sh --evaluate-only`, so its GitHub runner builds no system. A move
+`ci/gate.sh --evaluate-only`, so its GitHub runner builds no system. A move
 from that workflow that does not build therefore stops every later push until a
 push fixes the build ([Update inputs, apps and the kernel](updates.md)).
 Every host installs `main` by itself every hour
@@ -119,7 +119,7 @@ scripts/check.sh --fix
 scripts/eval.sh '.#nixosConfigurations.nixos-latitude.config.system.build.toplevel.drvPath'
 ```
 
-`check.sh` runs `ci/checks.sh`, the checks of the pre-push hook, with
+`check.sh` runs `ci/gate.sh`, the checks of the pre-push hook, with
 import from derivation forbidden. With `--fix` it formats first
 and copies the changed files back before it checks. `eval.sh` evaluates
 one attribute and does not forbid import from derivation.

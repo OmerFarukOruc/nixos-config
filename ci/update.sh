@@ -8,10 +8,6 @@ base=$(git rev-parse HEAD)
 failed=()
 warned=false
 
-gate() {
-  ci/checks.sh --evaluate-only && NIX_CONFIG="${NIX_CONFIG:-}"$'\n''allow-import-from-derivation = false' ci/unit-cycles.sh
-}
-
 drop() {
   failed+=("$1")
   echo "::error::$1 failed; nothing of it is pushed."
@@ -64,7 +60,7 @@ move() {
   fi
   echo "::endgroup::"
   echo "::group::Check the $mode"
-  if ! gate; then
+  if ! ci/gate.sh --evaluate-only; then
     echo "::endgroup::"
     drop "$mode-checks" "$before"
     return 0

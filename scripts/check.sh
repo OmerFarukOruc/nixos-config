@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # usage: scripts/check.sh [--fix]
-# Runs ci/checks.sh, the checks of the pre-push hook, on this host for a copy
+# Runs ci/gate.sh, the checks of the pre-push hook, on this host for a copy
 # of this checkout (scripts/lib/work-copy.sh), so a checkout without the devenv
 # shell loaded can run them too.
 # With --fix, it first formats the copy and locks each input that flake.lock
@@ -37,5 +37,5 @@ copy_run <<'EOF'
 set -e
 cd "$1"
 git add -A
-ci/checks.sh
+ci/gate.sh
 EOF
