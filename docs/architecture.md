@@ -6,6 +6,7 @@
 - [Theme](#theme)
 - [Secrets](#secrets)
 - [Home Manager](#home-manager)
+- [Failure popups](#failure-popups)
 - [DPI bypass and the WARP proxy](#dpi-bypass-and-the-warp-proxy)
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
 
@@ -648,6 +649,37 @@ to edit a file.
 Omer works at every day, with GPU tools that follow the machine record. Units a
 host can share, such as desktop-sync, are in `home-manager/modules/`.
 
+## Failure popups
+
+`nixosModules/monitoring.nix` owns the option `oruc.failurePopupUnits`, a list
+of system service names (without `.service`). Each listed service gets
+`onFailure = [ "notify-failure@%p.service" ]` on a machine with a login session,
+and `notify-failure@` sends the popup through systembus-notify. A server shows
+no popup, and the list has no effect there. An assertion in the same file fails
+the build when a listed service has no `ExecStart=` or script on that machine.
+
+The rule is that every long-running or timer-run system service that this
+repository defines on a desktop host is listed, unless it is on this list of
+exceptions. A shared module lists its own services, `fans.nix` lists `case-fans`,
+and `machines/nixos-rog/monitoring.nix` lists the units of nixos-rog's own
+modules.
+
+- `nixos-upgrade` has its own handler, `nixos-upgrade-failed`, which records the
+  failed revision and shows an "Update failed" popup with its own text
+  (`nixosModules/auto-upgrade.nix`).
+- `openrgb-boot` is a oneshot that sets the case lights at boot and runs again
+  at the next boot.
+- `oruc-theme-root` is a oneshot that reports a failed step in its own journal
+  and in `apply-failed` in its state folder, and the next boot runs it again.
+- `envfs-reap` is a oneshot ordered before the `/usr/bin` mount, so a failure
+  shows as a failed mount in the switch.
+- `tailscaled-set` is a oneshot that follows `tailscaled`.
+- `oruc-stay-active` restarts every 10 s after a failure (`RestartSec`), and a
+  failure only stops the pointer nudge.
+
+A new service adds its name where its neighbours are listed. A service that
+needs no popup gets a line with its reason in the list of exceptions.
+
 ## DPI bypass and the WARP proxy
 
 `nixos-desktop` and `nixos-rog` carry two ways to reach Discord when the line
@@ -695,7 +727,7 @@ ask Cloudflare every 3 s. Removing `config.json` therefore makes the next start
 register a new device; that step was not run.
 
 `sudo systemctl status nfqws2@default usque` shows whether either service runs,
-and both raise the desktop failure popup when they fail.
+and both raise the failure popup ([Failure popups](#failure-popups)).
 
 ## nixos-desktop case fans
 

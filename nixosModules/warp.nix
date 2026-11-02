@@ -11,6 +11,8 @@ in
   };
 
   config = {
+    oruc.failurePopupUnits = [ "usque" ];
+
     systemd.services.usque = {
       description = "Cloudflare WARP SOCKS5 proxy";
       wantedBy = [ "multi-user.target" ];

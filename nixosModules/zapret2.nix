@@ -27,6 +27,8 @@ in
     }
   ];
 
+  oruc.failurePopupUnits = [ "nfqws2@default" ];
+
   networking.nftables.enable = true;
   # Docker needs its nftables backend once nftables is on, and that backend
   # calls nft itself.

@@ -1,11 +1,12 @@
 { config, pkgs, ... }:
 {
+  oruc.failurePopupUnits = [ "nixpkgs-clone" ];
+
   systemd.services.nixpkgs-clone = {
     description = "Fetch the nixpkgs clone in /var/cache/nixpkgs";
     wants = [ "network-online.target" ];
     after = [ "network-online.target" ];
     unitConfig.ConditionACPower = true;
-    onFailure = [ "notify-failure@%p.service" ];
     path = [ pkgs.git ];
     script = ''
       if ! git rev-parse --quiet --verify HEAD >/dev/null 2>&1; then

@@ -168,6 +168,8 @@ in
   boot.extraModulePackages = [ config.boot.kernelPackages.nct6687d ];
   boot.kernelModules = [ "nct6687" ];
 
+  oruc.failurePopupUnits = [ "case-fans" ];
+
   systemd.services.case-fans = {
     description = "Case and radiator fans on an RPM loop with positive pressure";
     after = [ "systemd-modules-load.service" ];
