@@ -23,9 +23,10 @@
 # sets the CPU load's threads; --seconds takes 10 to 1800 (default 240);
 # --label names the file and defaults to PROFILE.
 #
-# Exit status: 2 for a usage error or battery power, 3 when the platform
-# profile changes or the charger is unplugged mid-run, 75 when another run
-# holds the lock.
+# The loads' error messages show on stderr. Exit status: 2 for a usage error
+# or battery power, 3 when the platform profile changes or the charger is
+# unplugged mid-run, 4 when a load exits before its time is up (the samples
+# of that run are removed), 75 when another run holds the lock.
 #
 # On exit, also after Ctrl-C, it sets the original profile again and restarts
 # asusd and oruc-cpu-limits, which write that profile's limits and curves.
@@ -184,11 +185,11 @@ printf '# profile=%s ppt=%s threads=%s load=%s seconds=%s fans=%s release=%s scr
 printf 't_s\tphase\ttctl_c\tppt_w\tcpu_rpm\tgpu_rpm\tmid_rpm\tmhz\tsmu_limit_c\tgpu_w\tgpu_c\tgpu_mhz\n'
 loads=()
 if $cpu_load; then
-  "$stress" --cpu "$threads" --cpu-method matrixprod --timeout "${seconds}s" >/dev/null 2>&1 &
+  "$stress" --cpu "$threads" --cpu-method matrixprod --timeout "${seconds}s" >/dev/null &
   loads+=($!)
 fi
 if $gpu_load; then
-  setsid "$gpu_burn" "$seconds" >/dev/null 2>&1 &
+  setsid "$gpu_burn" "$seconds" >/dev/null &
   loads+=(-$!)
 fi
 trap 'kill -- "${loads[@]}" 2>/dev/null || true; wait || true' EXIT
@@ -202,6 +203,10 @@ for ((t = 0; t <= seconds + 30; t = SECONDS - start)); do
   if [[ $(</sys/class/power_supply/ACAD/online) != 1 ]]; then
     echo "the charger was unplugged at $t s; the test stopped" >&2
     exit 3
+  fi
+  if ((t < seconds - 2)) && (($(jobs -pr | wc -l) < ${#loads[@]})); then
+    echo "a load exited at $t s, before the $seconds s of load were over; the test stopped" >&2
+    exit 4
   fi
   phase=load
   ((t < seconds)) || phase=cool
@@ -229,20 +234,25 @@ if ((status == 75)); then
   rm -f -- "$out"
   exit 75
 fi
+if ((status == 4)); then
+  rm -f -- "$out"
+  echo "removed the samples of the failed run: $out" >&2
+fi
 ((status == 0)) || exit "$status"
 
 awk -F'\t' -v seconds="$seconds" '
   $1 ~ /^[0-9]+$/ {
     if ($3 > peak) peak = $3
     if ($5 > cpu) cpu = $5
+    if ($6 > gpufan) gpufan = $6
     if ($7 > mid) mid = $7
     if ($2 == "load" && $1 >= seconds - 40) { mhz += $8; n++ }
     if ($10 != "-" && $10 + 0 > gpu_w) gpu_w = $10 + 0
     if ($11 != "-" && $11 + 0 > gpu_c) gpu_c = $11 + 0
   }
   END {
-    printf "peak %d °C, %d MHz over the last 40 s of load, fans up to CPU %d and MID %d rpm",
-      peak, (n ? mhz / n : 0), cpu, mid
+    printf "peak %d °C, %d MHz over the last 40 s of load, fans up to CPU %d, GPU %d and MID %d rpm",
+      peak, (n ? mhz / n : 0), cpu, gpufan, mid
     if (gpu_w) printf ", RTX 4070 up to %.0f W and %d °C", gpu_w, gpu_c
     printf "\n"
   }' "$out"
