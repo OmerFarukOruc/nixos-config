@@ -544,7 +544,11 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
 The host sets zram swap of 16 GiB, `vm.swappiness` 100 and journald's cap at 2
 GiB, each over the shared value. The host has no systemd-oomd swap kill,
 because `nixosModules/memory.nix` sets it on `app.slice` of the workstations
-only. `/tmp` stays on the disk, loses files untouched for 7 days, and
+only. The same module's memory-pressure kill does run here: systemd-oomd
+watches the slices of omer's user manager, and
+`memory-pressure-snapshot.service` writes a process snapshot to
+`~/.local/state/oom-snapshots/` when pressure rises
+([Out of memory](recovery.md#out-of-memory)). `/tmp` stays on the disk, loses files untouched for 7 days, and
 keeps `/tmp/tmux-*`, `/tmp/.X11-unix` and `/tmp/.ICE-unix`.
 
 ## Boot test in a VM
