@@ -41,8 +41,9 @@ let
       };
     };
 
-  # Both journald receivers keep their cursor in the file store, so a restart
-  # of the collector resumes without a gap or a repeat. `all` is needed
+  # The three journald receivers (audit, units and user units) keep their
+  # cursor in the file store, so a restart of the collector resumes without a
+  # gap or a repeat. `all` is needed
   # because journalctl returns a record over 4096 bytes as a null MESSAGE
   # without it.
   journald =

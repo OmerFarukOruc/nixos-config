@@ -33,9 +33,12 @@ machine with no session, and the fonts skip one with no graphical user.
 sshd shares) serve every host, and `nixosModules/server-access.nix` adds a
 server's Tailscale flags and SSH ([devbox](devbox.md#access)). `ci/server.nix` evaluates a
 server record with no sessions, and `ci/checks.sh` fails when one of the pieces
-it lists comes in or when the schema stops rejecting one of the three records it
-rejects: `features.remoteAccess` on a server, `biosDevice` with systemd-boot,
-and `features.streamedDesktop` on a workstation.
+it lists comes in, when the record's access or boot setup changes, when a
+streamed desktop adds a piece it should not, when nixos-desktop or nixos-rog
+loses the fallback copy of its EFI binary, or when the schema stops rejecting
+one of the three records it rejects: `features.remoteAccess` on a server,
+`biosDevice` with systemd-boot, and `features.streamedDesktop` on a
+workstation ([Check before you deploy](deploy.md#check-before-you-deploy)).
 
 A server has a desktop through `features.streamedDesktop`, not through a login
 session: `nixosModules/streamed-desktop.nix` starts XFCE for each RDP login of

@@ -171,8 +171,12 @@ hardware and services work after activation. To read the last deployed source on
    other check runs under that flag too.
 7. `box browser feature`: evaluates a workstation with the box browser forced
    on (`ci/box-browser.nix`), to check the display's command line.
-8. `server record`: evaluates a bare server record (`ci/server.nix`), to check
-   what the schema accepts and rejects.
+8. `server record`: evaluates a bare server record (`ci/server.nix`) and
+   checks that it gets no workstation piece, keeps its access setup (sshd on
+   port 2222 by public key, Tailscale SSH, only Tailscale's UDP port) and the
+   Limine fields of its record, and that a streamed desktop adds only its own
+   pieces. It checks what the schema accepts and rejects, and that
+   nixos-desktop and nixos-rog keep the fallback copy of their EFI binary.
 9. `VM tests`: the flake still defines the `devbox-boot-bios` and
    `deploy-script` VM checks. It evaluates them and runs neither.
 10. `binary cache copies`: the substituters and keys in the install docs and
