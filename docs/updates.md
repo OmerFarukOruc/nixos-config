@@ -15,8 +15,10 @@ runs `ci/gate.sh --evaluate-only` on it, and pushes to `main` the
 moves that pass. A move that fails a step stays out and turns the run red, and
 GitHub emails the failure. A warning that a move stays out, such as an app
 that does not build or nixpkgs held back, turns the run red too, except the
-one that llm-agents waits for cache.numtide.com, which clears by itself. When `main` moves during the run, the run pushes
-nothing and the next one tries again. Its run summary lists the moves and the
+one that llm-agents waits for cache.numtide.com, which clears by itself. When `main` moves during the run, the run moves the
+apps and inputs again from the new `main`, checks them and pushes them. When
+`main` moves a second time, the run pushes nothing and the next one tries
+again. Its run summary lists the moves and the
 warnings. `gh workflow run update.yml` starts it now. It builds no host's
 system. Besides each host's unit files and the theme checks, it builds the
 `patches` check (`ci/patches.nix`), which unpacks each package that this

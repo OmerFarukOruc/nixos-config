@@ -72,21 +72,37 @@ move() {
   } >>"$summary"
 }
 
-move apps 'chore(pkgs): update apps to their newest releases' pkgs
-move inputs 'chore(flake): update inputs to their newest releases' flake.nix flake.lock devenv.lock pkgs
-
-if [[ $(git rev-parse HEAD) == "$base" ]]; then
-  echo "Nothing to push." | tee -a "$summary"
-elif git push --quiet origin HEAD:main; then
-  git log -1 --format='Pushed %H.' | tee -a "$summary"
-else
-  git fetch --quiet origin main
-  if [[ $(git rev-parse origin/main) == "$base" ]]; then
-    echo "::error::The push failed while main stayed at $base."
-    exit 1
+push_moves() {
+  if [[ $(git rev-parse HEAD) == "$base" ]]; then
+    echo "Nothing to push." | tee -a "$summary"
+  elif git push --quiet origin HEAD:main; then
+    git log -1 --format='Pushed %H.' | tee -a "$summary"
+  else
+    git fetch --quiet origin main || exit
+    if [[ $(git rev-parse origin/main) == "$base" ]]; then
+      echo "::error::The push failed while main stayed at $base."
+      exit 1
+    fi
+    return 1
   fi
-  echo "main moved during the run; the next run tries again." | tee -a "$summary"
-fi
+}
+
+for attempt in 1 2; do
+  move apps 'chore(pkgs): update apps to their newest releases' pkgs
+  move inputs 'chore(flake): update inputs to their newest releases' flake.nix flake.lock devenv.lock pkgs
+  push_moves && break
+  if ((attempt == 2)); then
+    echo "main moved again during the run; the next run tries again." | tee -a "$summary"
+    break
+  fi
+  base=$(git rev-parse origin/main)
+  echo "::notice::main moved to $base during the run, so the run moves the apps and inputs again from there; the annotations above belong to the attempt it replaced."
+  echo "main moved to $base during the run; the run moves the apps and inputs again from there." >>"$summary"
+  git reset --quiet --hard "$base"
+  git clean -fdq
+  failed=()
+  warned=false
+done
 if $warned; then
   echo "::error::A move stayed out; the warnings above name the cause."
 fi
