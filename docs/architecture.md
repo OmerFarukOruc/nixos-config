@@ -563,9 +563,9 @@ holds `theme-drift-ok: <reason>` passes. A file listed in
 `scripts/theme-drift-allow.txt` (`path-or-glob`, a tab, a reason) passes, and
 the check fails when an entry matches no tracked file, so the list cannot go
 stale. It does not read Markdown, lock files or `assets/`. It cannot see a hex string without `#`, a decimal triple, a color name
-or a default inside a package, so a new package or module whose UI has colors
-writes them from an `oruc.themeFiles` renderer, or lands in the list below
-with its reason.
+or a default inside a package, so a new package or module whose UI has such
+colors writes them from an `oruc.themeFiles` renderer, or lands in the list
+below with its reason.
 
 These stay fixed on purpose, and the check does not cover them:
 
