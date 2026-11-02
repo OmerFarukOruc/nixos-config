@@ -52,6 +52,7 @@ stdenv.mkDerivation {
     bun --bun node_modules/vite/bin/vite.js build
   '';
   installPhase = ''
+    rm -r node_modules/lightningcss-linux-x64-musl node_modules/@rolldown/binding-linux-x64-musl
     mkdir -p $out/lib/herdr-web-ui $out/bin
     cp -a . $out/lib/herdr-web-ui
     makeWrapper ${lib.getExe bun} $out/bin/herdr-web-ui \
@@ -59,9 +60,12 @@ stdenv.mkDerivation {
       --prefix PATH : ${lib.makeBinPath [ nodejs_26 ]} \
       --add-flags "run server/managed.ts"
   '';
-  # Only node-pty's Linux x64 module needs its loader set; the other
-  # platforms' prebuilds stay as they are.
-  autoPatchelfIgnoreMissingDeps = true;
+  doInstallCheck = true;
+  installCheckPhase = ''
+    runHook preInstallCheck
+    ${lib.getExe nodejs_26} -e "require('$out/lib/herdr-web-ui/node_modules/@lydell/node-pty')"
+    runHook postInstallCheck
+  '';
 
   passthru.githubRepo = "devswha/ovis";
   passthru.depsBun = "1.4.2";
