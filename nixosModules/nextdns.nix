@@ -5,7 +5,15 @@ in
 {
   services.resolved = {
     enable = true;
-    settings.Resolve.DNSSEC = "allow-downgrade";
+    settings.Resolve = {
+      DNS = [
+        "45.90.28.0#dns.nextdns.io"
+        "45.90.30.0#dns.nextdns.io"
+      ];
+      DNSOverTLS = "yes";
+      DNSSEC = "allow-downgrade";
+      Domains = [ "~." ];
+    };
   };
 
   sops.secrets.nextdns-profile = { };
@@ -15,10 +23,9 @@ in
     restartUnits = [ "systemd-resolved.service" ];
     content = ''
       [Resolve]
+      DNS=
       DNS=45.90.28.0#${profile}.dns.nextdns.io
       DNS=45.90.30.0#${profile}.dns.nextdns.io
-      DNSOverTLS=yes
-      Domains=~.
     '';
   };
   environment.etc."systemd/resolved.conf.d/nextdns.conf".source =
