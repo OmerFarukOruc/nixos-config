@@ -26,8 +26,9 @@ It also checks that an unknown scheme exits 64 and changes nothing, that
 changed, that it falls back to the record scheme when no scheme is stored,
 that neither run changes the running session's KDE colour scheme, and that
 the pack is a GC root. It prints a skip line for each scheme whose Plasma,
-keyboard light, wallpaper or GTK polarity checks cannot run, and one that
-lists the app files this host's pack lacks. A file that every workstation's
+keyboard light, wallpaper or GTK polarity checks cannot run, one that lists
+the app files this host's pack lacks, and one for the boot menu checks when
+sudo asks for a password or the host has no Limine. A file that every workstation's
 pack holds, such as the fzf, Starship, Neovim, Vesktop and Telegram colours,
 fails the check when it is missing.
 
@@ -155,18 +156,21 @@ color() {
 }
 
 absent_files=()
+in_pack() {
+  [[ -e $pack/$1/$2 ]] && return 0
+  absent_files+=("$2")
+  return 1
+}
+
 holds() {
   local slug=$1 key=$2 text=$3
-  [[ -e $pack/$slug/$key ]] || {
-    absent_files+=("$key")
-    return 0
-  }
+  in_pack "$slug" "$key" || return 0
   grep -qiF -- "$text" "$HOME/$key" || fail "$slug: ~/$key does not hold $text"
 }
 
 mpv_reads_colors() {
   local slug=$1 colour=$2 key=.config/mpv/oruc-colors.conf
-  [[ -e $pack/$slug/$key ]] || return 0
+  in_pack "$slug" "$key" || return 0
   local log
   log=$(mpv --no-config --include="$HOME/$key" --msg-level=cplayer=v --idle=no 2>&1) ||
     fail "$slug: mpv exited $? with ~/$key"
@@ -429,15 +433,16 @@ check_system() {
     fail "$slug: $login_colors does not hold HeaderTextColor #$login_text"
 }
 
+aura_path=/xyz/ljones/aura/19b6_3_4
 aura_led() {
-  busctl --system get-property xyz.ljones.Asusd /xyz/ljones/aura/19b6_3_4 xyz.ljones.Aura LedModeData
+  busctl --system get-property xyz.ljones.Asusd "$aura_path" xyz.ljones.Aura LedModeData
 }
 
 check_keyboard_light() {
   local slug=$1 red green blue want
   if ! aura_led >/dev/null 2>&1; then
-    busctl --system --no-legend list | awk '{print $1}' | grep -qx xyz.ljones.Asusd &&
-      fail "$slug: asusd runs but shows no Aura device at /xyz/ljones/aura/19b6_3_4"
+    [[ $(busctl --system call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s xyz.ljones.Asusd) == "b true" ]] &&
+      fail "$slug: asusd runs but shows no Aura device at $aura_path"
     echo "skip keyboard light for $slug: asusd does not run"
     return 0
   fi

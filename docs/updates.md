@@ -265,7 +265,7 @@ downloads. Each run prints the error as a warning until a check succeeds.
 `.github/workflows/update.yml` pins each action to a commit with its version in
 a comment. Dependabot (`.github/dependabot.yml`) checks those pins every week
 and opens one pull request that moves every action with a new release. GitHub runs no
-check on this repository, so land that pull request from a workstation instead
+check on a pull request, so land that pull request from a workstation instead
 of with the merge button: fetch its branch, rebase it on `origin/main` and run
 `git push origin HEAD:main`, so the pre-push gate runs. Dependabot closes the
 pull request once `main` holds the new pins. Only the GitHub runner runs the

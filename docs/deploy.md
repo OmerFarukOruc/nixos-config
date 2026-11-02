@@ -177,8 +177,9 @@ hardware and services work after activation. To read the last deployed source on
    `deploy-script` VM checks. It evaluates them and runs neither.
 10. `binary cache copies`: the substituters and keys in the install docs and
     `.github/workflows/update.yml` match the hosts' `nix.settings`.
-`ci/unit-cycles.sh` runs the ordering-cycle check
-of step 7 on each host's units. It builds the unit files without the programs
+
+`ci/unit-cycles.sh` runs the ordering-cycle check of the deploy's step 7
+([What the deploy does](#what-the-deploy-does)) on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a
 GitHub runner on 2026-10-13.
 

@@ -5,7 +5,7 @@
 # nixos-config
 
 **A NixOS desktop, two NixOS laptops and a server in one flake, deployed over Tailscale,<br>
-with a CachyOS kernel that the hosts download ready-built.**
+with a CachyOS kernel that the PCs download ready-built.**
 
 This is my own setup, not a framework. Read it and copy the parts you need.
 
@@ -40,7 +40,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 
 | Part | Choice |
 | --- | --- |
-| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) and its cache |
+| Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) and its cache on the three PCs, the nixpkgs kernel on devbox |
 | Boot loader | Limine on nixos-rog, nixos-desktop and devbox, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
@@ -55,13 +55,13 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Vesktop and Brave as its fallback, on nixos-desktop and nixos-rog |
 | Per-app route abroad | IPTVnator through a network namespace whose Tailscale node exits at devbox, on nixos-desktop and nixos-rog ([Apps through devbox](docs/nixos-rog.md#apps-through-devbox)) |
 | Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
-| Binary cache | `cache.lantian.pub` for the kernel and `cache.numtide.com` |
+| Binary cache | `cache.lantian.pub` for the PCs' kernel and `cache.numtide.com` |
 
 ## Highlights
 
-- **🧊 A kernel the hosts download.** The hosts follow the `release` branch of
-  nix-cachyos-kernel, which moves only to kernels already in upstream's cache.
-  So they download the CachyOS LTO kernel and compile only the modules built
+- **🧊 A kernel the PCs download.** The three PCs follow the `release` branch
+  of nix-cachyos-kernel, which moves only to kernels already in upstream's
+  cache. So they download the CachyOS LTO kernel and compile only the modules built
   against it, such as the NVIDIA open module
   ([The kernel](docs/updates.md#the-kernel)).
 - **🪟 Three login sessions, one theme.** nixos-rog offers Plasma, niri with Noctalia
@@ -123,7 +123,7 @@ nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme,
 home-manager/          the user layer, with one module per shell and app
 niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
-ci/                    the checks of the git hooks, the update workflow's script and the server boot tests
+ci/                    the checks of the git hooks, the update workflow's script, and the VM tests of devbox's boot and of deploy.sh
 devenv.nix             the dev shell, its linters and the git hooks
 scripts/               checks and builds, scripts that act on nixos-rog, update scripts and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
