@@ -2,7 +2,6 @@
 set -euo pipefail
 tools="$(readlink -f "${1:?usage: $0 BIN-DIR}")/claude-tools"
 profiles() { "$tools" accounts "$@"; }
-A="${CR_E2E_A:-work1-team}" C="${CR_E2E_C:-work2}" R="${CR_E2E_R:-work1}"
 dir=$(mktemp -d /tmp/cr-e2e.XXXXXX)
 mkdir -p "$dir/cache"
 run="cr-e2e-$(basename "$dir" | cut -d. -f2 | tr '[:upper:]' '[:lower:]')"
@@ -25,6 +24,12 @@ fail() {
   exit 1
 }
 
+"$tools" usage --json --max-age 600 >"$dir/real-usage.json"
+signed_in() { jq -r '.accounts[] | select(.plan != null) | "\(.plan | startswith("team"))\t\(.name)"' "$dir/real-usage.json"; }
+A=${CR_E2E_A:-$(signed_in | awk -F '\t' '$1 == "true" { print $2; exit }')}
+R=${CR_E2E_R:-$(signed_in | awk -F '\t' '$1 == "false" { print $2; exit }')}
+C=${CR_E2E_C:-$(signed_in | cut -f2 | grep -vxF -e "$A" -e "$R" | head -n 1)}
+[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a team account, a personal account and a third account that are signed in; set CR_E2E_A, CR_E2E_R and CR_E2E_C"
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
 done
@@ -34,7 +39,6 @@ mkdir -p "$dir/data"
 jq --arg d "$D" --arg m "$M" 'del(.accounts[$d]) | .accounts[$m] = {email: "e2e@example.invalid", org: "personal"}' \
   "${CLAUDE_TOOLS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}/accounts.json" >"$dir/data/accounts.json"
 
-"$tools" usage --json --max-age 600 >"$dir/real-usage.json"
 jq --arg a "$A" --arg c "$C" --arg r "$R" --arg d "$D" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};
   .updated = $now | .hosts = []

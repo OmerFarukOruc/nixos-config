@@ -366,8 +366,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 - `claude-tools-limit-switch.timer` runs `claude-tools limit-switch scan` of
   `pkgs/claude-tools` every minute. A run starts herdr's default session through
   `herdr-default.service` when no server runs, starts the recorded Claude agents
-  again after a server restart, and moves each named agent whose screen ends in
-  a usage limit message to another account. A failed run means one agent could
+  again after a server restart, and moves each named agent whose session
+  transcript ends in a usage limit error to another account. A failed run means one agent could
   not move. The log names the agent and the reason:
   `journalctl --user -u claude-tools-limit-switch.service` and
   `~/.local/state/claude-tools/limit-switch/events.log`.

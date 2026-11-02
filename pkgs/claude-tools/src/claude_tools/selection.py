@@ -151,9 +151,9 @@ def free_at(settings: Settings, names: list[str], at: int) -> int | None:
     return min(times, default=None)
 
 
-def hold_limit(settings: Settings, name: str, text: str) -> tuple[int, str] | None:
+def hold_limit(settings: Settings, name: str, text: str, said: int | None = None) -> tuple[int, str] | None:
     at = now()
-    until, reason = parse_limit(text, at) or (None, "limit")
+    until, reason = parse_limit(text, said or at) or (None, "limit")
     if until is None:
         entry = by_name(locked_refresh(settings, [name], None)).get(name, {})
         until, reason = full_window(entry, at) or (at + NO_RESET_WAIT, f"{reason} with no full window")

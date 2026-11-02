@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,7 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from claude_tools.store import locked, now, read_json, write_json
 
 NO_RESET_WAIT = 3600
-TAIL = 6
+TRANSCRIPT_TAIL = 256 * 1024
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
 LIMIT = re.compile(r"You've hit your (session|weekly) limit · resets (.+?\))")
 MODEL_LIMIT = re.compile(r"You've reached your \S+ limit")
@@ -18,15 +19,38 @@ RESET = re.compile(
 )
 
 
-def find_limit(screen: str) -> str | None:
-    lines = screen.splitlines()
-    end = len(lines)
-    for i in range(len(lines) - 1, 0, -1):
-        if lines[i].lstrip().startswith("❯") and lines[i - 1].lstrip().startswith("─"):
-            end = i - 1
-            break
-    return next((line.strip() for line in reversed([x for x in lines[:end] if x.strip()][-TAIL:])
-                 if LIMIT.search(line) or MODEL_LIMIT.search(line)), None)
+def last_assistant(transcript: Path) -> dict | None:
+    with transcript.open("rb") as f:
+        f.seek(max(0, f.seek(0, 2) - TRANSCRIPT_TAIL))
+        lines = f.read().splitlines()
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "assistant":
+            return entry
+    return None
+
+
+def recorded_limit(config_dir: Path, session: str) -> tuple[str, int] | None:
+    """The limit message and its time when the session's last reply is Claude Code's usage limit error."""
+    for transcript in config_dir.glob(f"projects/*/{session}.jsonl"):
+        try:
+            entry = last_assistant(transcript)
+        except OSError:
+            continue
+        if not entry or entry.get("isApiErrorMessage") is not True:
+            continue
+        content = (entry.get("message") or {}).get("content") or []
+        text = " ".join(c["text"] for c in content if isinstance(c, dict) and isinstance(c.get("text"), str))
+        try:
+            said = int(datetime.fromisoformat(entry["timestamp"]).timestamp())
+        except (KeyError, TypeError, ValueError):
+            continue
+        if LIMIT.search(text) or MODEL_LIMIT.search(text):
+            return text.strip(), said
+    return None
 
 
 def parse_reset(text: str, at: int, window: int) -> int | None:

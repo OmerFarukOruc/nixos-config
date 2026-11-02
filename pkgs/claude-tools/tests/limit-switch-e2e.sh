@@ -79,6 +79,18 @@ check_prompted() {
     -F "The usage limit of your Claude account $1 has reset. Continue where you stopped." ||
     fail "scan did not prompt the agent on its own account $1 to continue"
 }
+inject_limit() {
+  local t parent
+  t=$(ls ~/.claude/projects/*/"$sid".jsonl)
+  parent=$(jq -rs '[.[] | select(.uuid)] | last | .uuid' "$t")
+  jq -cn --arg text "$1" --arg sid "$sid" --arg cwd "$dir" --arg uuid "$(cat /proc/sys/kernel/random/uuid)" \
+    --arg parent "$parent" --arg ts "$(date -u +%FT%T.000Z)" \
+    '{parentUuid: $parent, isSidechain: false, userType: "external", cwd: $cwd, sessionId: $sid, type: "assistant",
+      uuid: $uuid, timestamp: $ts, error: "rate_limit", isApiErrorMessage: true,
+      message: {id: $uuid, model: "<synthetic>", role: "assistant", type: "message", stop_reason: "stop_sequence",
+        content: [{type: "text", text: $text}]}}' >>"$t"
+}
+limit_line() { echo "You've hit your session limit · resets $(LC_ALL=C date -u -d "@$1" +%-I:%M%P) (UTC)"; }
 check_move() {
   local now
   now=$(account "$pane")
@@ -87,8 +99,13 @@ check_move() {
   echo "$1: moved from $2 to $now"
 }
 
+start=${CLS_E2E_ACCOUNT:-}
+if [[ -z $start ]]; then
+  for n in $(profiles names); do [[ -d "$(profiles dir "$n")" ]] && start=$n && break; done
+fi
+[[ -n $start ]] || fail "no account with a folder in accounts.json"
 cls restore || fail "restore could not start the $run server"
-ws_json=$(h workspace create --cwd "$dir" --label "$run" --env "CLAUDE_CONFIG_DIR=$(profiles dir work1-team)" --no-focus)
+ws_json=$(h workspace create --cwd "$dir" --label "$run" --env "CLAUDE_CONFIG_DIR=$(profiles dir "$start")" --no-focus)
 pane=$(jq -r .result.root_pane.pane_id <<<"$ws_json")
 for _ in $(seq 60); do
   out=$(h agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- --dangerously-skip-permissions --model haiku 2>&1) && break
@@ -101,7 +118,7 @@ if grep -q agent_not_ready <<<"$out"; then
   h agent send-keys "$name" enter >/dev/null
 fi
 h agent wait "$name" --until idle --timeout 60000 >/dev/null
-[[ "$(account "$pane")" == work1-team ]] || fail "scratch agent did not start on work1-team"
+[[ "$(account "$pane")" == "$start" ]] || fail "scratch agent did not start on $start"
 ask "Remember the code word PELICAN. Reply only OK."
 h agent prompt "$name" "/loop 6h reply only with the word tick" >/dev/null 2>&1 || true
 sleep 3
@@ -118,21 +135,22 @@ h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null ||
   }
 sid=$(session)
 [[ -n "$sid" && "$sid" != null ]] || fail "herdr reports no session id"
+check_loop "the /loop setup"
 
 mkdir -p "$dir/state"
-profiles names | jq -R . | jq -s --argjson u "$(($(date +%s) + 3600))" \
-  'map(select(. != "work1-team") | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"
+profiles names | jq -R . | jq -s --arg start "$start" --argjson u "$(($(date +%s) + 3600))" \
+  'map(select(. != $start) | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"
 cls switch "$name" && fail "switch moved the agent while the hold file held every other account"
-[[ "$(account "$pane")" == work1-team ]] || fail "switch left work1-team while every other account was held"
-grep -q "$name: every other account is limited or unreadable; $name stays on work1-team" \
+[[ "$(account "$pane")" == "$start" ]] || fail "switch left $start while every other account was held"
+grep -q "$name: every other account is limited or unreadable; $name stays on $start" \
   "$state/events.log" || fail "switch did not log that it stays"
 rm "$dir/state/limits.json"
-echo "held: switch kept the agent on work1-team while the hold file held every other account"
+echo "held: switch kept the agent on $start while the hold file held every other account"
 h agent wait "$name" --until idle --timeout 120000 >/dev/null || fail "the agent did not go idle after the held switch"
 
 cls switch "$name" || fail "switch exited $?"
 first=$(account "$pane")
-check_move switch work1-team work1-team
+check_move switch "$start" "$start"
 grep -q "answered the background-work dialog of $name" "$state/events.log" ||
   fail "switch did not answer the background-work dialog"
 answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$state/events.log" | cut -d' ' -f1)" +%s)
@@ -147,14 +165,21 @@ jq -e --arg n "$name" '.agents[$n].session' "$state/agents.json" >/dev/null || f
 
 reset=$(date -u -d '+2 hours' +%s)
 reset=$((reset - reset % 60))
-ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$reset" +%-I:%M%P) (UTC)"
+ask "Reply with exactly this line and nothing else: $(limit_line "$reset")"
+transcript_shows "$last_reply" -F "$(limit_line "$reset")" || fail "the agent did not print the limit line"
+rm -f "$state/switched.json"
+cls scan || fail "scan after a printed limit line exited $?"
+[[ "$(account "$pane")" == "$first" ]] || fail "scan moved an agent that only printed a limit line to $(account "$pane")"
+echo "printed limit: scan left the agent on $first"
+
+inject_limit "$(limit_line "$reset")"
 rm -f "$state/switched.json"
 cls scan || fail "scan after a limit message exited $?"
 check_move "scan after a limit" "$first" "$first"
 first=$(account "$pane")
 
 old=$(date -u -d '-1 hour' +%s)
-ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$old" +%-I:%M%P) (UTC)"
+inject_limit "$(limit_line "$old")"
 rm -f "$state/switched.json"
 profiles names | jq -R . | jq -s --arg keep "$first" --argjson u "$(($(date +%s) + 3600))" \
   'map(select(. != $keep) | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"

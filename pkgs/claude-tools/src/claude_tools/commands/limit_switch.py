@@ -5,12 +5,13 @@ import subprocess
 import time
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
 from claude_tools.accounts import account_of, read_accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
-from claude_tools.limits import find_limit
+from claude_tools.limits import recorded_limit
 from claude_tools.selection import hold_limit, next_account
 from claude_tools.settings import Settings
 from claude_tools.store import locked, read_json, write_json
@@ -184,15 +185,26 @@ class Switcher:
                             "session": sid, "config_dir": config_dir, "args": argv[1:]}
         self.save("agents.json", next_record(record, agents, server, failed, time.time()))
 
-    def move_limited(self, a: dict, hit: str, local: dict[str, str]) -> None:
-        name = a["name"]
-        current = account_of(self.agents.claude_process(a["pane_id"])[2], local, self.settings.home)
+    def limit_of(self, a: dict) -> tuple[str, int, str] | None:
+        session = session_of(a)
+        if not session:
+            return None
         try:
-            held = hold_limit(self.settings, current, hit)
+            config_dir = self.agents.claude_process(a["pane_id"])[2]
+        except Failed:
+            return None
+        hit = recorded_limit(Path(config_dir) if config_dir else self.settings.home / ".claude", session)
+        return (*hit, config_dir) if hit else None
+
+    def move_limited(self, name: str, hit: tuple[str, int, str], local: dict[str, str]) -> None:
+        text, said, config_dir = hit
+        current = account_of(config_dir, local, self.settings.home)
+        try:
+            held = hold_limit(self.settings, current, text, said)
         except (OSError, subprocess.SubprocessError, ValueError) as e:
             raise Failed(f"could not hold {current}: {e!r}") from e
         what = f"held until {at(held[0])} after a {held[1]}" if held else "not held, its limit has reset"
-        self.log(f"{name}: {current} shows {hit!r}; {what}")
+        self.log(f"{name}: {current} recorded {text!r} at {at(said)}; {what}")
         self.switch(name, None, after_limit=True)
 
     def scan(self) -> int:
@@ -207,12 +219,12 @@ class Switcher:
                 continue
             if switched.get(name, 0) > time.time() - COOLDOWN:
                 continue
-            hit = find_limit(self.herdr.screen(name))
+            hit = self.limit_of(a)
             if not hit:
                 continue
             try:
                 local = local or read_accounts(self.settings.accounts_file).local
-                self.move_limited(a, hit, local)
+                self.move_limited(name, hit, local)
             except Failed as e:
                 failed += 1
                 self.log(f"{name}: switch failed: {e}")
