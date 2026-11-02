@@ -64,6 +64,8 @@ in
       ]
   );
 
+  systemd.timers.nixos-upgrade.wantedBy = lib.mkForce [ ];
+
   home-manager.users.${config.oruc.machine.user}.systemd.user = {
     services =
       lib.genAttrs
@@ -82,7 +84,6 @@ in
         [
           "claude-tools-limit-switch"
           "cliproxy-update"
-          "nixos-upgrade"
           "stay-green"
         ]
         (_: {
