@@ -5,7 +5,8 @@
 # flake attribute such as .#nixosConfigurations.nixos-rog.pkgs.deskflow, or a
 # package file such as pkgs/claude-tools.nix, which modules reach only through
 # callPackage; the file is built with nixos-rog's pkgs.callPackage and no extra
-# arguments. With none it builds .#nixosConfigurations.nixos-rog.config.system.build.toplevel,
+# arguments. A file that takes an argument pkgs lacks, such as src, exits 2 and
+# names a system build that proves it instead. With none it builds .#nixosConfigurations.nixos-rog.config.system.build.toplevel,
 # which compiles whatever the caches lack. The build creates no result link and
 # activates nothing, and the outputs stay in this host's store until garbage
 # collection. It stops at the first attribute that fails, with that build's
@@ -36,6 +37,18 @@ for attr in "$@"; do
   if [[ $attr == *#* ]]; then
     nix build --no-link --print-out-paths --no-write-lock-file "$attr" </dev/null
   else
+    missing=$(nix eval --raw --impure --expr "
+      let
+        pkgs = (builtins.getFlake \"path:$PWD\").nixosConfigurations.nixos-rog.pkgs;
+        args = builtins.functionArgs (import $PWD/$attr);
+        filled = a: args.\${a} || (pkgs ? \${a} && (builtins.tryEval pkgs.\${a}).success);
+      in
+      builtins.concatStringsSep \" \" (builtins.filter (a: !filled a) (builtins.attrNames args))
+    " </dev/null)
+    if [[ -n $missing ]]; then
+      echo "build.sh: $attr takes $missing, which pkgs.callPackage cannot fill; build a system that uses it instead, such as scripts/build.sh with no argument (nixos-rog's system) or .#nixosConfigurations.devbox.config.system.build.toplevel" >&2
+      exit 2
+    fi
     nix build --no-link --print-out-paths --impure --expr \
       "(builtins.getFlake \"path:$PWD\").nixosConfigurations.nixos-rog.pkgs.callPackage $PWD/$attr { }" </dev/null
   fi

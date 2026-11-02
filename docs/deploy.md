@@ -134,7 +134,10 @@ uses stay unbuilt. It builds each flake attribute in a copy of this checkout and
 the output paths. A package that modules load with `pkgs.callPackage
 ../../pkgs/NAME.nix { }` has no flake attribute, so pass its file instead, such
 as `pkgs/claude-tools.nix`; the script builds it with nixos-rog's
-`pkgs.callPackage` and no extra arguments. With no attribute it builds nixos-rog's
+`pkgs.callPackage` and no extra arguments. A file that takes an argument
+nixos-rog's pkgs lack, such as the `src` of `pkgs/stay-green.nix` or the
+`claudeTools` of `pkgs/claude-accounts-widget.nix`, exits 2 with that
+argument's name; build a system that uses it instead. With no attribute it builds nixos-rog's
 system, which compiles whatever the caches lack. It creates no result link,
 activates nothing, and stops at the first build that fails.
 
