@@ -553,9 +553,11 @@ names the one a scheme takes: the one its name matches, such as `catppuccin`
 for the Catppuccin schemes, else the variant of its dark or light kind
 nearest by Oklab distance (`contrast.nix`) over background, text and accent,
 weighted .55, .27 and .18. pi's theme comes only on hosts that set
-`oruc.piTheme`, which `agent-cli.nix` does. grok and gum draw with the
-terminal's 16 colours: dotfiles' grok config selects its `terminal` theme, and
-`agent-theme.nix` points gum's colour variables at ANSI slots.
+`oruc.piTheme`, which `agent-cli.nix` does. grok, gum and the usage cards and
+account list of `pkgs/claude-tools` draw with the terminal's 16 colours:
+dotfiles' grok config selects its `terminal` theme, `agent-theme.nix` points
+gum's colour variables at ANSI slots, and `terminal.py` and `picker.py` name
+ANSI codes.
 
 `theme.plasmaLook` names the default Plasma look, and a machine with no Plasma session leaves it null. `plasma-look` activates
 another look at run time, with the same variants
@@ -563,12 +565,13 @@ another look at run time, with the same variants
 
 `scripts/check-theme-drift.sh` runs inside `nix fmt` and fails on a fixed color
 in a tracked file: `#RRGGBB`, `#RRGGBBAA` (and `#RGB` in CSS), or a number
-inside `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` or `oklab(`. `#000000` and
+inside `rgb(`, `rgba(`, `hsl(`, `hsla(`, `oklch(` or `oklab(`, or a 24-bit
+terminal color code (`38;2;R;G;B`, `48;2;R;G;B`). `#000000` and
 `#00000000` pass, because black and full transparency carry no hue. A line that
 holds `theme-drift-ok: <reason>` passes. A file listed in
 `scripts/theme-drift-allow.txt` (`path-or-glob`, a tab, a reason) passes, and
 the check fails when an entry matches no tracked file, so the list cannot go
-stale. It does not read Markdown, lock files or `assets/`. It cannot see a hex string without `#`, a decimal triple, a color name
+stale. It does not read Markdown, lock files or `assets/`. It cannot see a hex string without `#`, a decimal triple outside a terminal color code, a color name
 or a default inside a package, so a new package or module whose UI has such
 colors writes them from an `oruc.themeFiles` renderer, or lands in the list
 below with its reason.

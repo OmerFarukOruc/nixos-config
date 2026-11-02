@@ -7,9 +7,9 @@ import termios
 from claude_tools.limits import WINDOWS
 from claude_tools.selection import BLOCKED, RESERVE, order, span
 from claude_tools.store import now
-from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, TRACK, Cards, login_left, visible
+from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, login_left, visible
 
-ROW_BG = "48;2;48;44;42"
+ROW_BG = "100"
 PICKED, CANCELLED, REFRESH = range(3)
 KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
 MOVES = {b"\x1b[A": -1, b"\x1bOA": -1, b"k": -1, b"\x1b[B": 1, b"\x1bOB": 1, b"j": 1, b"\t": 1}
@@ -109,10 +109,10 @@ class Picker:
         wname = max((len(n) for n in self.names), default=8)
         for k, n in enumerate(self.rows):
             if self.group[n] == RESERVE and (k == 0 or self.group[self.rows[k - 1]] != RESERVE):
-                lines.append(" " + cards.c("── reserve: weekly limit ", TRACK))
+                lines.append(" " + cards.c("── reserve: weekly limit ", DIM))
             lines.append(self.row(n, width, wname))
         if self.choices:
-            lines += ["", " " + cards.c("─" * max(10, width - 2), TRACK), *self.detail(self.choices[self.i], width)]
+            lines += ["", " " + cards.c("─" * max(10, width - 2), DIM), *self.detail(self.choices[self.i], width)]
         else:
             lines += ["", "  " + cards.c("No account here has a login; run claude-tools accounts login-all.", RED)]
         foot = [cards.c(" " + KEYS, DIM),

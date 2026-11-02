@@ -8,8 +8,7 @@ from claude_tools.selection import span
 from claude_tools.store import now
 
 AMBER_FROM_PERCENT, RED_FROM_PERCENT = 70, 90
-GREEN, AMBER, RED = "38;2;106;211;158", "38;2;255;197;88", "38;2;255;100;100"
-ACCENT, TRACK, DIM, BOLD = "38;2;217;119;87", "38;2;70;70;70", "2", "1"
+GREEN, AMBER, RED, ACCENT, DIM, BOLD = "32", "33", "31", "34", "2", "1"
 RESET_SLACK = 30
 ANSI = re.compile(r"\033\[[0-9;]*m")
 
@@ -47,7 +46,7 @@ class Cards:
         half = cells - full >= 0.5 and full < self.bar
         tone = (self.tone(used), DIM) if stale else (self.tone(used),)
         track = self.bar - full - (1 if half else 0)
-        return self.c("━" * full + ("╸" if half else ""), *tone) + self.c("─" * track, TRACK)
+        return self.c("━" * full + ("╸" if half else ""), *tone) + self.c("─" * track, DIM)
 
     def pace_mark(self, w: dict, length: int, at: int, wide: bool) -> str:
         d = pace(w["used"], w.get("resets_at"), length, at)
@@ -62,7 +61,7 @@ class Cards:
     def window_row(self, label: str, w: dict | None, length: int, at: int, stale: bool) -> str:
         head = "    " + self.c(f"{label:<7}", DIM)
         if not w:
-            return head + self.c("─" * self.bar, TRACK) + "  " + self.c("no weekly limit", DIM)
+            return head + self.c("─" * self.bar, DIM) + "  " + self.c("no weekly limit", DIM)
         used, t = w["used"], w.get("resets_at")
         pct = self.c(f"{used:4.0f}%", self.tone(used), *((DIM,) if stale else ()))
         if not t:
