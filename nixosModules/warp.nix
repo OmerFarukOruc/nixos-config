@@ -16,9 +16,13 @@ in
     systemd.services.usque = {
       description = "Cloudflare WARP SOCKS5 proxy";
       wantedBy = [ "multi-user.target" ];
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
       preStart = ''
-        if [[ ! -f config.json ]]; then
-          ${lib.getExe pkgs.usque} register --accept-tos
+        if [[ ! -s config.json ]]; then
+          rm -f config.json.new
+          ${lib.getExe pkgs.usque} register --accept-tos --config config.json.new
+          mv config.json.new config.json
         fi
       '';
       serviceConfig = {
