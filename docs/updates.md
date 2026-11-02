@@ -30,8 +30,8 @@ Each host installs `main` within the hour after the push.
 
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the Grok Bot package, npm and
-`prefetch-npm-deps` through Nix for cf and openchamber-web, and a build for the
-apps with a GitHub release source. Run those scripts in a
+`prefetch-npm-deps` through Nix for cf and openchamber-web, and
+`nix flake prefetch` and a build for the apps with a GitHub release source. Run those scripts in a
 checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
 `update-app.sh antigravity-hub`, `update-app.sh openchamber` and
 `update-app.sh impeccable` need no Nix. `scripts/prepare-update.sh` runs all
@@ -129,7 +129,7 @@ build of that package.
 | Input | When it moves |
 | --- | --- |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| kwin-effects-glass, glass-style, hushmic, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, hushmic, mac-tahoe, nixpkgs-security, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet for the host's system, or the script cannot tell, llm-agents stays
@@ -221,10 +221,12 @@ release, with no waiting period, and prints the new version. It
 prints nothing when the app is current or when the package names no release
 source.
 
-Every app in `pkgs/` with an upstream release names its release source. The
-others are this repository's own code or follow a flake input: claude-tools,
-the Claude accounts widget, the Mac Tahoe plasmoids, the glass Plasma style and
-stay-green. ChatGPT, Claude Desktop and herdr come from the llm-agents input
+Every app in `pkgs/` with an upstream release names its release source, except
+pipewire-module-xrdp, which builds upstream's `v0.1` tag and moves only by hand.
+The others are this repository's own code or follow a flake input or another
+package: claude-tools, the Claude accounts widget, the Mac Tahoe plasmoids, the
+glass Plasma style, stay-green, the cursor theme (from bibata-cursors) and the
+agents' Python (`agent-python.nix`). ChatGPT, Claude Desktop and herdr come from the llm-agents input
 and move with it.
 
 Before you decide that a vendor publishes no release source, read the `.deb`'s

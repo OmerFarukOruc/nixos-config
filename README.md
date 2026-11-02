@@ -109,7 +109,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 - **🔐 Secrets bound to the machine.** sops-nix decrypts `secrets/<host>.yaml`
   with the age key derived from that host's SSH host key.
   [`machines/nixos-rog/configuration.nix`](machines/nixos-rog/configuration.nix)
-- **🧭 Private DNS on nixos-rog.** Public names go only to NextDNS over TLS and
+- **🧭 Private DNS on nixos-desktop and nixos-rog.** Public names go only to NextDNS over TLS and
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
   sign-in pages.
   [`nixosModules/nextdns.nix`](nixosModules/nextdns.nix)
@@ -123,7 +123,7 @@ nixosModules/          shared NixOS policy: kernel, boot, desktop, login, theme,
 home-manager/          the user layer, with one module per shell and app
 niri/                  niri config shared by every niri session, with one file per shell
 pkgs/  overlays/       apps that nixpkgs lacks, and fixes to nixpkgs packages
-ci/                    the checks of the git hooks: lock, format and flake checks, unit ordering check, host builds
+ci/                    the checks of the git hooks, the update workflow's script and the server boot tests
 devenv.nix             the dev shell, its linters and the git hooks
 scripts/               checks and builds, scripts that act on nixos-rog, update scripts and the post-deploy check
 tooling.nix            the formatter (nix fmt) and its linters
@@ -167,12 +167,12 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `scripts/eval.sh [--json] [--abort-on-warn] ATTRIBUTE` | print one value of nixos-rog's configuration, or of any flake attribute when it holds `#`; a value that is not a string needs `--json`, and `--abort-on-warn` stops at the first evaluation warning with its stack trace |
 | `scripts/build.sh [ATTRIBUTE...]` | build from a copy of the checkout and print each output path; with no ATTRIBUTE, build nixos-rog's system; `.#checks.x86_64-linux.devbox-boot-bios` runs devbox's [boot test](docs/devbox.md#boot-test-in-a-vm), and `.#checks.x86_64-linux.deploy-script` runs [deploy.sh in a VM](docs/deploy.md#test-deploysh-in-a-vm) |
 | `scripts/run-unit-on-rog.sh [--user] UNIT [SECONDS]` | run a service's script on nixos-rog for up to SECONDS (default 40) with only the unit's environment, or with `--user` a Home Manager user unit, before a deploy |
-| `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except the kernel, llm-agents and inputs pinned to a commit |
+| `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
 | `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` |
-| `scripts/check-theme.sh [--host HOST] SCHEME...` | run `theme SCHEME` for each scheme on this host or on HOST, check that the colour files and a running tmux and Neovim follow it, then switch back |
-| `scripts/check-secrets.sh [FILE]` | on nixos-desktop or nixos-rog, decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
+| `scripts/check-theme.sh [--host HOST] [--contrast] SCHEME...` | run `theme SCHEME` for each scheme on this host or on HOST, check that the colour files and a running tmux and Neovim follow it, then switch back; `--contrast` first checks the contrast of every scheme in the pack |
+| `scripts/check-secrets.sh [FILE]` | on a host with a `secrets/<host>.yaml` (nixos-desktop, nixos-rog, devbox), decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
 | `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
@@ -193,10 +193,8 @@ system state.
 helpers that other scripts source. Nobody runs these by hand.
 
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:
-`nix fmt` before the commit, and before the push `ci/gate.sh`, which runs
-`ci/checks.sh` (the lock, formatter and output checks, each host's system
-derivation, and a build of each workstation's system) and `ci/unit-cycles.sh`,
-which checks each host's units for an ordering cycle.
+`nix fmt` before the commit, and `ci/gate.sh` before the push. [Check before
+you deploy](docs/deploy.md#check-before-you-deploy) lists what they check.
 GitHub runs only the `update` workflow, which moves the apps and inputs every 2
 hours and runs the same checks, without the workstation builds, before it pushes
 ([Update inputs, apps and the kernel](docs/updates.md)). Run the update by hand

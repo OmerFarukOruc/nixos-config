@@ -91,8 +91,11 @@ system, records that `main` as failed and skips it in the hourly runs until
 `upgrade` tries that `main` again. `devenv tasks run ci` builds every host's
 system before a push.
 
-The gate exists only where the devenv shell loaded. Every host installs
-devenv, and direnv fails in a checkout where it is missing. A clone that never
+The gate exists only where the devenv shell loaded. nixos-desktop,
+nixos-latitude and nixos-rog install devenv
+(`home-manager/profiles/workstation.nix`); devbox does not, so direnv there
+prints `devenv: command not found` and loads no hooks. Land changes from a
+workstation. A clone that never
 ran `direnv allow` has no hooks, and on nixos-rog and nixos-desktop `heavy`
 fails without a user session bus, which fails the push hook. Git opens the SSH
 connection to GitHub before the pre-push hook runs and holds it open, and GitHub
@@ -147,21 +150,33 @@ candidate release on the target
 hardware and services work after activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
-`ci/checks.sh` validates the flake's output kinds and formatter, then checks each
-host's system derivation type and `drvPath` in a separate process. It then
-builds each workstation's system from those `drvPath`s, unless
-`--evaluate-only` is given, as the `update` workflow does. It also
-evaluates a workstation with the box browser forced on (`ci/box-browser.nix`),
-to check the display's command line, and a bare server record (`ci/server.nix`),
-to check what the schema accepts and rejects. It builds the `scheme-catalogue`
-check, which compares the scheme parser with `yq`, the `theme-contrast`
-check, which runs `scripts/lib/theme-contrast.py` on nixos-rog's theme packs,
-and the `patches` check (`ci/patches.nix`), which unpacks each nixpkgs package
-that this repository patches and applies its patches, also under
-`--evaluate-only`. The check fails when an overlay in `overlays/` patches a
-package it does not list.
-So a nixpkgs move after which a patch no longer applies fails without a build
-of the package.
+`ci/checks.sh` runs these checks in order:
+
+1. `lock files`: `flake.lock` matches `flake.nix`.
+2. `formatting`: `nix fmt -- --ci` changes nothing.
+3. `flake outputs`: the flake has only `checks`, `formatter` and
+   `nixosConfigurations`.
+4. `host systems`: each host's system derivation type and `drvPath`, each
+   evaluated in a separate process.
+5. `flake checks`: builds the `scheme-catalogue` check, which compares the
+   scheme parser with `yq`, the `theme-contrast` check, which runs
+   `scripts/lib/theme-contrast.py` on nixos-rog's theme packs, and the
+   `patches` check (`ci/patches.nix`), which unpacks each nixpkgs package that
+   this repository patches and applies its patches. The `patches` check fails
+   when an overlay in `overlays/` patches a package it does not list, so a
+   nixpkgs move after which a patch no longer applies fails without a build of
+   the package.
+6. `workstation builds`: builds each workstation's system from those
+   `drvPath`s. `--evaluate-only` skips it, as the `update` workflow does; every
+   other check runs under that flag too.
+7. `box browser feature`: evaluates a workstation with the box browser forced
+   on (`ci/box-browser.nix`), to check the display's command line.
+8. `server record`: evaluates a bare server record (`ci/server.nix`), to check
+   what the schema accepts and rejects.
+9. `VM tests`: the flake still defines the `devbox-boot-bios` and
+   `deploy-script` VM checks. It evaluates them and runs neither.
+10. `binary cache copies`: the substituters and keys in the install docs and
+    `.github/workflows/update.yml` match the hosts' `nix.settings`.
 `ci/unit-cycles.sh` runs the ordering-cycle check
 of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a

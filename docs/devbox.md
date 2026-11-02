@@ -23,7 +23,8 @@ devbox is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
 It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/devbox/` (`configuration.nix`, `disk.nix`,
-`hardware-configuration.nix`, `home.nix`) and `nixosModules/server-access.nix`.
+`hardware-configuration.nix`, `home.nix`, `services.nix` and the `cliproxy/`
+folder of the CLIProxyAPI containers) and `nixosModules/server-access.nix`.
 The host imports four more modules for its services: `tailnet-web.nix`,
 `rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
@@ -85,12 +86,13 @@ sops-nix decrypts `secrets/devbox.yaml`,
 `secrets/devbox-cliproxy.yaml` while the system activates, with the
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
-file, the Cloudflare token for the certificates from the second, the deploy
-unit's GitHub token from the third, and OpenChamber's passwords and the
-herdr web UI's token from the fourth, and CLIProxyAPI's keys from the fifth
-(`machines/devbox/services.nix`).
-An install that makes new host keys boots with no address, no password, no
-certificates and no deploy token. Install the Debian box's own key before the first boot, for example
+file, the Cloudflare token for the certificates from the second, the
+OpenChamber and OpenCode server passwords and the herdr web UI's token from the
+third, and CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key
+and its share host from the fourth. `machines/devbox/services.nix` declares the
+secrets of the last two files.
+An install that makes new host keys boots with no address, no password and no
+certificates. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
 `ssh-to-age < ssh_host_ed25519_key.pub` prints the `devbox` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
@@ -289,7 +291,7 @@ everywhere and connects from the tailnet only.
 
 `nixosModules/rootless-containers.nix` gives omer rootless Docker and rootless
 Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
-`/etc/subgid` come from the host record.
+`/etc/subgid` come from `machines/devbox/configuration.nix`.
 
 - Docker is the NixOS `virtualisation.docker.rootless` unit. The socket is
   `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in omer's
