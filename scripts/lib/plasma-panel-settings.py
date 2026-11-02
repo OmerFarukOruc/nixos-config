@@ -1,6 +1,7 @@
 """Compares the Plasma panel file with the panel settings in the Nix file.
 
 usage: python3 -I plasma-panel-settings.py EXPECTED.json APPLETSRC [DEFAULTS]
+       python3 -I plasma-panel-settings.py --icons EXPECTED.json DEFAULTS
 
 EXPECTED.json is /etc/oruc/verify-plasma-panels/LOOK.json: a list of panels, each
 {"location": ..., "widgets": [{"name": ..., "config": {GROUP: {KEY: VALUE}} or null}]}.
@@ -18,6 +19,9 @@ a key missing from its settings counts as a difference.
 A widget that keeps its settings in profiles (kVitals' profileList) reads
 only its active profile, so the declared keys found in that profile are
 compared there too.
+
+--icons prints WIDGET<TAB>ICON for each widget of EXPECTED.json that has an
+icon: its declared General icon, else the icon default in DEFAULTS.
 """
 
 import json
@@ -277,7 +281,23 @@ def compare(panels, groups, defaults):
     return problems
 
 
+def print_icons(expected, defaults_dir):
+    with open(expected, encoding="utf-8") as panels:
+        for panel in json.load(panels):
+            for widget in panel["widgets"]:
+                general = (widget.get("config") or {}).get("General") or {}
+                icon = general.get("icon") or ""
+                xml = os.path.join(defaults_dir, widget["name"], "main.xml")
+                if not icon and os.path.isfile(xml):
+                    icon = icon_default(xml)
+                if icon:
+                    print(widget["name"] + "\t" + icon)
+
+
 def main():
+    if len(sys.argv) == 4 and sys.argv[1] == "--icons":
+        print_icons(sys.argv[2], sys.argv[3])
+        return 0
     if len(sys.argv) not in (3, 4):
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 2

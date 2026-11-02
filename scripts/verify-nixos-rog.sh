@@ -174,9 +174,10 @@ plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
 panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
+panels_fetched=false
 mkdir -p "$work/widget-defaults"
 # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/icons-panels.json" 2>/dev/null &&
+if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null &&
   ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
 set -euo pipefail
 out=$(mktemp -d)
@@ -193,21 +194,10 @@ done
 tar -c -C "$out" .
 REMOTE
 then
-  widget_icon_tsv=$(python3 -I -B -c '
-import json, os, sys
-from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader("panel_settings", sys.argv[1]).load_module()
-for panel in json.load(open(sys.argv[2])):
-    for widget in panel["widgets"]:
-        icon = ((widget.get("config") or {}).get("General") or {}).get("icon") or ""
-        if not icon:
-            xml = os.path.join(sys.argv[3], widget["name"], "main.xml")
-            if os.path.isfile(xml):
-                icon = mod.icon_default(xml)
-        if icon:
-            name = widget["name"]
-            print(name + "\t" + icon)
-' "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/icons-panels.json" "$work/widget-defaults")
+  panels_fetched=true
+fi
+if [[ $panels_fetched == true ]] &&
+  widget_icon_tsv=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --icons "$work/expected.json" "$work/widget-defaults"); then
   widget_icon_ok=1
 fi
 remote_prelude+=$'\n'"widget_icon_ok=$widget_icon_ok"$'\n'"widget_icon_rows=$(printf '%q' "$widget_icon_tsv")"
@@ -238,26 +228,8 @@ case $build in
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
-    mkdir -p "$work/widget-defaults"
-    # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-    if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" &&
-      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc" &&
-      ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
-set -euo pipefail
-out=$(mktemp -d)
-trap 'rm -rf -- "$out"' EXIT
-for root in /run/current-system/sw "/etc/profiles/per-user/$USER"; do
-  for file in "$root"/share/plasma/plasmoids/*/contents/config/main.xml; do
-    [[ -e $file ]] || continue
-    widget=${file#"$root/share/plasma/plasmoids/"}
-    widget=${widget%%/*}
-    mkdir -p "$out/$widget"
-    cat "$file" >"$out/$widget/main.xml"
-  done
-done
-tar -c -C "$out" .
-REMOTE
-    then
+    if [[ $panels_fetched == true ]] &&
+      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
       differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" "$work/widget-defaults" 2>&1) || compared=$?
     else
       compared=255
@@ -350,22 +322,29 @@ REMOTE
   fi
 fi
 
+if [[ $suspend == true ]] && ! before=$(ssh "${ssh_opts[@]}" "$host" \
+  'cat /sys/power/suspend_stats/success; sudo -n systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"' 2>"$work/suspend-start.err"); then
+  record suspend-three-cycles fail "could not start the suspend cycles on $host: $(paste -sd ' ' "$work/suspend-start.err")"
+  suspend=false
+fi
+
 if [[ $suspend == true ]]; then
-  before=$(ssh "${ssh_opts[@]}" "$host" \
-    'cat /sys/power/suspend_stats/success; sudo systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"')
   after_resume=$(
     cat <<'REMOTE'
 set -euo pipefail
-test "$(( $(cat /sys/power/suspend_stats/success) - before ))" -ge 3
-test "$(cat "/sys/class/net/$wifi/operstate")" = up
-test -n "$(find_nvidia)"
-test "$(cpu_limits)" = "$(expected_cpu_limits "$(powerprofilesctl get)")"
+missing() { echo "$1" >&2; exit 1; }
+suspends=$(( $(cat /sys/power/suspend_stats/success) - before ))
+(( suspends >= 3 )) || missing "$suspends of 3 suspends succeeded"
+[[ $(cat "/sys/class/net/$wifi/operstate") == up ]] || missing "Wi-Fi $wifi is not up"
+[[ -n $(find_nvidia) ]] || missing "the RTX 4070 is missing"
+[[ $(cpu_limits) == "$(expected_cpu_limits "$(powerprofilesctl get)")" ]] || missing "the CPU limits differ from the profile's"
 REMOTE
   )
   resumed=false
+  last_error=
   for _ in {1..30}; do
     sleep 10
-    if printf 'before=%s\n%s\n' "$before" "$after_resume" | remote 2>/dev/null; then
+    if last_error=$(printf 'before=%s\n%s\n' "$before" "$after_resume" | remote 2>&1 >/dev/null); then
       resumed=true
       break
     fi
@@ -373,7 +352,8 @@ REMOTE
   if [[ $resumed == true ]]; then
     record suspend-three-cycles pass "3 successful suspends, Wi-Fi up, RTX 4070 present, CPU limits of the profile"
   else
-    record suspend-three-cycles fail "fewer than 3 successful suspends, or Wi-Fi, the RTX 4070 or the CPU limits missing afterwards"
+    last_error=${last_error:-the check printed no reason}
+    record suspend-three-cycles fail "after 300 s: ${last_error//$'\n'/; }"
   fi
 fi
 
