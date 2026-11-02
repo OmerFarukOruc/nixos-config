@@ -130,7 +130,7 @@ build of that package.
 | Input | When it moves |
 | --- | --- |
 | llm-agents | Only when a cache holds its builds. See the paragraph below. |
-| kwin-effects-glass, glass-style, hushmic, mac-tahoe, nixpkgs-security, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
+| kwin-effects-glass, glass-style, hushmic, mac-tahoe, nixpkgs-spotify, spicetify-nix, tinted-vscode and warm-burnout | Never. Their `flake.nix` URLs pin a commit, so moving one is a hand edit. |
 
 When the new llm-agents revision has a coding agent that cache.numtide.com does
 not hold yet for the host's system, or the script cannot tell, llm-agents stays
