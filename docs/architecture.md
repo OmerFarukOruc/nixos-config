@@ -176,13 +176,14 @@ NixOS and Home Manager each import that module with their own scheme:
   pack renderers below follow `theme`; a file that a module builds from
   `config.scheme` directly keeps the record scheme.
 
-The wallpaper is the file in `assets/wallpapers` named after the scheme. A scheme
-without one gets `assets/wallpapers/default.png` recolored to the scheme's 16
-colors by lutgen. In the session, `oruc-wallpaper-path`
+The wallpaper is the file in `assets/wallpapers/<host>` or `assets/wallpapers`
+named after the scheme. A scheme without one gets the matching `default.png`
+recolored to the scheme's 16 colors by `lutgen apply -R -P`, which preserves
+luminosity so `#000000` stays black. In the session, `oruc-wallpaper-path`
 (`home-manager/modules/wallpaper.nix`) prints the wallpaper of the scheme that
 `theme/current` points at: the scheme's own file, or a PNG it renders from the
 pack's `palette` fact into `~/.cache/oruc/wallpapers/<scheme>-<key>.png`. The
-key hashes the palette, the wallpaper images and lutgen, so a changed input
+key hashes the palette, the `default.png` path and lutgen, so a changed input
 renders a new file. One render took 0.05 to 0.07 s in 3 runs on nixos-rog
 (2026-10-31). Plasma, Noctalia, DMS and waybar take the wallpaper from it, so it
 follows any scheme. On Plasma, plasma-manager's startup script `oruc-wallpaper`

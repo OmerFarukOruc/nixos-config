@@ -27,16 +27,21 @@ let
     ];
     text = ''
       images=${images}
+      host=${lib.escapeShellArg osConfig.oruc.machine.name}
       scheme=$(readlink -e ${lib.escapeShellArg "${config.oruc.themeState}/theme/current"})
       slug=''${scheme##*/}
-      for extension in png jpg jpeg webp; do
-        if [[ -e $images/$slug.$extension ]]; then
-          echo "$images/$slug.$extension"
-          exit
-        fi
+      for dir in "$images/$host" "$images"; do
+        for extension in png jpg jpeg webp; do
+          if [[ -e $dir/$slug.$extension ]]; then
+            echo "$dir/$slug.$extension"
+            exit
+          fi
+        done
       done
+      default=$images/default.png
+      [[ ! -e $images/$host/default.png ]] || default=$images/$host/default.png
       palette=$(<"$scheme/.oruc/palette")
-      key=$(printf '%s\n' "$images" ${pkgs.lutgen} "$palette" | sha256sum | cut -c1-16)
+      key=$(printf '%s\n' "$default" ${pkgs.lutgen} "$palette" | sha256sum | cut -c1-16)
       cache=''${XDG_CACHE_HOME:-$HOME/.cache}/oruc/wallpapers
       out=$cache/$slug-$key.png
       if [[ ! -s $out ]]; then
@@ -44,7 +49,7 @@ let
         read -ra colors <<<"$palette"
         tmp=$(mktemp --suffix=.png "$cache/.$slug.XXXXXX")
         trap 'rm -f "$tmp"' EXIT
-        lutgen apply -R -o "$tmp" "$images/default.png" -- "''${colors[@]}" >/dev/null
+        lutgen apply -R -P -o "$tmp" "$default" -- "''${colors[@]}" >/dev/null
         mv -T "$tmp" "$out"
       fi
       echo "$out"
