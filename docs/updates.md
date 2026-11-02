@@ -139,11 +139,12 @@ update tries again.
 
 ## The kernel
 
-The hosts run the CachyOS kernel of
+The three PCs run the CachyOS kernel of
 [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) from its
-`release` branch. Upstream moves that branch only to a kernel its Hydra has
+`release` branch; devbox runs the nixpkgs kernel. Upstream moves that branch only to a kernel its Hydra has
 built and pushed to its cache, cache.lantian.pub (upstream's README, "How to use
-kernels"). `nixosModules/kernel.nix` adds that cache as a substituter, so the
+kernels"). `nixosModules/kernel.nix` adds that cache as a substituter on a host with a
+CachyOS profile, so the
 kernel moves with the other inputs, through `prepare-update.sh inputs` or
 `nix flake update nix-cachyos-kernel`, and a host downloads it.
 

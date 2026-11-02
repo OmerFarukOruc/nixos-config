@@ -9,10 +9,11 @@ let
   cfg = config.oruc.machine.kernel;
   selectors = import ../machines/selectors.nix;
   spec = selectors.kernelSpecs.${cfg.profile};
+  fromCachyos = lib.head spec.package == "cachyosKernels";
 in
 {
-  nixpkgs.overlays = [ inputs.nix-cachyos-kernel.overlays.pinned ];
-  nix.settings = {
+  nixpkgs.overlays = lib.mkIf fromCachyos [ inputs.nix-cachyos-kernel.overlays.pinned ];
+  nix.settings = lib.mkIf fromCachyos {
     extra-substituters = [ "https://cache.lantian.pub/lantian" ];
     extra-trusted-public-keys = [ "lantian:WVGO7vsRMSEN+h7Lp7kv6SAmrkEXgUGbbXm7jMDjBuQ=" ];
   };

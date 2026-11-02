@@ -159,6 +159,8 @@ These rules follow from the list:
   `[ "cachyosKernels" "linuxPackages-cachyos-<variant>" ]` with a variant that
   upstream's cache holds; [nix-cachyos-kernel's README](https://github.com/xddxdd/nix-cachyos-kernel#which-kernel-versions-are-provided)
   marks the variants it does not cache ([The kernel](updates.md#the-kernel)).
+  `nixosModules/kernel.nix` adds the CachyOS overlay and cache.lantian.pub only
+  to a host whose profile's package starts with `cachyosKernels`.
 
 ## Theme
 
