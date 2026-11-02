@@ -3,12 +3,13 @@
 set -uo pipefail
 report() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
 check() {
-  local name=$1 detail=$2
+  local name=$1 detail=$2 error
   shift 2
-  if "$@" >/dev/null 2>&1; then
+  if error=$("$@" 2>&1 >/dev/null); then
     report "$name" pass "$detail"
   else
-    report "$name" fail "$detail"
+    error=$(head -n 1 <<<"$error" | tr '\t' ' ')
+    report "$name" fail "$detail: ${error:-the check command failed}"
   fi
 }
 armoury=/sys/class/firmware-attributes/asus-armoury/attributes
