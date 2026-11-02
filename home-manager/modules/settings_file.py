@@ -1,3 +1,4 @@
+import collections.abc
 import os
 
 import tomlkit
@@ -30,6 +31,10 @@ def merge(table, values):
         if isinstance(value, dict):
             if key not in table:
                 table[key] = tomlkit.table()
+            elif not isinstance(table[key], collections.abc.Mapping):
+                raise ValueError(
+                    f"{key} holds a TOML {type(table[key]).__name__}, not a table"
+                )
             merge(table[key], value)
         elif table.get(key) != value:
             table[key] = value
