@@ -20,6 +20,7 @@ dir="$(dirname -- "$file")"
 find /tmp -maxdepth 1 -name 'pandoc-*.html' -mmin +60 -delete 2>/dev/null || true
 
 out="$(mktemp --suffix=.html /tmp/pandoc-XXXXXX)" || fail "could not create temp file"
+dir_url="$(realpath -- "$dir" | jq -Rr 'split("/") | map(@uri) | join("/")')"
 
 toc=()
 if [ "$(grep -cE -e '^#{1,6}[[:space:]]' -- "$file" || true)" -ge 3 ]; then
@@ -58,15 +59,17 @@ fm == 1 {
 { emit($0) }
 END { if (fm == 1) for (i = 1; i <= n; i++) emit(held[i]) }
 ' "$file" |
-  pandoc -s -f gfm-yaml_metadata_block+tex_math_dollars --embed-resources \
+  pandoc -s -f gfm-yaml_metadata_block+tex_math_dollars --sandbox \
     "${toc[@]}" \
     --highlight-style="$PANDOC_MD_ASSETS/typewriter-neutral.theme" \
-    --katex="$PANDOC_MD_KATEX" \
-    --resource-path="$dir" \
+    --katex -V math= \
     --metadata pagetitle="$name" \
+    -H "$PANDOC_MD_PAGE/csp.html" \
+    -H <(printf '<base href="file://%s/">\n' "${dir_url%/}") \
     -c "$theme_css" \
+    -c "$PANDOC_MD_KATEX/katex.min.css" \
     -c "$PANDOC_MD_ASSETS/pandoc-md.css" \
-    -A "$PANDOC_MD_ASSETS/pandoc-md.afterbody.html" \
+    -A "$PANDOC_MD_PAGE/afterbody.html" \
     -o "$out" || fail "pandoc failed on $name"
 
 brave-origin "$out" || fail "could not open Brave"

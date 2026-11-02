@@ -1,8 +1,20 @@
-<script>
-/* Pandoc Markdown Viewer — runtime enhancements (included via pandoc -A).
+/* Pandoc Markdown Viewer — runtime enhancements (built into one inline script with KaTeX).
    Progressive: every block degrades gracefully if a feature is unused. */
 (function () {
   'use strict';
+
+  document.querySelectorAll('span.math').forEach(function (el) {
+    katex.render(el.textContent, el, { displayMode: el.classList.contains('display'), throwOnError: false });
+  });
+
+  /* The page's <base> points at the Markdown file's folder, so a bare
+     "#id" link would open that folder instead of scrolling. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    location.hash = a.getAttribute('href');
+  });
 
   /* ── 1. Mermaid diagrams: convert ```mermaid fences, lazy-load renderer.
      The theme variables come from the page's CSS tokens, so the diagrams
@@ -141,17 +153,13 @@
       taskTextDarkColor: token('fg'),
       taskTextClickableColor: token('fg')
     });
-    /* Version 11.17.2 is the release whose theme variable names this block
-       uses. A new release gets a new URL and a new integrity value, so a
-       rename cannot reach the viewer unchecked. The integrity value is the
-       SHA-384 of mermaid.min.js at that version. */
     var m = document.createElement('script');
-    m.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js';
-    m.integrity = 'sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2';
+    m.src = '@mermaidUrl@';
+    m.integrity = '@mermaidIntegrity@';
     m.crossOrigin = 'anonymous';
     m.onload = function () {
       try {
-        window.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base', themeVariables: vars });
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: 'antiscript', theme: 'base', themeVariables: vars });
         window.mermaid.run({ nodes: Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')) });
       } catch (e) {}
     };
@@ -215,4 +223,3 @@
   /* GitHub-style alerts (> [!NOTE] etc.) are rendered natively by pandoc's
      gfm reader into div.note/.tip/.important/.warning/.caution and styled in CSS. */
 })();
-</script>
