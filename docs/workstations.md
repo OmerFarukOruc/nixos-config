@@ -157,11 +157,22 @@ output kinds or formatter systems until their coverage is added. Both checks
 run two host evaluations at a time (`PARALLEL_EACH_JOBS` in
 `scripts/lib/parallel-each.sh`), so a new host adds one evaluator heap only while
 it runs, and at most two heaps share the scope's `MemoryHigh`. The limits in
-`home-manager/modules/heavy.nix` stay unchanged.
+`home-manager/modules/heavy.nix` stay unchanged. `prepare-update.sh inputs`
+evaluates the hosts the same way when inputs moved.
+
+The `update` workflow sets `PARALLEL_EACH_JOBS` to 3 in
+`.github/workflows/update.yml`, because its runner has no `heavy` scope. On
+2026-11-02 the runner had 4 CPUs and 15 GiB as `free -g` shows it. In probe
+run 41540059527, a `ci/update.sh` run that moved three inputs on a warm store
+took 11.9 min with 3 evaluations at a time and peaked at 11.7 GiB used,
+against 14.2 min and 9.2 GiB with 2; on a cold store it peaked at 12.5 GiB.
+With 4 at a time, a cold run in probe run 41535294049 peaked at 14.3 GiB and
+evaluated the hosts no faster than with 3.
 
 Before the parallel evaluations start, both checks fetch every flake input in
-one process (`fetch_inputs` in `scripts/lib/host-systems.sh`), and so does
-`scripts/affected-hosts.sh` for each commit without a stored result. On
+one process (`fetch_inputs` in `scripts/lib/host-systems.sh`), and so do
+`prepare-update.sh inputs` and `scripts/affected-hosts.sh`, the latter for
+each commit without a stored result. On
 2026-11-01 a push failed with `getting Git object ...: object not found` after
 two host evaluations each unpacked the same new input into Nix's Git cache.
 Three runs that evaluated two hosts with that input missing from the store did

@@ -23,6 +23,10 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 # shellcheck source=/dev/null
 . scripts/lib/build-error.sh
+# shellcheck source=/dev/null
+. scripts/lib/parallel-each.sh
+# shellcheck source=/dev/null
+. scripts/lib/host-systems.sh
 
 app_files_with_npm_wrapper_dir() {
   local app
@@ -75,20 +79,32 @@ cp flake.nix flake.lock "$work/"
 
 cached_devenv_of_main=$(nix build --no-link --print-out-paths --inputs-from . nixpkgs#devenv)/bin/devenv
 
+eval_host() {
+  local rc=0
+  nix eval --raw ".#nixosConfigurations.$1.config.system.build.toplevel.drvPath" \
+    >/dev/null 2>"$work/eval-$1.log" || rc=$?
+  echo "$rc" >"$work/eval-$1.status"
+  return "$rc"
+}
 eval_error() {
-  local h hosts
-  hosts=$(nix eval --json .#nixosConfigurations --apply builtins.attrNames 2>"$work/eval.log") || {
+  local names h hosts
+  fetch_inputs . 2>"$work/fetch.log" >&2 || {
+    cat "$work/fetch.log" >&2
+    printf 'the flake inputs could not be fetched: %s\n' "$(eval_line "$work/fetch.log")"
+    return
+  }
+  names=$(host_names . 2>"$work/eval.log") || {
     cat "$work/eval.log" >&2
     printf 'the flake does not evaluate: %s\n' "$(eval_line "$work/eval.log")"
     return
   }
-  for h in $(jq -r '.[]' <<<"$hosts"); do
-    if ! nix eval --raw ".#nixosConfigurations.$h.config.system.build.toplevel.drvPath" \
-      >/dev/null 2>"$work/eval.log"; then
-      cat "$work/eval.log" >&2
-      printf '%s does not evaluate: %s\n' "$h" "$(eval_line "$work/eval.log")"
-      return
-    fi
+  mapfile -t hosts <<<"$names"
+  parallel_each eval_host "${hosts[@]}" && return
+  for h in "${hosts[@]}"; do
+    [[ $(cat "$work/eval-$h.status" 2>/dev/null) == 0 ]] && continue
+    cat "$work/eval-$h.log" >&2
+    printf '%s does not evaluate: %s\n' "$h" "$(eval_line "$work/eval-$h.log")"
+    return
   done
 }
 # eval_line LOG: the line of a failed evaluation that names the cause, such as

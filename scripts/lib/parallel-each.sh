@@ -1,5 +1,9 @@
 # shellcheck shell=bash
-PARALLEL_EACH_JOBS=2
+PARALLEL_EACH_JOBS=${PARALLEL_EACH_JOBS:-2}
+[[ $PARALLEL_EACH_JOBS =~ ^[1-9][0-9]*$ ]] || {
+  echo "PARALLEL_EACH_JOBS must be a positive integer, not '$PARALLEL_EACH_JOBS'." >&2
+  exit 2
+}
 
 parallel_each_stop() {
   local pids=("$@")
