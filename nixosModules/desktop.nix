@@ -61,12 +61,9 @@ in
           enable = true;
           wayland.enable = true;
         };
-        plasma-login-manager.enable = false;
       };
 
-      services.greetd.enable = false;
       qt.enable = true;
-      services.orca.enable = false;
       hardware.graphics.enable = true;
       users.users.${cfg.user}.extraGroups = [ "video" ];
       console.colors = systemThemeValues.consoleColors config.scheme;
@@ -79,9 +76,6 @@ in
       environment.etc = lib.mkMerge [
         {
           "niri/config.kdl".source = ../niri/config.kdl;
-          "niri/shell.kdl".text = ''
-            // The session file adds this shell's binds after config.kdl.
-          '';
           # The keyboard layout of the greeter, the machine record's touchpad
           # settings, and hardware settings that a machine's modules append;
           # included by config.kdl. niri caches the localed layout at startup, so it
@@ -121,6 +115,7 @@ in
 
     (lib.mkIf hasPlasma {
       services.desktopManager.plasma6.enable = true;
+      services.orca.enable = false;
       nixpkgs.overlays = [
         (import ../overlays/ksystemstats.nix)
         (import ../overlays/plasma-desktop.nix)

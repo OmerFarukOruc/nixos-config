@@ -92,5 +92,3 @@ binds {
     Mod+Shift+4 { move-column-to-workspace 4; }
 
 }
-
-include "/etc/niri/shell.kdl"
