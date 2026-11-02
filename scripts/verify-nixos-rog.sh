@@ -52,7 +52,6 @@ do), 1 when one fails, 64 for a usage error.
 EOF
 }
 
-host=$ROG_HOST
 octet='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
 suspend=false
 while_in_use=false
@@ -101,7 +100,7 @@ work=$(mktemp -d)
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
 
 write_report() {
-  jq -Rn --arg host "$host" --arg time "$stamp" \
+  jq -Rn --arg host "$ROG_HOST" --arg time "$stamp" \
     --arg revision "$(git -C "$repo_dir" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)" '
     [inputs | split("\t") | {name: .[0], status: .[1], detail: .[2]}] as $checks
     | {host: $host, time: $time, revision: $revision, checks: $checks,
@@ -172,7 +171,7 @@ remote() {
   {
     printf '%s\n' "$remote_prelude"
     cat
-  } | ssh "${SSH_OPTS[@]}" "$host" bash -s
+  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s
 }
 
 remote_checks() {
@@ -186,7 +185,7 @@ remote_checks() {
 
 widget_icon_tsv=
 widget_icon_ok=0
-plasma_look=$(ssh "${SSH_OPTS[@]}" "$host" \
+plasma_look=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
 panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
@@ -194,10 +193,10 @@ have_panels=false
 have_defaults=false
 mkdir -p "$work/widget-defaults"
 # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-if ssh "${SSH_OPTS[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null; then
+if ssh "${SSH_OPTS[@]}" "$ROG_HOST" cat "$panels_json" >"$work/expected.json" 2>/dev/null; then
   have_panels=true
 fi
-if [[ $have_panels == true ]] && ssh "${SSH_OPTS[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
+if [[ $have_panels == true ]] && ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
 set -euo pipefail
 out=$(mktemp -d)
 trap 'rm -rf -- "$out"' EXIT
@@ -225,13 +224,13 @@ status=0
 remote_checks >>"$results" || status=$?
 case $status in
   0) ;;
-  66) record verify-facts fail "/etc/oruc/verify-facts is missing on $host or lacks a fact the checks need; deploy a system that writes it" ;;
-  *) record remote-checks fail "SSH to $host failed (exit $status)" ;;
+  66) record verify-facts fail "/etc/oruc/verify-facts is missing on $ROG_HOST or lacks a fact the checks need; deploy a system that writes it" ;;
+  *) record remote-checks fail "SSH to $ROG_HOST failed (exit $status)" ;;
 esac
 
 build=$(
   # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-  ssh "${SSH_OPTS[@]}" "$host" "bash -s -- $panels_json" <<'REMOTE' || true
+  ssh "${SSH_OPTS[@]}" "$ROG_HOST" "bash -s -- $panels_json" <<'REMOTE' || true
 manager=$HOME/.local/share/plasma-manager
 if [[ ! -r $1 ]]; then
   echo none
@@ -243,12 +242,12 @@ fi
 REMOTE
 )
 case $build in
-  none) record plasma-panel-settings manual "$host has no $panels_json; deploy a system that writes it, then rerun" ;;
+  none) record plasma-panel-settings manual "$ROG_HOST has no $panels_json; deploy a system that writes it, then rerun" ;;
   old) record plasma-panel-settings manual "the panels were not built from this system's panel script; log out and in, or run scripts/panels-rebuild-on-rog.sh, then rerun" ;;
   current)
     compared=0
     if [[ $have_defaults == true ]] &&
-      ssh "${SSH_OPTS[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
+      ssh "${SSH_OPTS[@]}" "$ROG_HOST" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
       differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" "$work/widget-defaults" 2>&1) || compared=$?
     else
       compared=255
@@ -256,25 +255,25 @@ case $build in
     case $compared in
       0) record plasma-panel-settings pass "the panel file holds every setting of the $plasma_look look's panels" ;;
       1) record plasma-panel-settings fail "${differences//$'\n'/; }. A change made in Plasma lasts only until the next panel build; ask Omer whether to write it into plasma-panels.nix before you rebuild the panels" ;;
-      *) record plasma-panel-settings fail "could not compare the panel file (exit $compared): ${differences:-copy from $host failed}" ;;
+      *) record plasma-panel-settings fail "could not compare the panel file (exit $compared): ${differences:-copy from $ROG_HOST failed}" ;;
     esac
     ;;
-  *) record plasma-panel-settings fail "could not read the panel build state on $host" ;;
+  *) record plasma-panel-settings fail "could not read the panel build state on $ROG_HOST" ;;
 esac
 
 launcher_ids=
 if [[ $have_panels == false ]]; then
-  record dock-launchers-installed manual "could not copy $panels_json from $host; deploy a system that writes it, then rerun"
+  record dock-launchers-installed manual "could not copy $panels_json from $ROG_HOST; deploy a system that writes it, then rerun"
 elif ! launcher_ids=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --launchers "$work/expected.json"); then
   record dock-launchers-installed fail "could not read the launchers of $panels_json"
 elif [[ -z $launcher_ids ]]; then
-  record dock-launchers-installed manual "no applications: launcher in $host's $panels_json"
+  record dock-launchers-installed manual "no applications: launcher in $ROG_HOST's $panels_json"
 else
   mapfile -t launchers <<<"$launcher_ids"
   launcher_status=0
   missing=$(
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-    ssh "${SSH_OPTS[@]}" "$host" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
+    ssh "${SSH_OPTS[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
 environment=$(systemctl --user show-environment) || exit 4
 dirs=$(sed -n 's/^XDG_DATA_DIRS=//p' <<<"$environment")
 [[ -n $dirs ]] || exit 3
@@ -298,9 +297,9 @@ REMOTE
     else
       record dock-launchers-installed fail "no desktop file for ${missing//$'\n'/, }; install the app or drop its launcher from oruc.plasma.dockLaunchers in machines/nixos-rog/home.nix"
     fi ;;
-    3) record dock-launchers-installed manual "the user manager on $host has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
-    4) record dock-launchers-installed fail "systemctl --user show-environment failed on $host" ;;
-    *) record dock-launchers-installed fail "SSH to $host failed (exit $launcher_status)" ;;
+    3) record dock-launchers-installed manual "the user manager on $ROG_HOST has no XDG_DATA_DIRS; log in to Plasma, then rerun" ;;
+    4) record dock-launchers-installed fail "systemctl --user show-environment failed on $ROG_HOST" ;;
+    *) record dock-launchers-installed fail "SSH to $ROG_HOST failed (exit $launcher_status)" ;;
   esac
 fi
 
@@ -321,7 +320,7 @@ if [[ -n $lan_ip ]]; then
 fi
 
 if [[ $suspend == true && $while_in_use == false ]]; then
-  if ! ssh "${SSH_OPTS[@]}" "$host" 'bash -s' <<'REMOTE'
+  if ! ssh "${SSH_OPTS[@]}" "$ROG_HOST" 'bash -s' <<'REMOTE'
 set -euo pipefail
 id=$(loginctl show-seat seat0 -p ActiveSession --value)
 [[ -n $id ]] || exit 0
@@ -337,9 +336,9 @@ fi
 
 suspend_cycles() {
   local before after_resume reason tries=30 interval=10
-  if ! before=$(ssh "${SSH_OPTS[@]}" "$host" \
+  if ! before=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" \
     'cat /sys/power/suspend_stats/success; sudo -n systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"' 2>"$work/suspend-start.err"); then
-    record suspend-three-cycles fail "could not start the suspend cycles on $host: $(paste -sd ' ' "$work/suspend-start.err")"
+    record suspend-three-cycles fail "could not start the suspend cycles on $ROG_HOST: $(paste -sd ' ' "$work/suspend-start.err")"
     return
   fi
   after_resume=$(
@@ -360,7 +359,7 @@ REMOTE
       return
     fi
   done
-  record suspend-three-cycles fail "after $((tries * interval)) s: ${reason:-no answer from $host}"
+  record suspend-three-cycles fail "after $((tries * interval)) s: ${reason:-no answer from $ROG_HOST}"
 }
 
 if [[ $suspend == true ]]; then

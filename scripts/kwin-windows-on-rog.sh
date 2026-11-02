@@ -7,9 +7,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib/rog-host.sh"
 rog_pick_host
 
-{
-  rog_session_script
-  cat <<'EOF'
+rog_ssh_session <<'EOF'
 # KWin's print() writes to the user journal, so a marker picks out the lines
 # of this run.
 marker=kwin-windows-$$-$RANDOM
@@ -48,4 +46,3 @@ done
 echo "KWin printed no window list within 10 s." >&2
 exit 1
 EOF
-} | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s

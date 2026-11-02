@@ -28,7 +28,6 @@ set -euo pipefail
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
-host=$ROG_HOST
 mic=alsa_input.pci-0000_66_00.6.analog-stereo
 
 die() {
@@ -63,7 +62,7 @@ mkdir -p "$out"
 rog_run() {
   local script=$1
   shift
-  ssh "${SSH_OPTS[@]}" "$host" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
+  ssh "${SSH_OPTS[@]}" "$ROG_HOST" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
 }
 
 lib='node_id() {
@@ -82,14 +81,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-made=$(ssh "${SSH_OPTS[@]}" "$host" mktemp -d /tmp/mic-ab.XXXXXXXX)
-[[ $made =~ ^/tmp/mic-ab\.[A-Za-z0-9]{8}$ ]] || die "mktemp on $host printed $made"
+made=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" mktemp -d /tmp/mic-ab.XXXXXXXX)
+[[ $made =~ ^/tmp/mic-ab\.[A-Za-z0-9]{8}$ ]] || die "mktemp on $ROG_HOST printed $made"
 remote=$made
 
 # wpctl prints its usage to stdout when the node is missing, so only a number
 # shows that the microphone exists.
 volume=$(rog_run "$lib"$'\n''wpctl get-volume "$(node_id "$1")" | awk "{print \$2}"' "$mic")
-[[ $volume =~ ^[0-9]+\.[0-9]+$ ]] || die "$mic is missing on $host" 3
+[[ $volume =~ ^[0-9]+\.[0-9]+$ ]] || die "$mic is missing on $ROG_HOST" 3
 original_volume=$volume
 
 record_script='
@@ -145,7 +144,7 @@ if [[ $mode == level ]]; then
   notify "Level test done. You can stop reading."
 else
   for source in easyeffects_source hushmic_source; do
-    [[ -n $(rog_run "$lib"$'\n''node_id "$1"' "$source") ]] || die "$source is missing on $host" 3
+    [[ -n $(rog_run "$lib"$'\n''node_id "$1"' "$source") ]] || die "$source is missing on $ROG_HOST" 3
   done
   echo "Recording 60 s. Follow the cue on each line."
   rog_run "$record_script" "$remote" 60 \
@@ -160,7 +159,7 @@ else
   notify "A/B test done. You can stop."
 fi
 
-rsync -a -e "ssh ${SSH_OPTS[*]}" "$host:$remote/" "$out/"
+rsync -a -e "ssh ${SSH_OPTS[*]}" "$ROG_HOST:$remote/" "$out/"
 hushmic_status=$(rog_run 'hushmic status --json 2>/dev/null || echo null')
 preset=$(rog_run 'grep -h "^lastLoadedInputPreset=" ~/.config/easyeffects/db/easyeffectsrc || true')
 

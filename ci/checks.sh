@@ -13,7 +13,6 @@ if (($# > 1)) || { (($# == 1)) && [[ $1 != --evaluate-only ]]; }; then
 fi
 (($# == 0)) || build_workstations=false
 
-nix_opts=(--option allow-import-from-derivation false)
 log=$(mktemp)
 records=$(mktemp -d)
 trap 'rm -rf -- "$log" "$records"' EXIT
@@ -29,14 +28,14 @@ check() {
 }
 
 lock_files() {
-  nix flake metadata "${nix_opts[@]}" --no-update-lock-file . >/dev/null || {
+  nix flake metadata "${NIX_OPTS[@]}" --no-update-lock-file . >/dev/null || {
     echo "flake.lock does not match flake.nix, as after a new or changed input; Nix's error above names the cause, and scripts/check.sh --fix relocks" >&2
     return 1
   }
 }
 
 flake_outputs() {
-  nix eval "${nix_opts[@]}" --json --no-write-lock-file '.#.' --apply '
+  nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file '.#.' --apply '
     outputs:
       builtins.attrNames outputs == [ "checks" "formatter" "nixosConfigurations" ]
       && builtins.attrNames outputs.formatter == [ "x86_64-linux" ]
@@ -51,7 +50,7 @@ flake_outputs() {
 host_system() {
   local rc=0
   echo "$1"
-  nix eval "${nix_opts[@]}" --json --no-write-lock-file "$flake#nixosConfigurations.$1" --apply "
+  nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file "$flake#nixosConfigurations.$1" --apply "
     h:
       let toplevel = h.config.system.build.toplevel; in
       if builtins.isAttrs toplevel && (toplevel.type or null) == \"derivation\"
@@ -65,10 +64,10 @@ host_system() {
 
 host_systems() {
   local flake=. revision names hosts systems
-  revision=$(nix flake metadata "${nix_opts[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
+  revision=$(nix flake metadata "${NIX_OPTS[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
   [[ -z $revision ]] || flake="git+file://$PWD?rev=$revision"
-  fetch_inputs "$flake" "${nix_opts[@]}" --no-write-lock-file || return 1
-  names=$(host_names "$flake" "${nix_opts[@]}") || return 1
+  fetch_inputs "$flake" "${NIX_OPTS[@]}" --no-write-lock-file || return 1
+  names=$(host_names "$flake" "${NIX_OPTS[@]}") || return 1
   mapfile -t hosts <<<"$names"
   parallel_each host_system "${hosts[@]}" || return 1
   [[ -n $revision ]] || return 0
@@ -90,7 +89,7 @@ workstation_builds() {
 
 box_browser() {
   local out
-  out=$(nix eval "${nix_opts[@]}" --json --impure \
+  out=$(nix eval "${NIX_OPTS[@]}" --json --impure \
     --expr 'import ./ci/box-browser.nix (builtins.getFlake (toString ./.))') || return 1
   jq -e '.userUnits | contains(["box-browser", "box-display"])' <<<"$out" >/dev/null || {
     echo "The forced-on host lacks a box browser unit." >&2
@@ -105,7 +104,7 @@ box_browser() {
 
 server_record() {
   local out
-  out=$(nix eval "${nix_opts[@]}" --json --impure \
+  out=$(nix eval "${NIX_OPTS[@]}" --json --impure \
     --expr 'import ./ci/server.nix (builtins.getFlake (toString ./.))') || return 1
   jq -e '.workstation | to_entries | map(select(.value)) | map(.key) | . == []' <<<"$out" >/dev/null || {
     echo "The server record gets a workstation piece: $(jq -c '.workstation | with_entries(select(.value)) | keys' <<<"$out")" >&2
@@ -149,25 +148,24 @@ server_record() {
 }
 
 cache_copies() {
-  local values file value status=0
-  values=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#nixosConfigurations --apply '
+  local want have file status=0
+  want=$(nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file .#nixosConfigurations --apply '
     hosts: builtins.concatMap (host: host.config.nix.settings.extra-substituters
       ++ host.config.nix.settings.extra-trusted-public-keys) (builtins.attrValues hosts)
-  ' | jq -r 'unique[]') || return 1
+  ' | jq -r '.[]' | LC_ALL=C sort -u) || return 1
   for file in docs/install-nixos-desktop.md docs/install-nixos-latitude.md .github/workflows/update.yml; do
-    while IFS= read -r value; do
-      grep -qF -- "$value" "$file" || {
-        echo "$file lacks $value, which the hosts' nix.settings sets." >&2
-        status=1
-      }
-    done <<<"$values"
+    have=$(sed -nE "s/^ *extra-(substituters|trusted-public-keys) = //p" "$file" | tr -d "'" | tr ' ' '\n' | LC_ALL=C sort -u)
+    [[ $have == "$want" ]] && continue
+    echo "$file differs from the hosts' nix.settings (<: only the hosts set it, >: only $file has it):" >&2
+    diff <(echo "$want") <(echo "$have") | grep '^[<>]' >&2 || true
+    status=1
   done
   return "$status"
 }
 
 vm_tests() {
   local out
-  out=$(nix eval "${nix_opts[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
+  out=$(nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
     --apply 'checks: builtins.mapAttrs (_: test: test.drvPath) checks') || return 1
   jq -e 'keys | contains(["devbox-boot-bios", "deploy-script"])' <<<"$out" >/dev/null || {
     echo "The flake checks lack the boot test of devbox or the deploy.sh test: $(jq -c keys <<<"$out")" >&2
@@ -178,9 +176,11 @@ vm_tests() {
 # With --no-write-lock-file, evaluation accepts an input that flake.lock lacks
 # and only warns, so the input follows its upstream unpinned.
 check "lock files" lock_files
-check formatting nix fmt "${nix_opts[@]}" --no-update-lock-file -- --ci
+check formatting nix fmt "${NIX_OPTS[@]}" --no-update-lock-file -- --ci
 check "flake outputs" flake_outputs
 check "host systems" host_systems
+check "flake checks" nix build "${NIX_OPTS[@]}" --no-link --no-write-lock-file \
+  .#checks.x86_64-linux.{scheme-catalogue,theme-contrast,patches}
 if $build_workstations; then
   check "workstation builds" workstation_builds
 fi
@@ -192,12 +192,6 @@ echo
 check "VM tests" vm_tests
 echo
 check "binary cache copies" cache_copies
-echo
-check "scheme catalogue" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.scheme-catalogue
-echo
-check "theme contrast" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.theme-contrast
-echo
-check "overlay patches" nix build "${nix_opts[@]}" --no-link --no-write-lock-file .#checks.x86_64-linux.patches
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)

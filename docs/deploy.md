@@ -154,18 +154,18 @@ builds each workstation's system from those `drvPath`s, unless
 evaluates a workstation with the box browser forced on (`ci/box-browser.nix`),
 to check the display's command line, and a bare server record (`ci/server.nix`),
 to check what the schema accepts and rejects. It builds the `scheme-catalogue`
-check, which compares the scheme parser with `yq`, and the `theme-contrast`
+check, which compares the scheme parser with `yq`, the `theme-contrast`
 check, which runs `scripts/lib/theme-contrast.py` on nixos-rog's theme packs,
-also under `--evaluate-only`.
+and the `patches` check (`ci/patches.nix`), which unpacks each nixpkgs package
+that this repository patches and applies its patches, also under
+`--evaluate-only`. The check fails when an overlay in `overlays/` patches a
+package it does not list.
+So a nixpkgs move after which a patch no longer applies fails without a build
+of the package.
 `ci/unit-cycles.sh` runs the ordering-cycle check
 of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a
 GitHub runner on 2026-10-13.
-
-`ci/checks.sh` also builds the `patches` check (`ci/patches.nix`), also under
-`--evaluate-only`. It unpacks each nixpkgs package that an overlay patches,
-applies the patches and stops, so a nixpkgs move after which a patch no longer
-applies fails the check without a build of the package.
 
 Without a `#`, `scripts/eval.sh` prints one value of nixos-rog's
 configuration; give a flake attribute with `#` for another host. A string

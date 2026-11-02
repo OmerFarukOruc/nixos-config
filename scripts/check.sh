@@ -28,7 +28,7 @@ EOF
   # shellcheck disable=SC2016 # the remote bash expands $1
   changed=$(copy_run_light <<<'cd "$1" && git diff --name-only')
   if [[ -n $changed ]]; then
-    printf '%s\n' "$changed" | rsync -a --files-from=- "$(copy_path)" ./
+    printf '%s\n' "$changed" | "${COPY_RSYNC[@]}" -a --files-from=- "$(copy_path)" ./
     while read -r file; do echo "fixed: $file"; done <<<"$changed"
   fi
 fi

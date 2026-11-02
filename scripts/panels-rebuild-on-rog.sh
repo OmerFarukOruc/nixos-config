@@ -18,9 +18,7 @@ if (($#)); then
 fi
 
 rog_pick_host
-{
-  rog_session_script --wayland
-  cat <<'EOF'
+rog_ssh_session --wayland <<'EOF'
 if [[ $(systemctl --user show -p MainPID --value plasma-plasmashell) == 0 ]]; then
   echo "No Plasma session runs on nixos-rog; log in to Plasma first." >&2
   exit 1
@@ -69,4 +67,3 @@ echo "RTX 4070: $status"
 echo "Run scripts/verify-nixos-rog.sh next."
 systemctl --user is-active --quiet plasma-plasmashell
 EOF
-} | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s

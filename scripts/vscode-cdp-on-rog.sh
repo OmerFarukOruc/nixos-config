@@ -19,9 +19,7 @@ on() {
     return
   fi
   rog_pick_host
-  {
-    rog_session_script
-    cat <<'EOF'
+  rog_ssh_session "$remote_port" <<'EOF'
 if pgrep -u "$(id -u)" -f '[/]lib/vscode/code' >/dev/null; then
   echo "Close VS Code on nixos-rog first; this script never stops it." >&2
   exit 1
@@ -37,7 +35,6 @@ done
 echo "VS Code did not open its debugging port within 40 s." >&2
 exit 1
 EOF
-  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s -- "$remote_port"
   ssh "${SSH_OPTS[@]}" -N -o ExitOnForwardFailure=yes \
     -L "127.0.0.1:$local_port:127.0.0.1:$remote_port" "$ROG_HOST" </dev/null >/dev/null 2>&1 &
   echo $! >"$pidfile"
@@ -62,10 +59,7 @@ off() {
     rm -f -- "$pidfile"
   fi
   rog_pick_host
-  {
-    rog_session_script
-    echo 'systemctl --user stop vscode-cdp.service 2>/dev/null || true'
-  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s
+  rog_ssh_session <<<'systemctl --user stop vscode-cdp.service 2>/dev/null || true'
   echo "Quit VS Code on nixos-rog to close its debugging port."
 }
 

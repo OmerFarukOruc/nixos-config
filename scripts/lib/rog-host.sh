@@ -18,16 +18,24 @@ rog_pick_host() {
   exit 1
 }
 
-# rog_session_script [--wayland]: prints the start of a remote script that
-# reaches the login session's user bus, and with --wayland its Wayland socket.
-rog_session_script() {
-  cat <<'EOF'
+# rog_ssh_session [--wayland] [ARG...]: runs the script on stdin with bash on
+# nixos-rog, with the ARGs as its arguments, after a prelude that reaches the
+# login session's user bus, and with --wayland its Wayland socket.
+rog_ssh_session() {
+  local wayland=false
+  if [[ ${1:-} == --wayland ]]; then
+    wayland=true
+    shift
+  fi
+  # shellcheck disable=SC2029 # ${*@Q} quotes the arguments for the remote shell
+  {
+    cat <<'EOF'
 set -euo pipefail
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 EOF
-  [[ ${1:-} == --wayland ]] || return 0
-  cat <<'EOF'
+    if $wayland; then
+      cat <<'EOF'
 # The login session exports its Wayland socket name to the user's systemd
 # manager; the name depends on how many compositors started before it.
 WAYLAND_DISPLAY=$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p')
@@ -37,4 +45,7 @@ if [[ -z $WAYLAND_DISPLAY ]]; then
 fi
 export WAYLAND_DISPLAY
 EOF
+    fi
+    cat
+  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" "bash -s -- ${*@Q}"
 }
