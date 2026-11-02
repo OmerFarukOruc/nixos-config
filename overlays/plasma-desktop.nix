@@ -6,8 +6,10 @@
 # of the glass look, so a point between two widgets never moves. The patch
 # steps at least one pixel, starts the search no further out than the last
 # widget and treats "no widget" as the first position.
-# Upstream containments/panel/LayoutManager.js still has the loop:
-# https://invent.kde.org/plasma/plasma-desktop/-/blob/master/containments/panel/LayoutManager.js
+# Upstream containments/panel/LayoutManager.js had the loop on master cab933b0
+# (2026-11-02). Check these reports before dropping the patch:
+# https://bugs.kde.org/show_bug.cgi?id=528228
+# https://github.com/luisbocanegra/plasma-panel-colorizer/issues/593
 _final: prev: {
   kdePackages = prev.kdePackages.overrideScope (
     _kfinal: kprev: {
