@@ -23,7 +23,7 @@ system. Besides each host's unit files and the theme checks, it builds the
 repository patches and applies its patches, so a move after which a patch no
 longer applies stays out. Any other move that evaluates but fails to build
 reaches the hosts, which keep their system and show "Update failed"
-([Updater](nixos-rog.md#updater)).
+([Updater](workstations.md#updater)).
 Such a move also stops every later push, because the pre-push hook builds each
 workstation's system ([Check before you deploy](deploy.md#check-before-you-deploy)),
 until a push that fixes the build lands.

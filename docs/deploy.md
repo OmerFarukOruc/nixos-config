@@ -87,7 +87,7 @@ Every host installs `main` by itself every hour
 build for a host fails that host's next hourly install. The host keeps its
 system, records that `main` as failed and skips it in the hourly runs until
 `main` moves, and a host with a desktop shows "Update failed"
-([Failures and notifications](nixos-rog.md#failures-and-notifications)).
+([Failures and notifications](workstations.md#failures-and-notifications)).
 `upgrade` tries that `main` again. `devenv tasks run ci` builds every host's
 system before a push.
 
@@ -296,7 +296,7 @@ Deploy each host that it prints as `affected`. A host it prints as `unchanged`
 needs no deploy.
 
 Every host installs `main` by itself every hour, the PCs only on AC power
-([Updater](nixos-rog.md#updater)), and devbox reboots at night for a new kernel
+([Updater](workstations.md#updater)), and devbox reboots at night for a new kernel
 ([Deploy to a server](#deploy-to-a-server)). Leave an affected
 host to its timer, and deploy it by hand only when the change needs proof on
 that host now, such as a new systemd unit or a change on screen. A hand deploy
@@ -352,7 +352,7 @@ on a branch.
 ## Upgrade a host to main
 
 Every host installs the newest `main` by itself every hour with NixOS's
-`system.autoUpgrade` ([Updater](nixos-rog.md#updater)). Run `upgrade` on a host
+`system.autoUpgrade` ([Updater](workstations.md#updater)). Run `upgrade` on a host
 to do it now. It starts `nixos-upgrade.service`, prints the unit's log while it
 runs and exits with the run's status, or 1 when the run skipped. It refuses to
 start on battery. On devbox, a `main` that changes the kernel outside the night
@@ -368,7 +368,7 @@ which removed users and services until a deploy of `main` brought them back.
 ## Deploy to a server
 
 devbox installs `main` with the same `system.autoUpgrade` as the PCs
-([Updater](nixos-rog.md#updater)), and `oruc.autoUpgrade.reboot` adds a reboot.
+([Updater](workstations.md#updater)), and `oruc.autoUpgrade.reboot` adds a reboot.
 
 **Why root.** A deploy from nixos-desktop or nixos-rog logs in as root over
 Tailscale SSH, because omer's sudo needs a password on a server and a deploy

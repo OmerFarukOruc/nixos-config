@@ -223,7 +223,7 @@ delivery to SigNoz, which the cutover proves.
 ## Deploys
 
 The box installs `main` every hour with `system.autoUpgrade`, as the PCs do
-([Updater](nixos-rog.md#updater)), and reboots at night when the new `main`
+([Updater](workstations.md#updater)), and reboots at night when the new `main`
 changes the kernel, the initrd or the kernel modules. That install has none of
 deploy.sh's rollback, so a `main` that breaks sshd or Tailscale leaves only the
 provider's console. [Deploy to a server](deploy.md#deploy-to-a-server) has the

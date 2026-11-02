@@ -30,17 +30,17 @@ whatever generation runs, so a generation stays only after
 [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
 
 Every host installs `main` every hour on top of a generation you restored
-([Updater](nixos-rog.md#updater)), and that install makes a new newest
+([Updater](workstations.md#updater)), and that install makes a new newest
 generation. So every rollback recipe below pauses `nixos-upgrade.timer` before
 it changes the system profile, and resumes it once `main` holds a fix. The pause lasts until the next reboot, and
 `Persistent=true` runs a missed hour soon after boot, so pause it again after
-each reboot. [Updater](nixos-rog.md#updater) has the pause, the wait for a
+each reboot. [Updater](workstations.md#updater) has the pause, the wait for a
 running install, and the resume.
 
 ## Roll back a running host
 
 1. Pause `nixos-upgrade.timer` on the host and wait for a running install to
-   end ([Updater](nixos-rog.md#updater)).
+   end ([Updater](workstations.md#updater)).
 2. Switch the host back to its previous retained generation, here
    nixos-latitude:
 
@@ -62,7 +62,7 @@ running install, and the resume.
    nixos-latitude, select its entry. In Limine, open its `Generation <number>`
    entry and pick `Default`.
 3. As soon as it starts, pause `nixos-upgrade.timer`
-   ([Updater](nixos-rog.md#updater)). The missed hourly run starts soon after
+   ([Updater](workstations.md#updater)). The missed hourly run starts soon after
    boot and would install the broken `main` again.
 4. Make the selected generation the next boot default. On nixos-latitude, run:
 
@@ -86,7 +86,7 @@ To go back to a kept generation that the boot menu does not list, do these
 steps:
 
 1. Pause `nixos-upgrade.timer` first and wait for a running install to end
-   ([Updater](nixos-rog.md#updater)).
+   ([Updater](workstations.md#updater)).
 
 2. Run these commands. The first one lists the generations. The second one
    makes the generation you picked the current one, and the third one activates
@@ -112,7 +112,7 @@ nixos-rog, nixos-desktop and devbox a generation stays the default only after
 the newer ones are gone:
 
 1. Pause `nixos-upgrade.timer` and wait for a running install to end
-   ([Updater](nixos-rog.md#updater)). Otherwise the next install of `main`
+   ([Updater](workstations.md#updater)). Otherwise the next install of `main`
    makes a new newest generation, and Limine boots that one.
 2. Boot that generation from the Limine menu (its `Generation <number>` entry,
    then `Default`), and pause the timer again after the reboot, or activate it
@@ -154,7 +154,7 @@ load a different kernel, so recovery needs a reboot:
    ```
 
 4. To stay on the recovery entry past the next hourly run, pause
-   `nixos-upgrade.timer` ([Updater](nixos-rog.md#updater)), because that run
+   `nixos-upgrade.timer` ([Updater](workstations.md#updater)), because that run
    switches the host to `main`.
 
 ## Repair the bootloader
