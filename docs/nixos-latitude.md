@@ -103,8 +103,8 @@ sleeps: `systemd.sleep.settings.Sleep` refuses suspend, hibernation, hybrid
 sleep and suspend-then-hibernate, and the `sleep`, `suspend`, `hibernate` and
 `hybrid-sleep` targets are disabled. The module leaves the lid and power keys
 to each host. `machines/nixos-latitude/configuration.nix` sets
-`services.logind.settings.Login` so that the lid switch and the power key do
-nothing. The panic and watchdog settings are:
+`services.logind.settings.Login` so that logind ignores the lid switch and the
+power key. In the niri session the power key opens Noctalia's session panel. The panic and watchdog settings are:
 
 - `panic=10` reboots 10 s after a kernel panic.
 - `efi_pstore.pstore_disable=0` turns on EFI pstore, which the CachyOS kernel

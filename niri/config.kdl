@@ -48,7 +48,6 @@ binds {
     Mod+Ctrl+Space { spawn "oruc-launch-file"; }
     Mod+Q { close-window; }
     Mod+Shift+E { quit; }
-    XF86PowerOff { spawn "wlogout"; }
 
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }

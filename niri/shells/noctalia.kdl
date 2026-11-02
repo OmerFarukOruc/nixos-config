@@ -11,5 +11,6 @@ binds {
     Mod+V hotkey-overlay-title="Clipboard Manager" { spawn "noctalia" "msg" "panel-toggle" "clipboard"; }
     Mod+Comma hotkey-overlay-title="Settings" { spawn "noctalia" "msg" "settings-toggle"; }
     Mod+X hotkey-overlay-title="Power Menu" { spawn "noctalia" "msg" "panel-toggle" "session"; }
+    XF86PowerOff { spawn "noctalia" "msg" "panel-toggle" "session"; }
     Mod+Y hotkey-overlay-title="Browse Wallpapers" { spawn "noctalia" "msg" "panel-toggle" "wallpaper"; }
 }

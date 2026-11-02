@@ -152,7 +152,8 @@ These rules follow from the list:
 - **A shell.** Add it to `shellSpecs` in `machines/selectors.nix` and create
   `home-manager/modules/shells/<name>.nix`. A niri shell also needs
   `niri/shells/<name>.kdl` with its binds, because niri treats a missing include
-  as an error.
+  as an error. Those binds include `Mod+X` and `XF86PowerOff` (the power key),
+  which open the shell's power menu.
 - **A kernel profile.** Add it to `kernelSpecs` in `machines/selectors.nix`. For
   a CachyOS profile, set its `package` to
   `[ "cachyosKernels" "linuxPackages-cachyos-<variant>" ]` with a variant that
@@ -572,7 +573,6 @@ These stay fixed on purpose, and the check does not cover them:
 - Web pages and Electron app interiors follow only the dark or light variant,
   through the desktop portal.
 - niri's hotkey overlay, screenshot UI and error banner.
-- The icons of wlogout.
 - The icons other than folders. `nixosModules/icon-theme.nix` picks Gruvbox
   Plus for a gruvbox scheme, whose folders already match, and for every other
   scheme `Papirus-Oruc-<colour>-<Dark|Light>` from

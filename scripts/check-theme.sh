@@ -28,7 +28,7 @@ that neither run changes the running session's KDE colour scheme, and that
 the pack is a GC root. It prints a skip line for each scheme whose Plasma
 checks cannot run.
 
-For Noctalia, DMS, rofi, vicinae, niri, wlogout, mpv and the Plasma splash it
+For Noctalia, DMS, rofi, vicinae, niri, mpv and the Plasma splash it
 checks that each file holds the scheme's colour; for mpv's OSD and subtitle
 colours it asks mpv itself to read the file. While Noctalia or DMS runs, it
 also checks that the shell shows the custom palette in the scheme's dark or
@@ -502,7 +502,6 @@ check_session() {
   holds "$slug" .local/share/rofi/themes/custom.rasi "background-color: #$base00;"
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "background = \"#$base00\""
   holds "$slug" .local/share/vicinae/themes/oruc-base16.toml "variant = \"$polarity\""
-  holds "$slug" .config/wlogout/style.css "border-color: #$base0D;"
   holds "$slug" .config/mpv/script-opts/modernz.conf "seekbarfg_color=#$base0D"
   mpv_reads_colors "$slug" "$base05"
   holds "$slug" .local/share/plasma/look-and-feel/oruc.splash/contents/splash/Splash.qml "color: \"#$base00\""

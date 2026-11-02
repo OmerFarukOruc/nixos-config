@@ -168,7 +168,7 @@ let
       The cursor changes at once, or about 7 s later the first time a scheme is used. VS Code changes its
       colours at once and its see-through window at its next start. niri's
       focus ring, Noctalia and DMS change at once; rofi and vicinae at their
-      next open, wlogout, mpv, Konsole, Thunderbird, SourceGit and jadx at their
+      next open, mpv, Konsole, Thunderbird, SourceGit and jadx at their
       next start, the Cursor editor, Obsidian, OBS, Vesktop, Firefox and a Telegram
       that loaded the oruc palette at once, Spotify at its next start, and the Plasma
       splash at the next login. Brave and Chromium take the desktop's colours from
