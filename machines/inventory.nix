@@ -102,6 +102,9 @@ let
       system = "x86_64-linux";
       kind = "server";
       formFactor = "desktop";
+      theme = {
+        scheme = "warm-burnout-dark";
+      };
       kernel.profile = "nixos";
       bootloader = "limine";
       biosDevice = "/dev/vda";
