@@ -13,7 +13,7 @@ from claude_tools.usage import epoch
 NO_RESET_WAIT = 3600
 TRANSCRIPT_TAIL = 256 * 1024
 WINDOWS = {"five_hour": 5 * 3600, "seven_day": 7 * 86400}
-LIMIT = re.compile(r"You've hit your (session|weekly) limit · resets (.+?\))")
+LIMIT = re.compile(r"You've hit your (session|5-hour|weekly) limit · resets (.+?\))")
 MODEL_LIMIT = re.compile(r"You've reached your \S+ limit")
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 RESET = re.compile(
@@ -37,21 +37,19 @@ def last_assistant(transcript: Path) -> dict | None:
 
 
 def recorded_limit(projects: Path, session: str) -> tuple[str, int] | None:
-    """The limit message and its time when the session's last reply is Claude Code's usage limit error."""
     transcript = next(projects.glob(f"*/{session}.jsonl"), None)
     try:
         entry = last_assistant(transcript) if transcript else None
     except OSError:
         return None
-    if not entry or entry.get("isApiErrorMessage") is not True:
+    if not entry or entry.get("isApiErrorMessage") is not True or entry.get("apiError") != "usage_limit_reached":
         return None
     try:
         text = " ".join(c.get("text") or "" for c in entry["message"]["content"]).strip()
-        if not (LIMIT.search(text) or MODEL_LIMIT.search(text)):
-            return None
-        return text, epoch(entry["timestamp"])
+        said = epoch(entry["timestamp"])
     except (AttributeError, KeyError, TypeError, ValueError):
         return None
+    return (text, said) if said else None
 
 
 def parse_reset(text: str, at: int, window: int) -> int | None:
@@ -81,7 +79,7 @@ def parse_reset(text: str, at: int, window: int) -> int | None:
 
 def parse_limit(text: str, at: int) -> tuple[int | None, str] | None:
     if m := LIMIT.search(text):
-        window = WINDOWS["five_hour" if m[1] == "session" else "seven_day"]
+        window = WINDOWS["seven_day" if m[1] == "weekly" else "five_hour"]
         return parse_reset(m[2], at, window), f"{m[1]} limit"
     if MODEL_LIMIT.search(text):
         return None, "model limit"

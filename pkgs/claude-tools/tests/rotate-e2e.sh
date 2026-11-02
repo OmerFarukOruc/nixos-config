@@ -25,10 +25,13 @@ fail() {
 }
 
 "$tools" usage --json --max-age 600 >"$dir/real-usage.json"
-signed_in() { jq -r '.accounts[] | select(.plan != null) | "\(.plan | startswith("team"))\t\(.name)"' "$dir/real-usage.json"; }
+signed_in() {
+  jq -r '.accounts[] | select(.plan != null and (.state == "ok" or .state == "expiring"))
+    | "\(.plan | startswith("team"))\t\(.name)"' "$dir/real-usage.json"
+}
 A=${CR_E2E_A:-$(signed_in | awk -F '\t' '$1 == "true" { print $2; exit }')}
 R=${CR_E2E_R:-$(signed_in | awk -F '\t' '$1 == "false" { print $2; exit }')}
-C=${CR_E2E_C:-$(signed_in | cut -f2 | grep -vxF -e "$A" -e "$R" | head -n 1)}
+C=${CR_E2E_C:-$(signed_in | awk -F '\t' -v a="$A" -v r="$R" '$2 != a && $2 != r { print $2; exit }')}
 [[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a team account, a personal account and a third account that are signed in; set CR_E2E_A, CR_E2E_R and CR_E2E_C"
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
@@ -189,7 +192,7 @@ limit() {
   local c tmp
   c=$(child "$mwrapper" | cut -f1)
   tmp=$(mktemp "$runtime/.e2e.XXXXXX")
-  jq -n --arg s "$sid" --arg t "$transcript" --arg m "You've hit your session limit · resets $1 (UTC)" \
+  jq -n --arg s "$sid" --arg t "$transcript" --arg m "You've hit your 5-hour limit · resets $1 (UTC)" \
     '{session_id: $s, transcript_path: $t, hook_event_name: "StopFailure", last_assistant_message: $m}' >"$tmp"
   mv "$tmp" "$runtime/$mwrapper-$c.json"
 }

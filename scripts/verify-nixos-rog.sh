@@ -90,7 +90,6 @@ while (($# > 0)); do
   shift
 done
 
-rog_pick_host
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 if [[ -z $report ]]; then
@@ -120,6 +119,7 @@ finish() {
   rm -rf -- "$results" "$work"
 }
 trap finish EXIT
+rog_pick_host
 
 remote_prelude=$(
   cat <<'PRELUDE'
@@ -263,13 +263,15 @@ case $build in
   *) record plasma-panel-settings fail "could not read the panel build state on $host" ;;
 esac
 
-launchers=()
-if [[ $have_panels == true ]]; then
-  mapfile -t launchers < <(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --launchers "$work/expected.json")
-fi
-if ((${#launchers[@]} == 0)); then
+launcher_ids=
+if [[ $have_panels == false ]]; then
+  record dock-launchers-installed manual "could not copy $panels_json from $host; deploy a system that writes it, then rerun"
+elif ! launcher_ids=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" --launchers "$work/expected.json"); then
+  record dock-launchers-installed fail "could not read the launchers of $panels_json"
+elif [[ -z $launcher_ids ]]; then
   record dock-launchers-installed manual "no applications: launcher in $host's $panels_json"
 else
+  mapfile -t launchers <<<"$launcher_ids"
   launcher_status=0
   missing=$(
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell

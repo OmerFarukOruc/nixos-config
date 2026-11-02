@@ -208,7 +208,7 @@ class Switcher:
             if switched.get(name, 0) > time.time() - COOLDOWN:
                 continue
             session = session_of(a)
-            hit = session and recorded_limit(self.settings.home / ".claude/projects", session)
+            hit = recorded_limit(self.settings.home / ".claude/projects", session) if session else None
             if not hit:
                 continue
             try:
@@ -263,7 +263,7 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                         description="Move herdr Claude agents off accounts that hit a usage limit, and start them "
                                     "again after the herdr server restarted.")
     cmds = ap.add_subparsers(dest="cmd", required=True)
-    cmds.add_parser("scan", help="restore, then switch each named Claude agent whose screen ends in a limit message")
+    cmds.add_parser("scan", help="restore, then switch each named idle Claude agent whose transcript ends in a usage limit error")
     cmds.add_parser("restore", help="only the restore step of scan")
     sw = cmds.add_parser("switch", help="switch one agent now")
     sw.add_argument("name")

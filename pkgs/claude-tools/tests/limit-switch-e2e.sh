@@ -87,11 +87,11 @@ inject_limit() {
   jq -cn --arg text "$1" --arg sid "$sid" --arg cwd "$dir" --arg uuid "$(cat /proc/sys/kernel/random/uuid)" \
     --arg parent "$parent" --arg ts "$(date -u +%FT%T.000Z)" \
     '{parentUuid: $parent, isSidechain: false, userType: "external", cwd: $cwd, sessionId: $sid, type: "assistant",
-      uuid: $uuid, timestamp: $ts, error: "rate_limit", isApiErrorMessage: true,
+      uuid: $uuid, timestamp: $ts, error: "rate_limit", apiError: "usage_limit_reached", isApiErrorMessage: true,
       message: {id: $uuid, model: "<synthetic>", role: "assistant", type: "message", stop_reason: "stop_sequence",
         content: [{type: "text", text: $text}]}}' >>"$t"
 }
-limit_line() { echo "You've hit your session limit · resets $(LC_ALL=C date -u -d "@$1" +%-I:%M%P) (UTC)"; }
+limit_line() { echo "You've hit your 5-hour limit · resets $(LC_ALL=C date -u -d "@$1" +%-I:%M%P) (UTC)"; }
 check_move() {
   local now
   now=$(account "$pane")
@@ -121,22 +121,31 @@ fi
 h agent wait "$name" --until idle --timeout 60000 >/dev/null
 [[ "$(account "$pane")" == "$start" ]] || fail "scratch agent did not start on $start"
 ask "Remember the code word PELICAN. Reply only OK."
-h agent prompt "$name" "/loop 6h reply only with the word tick" >/dev/null 2>&1 || true
-sleep 3
-h agent read "$name" --source visible | grep -q '❯ /loop' && h agent send-keys "$name" enter >/dev/null
-h agent wait "$name" --until idle --until "done" --until blocked --timeout 120000 >/dev/null
-if h agent read "$name" --source visible | grep -q "This session only"; then
-  h agent send-keys "$name" down >/dev/null
-  h agent send-keys "$name" enter >/dev/null
-fi
-h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null ||
-  {
-    h agent read "$name" --source visible | tail -15
-    fail "the /loop prompt did not settle"
-  }
 sid=$(session)
 [[ -n "$sid" && "$sid" != null ]] || fail "herdr reports no session id"
-check_loop "the /loop setup"
+start_loop() {
+  local out
+  out=$(h agent prompt "$name" "/loop 6h reply only with the word tick" 2>&1) || echo "setup: herdr agent prompt failed: $out"
+  sleep 3
+  h agent read "$name" --source visible | grep -q '❯ /loop' && h agent send-keys "$name" enter >/dev/null
+  h agent wait "$name" --until idle --until "done" --until blocked --timeout 120000 >/dev/null
+  if h agent read "$name" --source visible | grep -q "This session only"; then
+    h agent send-keys "$name" down >/dev/null
+    h agent send-keys "$name" enter >/dev/null
+  fi
+  h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null ||
+    {
+      h agent read "$name" --source visible | tail -15
+      fail "the /loop prompt did not settle"
+    }
+}
+for attempt in 1 2 3; do
+  start_loop
+  ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
+  transcript_shows "$last_reply" 1j && break
+  ((attempt < 3)) || fail "the agent has no scheduled job after three /loop prompts"
+  echo "setup: the /loop prompt did not reach the session, so it is sent again"
+done
 
 mkdir -p "$dir/state"
 profiles names | jq -R . | jq -s --arg start "$start" --argjson u "$(($(date +%s) + 3600))" \
@@ -161,7 +170,7 @@ check_loop switch
 
 rm -f "$state/switched.json"
 cls scan || fail "scan exited $?"
-[[ "$(account "$pane")" == "$first" ]] || fail "scan moved an agent whose screen shows no limit to $(account "$pane")"
+[[ "$(account "$pane")" == "$first" ]] || fail "scan moved an agent whose transcript records no limit to $(account "$pane")"
 jq -e --arg n "$name" '.agents[$n].session' "$state/agents.json" >/dev/null || fail "scan did not record $name"
 
 reset=$(date -u -d '+2 hours' +%s)

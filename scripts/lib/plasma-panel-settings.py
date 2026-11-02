@@ -307,11 +307,13 @@ def print_launchers(expected):
 
 
 def main():
-    if sys.argv[1:2] == ["--icons"] and len(sys.argv) == 4:
-        print_icons(sys.argv[2], sys.argv[3])
-        return 0
-    if sys.argv[1:2] == ["--launchers"] and len(sys.argv) == 3:
-        print_launchers(sys.argv[2])
+    modes = {"--icons": (print_icons, 4), "--launchers": (print_launchers, 3)}
+    if sys.argv[1:2] and sys.argv[1] in modes:
+        run, argc = modes[sys.argv[1]]
+        if len(sys.argv) != argc:
+            print(__doc__.split("\n\n")[1], file=sys.stderr)
+            return 2
+        run(*sys.argv[2:])
         return 0
     if len(sys.argv) not in (3, 4):
         print(__doc__.split("\n\n")[1], file=sys.stderr)
