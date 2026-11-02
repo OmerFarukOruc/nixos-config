@@ -1,6 +1,7 @@
 { lib }:
 path:
 let
+  slugOf = import ./scheme-slug.nix { inherit lib; };
   file = builtins.unsafeDiscardStringContext (baseNameOf path);
   fail = problem: throw "machines/scheme-parser.nix: ${file}: ${problem}";
   slots = map (i: "base0${lib.toUpper (lib.toHexString i)}") (lib.range 0 15);
@@ -76,7 +77,7 @@ assert
   || fail "variant ${variant} is neither dark nor light";
 {
   system = "base16";
-  slug = lib.removeSuffix ".yaml" file;
+  slug = slugOf file;
   name = value "name";
   author = value "author";
   inherit variant;

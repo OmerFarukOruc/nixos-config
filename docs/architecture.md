@@ -215,7 +215,7 @@ is a specialisation (`home-manager/modules/variants.nix`), which `plasma-look`
 activates (`nixosModules/hm-variants.nix`). A host without Plasma has no
 variants. The shell commands read the finished rows and do not rebuild them.
 `theme <scheme>` activates no variant: it stores the scheme, points `current`
-at it in the pack and runs the reloads, so any of the 362 schemes switches in
+at it in the pack and runs the reloads, so any scheme of the pack switches in
 the same way. `plasma-look <look>` stores the look and activates its variant
 ([Switch the scheme](nixos-rog.md#switch-the-scheme)). Each deploy and each
 boot activates the default look first, so the Home Manager service then runs

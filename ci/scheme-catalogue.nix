@@ -20,11 +20,17 @@ in
         passAsFile = [ "parsed" ];
       }
       ''
-        for file in ${inputs.base16-schemes}/base16/*.yaml ${../assets/schemes}/*.yaml; do
+        for file in ${inputs.base16-schemes}/base16/*.y{,a}ml ${../assets/schemes}/*.y{,a}ml; do
           yq -o=json -I=0 '{"name": .name, "author": .author, "variant": .variant, "palette": (.palette | map_values(downcase))}' "$file" |
-            jq -c --arg slug "$(basename "$file" .yaml)" '{($slug): .}'
+            jq -c --arg slug "$(basename "$file" | sed -E 's/\.ya?ml$//')" '{($slug): .}'
         done | jq -S -s add >yaml.json
         jq -S . "$parsedPath" >parsed.json
+        files=$(find ${inputs.base16-schemes}/base16 ${../assets/schemes} -type f | wc -l)
+        entries=$(jq length parsed.json)
+        if [ "$files" != "$entries" ]; then
+          echo "$files scheme files but $entries catalogue entries: machines/schemes.nix skips a file." >&2
+          exit 1
+        fi
         if ! diff -u yaml.json parsed.json; then
           echo "machines/scheme-parser.nix reads the schemes above differently from yq." >&2
           exit 1
