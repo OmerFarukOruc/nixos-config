@@ -168,6 +168,3 @@ done
 if [ "${#replaced[@]}" -gt 0 ]; then
   docker image prune -f --filter label=dev.risoluto.cliproxy.build-stage=tls-proxy >/dev/null || true
 fi
-
-printf 'cliproxy-up: shared panel: https://%s/management.html#/\n' \
-  "$CLIPROXY_SHARE_HOST"

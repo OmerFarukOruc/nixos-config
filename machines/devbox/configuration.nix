@@ -92,7 +92,11 @@ in
       "xrdp.service"
       "xrdp-sesman.service"
     ];
-    journalUserUnits = [ "docker.service" ];
+    journalUserUnits = [
+      "docker.service"
+      "cliproxy.service"
+      "cliproxy-update.service"
+    ];
   };
 
   networking = {

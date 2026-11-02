@@ -150,7 +150,9 @@ outage loses nothing that the retry window covers.
   needs its unit in `journalUnits` before its lines ship.
   The lines of user units ship under the same `service.name` through
   `journalUserUnits`, which lists exact names, because a glob matches nothing
-  there. This box lists `docker.service`. A line carries `_SYSTEMD_USER_UNIT`
+  there. This box lists `docker.service`, `cliproxy.service` and
+`cliproxy-update.service`; `cliproxy-up.sh` prints no share host name, because
+that name is a secret. A line carries `_SYSTEMD_USER_UNIT`
   when the unit wrote it and `USER_UNIT` when the user's systemd wrote it about
   the unit, such as a start or the failure after a start limit, and both carry
   `_UID`. The receiver has no `--user-unit` option, and that option would read
