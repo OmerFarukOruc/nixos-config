@@ -58,7 +58,7 @@ fm == 1 {
 }
 { emit($0) }
 END { if (fm == 1) for (i = 1; i <= n; i++) emit(held[i]) }
-' "$file" |
+' <"$file" |
   pandoc -s -f gfm-yaml_metadata_block+tex_math_dollars --sandbox \
     "${toc[@]}" \
     --highlight-style="$PANDOC_MD_ASSETS/typewriter-neutral.theme" \
