@@ -64,6 +64,10 @@ let
         blurple-65 = fill 20 scheme.base0D;
         badge-primary-background = fill 0 scheme.base0D;
         badge-primary-text = text;
+        button-filled-brand-background = fill 0 scheme.base0D;
+        button-filled-brand-background-hover = fill 10 scheme.base0D;
+        button-filled-brand-text = text;
+        button-filled-brand-text-hover = text;
         brand-260 = fill 0 scheme.base0D;
         brand-500 = fill 0 scheme.base0F;
         mention-background = fill 0 scheme.base0D;

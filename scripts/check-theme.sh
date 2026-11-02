@@ -57,8 +57,11 @@ each text colour the VS Code theme draws on an accent background reaches
 4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
 and side bar backgrounds, that the Claude Code status line's segment colours
 are the scheme's and their text reaches 4.5:1 on them, and that OBS's text on
-its accent colours, SourceGit's badge and conflict text, and the text Vesktop
-and Telegram draw on their accent fills reach 4.5:1.
+its accent colours, SourceGit's badge and conflict text, the text Vesktop
+and Telegram draw on their accent fills, the text on GTK's accent,
+destructive, success, warning and error colours, on KDE's selection, on
+tmux's current window, on Noctalia's and DMS's accent colours, and on the
+login screen's button and highlight reach 4.5:1.
 
 For Codex, opencode, pi, Konsole, Thunderbird, Obsidian, SourceGit, OBS,
 Vesktop, Telegram, Spotify and the Cursor editor it checks that their theme
@@ -230,13 +233,14 @@ holds_required() {
 }
 
 check_contrast() {
-  python3 -I - "$pack" <<'PYTHON'
+  python3 -I - "$pack" "$system_pack" <<'PYTHON'
 import json
 import re
 import sys
 from pathlib import Path
 
 pack = Path(sys.argv[1])
+system_pack = Path(sys.argv[2])
 color = re.compile(r'^\s*"([^"]+)": "#([0-9a-fA-F]+)"', re.M)
 
 
@@ -427,6 +431,8 @@ vesktop_pairs = [
     ("control-primary-text-hover", "control-primary-background-hover"),
     ("control-primary-text-active", "control-primary-background-active"),
     ("badge-primary-text", "badge-primary-background"),
+    ("button-filled-brand-text", "button-filled-brand-background"),
+    ("button-filled-brand-text-hover", "button-filled-brand-background-hover"),
     ("white", "brand-260"),
     ("white", "brand-500"),
     ("mention-foreground", "mention-background"),
@@ -468,24 +474,67 @@ def app_failures(slug):
         block = vesktop.read_text().rsplit(".visual-refresh {", 1)[1]
         colors = dict(vesktop_var.findall(block))
         for text, background in vesktop_pairs:
+            if text not in colors or background not in colors:
+                found.append(f"{slug}: Vesktop sets no {text} or {background}")
+                continue
             ratio = contrast(colors[text], colors[background])
             if ratio < 4.5:
                 found.append(f"{slug}: Vesktop {text} on {background} is {ratio:.2f}:1")
     return found
 
 
+gtk_var = re.compile(r"^@define-color ([a-z_]+_color) #([0-9a-fA-F]{6});", re.M)
+gtk_fills = ("accent", "destructive", "success", "warning", "error")
+kde_selection = re.compile(r"^\[Colors:Selection\]\n(.*?)(?=^\[)", re.M | re.S)
+kde_key = re.compile(r"^(ForegroundNormal|BackgroundNormal)=(\d+),(\d+),(\d+)$", re.M)
+tmux_style = re.compile(r'^set -g ([a-z-]+) "fg=#([0-9a-fA-F]{6}),bg=#([0-9a-fA-F]{6})', re.M)
+noctalia_fills = ("Primary", "Secondary", "Tertiary", "Error")
+sddm_pairs = (("LoginButtonTextColor", "LoginButtonBackgroundColor"), ("HighlightTextColor", "HighlightBackgroundColor"))
+
+
+def desktop_failures(slug):
+    found = []
+
+    def check(app, text, background, fg, bg):
+        ratio = contrast(fg, bg)
+        if ratio < 4.5:
+            found.append(f"{slug}: {app} {text} #{fg} on {background} #{bg} is {ratio:.2f}:1")
+
+    gtk = dict(gtk_var.findall((pack / slug / ".config/gtk-4.0/oruc-colors.css").read_text()))
+    for fill in gtk_fills:
+        text, background = f"{fill}_fg_color", f"{fill}_bg_color"
+        check("GTK", text, background, gtk[text], gtk[background])
+    kde = kde_selection.search((pack / slug / ".local/share/oruc/kde/OrucBase16.colors").read_text())
+    keys = {key: "".join(f"{int(c):02x}" for c in rgb) for key, *rgb in kde_key.findall(kde[1])}
+    check("KDE", "Selection ForegroundNormal", "BackgroundNormal", keys["ForegroundNormal"], keys["BackgroundNormal"])
+    styles = {style: (fg, bg) for style, fg, bg in tmux_style.findall((pack / slug / ".config/tmux/oruc-theme.conf").read_text())}
+    check("tmux", "window-status-current-style fg", "bg", *styles["window-status-current-style"])
+    noctalia = json.loads((pack / slug / ".config/noctalia/palettes/oruc-base16.json").read_text())["dark"]
+    for fill in noctalia_fills:
+        check("Noctalia", f"mOn{fill}", f"m{fill}", noctalia[f"mOn{fill}"][1:], noctalia[f"m{fill}"][1:])
+    dms = json.loads((pack / slug / ".config/dms/oruc-theme.json").read_text())["dark"]
+    check("DMS", "primaryText", "primary", dms["primaryText"][1:], dms["primary"][1:])
+    sddm = dict(re.findall(r'^([A-Za-z]+)="#([0-9a-fA-F]{6})"$', (system_pack / slug / "sddm.conf.user").read_text(), re.M))
+    for text, background in sddm_pairs:
+        check("SDDM", text, background, sddm[text], sddm[background])
+    return found
+
+
 statusline = []
 apps = []
+desktop = []
 slugs = (pack / "slugs").read_text().split()
 for slug in slugs:
     statusline += statusline_failures(slug)
     apps += app_failures(slug)
-for line in (failures + statusline + apps)[:20]:
+    desktop += desktop_failures(slug)
+for line in (failures + statusline + apps + desktop)[:20]:
     print(f"check-theme: {line}", file=sys.stderr)
-if failures or statusline or apps:
+if failures or statusline or apps or desktop:
     sys.exit(
-        f"check-theme: {len(failures)} VS Code, {len(statusline)} status line"
-        f" and {len(apps)} OBS, SourceGit, Vesktop or Telegram contrast failures"
+        f"check-theme: {len(failures)} VS Code, {len(statusline)} status line,"
+        f" {len(apps)} OBS, SourceGit, Vesktop or Telegram"
+        f" and {len(desktop)} GTK, KDE, tmux, Noctalia, DMS or SDDM contrast failures"
     )
 print(
     f"ok contrast: VS Code text in {checked} schemes;"
@@ -493,6 +542,7 @@ print(
 )
 print(f"ok contrast: the Claude Code status line in {len(slugs)} schemes")
 print(f"ok contrast: OBS, SourceGit, Vesktop and Telegram accent text in {len(slugs)} schemes")
+print(f"ok contrast: GTK, KDE, tmux, Noctalia, DMS and login screen accent text in {len(slugs)} schemes")
 PYTHON
 }
 
@@ -787,6 +837,8 @@ points_at() {
 }
 
 if [[ -n $contrast ]]; then
+  system_pack=$(sed -n 's/^pack=//p' "$theme_root")
+  [[ -d $system_pack ]] || fail "$theme_root names no system theme pack"
   check_contrast || fail "contrast"
 fi
 

@@ -425,7 +425,10 @@ list the keys the renderer changed and the color theme VS Code shows, and
 theme. The Warm Burnout schemes use their own theme, so the check skips them.
 The same run checks the `statusline` fact of every scheme: each segment
 background is the scheme's slot, and each text and usage colour reaches 4.5:1
-on it.
+on it. GTK's accent, destructive, success, warning and error colours, KDE's
+selection, tmux's current window, Noctalia's and DMS's accents and the login
+screen's button and highlight draw their text in `theme.readableOn` of the
+accent, and the same run checks that it reaches 4.5:1 in every scheme.
 
 The pack file `~/.config/oruc/vscode-colors.json` holds `workbench.colorTheme`,
 `window.systemColorTheme` and `workbench.colorCustomizations`, and

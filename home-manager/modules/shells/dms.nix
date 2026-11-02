@@ -27,7 +27,7 @@ let
   };
 
   dmsMode =
-    { scheme, ... }:
+    { scheme, theme }:
     let
       color = scheme.withHashtag;
     in
@@ -45,7 +45,7 @@ let
       surfaceContainerHighest = color.base03;
       primary = color.base0D;
       secondary = color.base0A;
-      primaryText = color.base00;
+      primaryText = "#${theme.readableOn scheme.base0D}";
       primaryContainer = color.base02;
       surfaceTint = color.base0C;
       error = color.base08;

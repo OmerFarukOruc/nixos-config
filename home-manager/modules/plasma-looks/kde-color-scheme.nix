@@ -1,4 +1,8 @@
-{ lib, rawScheme }:
+{
+  lib,
+  rawScheme,
+  selectionText,
+}:
 translucent:
 let
   contrast = import ../../../nixosModules/contrast.nix { inherit lib; };
@@ -20,8 +24,12 @@ let
       backgroundNormal,
       backgroundAlternate,
       foregroundNormal,
+      accentText ? null,
       groupTranslucent ? false,
     }:
+    let
+      accent = color: if accentText == null then color else accentText;
+    in
     ''
       BackgroundAlternate=${
         if groupTranslucent then rgba backgroundAlternate 80 else rgb backgroundAlternate
@@ -29,14 +37,14 @@ let
       BackgroundNormal=${if groupTranslucent then rgba backgroundNormal 140 else rgb backgroundNormal}
       DecorationFocus=${rgb scheme.base0D}
       DecorationHover=${rgb scheme.base0D}
-      ForegroundActive=${rgb scheme.base0D}
+      ForegroundActive=${rgb (accent scheme.base0D)}
       ForegroundInactive=${rgb scheme.base03}
-      ForegroundLink=${rgb scheme.base0D}
+      ForegroundLink=${rgb (accent scheme.base0D)}
       ForegroundNegative=${rgb scheme.base08}
       ForegroundNeutral=${rgb scheme.base09}
       ForegroundNormal=${rgb foregroundNormal}
       ForegroundPositive=${rgb scheme.base0B}
-      ForegroundVisited=${rgb scheme.base0E}
+      ForegroundVisited=${rgb (accent scheme.base0E)}
     '';
 in
 ''
@@ -87,8 +95,9 @@ in
   [Colors:Selection]
   ${group {
     backgroundNormal = scheme.base0D;
-    backgroundAlternate = scheme.base0C;
-    foregroundNormal = scheme.base00;
+    backgroundAlternate = scheme.base0D;
+    foregroundNormal = selectionText;
+    accentText = selectionText;
   }}
   [Colors:Tooltip]
   ${group {

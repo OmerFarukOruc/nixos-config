@@ -8,6 +8,7 @@ in
     scheme:
     let
       color = scheme.withHashtag;
+      onAccent = "#${(themeValues scheme).readableOn scheme.base0D}";
     in
     lib.generators.toINI { } {
       General = lib.mapAttrs (_: value: ''"${value}"'') {
@@ -29,7 +30,7 @@ in
         PlaceholderTextColor = color.base03;
         WarningColor = color.base08;
 
-        LoginButtonTextColor = color.base00;
+        LoginButtonTextColor = onAccent;
         LoginButtonBackgroundColor = color.base0D;
         SystemButtonsIconsColor = color.base05;
         SessionButtonTextColor = color.base05;
@@ -39,7 +40,7 @@ in
         DropdownSelectedBackgroundColor = color.base02;
         DropdownBackgroundColor = color.base01;
 
-        HighlightTextColor = color.base00;
+        HighlightTextColor = onAccent;
         HighlightBackgroundColor = color.base0D;
 
         HoverUserIconColor = color.base0D;

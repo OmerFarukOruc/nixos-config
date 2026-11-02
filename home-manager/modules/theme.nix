@@ -16,9 +16,10 @@ let
   warmBurnout = import ./warm-burnout.nix { inherit inputs pkgs; };
 
   kdeColorScheme =
-    scheme:
+    { scheme, theme }:
     import ./plasma-looks/kde-color-scheme.nix {
       inherit lib;
+      selectionText = theme.readableOn scheme.base0D;
       rawScheme = scheme;
     };
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
@@ -89,14 +90,14 @@ in
     })
     (lib.mkIf config.programs.tmux.enable {
       ".config/tmux/oruc-theme.conf" =
-        { scheme, ... }:
+        { scheme, theme }:
         let
           s = scheme.withHashtag;
         in
         ''
           set -g status-style "fg=${s.base05},bg=${s.base01}"
           set -g window-status-style "fg=${s.base04}"
-          set -g window-status-current-style "fg=${s.base00},bg=${s.base0D},bold"
+          set -g window-status-current-style "fg=#${theme.readableOn scheme.base0D},bg=${s.base0D},bold"
           set -g message-style "fg=${s.base05},bg=${s.base02}"
           set -g mode-style "fg=${s.base05},bg=${s.base02}"
           set -g pane-border-style "fg=${s.base02}"
@@ -104,12 +105,11 @@ in
         '';
     })
     (lib.mkIf isPlasma {
-      ".local/share/oruc/kde/OrucBase16.colors" = { scheme, ... }: kdeColorScheme scheme false;
-      ".local/share/oruc/kde/OrucBase16Glass.colors" = { scheme, ... }: kdeColorScheme scheme true;
+      ".local/share/oruc/kde/OrucBase16.colors" = args: kdeColorScheme args false;
+      ".local/share/oruc/kde/OrucBase16Glass.colors" = args: kdeColorScheme args true;
     })
     (lib.mkIf (isNiri && !isPlasma) {
-      ".config/kdeglobals" =
-        { scheme, theme }: kdeColorScheme scheme false + "\n[Icons]\nTheme=${theme.icons}\n";
+      ".config/kdeglobals" = args: kdeColorScheme args false + "\n[Icons]\nTheme=${args.theme.icons}\n";
     })
     (lib.mkIf config.programs.atuin.enable {
       ".config/atuin/themes/oruc-base16.toml" =
