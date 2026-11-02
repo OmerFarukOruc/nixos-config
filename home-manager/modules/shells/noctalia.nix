@@ -2,31 +2,12 @@
   config,
   lib,
   osConfig,
-  pkgs,
   sessions,
   ...
 }:
 let
   theme = config.oruc.theme;
   palette = ".config/noctalia/palettes/oruc-base16.json";
-  applyScheme = pkgs.writeShellApplication {
-    name = "oruc-noctalia-scheme";
-    runtimeInputs = [
-      pkgs.coreutils
-      config.programs.noctalia.package
-      config.oruc.wallpaper
-    ];
-    text = ''
-      for _ in $(seq 40); do
-        noctalia msg theme-mode-get >/dev/null 2>&1 && break
-        sleep 0.5
-      done
-      noctalia msg color-scheme-set custom oruc-base16
-      noctalia msg config-reload
-      noctalia msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
-      noctalia msg wallpaper-set "$(oruc-wallpaper-path)"
-    '';
-  };
 
   noctaliaMode =
     { scheme, theme }:
@@ -193,10 +174,15 @@ in
         dark = noctaliaMode args;
         light = noctaliaMode args;
       };
-    systemd.user.services.noctalia.Service.ExecStartPost = [ "-${lib.getExe applyScheme}" ];
-    oruc.variantReloads.noctalia = ''
-      systemctl --user is-active -q noctalia.service || exit 0
-      ${lib.getExe applyScheme}
-    '';
+    oruc.shellScheme.noctalia = {
+      inherit (config.programs.noctalia) package;
+      probe = "noctalia msg theme-mode-get";
+      steps = ''
+        noctalia msg color-scheme-set custom oruc-base16
+        noctalia msg config-reload
+        noctalia msg theme-mode-set "$(<${lib.escapeShellArg "${config.oruc.themeFactsDir}/polarity"})"
+        noctalia msg wallpaper-set "$(oruc-wallpaper-path)"
+      '';
+    };
   };
 }

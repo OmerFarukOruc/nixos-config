@@ -3,5 +3,5 @@ let
   selectors = import ../../../machines/selectors.nix;
 in
 {
-  imports = map (name: ./. + "/${name}.nix") selectors.shellNames;
+  imports = [ ./scheme-apply.nix ] ++ map (name: ./. + "/${name}.nix") selectors.shellNames;
 }
