@@ -13,10 +13,3 @@ running_revision() {
     fi
   done | tail -n 1
 }
-
-runs_tree_of() {
-  local revision dirty action
-  read -r revision dirty action _ <<<"$(running_revision)" || true
-  [[ -n $revision && $dirty == false && $action != test ]] || return 1
-  [[ $(git rev-parse -q --verify "$revision^{tree}") == "$(git rev-parse "$1^{tree}")" ]]
-}
