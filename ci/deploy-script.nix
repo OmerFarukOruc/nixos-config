@@ -73,9 +73,7 @@ in
               systemctl --user -M ${user}@ kill --signal=KILL session-test.service ignored-test.service
             '';
           };
-          bootfail.system.build.installBootLoader = lib.mkForce (
-            pkgs.writeShellScript "install-boot-loader-fails" "exit 1"
-          );
+          bootfail.boot.loader.limine.extraInstallCommands = "exit 1";
           cycle.systemd.services = {
             cycle-a = {
               wantedBy = [ "multi-user.target" ];

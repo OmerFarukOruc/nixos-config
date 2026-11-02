@@ -548,8 +548,8 @@ the host that runs `scripts/build.sh`:
 scripts/build.sh .#checks.x86_64-linux.deploy-script
 ```
 
-The VM boots with Limine on a separate ESP, and its specialisations are the
-candidates; each phase of `ci/deploy-script/test.py` commits a `flake.nix`
+Limine installs to a separate ESP on `/dev/vdb`, while the VM boots its kernel
+directly, and the VM's specialisations are the candidates; each phase of `ci/deploy-script/test.py` commits a `flake.nix`
 whose system is one of them and checks the exit code, the running system and
 the boot default. The phases cover a good switch, the lock, a pending rollback
 timer, an ordering cycle, the rollback after a failed activation or a broken
@@ -558,7 +558,8 @@ checkout that would drop a file of the running release.
 
 The check does not cover a deploy over SSH, a dropped connection (exit 76),
 exits 71, 72, 74 and 79, the `deployLogin` lookup, or dix. Nix caches a pass
-until the test or `deploy.sh` changes, and `ci/checks.sh` only evaluates it.
+until the test, `deploy.sh`, `nixosModules/deploy-host.nix` or the nixpkgs input
+changes, and `ci/checks.sh` only evaluates it.
 
 ## One deploy at a time
 

@@ -39,6 +39,7 @@ in
     };
     gtk = readOnly types.str "GTK theme that follows the scheme variant.";
     readableOn = readOnly (types.functionTo types.str) "The text colour for a background given as six hex digits: base00 or base07 when one reaches 4.5:1 contrast on it, else black or white, as six lowercase hex digits.";
+    slots = readOnly (types.listOf types.str) "The 16 scheme slots, base00 to base0F.";
     textOn = readOnly (types.attrsOf types.str) "readableOn of each scheme slot, base00 to base0F, such as textOn.base0D for text on the accent, as six lowercase hex digits.";
     ansi = readOnly (types.listOf types.str) "Scheme slots of the 16 ANSI colors: black, red, green, yellow, blue, magenta, cyan, white, then the bright row.";
     ansiNames = readOnly (types.listOf types.str) "Capitalized names of the eight ANSI colors, in the order of each row of ansi.";

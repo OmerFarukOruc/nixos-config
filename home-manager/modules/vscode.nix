@@ -299,7 +299,7 @@ let
     in
     if tag == null then line else builtins.replaceStrings [ "{{${entry.slot}-hex}}" ] [ tag ] line
   ) templateLines;
-  slots = map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF");
+  inherit (config.oruc.theme) slots;
   renderTheme =
     { scheme, theme }:
     let

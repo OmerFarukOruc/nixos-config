@@ -85,6 +85,7 @@ held = f"flock {state}/deploy.lock sh -c 'cd {checkout} && ./deploy.sh {HOST} te
 status, out = machine.execute(f"runuser -l {USER} -c {shlex.quote(held)} 2>&1")
 print(out[-600:])
 assert status == 77, f"a held lock gave exit {status}, not 77"
+assert f"Another deploy to {HOST} is running" in out
 
 print("phase: a rollback timer is still pending")
 machine.succeed("systemd-run --unit=deploy-rollback --on-active=600 true")
@@ -102,7 +103,7 @@ assert_on_good("cycle")
 print("phase: a system that breaks sshd")
 publish("broken")
 status, out = deploy("switch")
-assert status != 0, "the deploy of a system that breaks sshd succeeded"
+assert status == 4, f"a system that breaks sshd gave exit {status}, not 4"
 assert "Restoring the previous system now" in out, "the deploy did not roll back"
 assert_on_good("broken")
 machine.wait_for_unit("sshd.service")
@@ -117,6 +118,7 @@ assert_on_good("session")
 machine.succeed(f"systemctl --user -M {USER}@ restart session-test.service ignored-test.service")
 
 print("phase: a system whose boot entries fail to install")
+menu = machine.succeed("cat /boot/limine/limine.conf")
 publish("bootfail")
 status, out = deploy("switch")
 assert status == 73, f"a failed boot entry install gave exit {status}, not 73"
@@ -125,6 +127,7 @@ assert running() == systems["bootfail"], "the candidate does not keep running"
 assert boot_default() == systems["good"], "the good system is not the boot default again"
 links = machine.succeed(f"for l in {profile}-*-link; do readlink -f $l; done").split()
 assert systems["bootfail"] not in links, "the failed generation stays in the system profile"
+assert machine.succeed("cat /boot/limine/limine.conf") == menu, "the boot menu is not the one before the deploy"
 publish("good")
 status, out = deploy("switch")
 assert status == 0, "the deploy back to the good system failed"

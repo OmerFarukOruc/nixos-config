@@ -34,7 +34,7 @@ let
     import ./plasma-looks/once-per-login.nix { inherit lib pkgs; } { inherit name target; }
   ) loginUnits;
 
-  slots = map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF");
+  inherit (config.oruc.theme) slots;
   nvimTheme = "${config.xdg.configHome}/oruc/nvim-theme.lua";
   tmuxTheme = "${config.xdg.configHome}/tmux/oruc-theme.conf";
   tmux = lib.getExe config.programs.tmux.package;
