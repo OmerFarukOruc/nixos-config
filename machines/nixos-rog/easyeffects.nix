@@ -8,7 +8,7 @@ let
       preset-name = preset;
     };
   };
-  inherit (import ./audio-nodes.nix) mic;
+  inherit (import ./audio-settings.nix) mic;
 in
 {
   xdg.dataFile = {

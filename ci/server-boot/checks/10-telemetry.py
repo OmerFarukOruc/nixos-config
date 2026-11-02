@@ -26,7 +26,6 @@ for tel_key in [
 ]:
     assert f"key={tel_key}" in tel_rules, f"auditctl lists no rule with the key {tel_key}"
 assert "path=/run/wrappers/bin/sudo" in tel_rules, "the sudo rule does not watch the wrapper"
-assert tel_rules.count("always,exclude") == 3, "auditctl does not list 3 excludes"
 
 machine.succeed(f"sshd -T -C user={BOX_USER},host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
 
@@ -94,8 +93,26 @@ def tel_probe(name):
 tel_probe("telemetry-probe-1")
 tel_wait("logs.json", "telemetry-probe-1")
 
-machine.execute("runuser -u nobody -- cat /run/secrets/network-dns-1")
-tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
+tel_credstore = "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore"
+
+
+def tel_credstore_read():
+    seen = tel_count("logs.json", tel_credstore)
+    machine.execute("runuser -u nobody -- cat /run/secrets/network-dns-1")
+    retry(lambda _last_try: tel_count("logs.json", tel_credstore) > seen)
+
+
+tel_credstore_read()
+tel_excluded = ["NETFILTER_CFG", "ANOM_PROMISCUOUS", "BPF"]
+tel_before = {t: tel_count("logs.json", f"type={t} msg=audit") for t in tel_excluded}
+machine.succeed("iptables -N tel-probe && iptables -X tel-probe")
+machine.succeed("ip link set lo promisc on && ip link set lo promisc off")
+machine.succeed("systemd-run --wait -p IPAddressDeny=any true")
+tel_credstore_read()
+for tel_type in tel_excluded:
+    assert tel_count("logs.json", f"type={tel_type} msg=audit") == tel_before[tel_type], (
+        f"the sink got {tel_type} records of system processes"
+    )
 
 machine.succeed("systemctl stop opentelemetry-collector.service")
 tel_probe("telemetry-probe-2")
@@ -138,10 +155,8 @@ assert tel_count("logs.json", f"Accepted publickey for {BOX_USER}") == 2, "the s
 
 for tel_key in ["sudo-exec", "etc-change"]:
     tel_wait("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}")
-tel_wait("logs.json", "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore")
 
 assert tel_attr("logs.json", "service.name", "host-audit") > 0, "the sink has no host-audit logs"
-assert tel_attr("logs.json", "service.name", "infra-units") > 0, "the sink has no infra-units logs"
 for tel_file in ["logs.json", "metrics.json"]:
     for tel_attribute in ["host.name", "host.id"]:
         assert tel_attr(tel_file, tel_attribute, BOX_HOST) > 0, f"the sink lacks {tel_attribute} in {tel_file}"

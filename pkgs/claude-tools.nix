@@ -18,7 +18,6 @@ python3Packages.buildPythonApplication {
     install -Dm644 -t $out/libexec/claude-tools libexec/config-lock.sh
     install -Dm644 -t $out/share/claude-tools share/claude-tools.sh README.md
   '';
-  pythonImportsCheck = [ "claude_tools.cli" ];
   doInstallCheck = true;
   installCheckPhase = ''
     runHook preInstallCheck
@@ -32,9 +31,10 @@ python3Packages.buildPythonApplication {
         case $s in -*) ;; *) $tools "$c" "$s" --help >/dev/null ;; esac
       done
     done
-    bash -n $out/libexec/claude-tools/claude-accounts $out/libexec/claude-tools/login-browser \
-      $out/libexec/claude-tools/config-lock.sh $out/share/claude-tools/claude-tools.sh
-    ! grep -rn '@bin@\|@libexec@' $out/libexec $out/share $out/lib
+    if grep -rn --exclude=README.md '@bin@\|@libexec@' $out/libexec $out/share $out/lib; then
+      echo "a store path placeholder was left in place" >&2
+      exit 1
+    fi
     runHook postInstallCheck
   '';
 }

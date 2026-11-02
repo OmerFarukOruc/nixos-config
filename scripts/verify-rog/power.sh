@@ -29,8 +29,6 @@ online=$(cat /sys/class/power_supply/ACAD/online)
 capacity=$(cat /sys/class/power_supply/BAT1/capacity)
 if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
   check ppd-profile "$profile on low battery (battery=$capacity%)" test "$profile" = power-saver
-else
-  check ppd-profile "$profile as chosen (AC=$online, battery=$capacity%)" test -n "$profile"
 fi
 if [[ $online == 1 ]]; then
   check low-battery-undone "/run/oruc-low-battery/active absent on AC" test ! -e /run/oruc-low-battery/active

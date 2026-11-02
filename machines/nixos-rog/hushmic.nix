@@ -6,6 +6,7 @@
   ...
 }:
 let
+  audio = import ./audio-settings.nix;
   hushmic =
     (inputs.hushmic.packages.${pkgs.stdenv.hostPlatform.system}.hushmic.override {
       xorg = {
@@ -26,8 +27,8 @@ let
       });
   settings = (pkgs.formats.toml { }).generate "hushmic-config.toml" {
     enabled = true;
-    inherit (import ./audio-nodes.nix) mic;
-    model = "dpdfnet8_48khz_hr";
+    inherit (audio) mic;
+    model = audio.hushmicModel;
     attn_limit = 100;
     inference = "auto";
     set_default = false;

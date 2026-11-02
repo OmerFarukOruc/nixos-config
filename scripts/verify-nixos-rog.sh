@@ -30,7 +30,8 @@ listed in the report as manual.
 The facts the checks expect (the NVIDIA driver version, the Wi-Fi interface,
 the low-battery threshold, the CPU temperature limit and top clock of each
 profile, the fan curves and asus-armoury limits of each platform profile, the
-Plasma panel widgets and KWin effects of each Plasma look) come from
+Plasma panel widgets and KWin effects of each Plasma look, the microphone node
+and the HushMic model) come from
 /etc/oruc/verify-facts, which the deployed system writes
 (nixosModules/verify-facts.nix). The Plasma checks use the look that
 plasma-look stored, or the default look. The KWin effects are checked only in
@@ -113,7 +114,7 @@ fi
 for fact in low_battery_percent nvidia_version wifi \
   cpu_temp_limit_power_saver cpu_temp_limit_balanced cpu_temp_limit_performance \
   cpu_max_khz_power_saver cpu_max_khz_balanced cpu_max_khz_performance \
-  fan_temps_quiet_cpu fan_pwms_quiet_cpu armoury_ac_quiet_ppt_pl1_spl; do
+  fan_temps_quiet_cpu fan_pwms_quiet_cpu armoury_ac_quiet_ppt_pl1_spl mic_node hushmic_model; do
   if [[ -z ${!fact:-} ]]; then
     exit 66
   fi

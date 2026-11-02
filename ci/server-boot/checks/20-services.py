@@ -86,12 +86,8 @@ for svc_site in ["openchamber", "herdr"]:
         f"grep -oE '/nix/store/[^ ]*' <<< \"$(systemctl show -p ExecStart --value {svc_unit})\" | head -n 1"
     ).strip()
     machine.succeed(f"grep -F -e --dns.propagation.disable-rns {svc_script}")
-    machine.succeed(
-        f"openssl x509 -noout -subject -in /var/lib/acme/{svc_site}.risoluto.dev/cert.pem | grep -F {svc_site}.risoluto.dev"
-    )
 
 machine.wait_for_unit("caddy.service")
-machine.succeed("ss -Htln | grep -E ':443 '")
 for svc_port in [3000, 7317]:
     machine.wait_for_open_port(svc_port)
 

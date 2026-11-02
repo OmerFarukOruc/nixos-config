@@ -17,7 +17,7 @@ let
     text = ''exec ${lib.getExe' whisper-cpp "whisper-cli"} -m ${whisperModel} "$@"'';
   };
 
-  inherit (import ./audio-nodes.nix) mic;
+  inherit (import ./audio-settings.nix) mic hushmicModel;
 
   contrast = import ../../nixosModules/contrast.nix { inherit lib; };
   obsThemes = {
@@ -138,6 +138,11 @@ let
   };
 in
 {
+  oruc.verifyFacts = {
+    mic_node = mic;
+    hushmic_model = hushmicModel;
+  };
+
   security.rtkit.args = [ "--rttime-usec-max=${toString realtimeLimitUs}" ];
 
   services.pipewire.extraConfig =

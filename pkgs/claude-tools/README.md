@@ -130,7 +130,7 @@ Keep these true in every change:
 ## Changing the code
 
 1. Edit `src/claude_tools` or `libexec/`. When the `claude` function needs new behaviour, add a command and call it from `share/claude-tools.sh`; keep paths and names out of the shell config.
-2. Run `nix fmt` from the repository root. It runs ruff with `ruff.toml` on `src`, and shellcheck with `.shellcheckrc` on `libexec`, `share` and `tests` (`tooling.nix`), and exits non-zero on a finding. The package build runs the `--help` of every command and subcommand that `claude-tools --complete-words` lists, except `rotate` and `accounts`, and `bash -n` on the shell files.
+2. Run `nix fmt` from the repository root. It runs ruff with `ruff.toml` on `src`, and shellcheck with `.shellcheckrc` on `libexec`, `share` and `tests` (`tooling.nix`), and exits non-zero on a finding. The package build runs the `--help` of every command and subcommand that `claude-tools --complete-words` lists, except `rotate` and `accounts`, and fails when an installed file other than this README still holds `@bin@` or `@libexec@`.
 3. Deploy, then run the commands against the real accounts. A change to `accounts` is done when every one of these holds:
    - `claude-tools accounts list` shows every account with its email and `ok` links.
    - `claude-tools accounts update` prints `config: synced` for each profile with no running session and exits 0.
@@ -146,11 +146,11 @@ Keep these true in every change:
 
 The end-to-end tests in `tests/` run on devbox against real Claude accounts and a real herdr server, each in its own herdr session or tmux server. Run them from a nixos-config checkout against the installed command, for example `pkgs/claude-tools/tests/agent-e2e.sh "$(dirname "$(readlink -f "$(command -v claude-tools)")")"`; each prints `PASS` and exits 0.
 
-- `limit-switch-e2e.sh`: a switch held back while every other account is held, a switch, a scan that leaves an agent without a limit alone, a scan that holds and moves an agent whose screen shows a limit message, a scan that holds nothing after an old one, the restore after a server stop, and `resume`.
-- `rotate-e2e.sh`: the account picker and its accounts.json list, the exit codes of `rotate`, a move after a limit, the wait while no account is free, and a prompt typed during that wait.
+- `limit-switch-e2e.sh`: a switch held back while every other account is held, a switch, a scan that leaves an agent without a limit alone, a scan that moves an agent whose screen shows a limit message, a scan that holds nothing after an old one, the restore after a server stop, and `resume`.
+- `rotate-e2e.sh`: the account picker and its accounts.json list, the exit codes of `rotate`, and a move after a limit to the first account of the order.
 - `agent-e2e.sh`: `agent start` with a relative `--cwd` and a running name, `agent stop` of a running and of an exited agent, and `agent watch` started before the agent, through a question that blocks it, a pane moved to another workspace, a watcher restart that missed a turn, the agent leaving through `agent stop` and through a closed tab, and a herdr server that stops and starts again.
 
-The picker step reads a usage cache and a hold file that the test writes from the real cache with changed numbers, so it proves how the picker shows and orders those records, not how `usage` and `rotate` write them. The move and wait steps write the hook's flag file themselves, with a made-up session limit message, on accounts that have room, so they prove the hold, the account choice after a fresh reading, the wait and the resume, not the hook or a real limit. The limit-switch scan steps ask the agent to print a made-up limit message, so `scan` reads it off the real screen, but no real limit stands behind it.
+The picker step reads a usage cache and a hold file that the test writes from the real cache with changed numbers, so it proves how the picker shows and orders those records, not how `usage` and `rotate` write them. The move step writes the hook's flag file itself, with a made-up session limit message, on accounts that have room, so it proves the account choice after a fresh reading and the resume, not the hook or a real limit. The limit-switch scan steps ask the agent to print a made-up limit message, so `scan` reads it off the real screen, but no real limit stands behind it.
 
 The dotfiles checkout's `desktop/bin/tests/desktop-sync-e2e.sh` runs the installed `claude-tools accounts prefs` and `config-lock.sh` against scratch homes, so a change to either needs that test too: `~/Desktop/workspace/dotfiles/desktop/bin/tests/desktop-sync-e2e.sh` after the deploy.
 
@@ -159,5 +159,8 @@ No test covers these, because a run cannot reach them for real:
 - a move after a real usage limit, in `rotate` and `limit-switch`, with the session's memory kept across the move;
 - the hold after a limit message without a reset time, such as a model limit, which reads the account's windows;
 - the StopFailure hook handshake of `rotate`, including a nested `claude -p` whose limit must leave the session alone;
+- the hold that `rotate` writes until the reset time of a limit message, its wait while no account is free, and a prompt typed during that wait;
+- the hold that `scan` writes until the reset time of a limit message;
+- that `scan` neither moves nor restarts an agent whose old limit message has passed, beyond the prompt to continue;
 - `agent start`'s cleanup when herdr refuses the brief;
 - the lock release of `prefs` and `update` when TERM ends them.

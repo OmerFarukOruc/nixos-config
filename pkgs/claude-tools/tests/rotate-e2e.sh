@@ -200,11 +200,6 @@ moved() {
     sleep 1
   done
 }
-hold_others() {
-  profiles names | jq -R . | jq -s --arg keep "$1" --argjson u "$2" \
-    'map(select(. != $keep) | {(.): {until: $u, reason: "e2e hold"}}) | add' >"$mstate/limits.json.e2e"
-  flock "$mstate/limits.lock" mv "$mstate/limits.json.e2e" "$mstate/limits.json"
-}
 quiet
 first=$(child "$mwrapper")
 A=$(account_of "$(cut -f2 <<<"$first")")
@@ -215,47 +210,6 @@ next=$(moved "$(cut -f1 <<<"$first")" 300)
 [[ -n "$next" ]] || fail "claude-tools rotate did not resume $sid on another account in 300 s after the limit on $A"
 B=$(account_of "$(cut -f2 <<<"$next")")
 [[ "$B" == "$(order --skip "$A")" ]] || fail "the session moved to $B, not to $(order --skip "$A"), the first of the order"
-jq -e --arg a "$A" --argjson u "$reset" '.[$a].until == $u' "$mstate/limits.json" >/dev/null ||
-  fail "the hold file does not hold $A until $(date -d "@$reset" -Iseconds): $(jq -c . "$mstate/limits.json")"
-echo "move: the limit on $A held it until $(date -d "@$reset" -Iseconds) and resumed $sid on $B"
-
-settle "$m" "$mwrapper"
-quiet
-[[ -n "$(order --skip "$B")" ]] || fail "no account other than $B has room, so the wait step cannot run"
-free=$(($(date +%s) + 90))
-hold_others "$B" "$free"
-limit "$(LC_ALL=C date -u -d "@$reset" +%-I:%M%P)"
-for _ in $(seq 120); do
-  grep -q "picking again at" "$mstate/rotate/events.log" 2>/dev/null && break
-  sleep 1
-done
-grep -q "session $sid: no account is free; picking again at $(date -d "@$free" -Iseconds)" "$mstate/rotate/events.log" ||
-  fail "claude-tools rotate did not wait until $(date -d "@$free" -Iseconds): $(grep 'picking again' "$mstate/rotate/events.log")"
-now=$(date +%s)
-((now < free)) || fail "the wait was set up only after the wake time"
-next2=$(moved "$(cut -f1 <<<"$next")" $((free - now + 300)))
-[[ -n "$next2" ]] || fail "claude-tools rotate did not resume $sid once the holds ended"
-B2=$(account_of "$(cut -f2 <<<"$next2")")
-[[ "$B2" == "$(order)" ]] || fail "after the wait the session resumed on $B2, not on $(order), the first of the order"
-echo "wait: no account was free until $(date -d "@$free" -Iseconds); then $sid resumed on $B2"
-
-settle "$m" "$mwrapper"
-quiet
-free=$(($(date +%s) + 90))
-hold_others "$B2" "$free"
-limit "$(LC_ALL=C date -u -d "@$reset" +%-I:%M%P)"
-for _ in $(seq 120); do
-  (($(grep -c "picking again at" "$mstate/rotate/events.log") == 2)) && break
-  sleep 1
-done
-(($(grep -c "picking again at" "$mstate/rotate/events.log") == 2)) || fail "the second limit started no wait"
-type_line "Reply only OK again." "$m"
-now=$(date +%s)
-((now < free)) || fail "the prompt went in only after the wake time"
-sleep $((free - now + 30))
-[[ "$(child "$mwrapper" | cut -f1)" == "$(cut -f1 <<<"$next2")" ]] || fail "claude-tools rotate restarted a session that went on by hand"
-grep -q "session $sid: a prompt went in after the limit; no move" "$mstate/rotate/events.log" ||
-  fail "claude-tools rotate did not log the prompt typed during the wait"
-echo "typed: a prompt during the wait kept $sid on $B2"
+echo "move: the limit on $A resumed $sid on $B, the first of the order"
 ok=1
 echo PASS

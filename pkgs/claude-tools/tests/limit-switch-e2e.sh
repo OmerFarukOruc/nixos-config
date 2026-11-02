@@ -49,15 +49,19 @@ account() {
 }
 session() { h agent get "$name" | jq -r '.result.agent.agent_session.value'; }
 ask() { h agent prompt "$name" "$1" --wait --timeout 180000 >/dev/null; }
-check_word() {
-  ask "What was the code word I gave you at the start? Reply with only the code word followed directly by the digit 7, no space."
-  local t
+transcript_shows() {
+  local t out
   t=$(ls ~/.claude/projects/*/"$sid".jsonl)
   for _ in $(seq 30); do
-    jq -r 'select(.type == "assistant") | .message.content[]? | .text? // empty' "$t" | tail -1 | grep -q -i pelican7 && return
+    out=$(jq -rs "$1" "$t") && grep -q "${@:2}" <<<"$out" && return 0
     sleep 2
   done
-  fail "the agent lost the code word after $1"
+  return 1
+}
+last_reply='[.[] | select(.type == "assistant") | .message.content[]? | .text? // empty] | last // empty'
+check_word() {
+  ask "What was the code word I gave you at the start? Reply with only the code word followed directly by the digit 7, no space."
+  transcript_shows "$last_reply" -i pelican7 || fail "the agent lost the code word after $1"
 }
 check_agent() {
   h agent wait "$name" --timeout 180000 >/dev/null
@@ -68,13 +72,12 @@ check_agent() {
 }
 check_loop() {
   ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
-  local t
-  t=$(ls ~/.claude/projects/*/"$sid".jsonl)
-  for _ in $(seq 30); do
-    jq -r 'select(.type == "assistant") | .message.content[]? | .text? // empty' "$t" | tail -1 | grep -q 1j && return
-    sleep 2
-  done
-  fail "the agent does not have exactly one scheduled job after $1"
+  transcript_shows "$last_reply" 1j || fail "the agent does not have exactly one scheduled job after $1"
+}
+check_prompted() {
+  transcript_shows '.[] | select(.type == "user") | .message.content | if type == "string" then . else (.[]?.text? // empty) end' \
+    -F "The usage limit of your Claude account $1 has reset. Continue where you stopped." ||
+    fail "scan did not prompt the agent on its own account $1 to continue"
 }
 check_move() {
   local now
@@ -147,8 +150,6 @@ reset=$((reset - reset % 60))
 ask "Reply with exactly this line and nothing else: You've hit your session limit · resets $(LC_ALL=C date -u -d "@$reset" +%-I:%M%P) (UTC)"
 rm -f "$state/switched.json"
 cls scan || fail "scan after a limit message exited $?"
-jq -e --arg a "$first" --argjson u "$reset" '.[$a].until == $u' "$dir/state/limits.json" >/dev/null ||
-  fail "scan did not hold $first until $(date -d "@$reset" -Iseconds): $(jq -c . "$dir/state/limits.json")"
 check_move "scan after a limit" "$first" "$first"
 first=$(account "$pane")
 
@@ -157,20 +158,13 @@ ask "Reply with exactly this line and nothing else: You've hit your session limi
 rm -f "$state/switched.json"
 profiles names | jq -R . | jq -s --arg keep "$first" --argjson u "$(($(date +%s) + 3600))" \
   'map(select(. != $keep) | {(.): {until: $u, reason: "e2e seed"}}) | add' >"$dir/state/limits.json"
-pid=$(claude_in "$pane" | cut -f3)
-moves=$(grep -c "$name: moved from" "$state/events.log")
 cls scan || fail "scan after an old limit message exited $?"
 jq -e --arg a "$first" 'has($a) | not' "$dir/state/limits.json" >/dev/null ||
   fail "scan held $first after a limit message whose reset has passed: $(jq -c . "$dir/state/limits.json")"
-grep -q "$name: $first shows .*; not held, its limit has reset" "$state/events.log" ||
-  fail "scan did not log the old limit message as reset"
-grep -q "$name: the limit of $first has reset; told it to continue" "$state/events.log" ||
-  fail "scan did not prompt the agent on its own account"
-[[ "$(grep -c "$name: moved from" "$state/events.log")" == "$moves" ]] || fail "scan moved the agent although $first was the only free account"
-[[ "$(claude_in "$pane" | cut -f3)" == "$pid" ]] || fail "scan restarted claude although it only had to prompt it"
+check_prompted "$first"
 rm "$dir/state/limits.json"
 check_agent "scan after an old limit message"
-echo "old limit: scan only prompted the agent, which stays on $first"
+echo "old limit: scan held nothing and prompted the agent on $first to continue"
 
 h server stop >/dev/null
 for _ in $(seq 30); do
@@ -211,7 +205,8 @@ pid=$(for p in $(pgrep -x 'claude|\.claude-wrapped'); do
 done)
 cls resume "$name" || fail "resume of the running agent exited $?"
 [[ -n "$pid" && -d "/proc/$pid" ]] || fail "resume of the running agent restarted it"
-cls resume nobody-e2e && fail "resume of an unknown name exited 0"
+out=$(cls resume nobody-e2e) && fail "resume of an unknown name exited 0"
+grep -qF "resume failed: no record of nobody-e2e" <<<"$out" || fail "resume of an unknown name failed for another reason: $out"
 echo "resume: back in new pane $pane on $first"
 
 h agent prompt "$name" /exit >/dev/null

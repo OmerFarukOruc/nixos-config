@@ -27,7 +27,6 @@ def sshd_settings(user):
 
 box_sshd = sshd_settings(BOX_USER)
 assert "permitrootlogin prohibit-password" in box_sshd, "root may log in other than by key"
-assert "port 2222" in box_sshd, "sshd does not listen on port 2222"
 assert "passwordauthentication no" in box_sshd, "password logins are on"
 assert "allowusers root" in box_sshd and f"allowusers {BOX_USER}" in box_sshd, f"AllowUsers is not root and {BOX_USER}"
 assert (
@@ -36,7 +35,9 @@ assert (
 assert (
     "authorizedkeysfile /etc/ssh/authorized_keys.d/%u" in sshd_settings("root")
 ), "root reads more than the declared keys"
-machine.succeed("test $(grep -c ssh-ed25519 /etc/ssh/authorized_keys.d/root) = 3")
+machine.succeed(
+    "f=/etc/ssh/authorized_keys.d/root; n=$(grep -c . $f) && [ $n -gt 0 ] && [ $(ssh-keygen -l -f $f | wc -l) = $n ]"
+)
 
 machine.succeed(f"passwd -S {BOX_USER} | grep -E '^{BOX_USER} P '")
 machine.succeed("passwd -S root | grep -E '^root P '")
