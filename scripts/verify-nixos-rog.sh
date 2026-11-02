@@ -52,7 +52,7 @@ do), 1 when one fails, 64 for a usage error.
 EOF
 }
 
-host=nixos-rog
+host=$ROG_HOST
 octet='(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])'
 suspend=false
 while_in_use=false
@@ -96,7 +96,6 @@ if [[ -z $report ]]; then
   report=$HOME/.local/state/nixos-config-verify/nixos-rog-$stamp.json
 fi
 mkdir -p -- "$(dirname "$report")"
-ssh_opts=(-o ConnectTimeout=15 -o BatchMode=yes)
 results=$(mktemp)
 work=$(mktemp -d)
 record() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$results"; }
@@ -173,7 +172,7 @@ remote() {
   {
     printf '%s\n' "$remote_prelude"
     cat
-  } | ssh "${ssh_opts[@]}" "$host" bash -s
+  } | ssh "${SSH_OPTS[@]}" "$host" bash -s
 }
 
 remote_checks() {
@@ -187,7 +186,7 @@ remote_checks() {
 
 widget_icon_tsv=
 widget_icon_ok=0
-plasma_look=$(ssh "${ssh_opts[@]}" "$host" \
+plasma_look=$(ssh "${SSH_OPTS[@]}" "$host" \
   'cat .local/state/oruc/plasma-look 2>/dev/null || sed -n "s/^plasma_look_default=//p" /etc/oruc/verify-facts' || true)
 [[ $plasma_look =~ ^[a-z0-9]+$ ]] || plasma_look=none
 panels_json=/etc/oruc/verify-plasma-panels/$plasma_look.json
@@ -195,10 +194,10 @@ have_panels=false
 have_defaults=false
 mkdir -p "$work/widget-defaults"
 # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-if ssh "${ssh_opts[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null; then
+if ssh "${SSH_OPTS[@]}" "$host" cat "$panels_json" >"$work/expected.json" 2>/dev/null; then
   have_panels=true
 fi
-if [[ $have_panels == true ]] && ssh "${ssh_opts[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
+if [[ $have_panels == true ]] && ssh "${SSH_OPTS[@]}" "$host" bash -s <<'REMOTE' | tar -x -C "$work/widget-defaults"
 set -euo pipefail
 out=$(mktemp -d)
 trap 'rm -rf -- "$out"' EXIT
@@ -232,7 +231,7 @@ esac
 
 build=$(
   # shellcheck disable=SC2029 # panels_json holds only a fixed path and a checked look name
-  ssh "${ssh_opts[@]}" "$host" "bash -s -- $panels_json" <<'REMOTE' || true
+  ssh "${SSH_OPTS[@]}" "$host" "bash -s -- $panels_json" <<'REMOTE' || true
 manager=$HOME/.local/share/plasma-manager
 if [[ ! -r $1 ]]; then
   echo none
@@ -249,7 +248,7 @@ case $build in
   current)
     compared=0
     if [[ $have_defaults == true ]] &&
-      ssh "${ssh_opts[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
+      ssh "${SSH_OPTS[@]}" "$host" cat .config/plasma-org.kde.plasma.desktop-appletsrc >"$work/appletsrc"; then
       differences=$(python3 -I "$repo_dir/scripts/lib/plasma-panel-settings.py" "$work/expected.json" "$work/appletsrc" "$work/widget-defaults" 2>&1) || compared=$?
     else
       compared=255
@@ -275,7 +274,7 @@ else
   launcher_status=0
   missing=$(
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-    ssh "${ssh_opts[@]}" "$host" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
+    ssh "${SSH_OPTS[@]}" "$host" "bash -s -- $(printf '%q ' "${launchers[@]}")" <<'REMOTE'
 environment=$(systemctl --user show-environment) || exit 4
 dirs=$(sed -n 's/^XDG_DATA_DIRS=//p' <<<"$environment")
 [[ -n $dirs ]] || exit 3
@@ -322,7 +321,7 @@ if [[ -n $lan_ip ]]; then
 fi
 
 if [[ $suspend == true && $while_in_use == false ]]; then
-  if ! ssh "${ssh_opts[@]}" "$host" 'bash -s' <<'REMOTE'
+  if ! ssh "${SSH_OPTS[@]}" "$host" 'bash -s' <<'REMOTE'
 set -euo pipefail
 id=$(loginctl show-seat seat0 -p ActiveSession --value)
 [[ -n $id ]] || exit 0
@@ -338,7 +337,7 @@ fi
 
 suspend_cycles() {
   local before after_resume reason tries=30 interval=10
-  if ! before=$(ssh "${ssh_opts[@]}" "$host" \
+  if ! before=$(ssh "${SSH_OPTS[@]}" "$host" \
     'cat /sys/power/suspend_stats/success; sudo -n systemd-run --quiet --collect --unit=verify-suspend sh -c "for i in 1 2 3; do rtcwake -m freeze -s 20 || exit 1; sleep 20; done"' 2>"$work/suspend-start.err"); then
     record suspend-three-cycles fail "could not start the suspend cycles on $host: $(paste -sd ' ' "$work/suspend-start.err")"
     return

@@ -43,18 +43,10 @@ if [[ -n $crop ]] && ! command -v nix >/dev/null; then
 fi
 rog_pick_host
 status=0
-ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog "bash -s -- $(printf '%q ' "$window")" <<'EOF' >"$out" || status=$?
-set -euo pipefail
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
-# The login session exports its Wayland socket name to the user's systemd
-# manager; the name depends on how many compositors started before it.
-WAYLAND_DISPLAY=$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p')
-if [[ -z $WAYLAND_DISPLAY ]]; then
-  echo "No Wayland session runs on nixos-rog; log in first." >&2
-  exit 1
-fi
-export WAYLAND_DISPLAY
+# shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
+{
+  rog_session_script --wayland
+  cat <<'EOF'
 dir=$(mktemp -d /tmp/screenshot.XXXXXX)
 cleanup() {
   if [[ -n ${pid:-} ]]; then kill "$pid" 2>/dev/null || true; fi
@@ -73,6 +65,7 @@ fi
 spectacle --background --nonotify --fullscreen --output "$dir/shot.png" >&2
 cat "$dir/shot.png"
 EOF
+} | ssh "${SSH_OPTS[@]}" "$ROG_HOST" "bash -s -- $(printf '%q ' "$window")" >"$out" || status=$?
 if ((status)); then
   rm -f -- "$out"
   exit "$status"

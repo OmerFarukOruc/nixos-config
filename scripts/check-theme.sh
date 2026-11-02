@@ -109,11 +109,13 @@ done
 
 lib=$(dirname "$0")/lib
 if [[ -n $host ]]; then
+  # shellcheck source=/dev/null
+  . "$lib/ssh.sh"
   remote=/tmp/check-theme-$$
-  ssh "$host" mkdir -p "$remote/lib"
-  scp -q "$0" "$host:$remote/check-theme.sh"
-  scp -q "$lib/theme-contrast.py" "$host:$remote/lib/"
-  exec ssh "$host" "bash $remote/check-theme.sh $contrast $* </dev/null; rc=\$?; rm -r $remote; exit \$rc"
+  ssh "${SSH_OPTS[@]}" "$host" mkdir -p "$remote/lib"
+  scp -q "${SSH_OPTS[@]}" "$0" "$host:$remote/check-theme.sh"
+  scp -q "${SSH_OPTS[@]}" "$lib/theme-contrast.py" "$host:$remote/lib/"
+  exec ssh "${SSH_OPTS[@]}" "$host" "bash $remote/check-theme.sh $contrast $* </dev/null; rc=\$?; rm -r $remote; exit \$rc"
 fi
 
 state=${XDG_STATE_HOME:-$HOME/.local/state}/oruc

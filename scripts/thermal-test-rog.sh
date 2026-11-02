@@ -36,8 +36,7 @@ set -euo pipefail
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
-host=nixos-rog
-ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
+host=$ROG_HOST
 
 die() {
   echo "$0: $*" >&2
@@ -106,9 +105,9 @@ for group in "${groups[@]}"; do
   curves+=("$n=${group#*=}")
 done
 
-[[ $(ssh "${ssh_opts[@]}" "$host" cat /sys/class/power_supply/ACAD/online) == 1 ]] ||
+[[ $(ssh "${SSH_OPTS[@]}" "$host" cat /sys/class/power_supply/ACAD/online) == 1 ]] ||
   die "nixos-rog runs on battery; plug in the charger"
-original=$(ssh "${ssh_opts[@]}" "$host" powerprofilesctl get)
+original=$(ssh "${SSH_OPTS[@]}" "$host" powerprofilesctl get)
 script_blob=$(git hash-object "$0")
 
 state=$HOME/.local/state/nixos-config-thermal
@@ -117,7 +116,7 @@ out=$state/$(date -u +%Y%m%dT%H%M%SZ)-$label.tsv
 
 restore() {
   # shellcheck disable=SC2029
-  ssh "${ssh_opts[@]}" "$host" \
+  ssh "${SSH_OPTS[@]}" "$host" \
     "sudo -n powerprofilesctl set $(printf %q "$original") && sudo -n systemctl restart asusd oruc-cpu-limits" ||
     echo "restore failed: set $original and restart asusd and oruc-cpu-limits on $host" >&2
 }
@@ -126,7 +125,7 @@ trap 'exit 130' INT TERM HUP
 
 status=0
 # shellcheck disable=SC2029
-ssh "${ssh_opts[@]}" "$host" \
+ssh "${SSH_OPTS[@]}" "$host" \
   "bash -s -- $(printf '%q ' "$profile" "$ppt" "$threads" "$seconds" "$load" "$script_blob" "${curves[@]}")" <<'REMOTE' |
 set -euo pipefail
 profile=$1 ppt=$2 threads=$3 seconds=$4 load=$5 script_blob=$6

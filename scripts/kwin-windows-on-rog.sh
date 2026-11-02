@@ -7,10 +7,9 @@ set -euo pipefail
 . "$(dirname "$0")/lib/rog-host.sh"
 rog_pick_host
 
-ssh -o ConnectTimeout=15 -o BatchMode=yes nixos-rog bash -s <<'EOF'
-set -euo pipefail
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+{
+  rog_session_script
+  cat <<'EOF'
 # KWin's print() writes to the user journal, so a marker picks out the lines
 # of this run.
 marker=kwin-windows-$$-$RANDOM
@@ -49,3 +48,4 @@ done
 echo "KWin printed no window list within 10 s." >&2
 exit 1
 EOF
+} | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s

@@ -1,7 +1,7 @@
 # shellcheck shell=bash disable=SC2119,SC2120 # callers pass copy_run its ARGs
 # shellcheck source=/dev/null
 . scripts/lib/rog-host.sh
-COPY_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=15)
+COPY_SSH=(ssh "${SSH_OPTS[@]}")
 # A local run starts without the caller's Git variables, as an SSH login does.
 # A git hook exports GIT_DIR and GIT_INDEX_FILE, and with them the copy's
 # git add would write to the caller's index.

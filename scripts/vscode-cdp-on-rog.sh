@@ -12,7 +12,6 @@ set -euo pipefail
 remote_port=9229
 local_port=19229
 pidfile=${XDG_RUNTIME_DIR:-/tmp}/vscode-cdp-on-rog.pid
-ssh_opts=(-o ConnectTimeout=15 -o BatchMode=yes)
 
 on() {
   if curl -sf "http://127.0.0.1:$local_port/json/version" >/dev/null; then
@@ -20,10 +19,9 @@ on() {
     return
   fi
   rog_pick_host
-  ssh "${ssh_opts[@]}" nixos-rog bash -s -- "$remote_port" <<'EOF'
-set -euo pipefail
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+  {
+    rog_session_script
+    cat <<'EOF'
 if pgrep -u "$(id -u)" -f '[/]lib/vscode/code' >/dev/null; then
   echo "Close VS Code on nixos-rog first; this script never stops it." >&2
   exit 1
@@ -39,8 +37,9 @@ done
 echo "VS Code did not open its debugging port within 40 s." >&2
 exit 1
 EOF
-  ssh "${ssh_opts[@]}" -N -o ExitOnForwardFailure=yes \
-    -L "127.0.0.1:$local_port:127.0.0.1:$remote_port" nixos-rog </dev/null >/dev/null 2>&1 &
+  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s -- "$remote_port"
+  ssh "${SSH_OPTS[@]}" -N -o ExitOnForwardFailure=yes \
+    -L "127.0.0.1:$local_port:127.0.0.1:$remote_port" "$ROG_HOST" </dev/null >/dev/null 2>&1 &
   echo $! >"$pidfile"
   disown
   for _ in $(seq 20); do
@@ -63,11 +62,10 @@ off() {
     rm -f -- "$pidfile"
   fi
   rog_pick_host
-  ssh "${ssh_opts[@]}" nixos-rog bash -s <<'EOF'
-export XDG_RUNTIME_DIR=/run/user/$(id -u)
-export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
-systemctl --user stop vscode-cdp.service 2>/dev/null || true
-EOF
+  {
+    rog_session_script
+    echo 'systemctl --user stop vscode-cdp.service 2>/dev/null || true'
+  } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s
   echo "Quit VS Code on nixos-rog to close its debugging port."
 }
 

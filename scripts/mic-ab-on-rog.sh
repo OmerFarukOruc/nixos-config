@@ -28,8 +28,7 @@ set -euo pipefail
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/rog-host.sh"
 
-host=nixos-rog
-ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
+host=$ROG_HOST
 mic=alsa_input.pci-0000_66_00.6.analog-stereo
 
 die() {
@@ -64,7 +63,7 @@ mkdir -p "$out"
 rog_run() {
   local script=$1
   shift
-  ssh "${ssh_opts[@]}" "$host" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
+  ssh "${SSH_OPTS[@]}" "$host" "XDG_RUNTIME_DIR=/run/user/\$(id -u) bash -s -- $(printf '%q ' "$@")" <<<"$script"
 }
 
 lib='node_id() {
@@ -83,7 +82,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-made=$(ssh "${ssh_opts[@]}" "$host" mktemp -d /tmp/mic-ab.XXXXXXXX)
+made=$(ssh "${SSH_OPTS[@]}" "$host" mktemp -d /tmp/mic-ab.XXXXXXXX)
 [[ $made =~ ^/tmp/mic-ab\.[A-Za-z0-9]{8}$ ]] || die "mktemp on $host printed $made"
 remote=$made
 
@@ -161,7 +160,7 @@ else
   notify "A/B test done. You can stop."
 fi
 
-rsync -a "$host:$remote/" "$out/"
+rsync -a -e "ssh ${SSH_OPTS[*]}" "$host:$remote/" "$out/"
 hushmic_status=$(rog_run 'hushmic status --json 2>/dev/null || echo null')
 preset=$(rog_run 'grep -h "^lastLoadedInputPreset=" ~/.config/easyeffects/db/easyeffectsrc || true')
 

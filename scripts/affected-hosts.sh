@@ -23,6 +23,8 @@ cd "$(dirname "$0")/.."
 . scripts/lib/host-systems.sh
 # shellcheck source=/dev/null
 . scripts/lib/parallel-each.sh
+# shellcheck source=/dev/null
+. scripts/lib/ssh.sh
 
 usage="usage: $0 [--running] [REV | OLD..REV]"
 running=false
@@ -75,7 +77,6 @@ if [[ ! $url =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then
   exit 1
 fi
 repo=${BASH_REMATCH[1]%.git}
-ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 this_host=$(</proc/sys/kernel/hostname)
 
 on_host() {
@@ -89,9 +90,9 @@ on_host() {
     (cd && bash -s -- "$@")
   elif (($#)); then
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-    ssh "${ssh_opts[@]}" "$target" "bash -s -- $(printf '%q ' "$@")"
+    ssh "${SSH_OPTS[@]}" "$target" "bash -s -- $(printf '%q ' "$@")"
   else
-    ssh "${ssh_opts[@]}" "$target" 'bash -s'
+    ssh "${SSH_OPTS[@]}" "$target" 'bash -s'
   fi
 }
 
