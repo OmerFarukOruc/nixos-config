@@ -343,7 +343,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   profile tools through their PATH, which lists `/etc/profiles/per-user/%u/bin`,
   and coreutils such as `dirname` through `/run/current-system/sw/bin`, which
   the PATH also lists; there is no `/usr/local/bin` on this host, so a
-  tool that only infra installed there (linctl, micro, lazygit, node and
+  tool that only infra installed there (micro, lazygit, node and
   others) is missing until the profile or mise provides it.
 - The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
   drives labwc. The module installs both desktops with their NixOS modules, and

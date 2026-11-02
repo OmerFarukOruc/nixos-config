@@ -12,6 +12,7 @@
   home.packages = [
     agents.agent-browser
     agents.pi
+    (pkgs.callPackage ../../pkgs/linctl.nix { })
     pkgs.mitmproxy
   ];
 

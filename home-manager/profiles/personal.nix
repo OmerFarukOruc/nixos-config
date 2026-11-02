@@ -101,7 +101,6 @@ in
     ++ [
       (pkgs.callPackage ../../pkgs/antigravity-hub.nix { })
       (pkgs.callPackage ../../pkgs/grok-bot.nix { })
-      (pkgs.callPackage ../../pkgs/linctl.nix { })
       (pkgs.callPackage ../../pkgs/openchamber.nix { })
       (pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; })
     ]
