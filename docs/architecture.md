@@ -6,6 +6,7 @@
 - [Theme](#theme)
 - [Secrets](#secrets)
 - [Home Manager](#home-manager)
+- [DPI bypass and the WARP proxy](#dpi-bypass-and-the-warp-proxy)
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
 
 The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `devbox`.
@@ -646,6 +647,55 @@ to edit a file.
 `workstation.nix` for every workstation, and `personal.nix` for the machines
 Omer works at every day, with GPU tools that follow the machine record. Units a
 host can share, such as desktop-sync, are in `home-manager/modules/`.
+
+## DPI bypass and the WARP proxy
+
+`nixos-desktop` and `nixos-rog` carry two ways to reach Discord when the line
+blocks it. zapret2 (`nixosModules/zapret2.nix`, the hosts set
+`services.zapret2.firewall.interfaces`) comes first, and the Cloudflare WARP
+proxy (`nixosModules/warp.nix`) is the fallback for the Vesktop and Brave
+launchers in `home-manager/modules/warp-launchers.nix`. The commands below ran
+on nixos-rog on 2026-11-02 and only read state; nixos-desktop runs the same
+modules with its own uplink.
+
+**zapret2.** `nfqws2@default.service` rewrites the first packets of outgoing HTTP, TLS
+and QUIC connections so the DPI on the line cannot match them. The firewall
+rules (`sudo nft list table inet zapret2`) queue the first 16 packets of each
+connection, in both directions, to `nfqws2` on the named uplink only: `wlp99s0`
+on nixos-rog and `enp14s0` on nixos-desktop. Traffic on any other interface, and
+connections to private addresses, pass untouched. The queue number and the
+flags of each profile show in `systemctl cat nfqws2@default`.
+
+The service runs three profiles. `http` and `tls` start with the Discord
+domains in their include list, exclude Microsoft's domains, and pass
+`--hostlist-auto=/var/lib/zapret2/auto-hosts.txt`, so they also add a host to
+that file when connections to it keep failing. `nfqws2 --help` on this host
+gives the defaults: 3 failed attempts within 60 s. `quic` only reads the same
+file, so a host reaches QUIC treatment only after the `http` or `tls` profile
+has learnt it. The zapret2 manual says a profile with an automatic list applies
+to every host that has a name, which is why autodetection can add hosts that
+break under the TCP MD5 fake; Microsoft's domains are excluded for that reason
+(`3372db2`), and another host that breaks the same way needs another exclusion
+in `nixosModules/zapret2.nix`. The manual's statement was not tested here.
+
+The list survives rebuilds and reboots. It is `/var/lib/zapret2/auto-hosts.txt`
+in the service's state folder (`StateDirectory=zapret2`), and `ExecStartPre`
+creates it empty when it is missing. Read it with
+`sudo cat /var/lib/zapret2/auto-hosts.txt`; it held 60 hosts on nixos-rog on
+2026-11-02. Emptying or deleting the file was not run.
+
+**WARP proxy.** `usque.service` runs `usque socks` on `127.0.0.1:1080`
+(`oruc.warpProxy` holds the address). It carries only the traffic of an app that
+points at it. `usque` keeps one registered WARP device in
+`/var/lib/usque/config.json` (`sudo ls -l /var/lib/usque` lists it, owned by the
+`usque` user). `preStart` registers a device when that file is missing. When the
+machine is offline at boot, registration fails and the service restarts with a
+growing delay (`RestartSec=3`, up to `RestartMaxDelaySec=5min`), so it does not
+ask Cloudflare every 3 s. Removing `config.json` therefore makes the next start
+register a new device; that step was not run.
+
+`sudo systemctl status nfqws2@default usque` shows whether either service runs,
+and both raise the desktop failure popup when they fail.
 
 ## nixos-desktop case fans
 
