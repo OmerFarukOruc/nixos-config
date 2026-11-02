@@ -153,8 +153,8 @@ let
     usage = ''
       Usage: theme [SCHEME | --list | --reapply]
 
-      With no argument, prints the active Base16 scheme. --list prints every scheme
-      of the installed theme pack, the store path that holds each scheme's colour files.
+      With no argument, prints the active Base16 scheme. --list prints the slug of
+      every scheme in the installed theme pack, one per line.
       SCHEME activates that scheme and keeps it across deploys. Ghostty, tmux, Neovim
       and a Claude Code that selects custom:scheme take its colours at once, and so
       do grok and gum, which draw with the terminal's colours, and opencode and pi.

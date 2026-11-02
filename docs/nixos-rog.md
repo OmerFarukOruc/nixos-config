@@ -911,56 +911,46 @@ takes any scheme of the theme pack, which holds all 362 of tinted-theming and
 
 ```sh
 theme                      # prints the active scheme and the record's
-theme --list               # prints every scheme of the pack
+theme --list               # prints the slug of every scheme in the pack, one per line
 theme tokyo-night-dark
 ```
 
-Ghostty, running tmux servers and running Neovim, which `theme` tells to
-reload, take the new colors at once, and so does Claude Code, whose dotfiles
-`settings.json` selects `custom:scheme`. Its status line reads the pack's
-`statusline` fact at its next refresh (30 s at most). Every segment's text
-reaches 4.5:1 on its background in every scheme. The usage bars take the
-scheme's green, yellow and red, each lightened or darkened only as far as
-4.5:1 needs. Starship reads its colors at each prompt, so it changes in open
-shells too; fzf and atuin take them at their next start, and the Markdown
-viewer the next time a file opens. A running VS Code
-takes the new colors at once and its see-through window background at its
-next start. Its text, button text, muted text such as descriptions and line
-numbers, and comments reach 4.5:1 contrast on the editor background in every
-scheme, and on the side bar too where the scheme allows it
-([Theme](architecture.md#theme)). In niri, the focus ring and borders change at
-once, and so do Noctalia and DMS, which `theme` tells to reload and to switch
-to the scheme's dark or light mode; `theme` also selects the scheme's palette
-in Noctalia when another palette was picked there. rofi and vicinae take the
-colors at their next open, wlogout and mpv at their next start, and the Plasma
-splash at the next login. kVitals in the Plasma panel draws its text, warning
-and critical values in the KDE colors, so it changes with them.
+`theme --help` lists when each app takes the new scheme: at once, at its next
+start or open, or at the next login or boot. It is the one list, so this
+section holds only what the help text leaves out.
 
-On Plasma, the KDE colors of running apps, GTK 4 and libadwaita apps such as
-Mission Center, the cursor, the icons and the Glass glow change at once
-([Theme](architecture.md#theme)). A live color scheme change can crash an
-Electron app; start it again. GTK 3 apps and Kate's editor
-colors change at their next start. On nixos-latitude, which has no Plasma, the
-GTK colors and the KDE colors and icon theme in `~/.config/kdeglobals` follow
-the scheme at each app's next start. In a niri session, niri's cursor and the
-GTK theme, cursor, dark or light preference and icon theme in dconf follow the
-scheme at once.
+Claude Code follows the scheme because its dotfiles `settings.json`
+selects `custom:scheme`, and its status line reads the pack's `statusline`
+fact at its next refresh. Every segment's text reaches 4.5:1 on its background
+in every scheme. The usage bars take the scheme's green, yellow and red, each
+lightened or darkened only as far as 4.5:1 needs. VS Code's text, button text,
+muted text such as descriptions and line numbers, and comments reach 4.5:1
+contrast on the editor background in every scheme, and on the side bar too
+where the scheme allows it ([Theme](architecture.md#theme)). `theme` tells
+Noctalia and DMS to switch to the scheme's dark or light mode, and selects the
+scheme's palette in Noctalia when another palette was picked there. kVitals in
+the Plasma panel draws its text, warning and critical values in the KDE
+colors, so it changes with them.
 
-The wallpaper changes with the scheme in Plasma, Noctalia and DMS. A scheme
-without a file in `assets/wallpapers` gets the default one recolored to it,
-rendered the first time `theme` selects the scheme
+A live color scheme change can crash an Electron app; start it again. On
+nixos-latitude, which has no Plasma, the GTK colors and the KDE colors and icon
+theme in `~/.config/kdeglobals` follow the scheme at each app's next start. In
+a niri session, niri's cursor and the dark or light preference in dconf follow
+the scheme at once.
+
+A scheme without a file in `assets/wallpapers` gets the default wallpaper
+recolored to it, rendered the first time `theme` selects the scheme
 ([Theme](architecture.md#theme)).
 
-The console changes at once, the login screen at its next start and the Limine
-boot menu at the next boot, and all three keep the scheme after a reboot. A
-light scheme leaves the login screen on the record's colors, because it draws
-the form at 30 % opacity over the dark Jake video, where a light scheme's dark
-text loses contrast. The keyboard's Aura light on nixos-rog and the case lights
-on nixos-desktop turn static in the scheme's base09 at once and at each login;
-from boot until the login they show the record's color. `Fn+F4` still picks
-another Aura effect until the next switch, login or deploy. Spotify takes the
-scheme at its next start. Telegram follows once it has loaded the palette: type
-open Telegram's Settings, type `loadcolors` with no text field focused, and pick
+The console, the login screen and the Limine boot menu keep the scheme after a
+reboot. A light scheme leaves the login screen on the record's colors, because
+it draws the form at 30 % opacity over the dark Jake video, where a light
+scheme's dark text loses contrast. The keyboard's Aura light on nixos-rog and
+the case lights on nixos-desktop also turn static in the scheme's base09 at
+each login; from boot until the login they show the record's color. `Fn+F4`
+still picks another Aura effect until the next switch, login or deploy.
+Telegram follows once it has loaded the palette: open Telegram's Settings, type
+`loadcolors` with no text field focused, and pick
 `~/.config/oruc/oruc.tdesktop-palette`; it then repaints at each switch.
 [Theme](architecture.md#theme) lists the apps that keep fixed colors. The choice
 lasts across deploys and reboots, and `theme <record's scheme>` goes back.
