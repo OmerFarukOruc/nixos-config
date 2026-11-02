@@ -27,7 +27,8 @@ CACHE_MAX_AGE = 900
 MIN_WAIT = 60
 STOP_WAIT_S = 15
 NON_INTERACTIVE = {"-p", "--print", "-v", "--version", "-h", "--help"}
-SESSION_FLAGS = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "--from-pr"}
+NOT_CARRIED = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "--from-pr",
+               "-w", "--worktree", "--tmux"}
 OPTION_LINE = re.compile(r"^  ((?:--?[\w-]+, )*--?[\w-]+)(?: ([<\[])[^>\]]*?(\.\.\.)?[>\]])?")
 COMMAND_LINE = re.compile(r"^  ([a-z][\w|-]*)")
 
@@ -195,7 +196,7 @@ def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
         name = a.split("=", 1)[0]
         taken = option_values(args, i, "" if "=" in a else opts.get(name, ""))
         i += len(taken)
-        if name not in SESSION_FLAGS:
+        if name not in NOT_CARRIED:
             out += [a, *taken]
     return out
 
