@@ -366,19 +366,24 @@ in
     security.audit = {
       backlogLimit = 8192;
       rules = lib.mkMerge [
-        [
-          "-a always,exit -F arch=b64 -F dir=/etc/systemd -F perm=wa -F key=unit-change"
-          "-a always,exit -F arch=b64 -F path=/etc/sudoers -F perm=wa -F key=sudo-change"
-          "-a always,exit -F arch=b64 -F dir=/etc/ssh -F perm=wa -F key=ssh-config"
-          "-a always,exit -F arch=b64 -F dir=/etc/audit -F perm=wa -F key=audit-config"
-          "-a always,exit -F arch=b64 -F path=/etc/passwd -F perm=wa -F key=identity"
-          "-a always,exit -F arch=b64 -F path=/etc/shadow -F perm=wa -F key=identity"
-          "-a always,exit -F arch=b64 -F path=/etc/group -F perm=wa -F key=identity"
-          "-a always,exit -F arch=b64 -F dir=/etc -F perm=wa -F auid!=unset -F key=etc-change"
-          "-a always,exit -F arch=b64 -F path=/run/wrappers/bin/sudo -F perm=x -F key=sudo-exec"
-          "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=wa -F key=credstore"
-          "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=r -F uid!=0 -F key=credstore"
-        ]
+        (
+          let
+            watches = [
+              "-a always,exit -F arch=b64 -F dir=/etc/systemd -F perm=wa -F key=unit-change"
+              "-a always,exit -F arch=b64 -F path=/etc/sudoers -F perm=wa -F key=sudo-change"
+              "-a always,exit -F arch=b64 -F dir=/etc/ssh -F perm=wa -F key=ssh-config"
+              "-a always,exit -F arch=b64 -F dir=/etc/audit -F perm=wa -F key=audit-config"
+              "-a always,exit -F arch=b64 -F path=/etc/passwd -F perm=wa -F key=identity"
+              "-a always,exit -F arch=b64 -F path=/etc/shadow -F perm=wa -F key=identity"
+              "-a always,exit -F arch=b64 -F path=/etc/group -F perm=wa -F key=identity"
+              "-a always,exit -F arch=b64 -F dir=/etc -F perm=wa -F auid!=unset -F key=etc-change"
+              "-a always,exit -F arch=b64 -F path=/run/wrappers/bin/sudo -F perm=x -F key=sudo-exec"
+              "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=wa -F key=credstore"
+              "-a always,exit -F arch=b64 -F dir=/run/secrets.d -F perm=r -F uid!=0 -F key=credstore"
+            ];
+          in
+          watches ++ map (lib.replaceStrings [ "arch=b64" ] [ "arch=b32" ]) watches
+        )
         (lib.mkAfter [
           "-a always,exclude -F msgtype=NETFILTER_CFG -F auid=unset"
           "-a always,exclude -F msgtype=ANOM_PROMISCUOUS -F auid=unset"
