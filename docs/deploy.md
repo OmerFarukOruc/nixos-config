@@ -162,6 +162,11 @@ of step 7 on each host's units. It builds the unit files without the programs
 they start, so it downloaded about 1.8 GiB instead of the whole system on a
 GitHub runner on 2026-10-13.
 
+`ci/checks.sh` also builds the `patches` check (`ci/patches.nix`), also under
+`--evaluate-only`. It unpacks each nixpkgs package that an overlay patches,
+applies the patches and stops, so a nixpkgs move after which a patch no longer
+applies fails the check without a build of the package.
+
 Without a `#`, `scripts/eval.sh` prints one value of nixos-rog's
 configuration; give a flake attribute with `#` for another host. A string
 prints raw, and any other value needs `--json`.

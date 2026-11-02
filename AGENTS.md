@@ -30,7 +30,7 @@ Agents run on nixos-desktop or on nixos-rog; `hostname` tells which. These scrip
 # Nixpkgs
 
 - `flake.lock` holds more than one nixpkgs node. Ours is the one the root input names: `jq -r '.nodes.root.inputs.nixpkgs as $n | "\($n) \(.nodes[$n].locked.rev)"' flake.lock`. llm-agents and nix-cachyos-kernel keep their own nixpkgs on purpose, so their binary caches still match.
-- Fix a nixpkgs package with an overlay in `overlays/` (`overrideAttrs` with `patches` or `postPatch`). The module that needs an overlay imports its file in `nixpkgs.overlays` (`git grep -n 'overlays/' nixosModules` lists them), so extend the package's existing overlay or import the new file where the package is used. Fix a NixOS module with `disabledModules` plus the module from a second pinned nixpkgs input. Patching nixpkgs itself needs import from derivation, which `ci/checks.sh` forbids.
+- Fix a nixpkgs package with an overlay in `overlays/` (`overrideAttrs` with `patches` or `postPatch`). The module that needs an overlay imports its file in `nixpkgs.overlays` (`git grep -n 'overlays/' nixosModules` lists them), so extend the package's existing overlay or import the new file where the package is used. Add a patched package to `ci/patches.nix`, whose `patches` check applies its patches in the pre-push hook and the `update` workflow. Fix a NixOS module with `disabledModules` plus the module from a second pinned nixpkgs input. Patching nixpkgs itself needs import from derivation, which `ci/checks.sh` forbids.
 - A text edit in a build step fails the build when it changes nothing. Use `substituteInPlace --replace-fail`; after a `sed`, or a `--replace-quiet` where a release may use either of two forms, check the result with `grep`.
 
 # Lookups

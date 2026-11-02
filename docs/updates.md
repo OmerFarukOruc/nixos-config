@@ -17,8 +17,11 @@ that does not build or nixpkgs held back, turns the run red too, except the
 one that llm-agents waits for cache.numtide.com, which clears by itself. When `main` moves during the run, the run pushes
 nothing and the next one tries again. Its run summary lists the moves and the
 warnings. `gh workflow run update.yml` starts it now. It builds no host's
-system, so a move that evaluates but fails to build reaches the hosts, which
-keep their system and show "Update failed" ([Updater](nixos-rog.md#updater)).
+system. It only unpacks each package that an overlay patches and applies its
+patches (the `patches` check, `ci/patches.nix`), so a move after which a patch
+no longer applies stays out. Any other move that evaluates but fails to build
+reaches the hosts, which keep their system and show "Update failed"
+([Updater](nixos-rog.md#updater)).
 Such a move also stops every later push, because the pre-push hook builds each
 workstation's system ([Check before you deploy](deploy.md#check-before-you-deploy)),
 until a push that fixes the build lands.

@@ -123,6 +123,7 @@
         // import ./ci/theme-contrast.nix {
           inherit inputs;
           host = inventory.nixosConfigurations.nixos-rog;
-        };
+        }
+        // import ./ci/patches.nix { inherit (inventory) nixosConfigurations; };
     };
 }

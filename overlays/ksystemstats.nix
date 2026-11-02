@@ -8,6 +8,7 @@
 #   at logout, created a client the daemon never removed. The patch drops it.
 # Upstream src/client.cpp and src/daemon.cpp still have both bugs:
 # https://invent.kde.org/plasma/ksystemstats/-/tree/master/src
+# The first is https://bugs.kde.org/show_bug.cgi?id=526594.
 _final: prev: {
   kdePackages = prev.kdePackages.overrideScope (
     _kfinal: kprev: {
