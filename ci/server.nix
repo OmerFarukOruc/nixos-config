@@ -56,6 +56,26 @@ let
         true
     )).success;
 
+  failedAssertions = host: map (a: a.message) (lib.filter (a: !a.assertion) host.config.assertions);
+  firewallVariants = {
+    tcpPort.networking.firewall.allowedTCPPorts = [ 8080 ];
+    tcpPortRange.networking.firewall.allowedTCPPortRanges = [
+      {
+        from = 8000;
+        to = 8010;
+      }
+    ];
+    udpPort.networking.firewall.allowedUDPPorts = [ 5353 ];
+    udpPortRange.networking.firewall.allowedUDPPortRanges = [
+      {
+        from = 9000;
+        to = 9010;
+      }
+    ];
+    trustedInterface.networking.firewall.trustedInterfaces = [ "eth0" ];
+    interfacePort.networking.firewall.interfaces.eth0.allowedTCPPorts = [ 8080 ];
+  };
+
   hasPackage =
     prefixes: packages:
     lib.any (package: lib.any (prefix: lib.hasPrefix prefix (package.name or "")) prefixes) packages;
@@ -117,6 +137,13 @@ in
     ) config.services.openssh.listenAddresses;
     udpPorts = config.networking.firewall.allowedUDPPorts;
     tailscalePort = config.services.tailscale.port;
+  };
+
+  firewall = {
+    baseline = failedAssertions system;
+    variants = lib.mapAttrs (
+      _: module: failedAssertions (system.extendModules { modules = [ module ]; })
+    ) firewallVariants;
   };
 
   boot = {

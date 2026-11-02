@@ -117,6 +117,15 @@ server_record() {
     echo "The server record's access setup changed: $(jq -c .access <<<"$out")" >&2
     return 1
   }
+  jq -e '.firewall.baseline == []' <<<"$out" >/dev/null || {
+    echo "The server record fails an assertion: $(jq -c .firewall.baseline <<<"$out")" >&2
+    return 1
+  }
+  jq -e '.firewall.variants | to_entries | map(select(.value | map(contains("networking.firewall opens a port")) | any | not)) | map(.key) | . == []' \
+    <<<"$out" >/dev/null || {
+    echo "The Tailscale-only firewall assertion does not fail for these firewall variants: $(jq -c '.firewall.variants | with_entries(select(.value | map(contains("networking.firewall opens a port")) | any | not)) | keys' <<<"$out")" >&2
+    return 1
+  }
   jq -e '.boot | .enable and .efiSupport and .biosSupport and .biosDevice == "/dev/vda"
     and (.canTouchEfiVariables | not) and .efiInstallAsRemovable and .additionalFiles == {}' \
     <<<"$out" >/dev/null || {
