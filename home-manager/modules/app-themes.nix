@@ -8,7 +8,7 @@ let
   contrast = import ../../nixosModules/contrast.nix { inherit lib; };
   home = config.home.homeDirectory;
   hex = color: "#${lib.toLower color}";
-  decimal = color: lib.concatMapStringsSep "," toString (contrast.channels color);
+  inherit (contrast) decimal;
   polarityName = theme: lib.toSentenceCase theme.polarity;
 
   konsoleScheme = "OrucBase16";

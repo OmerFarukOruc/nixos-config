@@ -45,7 +45,7 @@ let
       css = lib.concatStrings (
         lib.mapAttrsToList (name: color: ''
           --spice-${name}: #${color};
-          --spice-rgb-${name}: ${lib.concatMapStringsSep "," toString (contrast.channels color)};
+          --spice-rgb-${name}: ${contrast.decimal color};
         '') (roles scheme)
       );
     in

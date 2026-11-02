@@ -1,18 +1,21 @@
 { lib, rawScheme }:
 translucent:
 let
-  rgb =
-    name:
-    lib.concatStringsSep "," [
-      rawScheme."${name}-rgb-r"
-      rawScheme."${name}-rgb-g"
-      rawScheme."${name}-rgb-b"
-    ];
+  contrast = import ../../../nixosModules/contrast.nix { inherit lib; };
+  scheme = rawScheme;
+  rgb = contrast.decimal;
+  buttonSeparation = 1.3;
+  button = contrast.raisedSurface scheme scheme.base00 buttonSeparation;
+  buttonAlternate = contrast.raisedSurface scheme button buttonSeparation;
+  text = contrast.legibleOn scheme [
+    scheme.base00
+    button
+  ] scheme.base05;
   # KDE reads a fourth number as the alpha, from 0 (clear) to 255 (opaque).
   # The Glass Qt style draws windows with these backgrounds, and the Glass
   # KWin effect blurs what shows through.
-  rgba = name: alpha: "${rgb name},${toString alpha}";
-  kdeColorGroup =
+  rgba = color: alpha: "${rgb color},${toString alpha}";
+  group =
     {
       backgroundNormal,
       backgroundAlternate,
@@ -24,22 +27,21 @@ let
         if groupTranslucent then rgba backgroundAlternate 80 else rgb backgroundAlternate
       }
       BackgroundNormal=${if groupTranslucent then rgba backgroundNormal 140 else rgb backgroundNormal}
-      DecorationFocus=${rgb "base0D"}
-      DecorationHover=${rgb "base0D"}
-      ForegroundActive=${rgb "base0D"}
-      ForegroundInactive=${rgb "base03"}
-      ForegroundLink=${rgb "base0D"}
-      ForegroundNegative=${rgb "base08"}
-      ForegroundNeutral=${rgb "base09"}
+      DecorationFocus=${rgb scheme.base0D}
+      DecorationHover=${rgb scheme.base0D}
+      ForegroundActive=${rgb scheme.base0D}
+      ForegroundInactive=${rgb scheme.base03}
+      ForegroundLink=${rgb scheme.base0D}
+      ForegroundNegative=${rgb scheme.base08}
+      ForegroundNeutral=${rgb scheme.base09}
       ForegroundNormal=${rgb foregroundNormal}
-      ForegroundPositive=${rgb "base0B"}
-      ForegroundVisited=${rgb "base0E"}
+      ForegroundPositive=${rgb scheme.base0B}
+      ForegroundVisited=${rgb scheme.base0E}
     '';
-  group = kdeColorGroup;
 in
 ''
   [ColorEffects:Disabled]
-  Color=${rgb "base03"}
+  Color=${rgb scheme.base03}
   ColorAmount=0
   ColorEffect=0
   ContrastAmount=0.65
@@ -49,7 +51,7 @@ in
 
   [ColorEffects:Inactive]
   ChangeSelectionColor=true
-  Color=${rgb "base03"}
+  Color=${rgb scheme.base03}
   ColorAmount=0.025
   ColorEffect=2
   ContrastAmount=0.1
@@ -60,52 +62,52 @@ in
 
   [Colors:Button]
   ${group {
-    backgroundNormal = "base01";
-    backgroundAlternate = "base02";
-    foregroundNormal = "base05";
+    backgroundNormal = button;
+    backgroundAlternate = buttonAlternate;
+    foregroundNormal = text;
   }}
   [Colors:Complementary]
   ${group {
-    backgroundNormal = "base00";
-    backgroundAlternate = "base01";
-    foregroundNormal = "base05";
+    backgroundNormal = scheme.base00;
+    backgroundAlternate = scheme.base01;
+    foregroundNormal = scheme.base05;
   }}
   [Colors:Header]
   ${group {
-    backgroundNormal = "base01";
-    backgroundAlternate = "base02";
-    foregroundNormal = "base05";
+    backgroundNormal = scheme.base01;
+    backgroundAlternate = scheme.base02;
+    foregroundNormal = scheme.base05;
   }}
   [Colors:Header][Inactive]
   ${group {
-    backgroundNormal = "base00";
-    backgroundAlternate = "base01";
-    foregroundNormal = "base04";
+    backgroundNormal = scheme.base00;
+    backgroundAlternate = scheme.base01;
+    foregroundNormal = scheme.base04;
   }}
   [Colors:Selection]
   ${group {
-    backgroundNormal = "base0D";
-    backgroundAlternate = "base0C";
-    foregroundNormal = "base00";
+    backgroundNormal = scheme.base0D;
+    backgroundAlternate = scheme.base0C;
+    foregroundNormal = scheme.base00;
   }}
   [Colors:Tooltip]
   ${group {
-    backgroundNormal = "base01";
-    backgroundAlternate = "base02";
-    foregroundNormal = "base05";
+    backgroundNormal = scheme.base01;
+    backgroundAlternate = scheme.base02;
+    foregroundNormal = scheme.base05;
   }}
   [Colors:View]
   ${group {
-    backgroundNormal = "base00";
-    backgroundAlternate = "base01";
-    foregroundNormal = "base05";
+    backgroundNormal = scheme.base00;
+    backgroundAlternate = scheme.base01;
+    foregroundNormal = scheme.base05;
     groupTranslucent = translucent;
   }}
   [Colors:Window]
   ${group {
-    backgroundNormal = "base00";
-    backgroundAlternate = "base01";
-    foregroundNormal = "base05";
+    backgroundNormal = scheme.base00;
+    backgroundAlternate = scheme.base01;
+    foregroundNormal = text;
     groupTranslucent = translucent;
   }}
   [General]
@@ -117,10 +119,10 @@ in
   contrast=4
 
   [WM]
-  activeBackground=${rgb "base01"}
-  activeBlend=${rgb "base01"}
-  activeForeground=${rgb "base05"}
-  inactiveBackground=${rgb "base00"}
-  inactiveBlend=${rgb "base00"}
-  inactiveForeground=${rgb "base03"}
+  activeBackground=${rgb scheme.base01}
+  activeBlend=${rgb scheme.base01}
+  activeForeground=${rgb scheme.base05}
+  inactiveBackground=${rgb scheme.base00}
+  inactiveBlend=${rgb scheme.base00}
+  inactiveForeground=${rgb scheme.base03}
 ''

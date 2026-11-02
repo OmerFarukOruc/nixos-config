@@ -515,7 +515,15 @@ desktop's colours, because their `Preferences` set
 colours they then follow at once, and to GTK (1) elsewhere, whose colours
 apply at their next start; `oruc-app-settings` writes it, with an empty
 `extensions.theme.id`, which Chromium requires for that mode, while the
-browser is closed. `spicetify.nix` builds Spotify with Spicetify and links its
+browser is closed. In Qt mode Brave Origin 1.98 paints the tab strip with
+the `[WM]` `inactiveBackground` (base00), the toolbar and active tab with the
+Button background, and the active tab title and toolbar icons with the Window
+text. `plasma-looks/kde-color-scheme.nix` therefore mixes base00 toward base05
+until the Button background reaches 1.3:1 against base00 (`contrast.nix`
+`raisedSurface`; 1.3:1 is Catppuccin Mocha's surface0, which Catppuccin's own
+KDE scheme uses for buttons), and lifts the Button and Window text to 4.5:1 on
+both with `legibleOn`. With base01 as the Button background, Mocha's active
+tab differed from the tab strip by 1.07:1. `spicetify.nix` builds Spotify with Spicetify and links its
 `Apps/xpui/colors.css` to the pack's `spicetify-colors.css` fact through the
 theme pointer, so Spotify takes the stored scheme at its next start.
 

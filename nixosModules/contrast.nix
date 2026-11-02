@@ -118,6 +118,16 @@ rec {
     pct: a: b:
     lib.concatMapStrings (builtins.elemAt hexBytes) (mix pct (channels a) (channels b));
 
+  decimal = color: lib.concatMapStringsSep "," toString (channels color);
+
+  raisedSurface =
+    scheme: background: separation:
+    let
+      toward = pct: mixHex (100 - pct) background scheme.base05;
+      pct = lib.findFirst (pct: ratio (toward pct) background >= separation) 100 (lib.range 0 100);
+    in
+    lib.toLower (toward pct);
+
   legibleOn =
     scheme: backgrounds: color:
     let
