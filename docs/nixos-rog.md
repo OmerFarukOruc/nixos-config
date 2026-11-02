@@ -101,8 +101,8 @@ resume before the next reboot, run
 `sudo rm /run/systemd/system.control/nixos-upgrade.timer`,
 `sudo systemctl daemon-reload` and then
 `sudo systemctl start nixos-upgrade.timer`. After a reboot the timer runs
-again, so pause it again after each reboot. [recovery.md](recovery.md#nixos-rog)
-uses this pause when it pins a generation.
+again, so pause it again after each reboot. Every rollback recipe in
+[recovery.md](recovery.md) uses this pause.
 
 ### Packages no cache holds
 

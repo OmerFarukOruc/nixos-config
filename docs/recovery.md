@@ -3,6 +3,7 @@
 - [Roll back a running host](#roll-back-a-running-host)
 - [A host that does not boot](#a-host-that-does-not-boot)
 - [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
+- [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host)
 - [Boot the recovery entry](#boot-the-recovery-entry)
 - [Repair the bootloader](#repair-the-bootloader)
 - [Swap on nixos-latitude](#swap-on-nixos-latitude)
@@ -21,30 +22,58 @@ root in `/nix/var/nix/gcroots/auto`. The generation `nixos-install` made has
 none, so it stays until someone deletes it by hand
 ([install-nixos-latitude.md](install-nixos-latitude.md), step 9).
 
-The systemd-boot menu in the sections below is the one on nixos-latitude.
-nixos-rog uses Limine, which the [nixos-rog](#nixos-rog) section covers.
+nixos-latitude boots with systemd-boot, and nixos-rog, nixos-desktop and
+devbox boot with Limine (`bootloader` in `machines/inventory.nix`).
+systemd-boot boots the generation that `switch-to-configuration boot` made the
+default last. Limine always boots the newest generation of the system profile,
+whatever generation runs, so a generation stays only after
+[Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+
+Every host installs `main` every hour on top of a generation you restored
+([Updater](nixos-rog.md#updater)), and that install makes a new newest
+generation. So every rollback recipe below pauses `nixos-upgrade.timer` before
+it changes the system profile, and resumes it once `main` holds a fix. The pause lasts until the next reboot, and
+`Persistent=true` runs a missed hour soon after boot, so pause it again after
+each reboot. [Updater](nixos-rog.md#updater) has the pause, the wait for a
+running install, and the resume.
 
 ## Roll back a running host
 
-To switch nixos-latitude back to its previous retained generation, run:
+1. Pause `nixos-upgrade.timer` on the host and wait for a running install to
+   end ([Updater](nixos-rog.md#updater)).
+2. Switch the host back to its previous retained generation, here
+   nixos-latitude:
 
-```sh
-ssh -t nixos-latitude 'sudo nixos-rebuild switch --rollback'
-```
+   ```sh
+   ssh -t nixos-latitude 'sudo nixos-rebuild switch --rollback'
+   ```
 
-systemd-boot then boots that generation by default, as long as the menu lists
-it. On nixos-rog, Limine always boots the newest generation, so a rollback lasts
-only until the next reboot. To keep it there, follow [nixos-rog](#nixos-rog).
+   On nixos-latitude, systemd-boot then boots that generation by default, as
+   long as the menu lists it. On a Limine host the rollback lasts only until
+   the next reboot; to keep it, follow
+   [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+3. Resume the timer once `main` holds a fix.
 
 ## A host that does not boot
 
-1. Use the local console.
-2. In the systemd-boot menu on nixos-latitude, select an older NixOS generation.
-3. After it starts, make that selected generation the next boot default:
+1. Use the local console; devbox has only the provider's
+   ([devbox](#devbox)).
+2. In the boot menu, select an older NixOS generation. In systemd-boot on
+   nixos-latitude, select its entry. In Limine, open its `Generation <number>`
+   entry and pick `Default`.
+3. As soon as it starts, pause `nixos-upgrade.timer`
+   ([Updater](nixos-rog.md#updater)). The missed hourly run starts soon after
+   boot and would install the broken `main` again.
+4. Make the selected generation the next boot default. On nixos-latitude, run:
 
    ```sh
    sudo /run/current-system/bin/switch-to-configuration boot
    ```
+
+   On a Limine host, follow
+   [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host)
+   from step 3.
+5. Resume the timer once `main` holds a fix.
 
 After a kernel panic, a watchdog reset or an unexplained stop on
 nixos-latitude, read the files in
@@ -56,9 +85,8 @@ nixos-latitude, read the files in
 To go back to a kept generation that the boot menu does not list, do these
 steps:
 
-1. Pause `nixos-upgrade.timer` first.
-   [Updater](nixos-rog.md#updater) has the pause, the wait, and
-   the resume.
+1. Pause `nixos-upgrade.timer` first and wait for a running install to end
+   ([Updater](nixos-rog.md#updater)).
 
 2. Run these commands. The first one lists the generations. The second one
    makes the generation you picked the current one, and the third one activates
@@ -70,10 +98,39 @@ steps:
    sudo /nix/var/nix/profiles/system/bin/switch-to-configuration switch
    ```
 
-   The host now runs the picked generation. On nixos-rog, a reboot boots the
-   newest generation again, because Limine always makes the newest generation of
-   the system profile the default. To keep the picked generation, follow
-   [nixos-rog](#nixos-rog).
+   The host now runs the picked generation. On a Limine host, a reboot boots
+   the newest generation again. To keep the picked generation there, follow
+   [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host)
+   from step 3.
+
+3. Resume the timer once `main` holds a fix.
+
+## Keep a generation on a Limine host
+
+Limine makes the newest generation of the system profile the default, so on
+nixos-rog, nixos-desktop and devbox a generation stays the default only after
+the newer ones are gone:
+
+1. Pause `nixos-upgrade.timer` and wait for a running install to end
+   ([Updater](nixos-rog.md#updater)). Otherwise the next install of `main`
+   makes a new newest generation, and Limine boots that one.
+2. Boot that generation from the Limine menu (its `Generation <number>` entry,
+   then `Default`), and pause the timer again after the reboot, or activate it
+   with `switch-generation` and `switch-to-configuration switch` as
+   [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
+   describes.
+3. Drop the newer generations and reinstall the boot entries. The running
+   system is the generation from step 2, so this command writes its boot
+   entries:
+
+   ```sh
+   sudo nix-env -p /nix/var/nix/profiles/system --list-generations
+   sudo nix-env -p /nix/var/nix/profiles/system --switch-generation <good>
+   sudo nix-env -p /nix/var/nix/profiles/system --delete-generations <newer...>
+   sudo /run/current-system/bin/switch-to-configuration boot
+   ```
+
+4. Resume the timer once `main` holds a fix.
 
 ## Boot the recovery entry
 
@@ -88,13 +145,17 @@ load a different kernel, so recovery needs a reboot:
 
 1. Reboot.
 2. In the boot menu of nixos-latitude, select the `recovery` specialisation
-   for the generation that you need. On nixos-rog, open the generation in the
-   Limine menu and pick `recovery`.
+   for the generation that you need. On a Limine host, open the generation in
+   the Limine menu and pick `recovery`.
 3. Check the running kernel:
 
    ```sh
    uname -r
    ```
+
+4. To stay on the recovery entry past the next hourly run, pause
+   `nixos-upgrade.timer` ([Updater](nixos-rog.md#updater)), because that run
+   switches the host to `main`.
 
 ## Repair the bootloader
 
@@ -187,33 +248,10 @@ driver this laptop needs. The recovery entry runs on the Radeon iGPU without
 the NVIDIA driver. So a driver or kernel update never compiles the NVIDIA
 module on the laptop for the recovery kernel.
 
-To go back to an older generation, open its `Generation <number>` entry in the
-Limine boot menu and pick `Default`. Pick `recovery` there for the recovery
-kernel. A generation the menu does not list can be activated first with
-[A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list).
-Start at step 2 below once that generation is the running system.
-
-Limine always makes the newest generation of the system profile the default,
-whatever generation runs. To keep a running generation as the default, do these
-steps:
-
-1. Boot that generation from the Limine menu, or activate it with
-   `switch-generation` and `switch-to-configuration switch` as
-   [A generation the boot menu does not list](#a-generation-the-boot-menu-does-not-list)
-   describes.
-2. Pause `nixos-upgrade.timer`.
-   [Updater](nixos-rog.md#updater) has the pause, the wait, the
-   resume, and the reboot hole. Otherwise the next deploy of `main` makes a new
-   newest generation, and Limine boots that one.
-3. Drop the newer generations and reinstall the boot entries. The running
-   system is the generation from step 1, so this command writes its boot entries:
-
-   ```sh
-   sudo nix-env -p /nix/var/nix/profiles/system --list-generations
-   sudo nix-env -p /nix/var/nix/profiles/system --switch-generation <good>
-   sudo nix-env -p /nix/var/nix/profiles/system --delete-generations <newer...>
-   sudo /run/current-system/bin/switch-to-configuration boot
-   ```
+To go back to an older generation, follow
+[A host that does not boot](#a-host-that-does-not-boot) or
+[Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+Pick `recovery` in a generation's Limine entry for the recovery kernel.
 
 When the nixos-rog bootloader needs repair, boot the NixOS installer and mount
 the filesystems before the `nixos-enter` lines in
@@ -245,7 +283,12 @@ mode the NVIDIA driver has no device.
 ## nixos-desktop
 
 nixos-desktop uses Limine on its own ESP on the WD disk; Windows keeps the ESP
-on the Samsung disk. When its bootloader needs repair, boot the NixOS
+on the Samsung disk. Its Limine menu lists the NixOS generations, each with
+its `recovery` specialisation. Roll back and keep a generation with
+[Roll back a running host](#roll-back-a-running-host),
+[A host that does not boot](#a-host-that-does-not-boot) and
+[Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+When its bootloader needs repair, boot the NixOS
 installer, mount by partition name, then run the `nixos-enter`,
 `NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot` lines of
 [Repair the bootloader](#repair-the-bootloader):
@@ -303,7 +346,8 @@ screenshot in the final message, so Omer can follow what was done.
    `press ArrowDown` and `press Enter` after a click on the console canvas.
 4. Once SSH answers again, keep the box on that generation: pause
    `nixos-upgrade.timer` and drop the newer generations as steps 2 and 3 of
-   the [nixos-rog](#nixos-rog) section show, because Limine always boots the
+   [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host)
+   show, because Limine always boots the
    newest generation and the hourly install would build the broken `main`
    again and reboot into it in the next night window.
 5. Open an issue with the broken `main` commit, the screenshots' findings and
