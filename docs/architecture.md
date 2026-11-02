@@ -670,7 +670,12 @@ sudo systemctl start case-fans
 ```
 
 The measurement aborts when Tctl reaches 70 C, so run it while the machine is
-idle.
+idle. It prints one JSON object with the keys `channel`, `floor_pwm` and
+`table`. Replace the object with the same `channel` in `fan-tables.json` (`radiator` is
+channel 1, `rear` is 3, and the list `intakes` holds channels 5 and 7) with it. `floor_pwm`
+already holds a margin of 6 PWM above the lowest PWM at which the fan turned.
+Then commit and deploy, because the service reads the table from the system
+that the deploy builds.
 
 When the daemon stops, crashes, misses its 10 s watchdog or cannot read a
 sensor, `ExecStopPost` hands the four channels back to the BIOS curves. The
