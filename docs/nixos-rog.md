@@ -52,8 +52,9 @@ reaches the host within about 3 hours. The run stops after 3 hours
 The service skips a run, without a failure, when:
 
 - the host is on battery (`ConditionACPower`);
-- `deploy.sh` holds the deploy lock, or a deploy's `deploy-rollback.timer` is
-  pending;
+- `deploy.sh` holds the deploy lock, a deploy's `deploy-rollback.timer` is
+  pending, or its activation or boot entry install still runs, which outlives
+  a dropped deploy connection and its lock;
 - `/boot` is not mounted, or has less than 1 GiB free;
 - fetching `main` fails, such as while GitHub cannot be reached;
 - the host runs a `test` deploy, a deploy from a dirty tree, or a commit that

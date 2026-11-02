@@ -445,8 +445,9 @@ The deploy runs these steps in order:
 14. Twenty seconds after the SSH check, it checks the recorded user services.
     The next list says what happens when this check fails.
 15. It stops the rollback timer.
-16. For `switch`, it makes the checked build the system profile and boot
-    default. It does not build or activate the build again.
+16. For `switch` and `boot`, it makes the checked build the system profile and
+    boot default in a system service, `deploy-boot`, so an SSH drop cannot
+    interrupt the install. It does not build or activate the build again.
 17. After the whole deploy succeeds, it updates `current` and copies the
     target's `flake.lock` into this repository. Then it prints
     `Deployment completed from release <release>.`
@@ -493,6 +494,13 @@ When a step after the build fails, the deploy acts as follows:
   deploy.
 - **Installing the boot entries fails.** The deploy sets the system profile and
   boot entries back to the previous generation and exits 73.
+- **The boot entry install returns no result**, for example because the SSH
+  connection dropped. The deploy reconnects and polls for the exit status that
+  the install unit records in `/run/deploy-boot.status`, until 300 seconds
+  after it started the install. When no status arrives in time, or the unit ended without one, it
+  exits 76. After `switch` the candidate then runs with no rollback timer
+  armed, and `journalctl -u deploy-boot.service` on the target shows how far
+  the install got.
 
 For `switch`, the candidate becomes the boot default only after it passes the
 SSH check and the user-service check.
@@ -519,6 +527,7 @@ such as 1.
 | 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
+| 76 | The boot entry install reported no result, after a dropped connection or a unit that ended without one. | Unknown: the system profile and boot default point at the candidate or the previous system. After `switch`, the candidate runs and no rollback timer is armed. |
 | 77 | Another deploy holds the lock on the host, or `nixos-upgrade.service` is installing main there. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |

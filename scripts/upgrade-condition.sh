@@ -19,6 +19,9 @@ skip() {
 if systemctl is-active --quiet deploy-rollback.timer; then
   skip "A deploy's rollback timer is pending, so this run skips."
 fi
+if systemctl is-active --quiet deploy-activate.service deploy-boot.service; then
+  skip "A deploy's activation or boot entry install still runs, so this run skips."
+fi
 if [[ -e $deploy_state/deploy.lock ]] && ! flock -n "$deploy_state/deploy.lock" true; then
   skip "deploy.sh holds the deploy lock, so this run skips."
 fi

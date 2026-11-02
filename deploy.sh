@@ -375,6 +375,9 @@ REMOTE
 # 20 s sleep): 355 s at worst.
 rollback_seconds=420
 activation_seconds=180
+install_seconds=300
+unit_running=254
+unit_lost=253
 
 fresh_login() {
   if $local_target; then
@@ -541,16 +544,16 @@ REMOTE
   esac
 }
 
-wait_activation() {
-  local deadline=$1 result
+wait_unit() {
+  local unit=$1 deadline=$2 result
   while :; do
     result=$(
       {
-        printf 'release=%q\n' "$release_id"
+        printf 'release=%q unit=%q\n' "$release_id" "$unit"
         cat <<'REMOTE'
-status_file=/run/deploy-activate.status
+status_file=/run/$unit.status
 status=$(sed -n "s/^$release //p" "$status_file" 2>/dev/null)
-if [[ -z $status ]] && systemctl is-active --quiet deploy-activate.service; then
+if [[ -z $status ]] && systemctl is-active --quiet "$unit.service"; then
   echo running
   exit 0
 fi
@@ -567,8 +570,46 @@ REMOTE
   printf '%s\n' "$result"
 }
 
+run_in_unit() {
+  local unit=$1 release=$2 script=$3 started status
+  shift 3
+  started=$(date +%s)
+  sudo systemd-run --quiet --no-ask-password --collect --unit="$unit" \
+    --service-type=exec --expand-environment=no --wait "$BASH" -c "$script"'
+status=$?
+printf "%s %s\n" "$0" "$status" >/run/'"$unit"'.status
+exit "$status"' "$release" "$@"
+  status=$?
+  sudo journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit.service" --since "@$started" | tail -n 30
+  grep -q "^$release " "/run/$unit.status" 2>/dev/null || return 1
+  return "$status"
+}
+
+run_unit() {
+  local unit=$1 deadline=$((SECONDS + $2)) script=$3 status=0 result
+  shift 3
+  {
+    declare -f run_in_unit
+    printf '%s\n' 'run_in_unit "$@"'
+  } | on_target "$unit" "$release_id" "$script" "$@" || status=$?
+  if ((status >= 128)); then
+    printf 'The connection dropped while %s ran. Waiting for its result.\n' "$unit" >&2
+    result=$(wait_unit "$unit" "$deadline")
+    case $result in
+      running) return "$unit_running" ;;
+      lost) return "$unit_lost" ;;
+    esac
+    status=$result
+  fi
+  return "$status"
+}
+
+activate() {
+  "$1/bin/switch-to-configuration" test
+}
+
 activate_with_rollback() {
-  local activate_status=0 session_list activation_deadline
+  local activate_status=0 session_list
   local -a session=()
 
   session_list=$(session_services) || {
@@ -576,52 +617,29 @@ activate_with_rollback() {
     return 1
   }
   [[ -z $session_list ]] || mapfile -t session <<<"$session_list"
-  activation_deadline=$((SECONDS + activation_seconds))
-  on_target "$new_system" "$previous_system" "$rollback_seconds" "$release_id" <<'REMOTE' || activate_status=$?
-set -uo pipefail
-
-new=$1
-previous=$2
-seconds=$3
-release=$4
-
-# AccuracySec defaults to one minute, which would delay the rollback.
+  # AccuracySec defaults to one minute, which would delay the rollback.
+  on_target "$previous_system" "$rollback_seconds" <<'REMOTE' || {
 sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-rollback \
-  --on-active="$seconds" --timer-property=AccuracySec=1s \
-  "$previous/bin/switch-to-configuration" test || exit 71
-
-started=$(date +%s)
-sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-activate \
-  --service-type=exec --wait "$BASH" -c '
-"$1/bin/switch-to-configuration" test
-status=$?
-printf "%s %s\n" "$2" "$status" >/run/deploy-activate.status
-exit "$status"' _ "$new" "$release"
-status=$?
-sudo journalctl --no-pager -o cat _SYSTEMD_UNIT=deploy-activate.service --since "@$started" | tail -n 30
-
-exit "$status"
+  --on-active="$2" --timer-property=AccuracySec=1s \
+  "$1/bin/switch-to-configuration" test
 REMOTE
-
-  if ((activate_status == 71)); then
     printf '%s\n' 'The rollback timer could not be armed, so nothing was activated.' >&2
     return 71
-  fi
-  if ((activate_status == 255)); then
-    printf '%s\n' 'The connection dropped during activation. Waiting for its result.' >&2
-    activate_status=$(wait_activation "$activation_deadline")
-    case $activate_status in
-      running)
-        printf 'The activation reported no result in time. The previous system returns within %d seconds.\n' \
-          "$rollback_seconds" >&2
-        return 1
-        ;;
-      lost)
-        printf '%s\n' 'The activation ended without a result.' >&2
-        activate_status=1
-        ;;
-    esac
-  fi
+  }
+
+  run_unit deploy-activate "$activation_seconds" "$(declare -f activate); activate \"\$@\"" "$new_system" ||
+    activate_status=$?
+  case $activate_status in
+    "$unit_running")
+      printf 'The activation reported no result in time. The previous system returns within %d seconds.\n' \
+        "$rollback_seconds" >&2
+      return 1
+      ;;
+    "$unit_lost")
+      printf '%s\n' 'The activation ended without a result.' >&2
+      activate_status=1
+      ;;
+  esac
   if ((activate_status != 0)); then
     printf 'Activation failed (exit %d). Restoring the previous system now.\n' "$activate_status" >&2
     roll_back_now
@@ -641,53 +659,78 @@ REMOTE
   fi
 }
 
-finish_release() {
-  on_target "$action" "$release_relative" "$new_system" <<'REMOTE'
+stop_rollback_timer() {
+  on_target "$new_system" <<'REMOTE'
 set -euo pipefail
 
-action=$1
-release_dir=$HOME/$2
-new=$3
-state_dir=$HOME/.local/state/nixos-config-deploy
+new=$1
 
 running_candidate() {
   [[ $(readlink -f /run/current-system) == "$new" ]] && ! systemctl is-active --quiet deploy-rollback.service
 }
 
-if [[ $action != boot ]]; then
-  running_candidate || { printf '%s\n' 'The rollback already ran. The target is not on the candidate.' >&2; exit 72; }
-  sudo systemctl stop deploy-rollback.timer
-  running_candidate || { printf '%s\n' 'The rollback ran during confirmation.' >&2; exit 72; }
-fi
+running_candidate || { printf '%s\n' 'The rollback already ran. The target is not on the candidate.' >&2; exit 72; }
+sudo systemctl stop deploy-rollback.timer
+running_candidate || { printf '%s\n' 'The rollback ran during confirmation.' >&2; exit 72; }
+REMOTE
+}
 
-
-if [[ $action != test ]]; then
-  profile=/nix/var/nix/profiles/system
+install_entries() {
+  local new=$1 profile=/nix/var/nix/profiles/system
+  local previous_link previous_profile new_link restored=true
+  PATH=$new/sw/bin
   previous_link=$(readlink "$profile")
   previous_profile=$(readlink -f "$profile")
-  sudo nix-env --profile "$profile" --set "$new"
-  new_link=$(readlink "$profile")
-  if ! sudo "$new/bin/switch-to-configuration" boot; then
-    printf '%s\n' 'Installing the boot entries failed. Restoring the previous boot default.' >&2
-    # Drop the new generation, so the boot menu written next does not list it.
-    # Links are named system-<generation>-link.
-    # Limine makes the newest generation the default, so the new one must go.
-    # A failure here must not skip reinstalling the previous entries below.
-    restored=true
-    if [[ $new_link != "$previous_link" ]]; then
-      sudo nix-env --profile "$profile" --switch-generation "${previous_link//[!0-9]/}" || restored=false
-      sudo nix-env --profile "$profile" --delete-generations "${new_link//[!0-9]/}" || restored=false
-    fi
-    if ! sudo "$previous_profile/bin/switch-to-configuration" boot; then
-      printf '%s\n' 'Reinstalling the previous boot entries failed too. Check the ESP before rebooting.' >&2
-    elif ! $restored; then
-      printf '%s\n' 'Removing the new generation from the system profile failed, so Limine may still default to it. Check before rebooting.' >&2
-    else
-      printf 'The boot default is %s again.\n' "$previous_profile" >&2
-    fi
-    exit 73
+  new_link=$previous_link
+  if nix-env --profile "$profile" --set "$new"; then
+    new_link=$(readlink "$profile")
+    "$new/bin/switch-to-configuration" boot && return 0
   fi
-fi
+  printf '%s\n' 'Installing the boot entries failed. Restoring the previous boot default.'
+  # Links are named system-<generation>-link.
+  # Limine makes the newest generation the default, so the new one must go.
+  if [[ $new_link != "$previous_link" && $(readlink -f "/nix/var/nix/profiles/$new_link") == "$new" ]]; then
+    nix-env --profile "$profile" --switch-generation "${previous_link//[!0-9]/}" || restored=false
+    nix-env --profile "$profile" --delete-generations "${new_link//[!0-9]/}" || restored=false
+  fi
+  if ! "$previous_profile/bin/switch-to-configuration" boot; then
+    printf '%s\n' 'Reinstalling the previous boot entries failed too. Check the ESP before rebooting.'
+  elif ! $restored; then
+    printf '%s\n' 'Removing the new generation from the system profile failed, so Limine may still default to it. Check before rebooting.'
+  else
+    printf 'The boot default is %s again.\n' "$previous_profile"
+  fi
+  return 73
+}
+
+install_boot_entries() {
+  local install_status=0
+  run_unit deploy-boot "$install_seconds" "$(declare -f install_entries); install_entries \"\$@\"" "$new_system" ||
+    install_status=$?
+  case $install_status in
+    0) return 0 ;;
+    73) ;;
+    *)
+      printf '%s\n' \
+        'The boot entry install reported no result. The system profile and the boot default may point at the candidate or at the previous system.' \
+        "Read journalctl -u deploy-boot.service and readlink /nix/var/nix/profiles/system on $host before a reboot." >&2
+      ;;
+  esac
+  [[ $action == boot ]] ||
+    printf '%s\n' 'The candidate keeps running until the next reboot or deploy, and no rollback timer is armed.' >&2
+  if ((install_status == 73)); then
+    return 73
+  fi
+  return 76
+}
+
+promote_release() {
+  on_target "$release_relative" "$new_system" <<'REMOTE'
+set -euo pipefail
+
+release_dir=$HOME/$1
+new=$2
+state_dir=$HOME/.local/state/nixos-config-deploy
 
 printf 'system=%s\n' "$new" >>"$release_dir.source"
 next_link=$state_dir/current.next.$$
@@ -710,8 +753,12 @@ deploy() {
   ensure_lock || return $?
   if [[ $action != boot ]]; then
     activate_with_rollback || return $?
+    stop_rollback_timer || return $?
   fi
-  finish_release
+  if [[ $action != test ]]; then
+    install_boot_entries || return $?
+  fi
+  promote_release
 }
 
 if deploy; then
