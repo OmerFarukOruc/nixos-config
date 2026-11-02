@@ -575,7 +575,9 @@ To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
 run in path order on `machine` (the booted host), and all files share one
 Python namespace, so give a variable or a function a name that only your file
 uses. Test values for a new sops key go in
-`ci/server-boot/secrets.yaml`. A NixOS module that only the test machine loads,
+`ci/server-boot/secrets.yaml`, under the key the host reads.
+`ci/server-boot/modules/sops.nix` points every secret that names its own
+`sopsFile` on the host at the test file, so a new key needs nothing else. A NixOS module that only the test machine loads,
 such as a stub of an external service, goes in `ci/server-boot/modules/`.
 
 `ci/server-boot/modules/sops.nix` gives the test machine a sops file with test

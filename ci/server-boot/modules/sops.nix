@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  lib,
+  pkgs,
+  hostSops,
+  ...
+}:
 let
   secrets =
     pkgs.runCommand "server-boot-secrets"
@@ -28,24 +33,10 @@ in
     validateSopsFiles = false;
     defaultSopsFile = lib.mkForce "${secrets}/secrets.yaml";
     age.sshKeyPaths = [ "${secrets}/ssh_host_ed25519_key" ];
-    secrets = {
-      cloudflare-acme-dns-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-      openchamber-ui-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-      opencode-server-password.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-      herdr-web-token.sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-    }
-    //
-      lib.genAttrs
-        [
-          "cliproxy-api-key-omer"
-          "cliproxy-api-key-friend"
-          "cliproxy-management-key"
-          "cliproxy-cloudflare-dns-token"
-          "cliproxy-ts-authkey"
-          "cliproxy-share-host"
-        ]
-        (_: {
-          sopsFile = lib.mkForce "${secrets}/secrets.yaml";
-        });
+    secrets = lib.mapAttrs (_: _: { sopsFile = lib.mkForce "${secrets}/secrets.yaml"; }) (
+      lib.filterAttrs (
+        _: secret: toString secret.sopsFile != toString hostSops.defaultSopsFile
+      ) hostSops.secrets
+    );
   };
 }

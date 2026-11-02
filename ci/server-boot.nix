@@ -19,6 +19,7 @@ in
     extraSystemConfig =
       { config, ... }:
       {
+        _module.args.hostSops = host.config.sops;
         imports = filesIn ".nix" ./server-boot/modules;
         # The installer VM sees the target disk as /dev/vdb, and
         # makeDiskoTest moves GRUB's device there but not Limine's.
