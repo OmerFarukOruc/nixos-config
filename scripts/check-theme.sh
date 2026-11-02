@@ -25,8 +25,11 @@ It also checks that an unknown scheme exits 64 and changes nothing, that
 `theme --reapply` finishes a switch interrupted after the stored scheme
 changed, that it falls back to the record scheme when no scheme is stored,
 that neither run changes the running session's KDE colour scheme, and that
-the pack is a GC root. It prints a skip line for each scheme whose Plasma
-checks cannot run.
+the pack is a GC root. It prints a skip line for each scheme whose Plasma,
+keyboard light, wallpaper or GTK polarity checks cannot run, and one that
+lists the app files this host's pack lacks. A file that every workstation's
+pack holds, such as the fzf, Starship, Neovim, Vesktop and Telegram colours,
+fails the check when it is missing.
 
 For Noctalia, DMS, rofi, vicinae, niri, mpv and the Plasma splash it
 checks that each file holds the scheme's colour; for mpv's OSD and subtitle
@@ -151,9 +154,13 @@ color() {
     tr '[:upper:]' '[:lower:]'
 }
 
+absent_files=()
 holds() {
   local slug=$1 key=$2 text=$3
-  [[ -e $pack/$slug/$key ]] || return 0
+  [[ -e $pack/$slug/$key ]] || {
+    absent_files+=("$key")
+    return 0
+  }
   grep -qiF -- "$text" "$HOME/$key" || fail "$slug: ~/$key does not hold $text"
 }
 
@@ -294,8 +301,8 @@ check_app_settings() {
   holds "$slug" .config/oruc/sourcegit-theme.json "\"Window\":\"#FF${base00^^}\""
   holds "$slug" ".config/obs-studio/themes/Oruc$side.ovt" "--grey7: #$base00"
   holds "$slug" .config/oruc/cursor-colors.json "\"Oruc Base16 $side\""
-  holds "$slug" .config/vesktop/themes/oruc.css "--base00: #$base00;"
-  holds "$slug" .config/oruc/oruc.tdesktop-palette "windowBg: #$base00;"
+  holds_required "$slug" .config/vesktop/themes/oruc.css "--base00: #$base00;"
+  holds_required "$slug" .config/oruc/oruc.tdesktop-palette "windowBg: #$base00;"
   if command -v spotify >/dev/null && [[ -e $pack/$slug/.oruc/spicetify-colors.css ]]; then
     line=$(readlink "$(dirname "$(readlink -f "$(command -v spotify)")")/Apps/xpui/colors.css")
     [[ $line == "$state/theme/current/.oruc/spicetify-colors.css" ]] ||
@@ -428,7 +435,12 @@ aura_led() {
 
 check_keyboard_light() {
   local slug=$1 red green blue want
-  aura_led >/dev/null 2>&1 || return 0
+  if ! aura_led >/dev/null 2>&1; then
+    busctl --system --no-legend list | awk '{print $1}' | grep -qx xyz.ljones.Asusd &&
+      fail "$slug: asusd runs but shows no Aura device at /xyz/ljones/aura/19b6_3_4"
+    echo "skip keyboard light for $slug: asusd does not run"
+    return 0
+  fi
   IFS=, read -r red green blue <<<"$(decimal "$(color "$slug" base09)")"
   want="(uu(yyy)(yyy)ss) 0 0 $red $green $blue "
   for _ in $(seq 25); do
@@ -440,7 +452,10 @@ check_keyboard_light() {
 
 check_wallpaper() {
   local slug=$1 path inode extension own=
-  command -v oruc-wallpaper-path >/dev/null || return 0
+  command -v oruc-wallpaper-path >/dev/null || {
+    echo "skip wallpaper for $slug: this host has no oruc-wallpaper-path"
+    return 0
+  }
   path=$(oruc-wallpaper-path) || fail "$slug: oruc-wallpaper-path exited $?"
   for extension in png jpg jpeg webp; do
     [[ $path == /nix/store/*/"$slug.$extension" ]] && own=1
@@ -469,7 +484,10 @@ gtk_polarity_applies() {
 
 check_gtk_polarity() {
   local slug=$1 gtk_before=$2 icons_before=$3 polarity cursor icons gtk expected replaceable
-  gtk_polarity_applies "$slug" || return 0
+  gtk_polarity_applies "$slug" || {
+    echo "skip GTK polarity for $slug: it applies only to a niri session without Plasma"
+    return 0
+  }
   polarity=$(cat "$pack/$slug/.oruc/polarity")
   cursor=$(recoloured_cursor "$slug")
   icons=$(cat "$pack/$slug/.oruc/icons")
@@ -568,6 +586,8 @@ if ! /run/wrappers/bin/sudo -n true 2>/dev/null; then
   echo "skip boot menu checks: sudo -n asks for a password"
 elif /run/wrappers/bin/sudo -n test -e "$limine_conf"; then
   boot_menu_before=$(boot_menu_rest)
+else
+  echo "skip boot menu checks: this host has no $limine_conf"
 fi
 
 previous=$original
@@ -622,8 +642,8 @@ for slug in "$@"; do
   [[ -n $base00 && -n $base01 && -n $base05 && -n $base0D ]] || fail "$slug: source.yaml lacks a slot"
   holds "$slug" .config/ghostty/oruc-colors "$base00"
   holds "$slug" .config/tmux/oruc-theme.conf "#$base01"
-  holds "$slug" .config/fzf/fzfrc "#$base0D"
-  holds "$slug" .config/starship.toml "#$base0D"
+  holds_required "$slug" .config/fzf/fzfrc "#$base0D"
+  holds_required "$slug" .config/starship.toml "#$base0D"
   holds "$slug" .config/atuin/themes/oruc-base16.toml "#$base05"
   holds "$slug" .config/oruc/pandoc-md-theme.css "#$base00"
   holds "$slug" .config/gtk-3.0/oruc-colors.css "#$base00"
@@ -647,9 +667,9 @@ for slug in "$@"; do
   check_wallpaper "$slug"
   check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then
-    holds "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"
+    holds_required "$slug" .config/oruc/nvim-theme.lua "colorscheme('$slug')"
   else
-    holds "$slug" .config/oruc/nvim-theme.lua "#$base00"
+    holds_required "$slug" .config/oruc/nvim-theme.lua "#$base00"
   fi
 
   status=$(tmux -L "$tmux_socket" show -gv status-style)
@@ -658,6 +678,9 @@ for slug in "$@"; do
     bg=$(nvim --server "$(cat "$scratch/nvim$i")" --remote-expr "synIDattr(hlID('Normal'),'bg#')")
     [[ ${bg,,} == "#$base00" ]] || fail "$slug: running Neovim $i has Normal background $bg, not #$base00"
   done
+  ((${#absent_files[@]} == 0)) ||
+    echo "skip $slug: this host's pack has no $(printf '%s\n' "${absent_files[@]}" | sort -u | paste -sd ' ')"
+  absent_files=()
   echo "ok $slug"
   previous=$slug
 done
