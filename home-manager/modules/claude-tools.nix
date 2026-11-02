@@ -14,7 +14,7 @@ in
     pkgs.gum
     pkgs.jq
     pkgs.openssh
-    (pkgs.python3.withPackages (ps: [ ps.pyyaml ]))
+    (pkgs.callPackage ../../pkgs/agent-python.nix { })
     pkgs.tmux
   ];
 

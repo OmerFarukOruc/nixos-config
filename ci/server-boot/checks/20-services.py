@@ -41,7 +41,6 @@ for svc_tool in [
     "sqlite3",
     "unzip",
     "tree",
-    "python3",
     "startxfce4",
     "xfce4-session",
     "xfwm4",
@@ -52,6 +51,7 @@ for svc_tool in [
     "docker",
 ]:
     machine.succeed(f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:$PATH command -v {svc_tool}")
+machine.succeed(f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:$PATH python3 -I -c 'import yaml; from PIL import Image'")
 machine.succeed("docker compose version")
 svc_unit_path = (
     f"/home/{BOX_USER}/.local/bin:/etc/profiles/per-user/{BOX_USER}/bin:/usr/local/bin:/usr/bin:/bin"

@@ -31,7 +31,7 @@
     ffmpeg
     imagemagick
     parallel
-    (python3.withPackages (ps: [ ps.pyyaml ]))
+    (callPackage ../pkgs/agent-python.nix { })
     sqlite
     tigervnc
     # The Cursor worker looks for Debian's name of the TigerVNC X server and
