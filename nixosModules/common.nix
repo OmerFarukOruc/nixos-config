@@ -135,15 +135,9 @@ in
 
     programs.nix-ld.enable = true;
 
-    environment.etc =
-      lib.mkIf
-        (builtins.elem cfg.name [
-          "nixos-desktop"
-          "nixos-rog"
-        ])
-        {
-          "ssl/cert.pem".source = config.security.pki.caBundle;
-        };
+    # uv's standalone Pythons read the system CA bundle at /etc/ssl/cert.pem,
+    # and every host has uv through home-manager/modules/applications.nix.
+    environment.etc."ssl/cert.pem".source = config.security.pki.caBundle;
 
     security.sudo.execWheelOnly = true;
 
