@@ -8,7 +8,7 @@ in
     scheme:
     let
       color = scheme.withHashtag;
-      onAccent = "#${(themeValues scheme).readableOn scheme.base0D}";
+      onAccent = "#${(themeValues scheme).textOn.base0D}";
     in
     lib.generators.toINI { } {
       General = lib.mapAttrs (_: value: ''"${value}"'') {

@@ -549,15 +549,12 @@ scripts/build.sh .#checks.x86_64-linux.deploy-script
 ```
 
 The VM boots with Limine on a separate ESP, and its specialisations are the
-candidates; each phase commits a `flake.nix` whose system is one of them.
-`ci/deploy-script/test.py` deploys a good system and checks that it runs, is
-the boot default and is the current release. It then checks exit 77 under a
-held lock, exit 70 under a pending rollback timer, exit 80 for an ordering
-cycle, the rollback after a system that breaks sshd, exit 75 and the rollback
-when a user service breaks while one that `oruc.deploy.sessionIgnore` names is
-left out, exit 73 with the good system back as boot default when the boot
-loader install fails, and exit 78 for a checkout that lacks a file of the
-running release, then `--replace`.
+candidates; each phase of `ci/deploy-script/test.py` commits a `flake.nix`
+whose system is one of them and checks the exit code, the running system and
+the boot default. The phases cover a good switch, the lock, a pending rollback
+timer, an ordering cycle, the rollback after a failed activation or a broken
+user service, `oruc.deploy.sessionIgnore`, a failed boot entry install, and a
+checkout that would drop a file of the running release.
 
 The check does not cover a deploy over SSH, a dropped connection (exit 76),
 exits 71, 72, 74 and 79, the `deployLogin` lookup, or dix. Nix caches a pass

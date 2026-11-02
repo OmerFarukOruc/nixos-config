@@ -19,7 +19,7 @@ let
     { scheme, theme }:
     import ./plasma-looks/kde-color-scheme.nix {
       inherit lib;
-      selectionText = theme.readableOn scheme.base0D;
+      selectionText = theme.textOn.base0D;
       rawScheme = scheme;
     };
   kwriteconfig = lib.getExe' pkgs.kdePackages.kconfig "kwriteconfig6";
@@ -97,7 +97,7 @@ in
         ''
           set -g status-style "fg=${s.base05},bg=${s.base01}"
           set -g window-status-style "fg=${s.base04}"
-          set -g window-status-current-style "fg=#${theme.readableOn scheme.base0D},bg=${s.base0D},bold"
+          set -g window-status-current-style "fg=#${theme.textOn.base0D},bg=${s.base0D},bold"
           set -g message-style "fg=${s.base05},bg=${s.base02}"
           set -g mode-style "fg=${s.base05},bg=${s.base02}"
           set -g pane-border-style "fg=${s.base02}"

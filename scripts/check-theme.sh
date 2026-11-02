@@ -445,6 +445,11 @@ vesktop_pairs = [
 ]
 
 
+def weak(slug, app, text, background, fg, bg):
+    ratio = contrast(fg, bg)
+    return [f"{slug}: {app} {text} #{fg} on {background} #{bg} is {ratio:.2f}:1"] if ratio < 4.5 else []
+
+
 def app_failures(slug):
     found = []
     polarity = (pack / slug / ".oruc/polarity").read_text().strip()
@@ -452,23 +457,17 @@ def app_failures(slug):
     if obs.exists():
         colors = dict(obs_var.findall(obs.read_text()))
         for name in ("primary", "primary_light", "primary_dark"):
-            ratio = contrast(colors["text"], colors[name])
-            if ratio < 4.5:
-                found.append(f"{slug}: OBS text on {name} is {ratio:.2f}:1")
+            found += weak(slug, "OBS", "text", name, colors["text"], colors[name])
     sourcegit = pack / slug / ".config/oruc/sourcegit-theme.json"
     if sourcegit.exists():
         basic = json.loads(sourcegit.read_text())["BasicColors"]
         for text, background in (("BadgeFG", "Badge"), ("Conflict.Foreground", "Conflict")):
-            ratio = contrast(basic[text][-6:], basic[background][-6:])
-            if ratio < 4.5:
-                found.append(f"{slug}: SourceGit {text} on {background} is {ratio:.2f}:1")
+            found += weak(slug, "SourceGit", text, background, basic[text][-6:], basic[background][-6:])
     telegram = pack / slug / ".config/oruc/oruc.tdesktop-palette"
     if telegram.exists():
         colors = dict(telegram_var.findall(telegram.read_text()))
         for text, background in telegram_pairs(colors):
-            ratio = contrast(colors[text], colors[background])
-            if ratio < 4.5:
-                found.append(f"{slug}: Telegram {text} on {background} is {ratio:.2f}:1")
+            found += weak(slug, "Telegram", text, background, colors[text], colors[background])
     vesktop = pack / slug / ".config/vesktop/themes/oruc.css"
     if vesktop.exists():
         block = vesktop.read_text().rsplit(".visual-refresh {", 1)[1]
@@ -477,9 +476,7 @@ def app_failures(slug):
             if text not in colors or background not in colors:
                 found.append(f"{slug}: Vesktop sets no {text} or {background}")
                 continue
-            ratio = contrast(colors[text], colors[background])
-            if ratio < 4.5:
-                found.append(f"{slug}: Vesktop {text} on {background} is {ratio:.2f}:1")
+            found += weak(slug, "Vesktop", text, background, colors[text], colors[background])
     return found
 
 
@@ -494,29 +491,23 @@ sddm_pairs = (("LoginButtonTextColor", "LoginButtonBackgroundColor"), ("Highligh
 
 def desktop_failures(slug):
     found = []
-
-    def check(app, text, background, fg, bg):
-        ratio = contrast(fg, bg)
-        if ratio < 4.5:
-            found.append(f"{slug}: {app} {text} #{fg} on {background} #{bg} is {ratio:.2f}:1")
-
     gtk = dict(gtk_var.findall((pack / slug / ".config/gtk-4.0/oruc-colors.css").read_text()))
     for fill in gtk_fills:
         text, background = f"{fill}_fg_color", f"{fill}_bg_color"
-        check("GTK", text, background, gtk[text], gtk[background])
+        found += weak(slug, "GTK", text, background, gtk[text], gtk[background])
     kde = kde_selection.search((pack / slug / ".local/share/oruc/kde/OrucBase16.colors").read_text())
     keys = {key: "".join(f"{int(c):02x}" for c in rgb) for key, *rgb in kde_key.findall(kde[1])}
-    check("KDE", "Selection ForegroundNormal", "BackgroundNormal", keys["ForegroundNormal"], keys["BackgroundNormal"])
+    found += weak(slug, "KDE", "Selection ForegroundNormal", "BackgroundNormal", keys["ForegroundNormal"], keys["BackgroundNormal"])
     styles = {style: (fg, bg) for style, fg, bg in tmux_style.findall((pack / slug / ".config/tmux/oruc-theme.conf").read_text())}
-    check("tmux", "window-status-current-style fg", "bg", *styles["window-status-current-style"])
+    found += weak(slug, "tmux", "window-status-current-style fg", "bg", *styles["window-status-current-style"])
     noctalia = json.loads((pack / slug / ".config/noctalia/palettes/oruc-base16.json").read_text())["dark"]
     for fill in noctalia_fills:
-        check("Noctalia", f"mOn{fill}", f"m{fill}", noctalia[f"mOn{fill}"][1:], noctalia[f"m{fill}"][1:])
+        found += weak(slug, "Noctalia", f"mOn{fill}", f"m{fill}", noctalia[f"mOn{fill}"][1:], noctalia[f"m{fill}"][1:])
     dms = json.loads((pack / slug / ".config/dms/oruc-theme.json").read_text())["dark"]
-    check("DMS", "primaryText", "primary", dms["primaryText"][1:], dms["primary"][1:])
+    found += weak(slug, "DMS", "primaryText", "primary", dms["primaryText"][1:], dms["primary"][1:])
     sddm = dict(re.findall(r'^([A-Za-z]+)="#([0-9a-fA-F]{6})"$', (system_pack / slug / "sddm.conf.user").read_text(), re.M))
     for text, background in sddm_pairs:
-        check("SDDM", text, background, sddm[text], sddm[background])
+        found += weak(slug, "SDDM", text, background, sddm[text], sddm[background])
     return found
 
 

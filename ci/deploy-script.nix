@@ -63,40 +63,32 @@ in
           ignored-test = sleeper;
         };
 
-        specialisation =
-          lib.mapAttrs
-            (name: config: {
-              configuration = {
-                imports = [ config ];
-                environment.etc."deploy-script-system".text = name;
-              };
-            })
-            {
-              good = { };
-              broken.systemd.services.sshd.preStart = lib.mkAfter "exit 1";
-              session.systemd.services.session-breaker = {
-                wantedBy = [ "multi-user.target" ];
-                serviceConfig.Type = "oneshot";
-                script = ''
-                  systemctl --user -M ${user}@ kill --signal=KILL session-test.service ignored-test.service
-                '';
-              };
-              bootfail.system.build.installBootLoader = lib.mkForce (
-                pkgs.writeShellScript "install-boot-loader-fails" "exit 1"
-              );
-              cycle.systemd.services = {
-                cycle-a = {
-                  wantedBy = [ "multi-user.target" ];
-                  after = [ "cycle-b.service" ];
-                  script = "true";
-                };
-                cycle-b = {
-                  wantedBy = [ "multi-user.target" ];
-                  after = [ "cycle-a.service" ];
-                  script = "true";
-                };
-              };
+        specialisation = lib.mapAttrs (_: configuration: { inherit configuration; }) {
+          good = { };
+          broken.systemd.services.sshd.preStart = lib.mkAfter "exit 1";
+          session.systemd.services.session-breaker = {
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig.Type = "oneshot";
+            script = ''
+              systemctl --user -M ${user}@ kill --signal=KILL session-test.service ignored-test.service
+            '';
+          };
+          bootfail.system.build.installBootLoader = lib.mkForce (
+            pkgs.writeShellScript "install-boot-loader-fails" "exit 1"
+          );
+          cycle.systemd.services = {
+            cycle-a = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "cycle-b.service" ];
+              script = "true";
             };
+            cycle-b = {
+              wantedBy = [ "multi-user.target" ];
+              after = [ "cycle-a.service" ];
+              script = "true";
+            };
+          };
+        };
       };
 
     testScript = ''

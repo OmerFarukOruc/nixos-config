@@ -25,6 +25,9 @@ in
   icons = iconTheme.name scheme isLight;
   gtk = if isLight then "adw-gtk3" else "adw-gtk3-dark";
   readableOn = contrast.readableOn scheme;
+  textOn = lib.genAttrs (map (n: "base0${n}") (lib.stringToCharacters "0123456789ABCDEF")) (
+    slot: contrast.readableOn scheme scheme.${slot}
+  );
   ansiNames = [
     "Black"
     "Red"

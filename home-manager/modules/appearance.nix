@@ -50,24 +50,23 @@ let
     { scheme, theme }:
     let
       s = scheme.withHashtag;
-      on = slot: "#${theme.readableOn scheme.${slot}}";
     in
     ''
       @define-color accent_color ${s.base0D};
       @define-color accent_bg_color ${s.base0D};
-      @define-color accent_fg_color ${on "base0D"};
+      @define-color accent_fg_color #${theme.textOn.base0D};
       @define-color destructive_color ${s.base08};
       @define-color destructive_bg_color ${s.base08};
-      @define-color destructive_fg_color ${on "base08"};
+      @define-color destructive_fg_color #${theme.textOn.base08};
       @define-color success_color ${s.base0B};
       @define-color success_bg_color ${s.base0B};
-      @define-color success_fg_color ${on "base0B"};
+      @define-color success_fg_color #${theme.textOn.base0B};
       @define-color warning_color ${s.base0A};
       @define-color warning_bg_color ${s.base0A};
-      @define-color warning_fg_color ${on "base0A"};
+      @define-color warning_fg_color #${theme.textOn.base0A};
       @define-color error_color ${s.base08};
       @define-color error_bg_color ${s.base08};
-      @define-color error_fg_color ${on "base08"};
+      @define-color error_fg_color #${theme.textOn.base08};
       @define-color window_bg_color ${s.base00};
       @define-color window_fg_color ${s.base05};
       @define-color view_bg_color ${s.base00};

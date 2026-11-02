@@ -32,7 +32,6 @@ let
     { scheme, theme }:
     let
       color = scheme.withHashtag;
-      on = slot: "#${theme.readableOn scheme.${slot}}";
       ansiRow =
         offset:
         lib.listToAttrs (
@@ -44,13 +43,13 @@ let
     in
     {
       mPrimary = color.base0D;
-      mOnPrimary = on "base0D";
+      mOnPrimary = "#${theme.textOn.base0D}";
       mSecondary = color.base0A;
-      mOnSecondary = on "base0A";
+      mOnSecondary = "#${theme.textOn.base0A}";
       mTertiary = color.base0E;
-      mOnTertiary = on "base0E";
+      mOnTertiary = "#${theme.textOn.base0E}";
       mError = color.base08;
-      mOnError = on "base08";
+      mOnError = "#${theme.textOn.base08}";
       mSurface = color.base00;
       mOnSurface = color.base05;
       mSurfaceVariant = color.base01;

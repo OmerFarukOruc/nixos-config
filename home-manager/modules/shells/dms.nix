@@ -45,7 +45,7 @@ let
       surfaceContainerHighest = color.base03;
       primary = color.base0D;
       secondary = color.base0A;
-      primaryText = "#${theme.readableOn scheme.base0D}";
+      primaryText = "#${theme.textOn.base0D}";
       primaryContainer = color.base02;
       surfaceTint = color.base0C;
       error = color.base08;

@@ -14,7 +14,7 @@ machine.succeed(f"nix-env --profile {profile} --set /run/current-system")
 
 systems = {
     name: machine.succeed(f"readlink -f /run/current-system/specialisation/{name}").strip()
-    for name in ["good", "broken", "session", "bootfail", "cycle"]
+    for name in machine.succeed("ls /run/current-system/specialisation").split()
 }
 
 
@@ -22,21 +22,17 @@ def as_user(command):
     return machine.succeed(f"runuser -l {USER} -c {shlex.quote(command)}").strip()
 
 
-def write(path, text):
-    machine.succeed(f"cat > {path} <<'EOF'\n{text}EOF\nchown {USER}: {path}")
-
-
 def publish(name, directory=checkout):
     path = systems[name]
-    write(
-        f"{directory}/flake.nix",
+    flake = (
         "{\n"
         "  outputs = _: {\n"
         f"    nixosConfigurations.{HOST}.config.system.build.toplevel =\n"
         f'      builtins.appendContext "{path}" {{ "{path}" = {{ path = true; }}; }};\n'
         "  };\n"
-        "}\n",
+        "}\n"
     )
+    machine.succeed(f"cat > {directory}/flake.nix <<'EOF'\n{flake}EOF\nchown {USER}: {directory}/flake.nix")
     as_user(f"cd {directory} && git add -A && git commit -q -m {name}")
 
 
