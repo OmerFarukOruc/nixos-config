@@ -175,7 +175,7 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `scripts/check-secrets.sh [FILE]` | on a host with a `secrets/<host>.yaml` (nixos-desktop, nixos-rog, devbox), decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
 | `scripts/screenshot-nixos-rog.sh [--window] [--crop WxH+X+Y] OUTPUT.png` | take a screenshot of the Plasma session on nixos-rog, or of one area of it |
-| `scripts/kwin-windows-on-rog.sh` | print each window's class, name and title on nixos-rog as JSON |
+| `scripts/kwin-windows-on-rog.sh [--titles]` | print each window's class and name on nixos-rog as JSON, and its title with `--titles` |
 | `scripts/panels-rebuild-on-rog.sh` | build the Plasma panels on nixos-rog as the next login would, without a logout |
 | `scripts/vscode-cdp-on-rog.sh on\|off\|run STEPS_JSON` | drive VS Code on nixos-rog over the DevTools Protocol |
 | `scripts/mic-ab-on-rog.sh level VOLUME...` or `ab` | record nixos-rog's microphone to pick its level, or to compare the raw microphone with both denoised sources; the script header lists the steps |
