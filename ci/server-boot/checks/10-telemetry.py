@@ -66,7 +66,15 @@ def tel_records(file):
 
     retry(tel_whole)
     for line in out.splitlines():
-        for resource_logs in tel_json.loads(line).get("resourceLogs", []):
+        try:
+            batch = tel_json.loads(line)
+        except tel_json.JSONDecodeError as err:
+            raise AssertionError(
+                f"{file} holds a line that is not JSON ({err.msg} at byte {err.pos} of a"
+                f" {len(line)}-byte line, {len(out)} bytes in the file):"
+                f" {line[max(0, err.pos - 200):err.pos + 200]!r}"
+            ) from err
+        for resource_logs in batch.get("resourceLogs", []):
             resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}
             for scope_logs in resource_logs["scopeLogs"]:
                 for record in scope_logs["logRecords"]:
