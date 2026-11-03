@@ -82,12 +82,13 @@ let
 
       usage() {
         cat >&2 <<'EOF'
-      Usage: oruc-theme-root [--apply | --limine]
+      Usage: oruc-theme-root [--apply | --limine | --status]
 
       With no argument, reads a scheme name from stdin, stores it, and applies it
       to the console and the login screen. --apply applies the stored scheme to
       the console and the login screen, and --limine to the Limine boot menu, or
-      the machine record's scheme when none is stored.
+      the machine record's scheme when none is stored. --status prints that
+      scheme, and a line when the last --apply of the unit failed; it needs no root.
       EOF
         exit 64
       }
@@ -200,6 +201,13 @@ let
           stored_or_record
           apply_session
           ;;
+        --status)
+          stored_or_record
+          echo "console and login screen: $slug"
+          if [[ -e $state/apply-failed ]]; then
+            echo "the last oruc-theme-root --apply failed: journalctl -b -u oruc-theme-root"
+          fi
+          ;;
         --limine)
           [[ -n $limine ]] || usage
           [[ -n ''${NIXOS_ACTION:-} ]] || hold_switch_lock
@@ -225,11 +233,6 @@ in
       readOnly = true;
       description = "Path of oruc-theme-root, which theme runs through sudo with the scheme on stdin, or null on a host without a desktop.";
     };
-    stateDir = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      readOnly = true;
-      description = "Folder where oruc-theme-root stores the scheme in `scheme` and its unit marks a failed --apply in `apply-failed`, or null on a host without a desktop.";
-    };
     pack = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       readOnly = true;
@@ -247,7 +250,6 @@ in
       oruc.themeRoot = {
         colorsFile = if themed then colorsFile else null;
         command = if themed then command else null;
-        stateDir = if themed then stateDir else null;
         pack = if themed then pack else null;
         bootMenu = themed && limine;
       };

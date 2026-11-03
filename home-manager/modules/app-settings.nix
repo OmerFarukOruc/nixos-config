@@ -78,10 +78,11 @@ let
       };
       subcommands = mkOption {
         type = types.listOf types.str;
-        description = "First arguments that start a mode without the terminal UI.";
+        description = "Regular expressions for the first argument that starts a mode without the terminal UI.";
       };
       valueFlags = mkOption {
         type = types.listOf types.str;
+        default = [ ];
         description = "Flags that take the next argument as their value.";
       };
     };
@@ -125,6 +126,7 @@ let
       };
       files = mkOption {
         type = types.listOf file;
+        default = [ ];
         description = "Files the switch sets; one the app also writes waits while the app runs.";
       };
     };

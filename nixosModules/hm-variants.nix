@@ -104,6 +104,7 @@ let
     }
 
     reload() {
+      local failed=0
       session_env
       ${lib.concatLines (
         lib.mapAttrsToList (name: command: ''
@@ -111,9 +112,11 @@ let
             ${command}
           ) 8>&-; then
             echo ${lib.escapeShellArg "theme: ${name} reload failed"} >&2
+            failed=1
           fi
         '') hm.oruc.variantReloads
       )}
+      return "$failed"
     }
 
     choose() {
@@ -184,8 +187,8 @@ let
       console changes at once and the login screen at its next start; a light
       scheme leaves the login screen on the machine record's colours, because
       its form is drawn see-through over a dark video. When the console, the
-      login screen or the boot menu fails, SCHEME still switches the rest and
-      exits 1.
+      login screen, the boot menu or an app's reload fails, SCHEME still switches
+      the rest and exits 1.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
       default ones; it leaves the console, the login screen and the boot menu
@@ -194,12 +197,7 @@ let
       case ''${1:-} in
         "")
           echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})"
-          ${lib.optionalString (root.stateDir != null) ''
-            echo "console and login screen: $(cat ${root.stateDir}/scheme 2>/dev/null || echo "${cfg.theme.scheme}, none stored")"
-            if [[ -e ${root.stateDir}/apply-failed ]]; then
-              echo "the last oruc-theme-root --apply failed: journalctl -b -u oruc-theme-root"
-            fi
-          ''}
+          ${lib.optionalString (root.command != null) "${root.command} --status"}
           if [[ -e $state/reapply-failed ]]; then
             echo "the last theme --reapply after a switch failed: journalctl -u home-manager-${cfg.user}"
           fi
@@ -223,8 +221,8 @@ let
           hold_switch_lock
           look=$(stored_look)
           "$pointer" --set "$1"
-          reload
           failed=0
+          reload || failed=1
           ${lib.optionalString (root.command != null) ''
             if ! /run/wrappers/bin/sudo -n ${root.command} <<<"$1"; then
               echo "theme: the console or the login screen failed" >&2
@@ -272,8 +270,10 @@ let
           hold_switch_lock
           choose plasma-look "$1"
           activate "$1"
-          reload
+          failed=0
+          reload || failed=1
           echo "Log out and in to load the $1 look's colors, Plasma style, panels and KWin effects."
+          exit "$failed"
           ;;
       esac
     '';

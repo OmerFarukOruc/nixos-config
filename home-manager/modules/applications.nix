@@ -181,30 +181,8 @@ in
     ];
     terminalSignal = {
       name = "SIGUSR2";
-      subcommands = [
-        "+boo"
-        "+crash-report"
-        "+edit-config"
-        "+explain-config"
-        "+help"
-        "+list-actions"
-        "+list-colors"
-        "+list-fonts"
-        "+list-keybinds"
-        "+list-themes"
-        "+new-tab"
-        "+new-window"
-        "+show-config"
-        "+show-face"
-        "+ssh"
-        "+ssh-cache"
-        "+toggle-quick-terminal"
-        "+validate-config"
-        "+version"
-      ];
-      valueFlags = [ ];
+      subcommands = [ ''\+.*'' ];
     };
-    files = [ ];
   };
 
   programs.ghostty = lib.mkIf hasDesktop {

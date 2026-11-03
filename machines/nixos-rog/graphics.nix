@@ -6,7 +6,6 @@
 }:
 let
   radeonRenderNode = import ./radeon-render-node.nix;
-  nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (import ./nvidia-driver.nix);
 in
 {
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
@@ -53,7 +52,7 @@ in
 
   hardware.nvidia = {
     open = true;
-    package = nvidiaDriver;
+    package = config.boot.kernelPackages.nvidiaPackages.mkDriver (import ./nvidia-driver.nix);
 
     prime = {
       offload = {

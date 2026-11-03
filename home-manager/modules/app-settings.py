@@ -224,7 +224,7 @@ def terminal_ui(app, argv):
         if arg in app["terminalSignal"]["valueFlags"]:
             next(args, None)
         elif not arg.startswith("-"):
-            return arg not in app["terminalSignal"]["subcommands"]
+            return not any(re.fullmatch(s, arg) for s in app["terminalSignal"]["subcommands"])
     return True
 
 
