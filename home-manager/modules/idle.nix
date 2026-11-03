@@ -20,6 +20,9 @@ let
     text = ''
       dimmed=''${XDG_RUNTIME_DIR:?}/oruc-idle-dimmed
       shopt -s nullglob
+      # The pattern matches amdgpu_bl* and intel_backlight and skips nvidia_0,
+      # which a hybrid laptop also lists and which wakes the RTX 4070 when touched.
+      devices=(/sys/class/backlight/*_b*)
 
       power_state() {
         local supply
@@ -36,7 +39,7 @@ let
 
       if [[ $1 == undim ]]; then
         if [[ -e $dimmed ]]; then
-          for device in /sys/class/backlight/*_b*; do
+          for device in "''${devices[@]}"; do
             brightnessctl --quiet --device "''${device##*/}" --restore
           done
           rm -f "$dimmed"
@@ -46,7 +49,8 @@ let
 
       [[ $(power_state) == "$1" ]] || exit 0
       if [[ $2 == dim ]]; then
-        for device in /sys/class/backlight/*_b*; do
+        [[ ! -e $dimmed ]] || exit 0
+        for device in "''${devices[@]}"; do
           current=$(<"$device/brightness")
           brightnessctl --quiet --device "''${device##*/}" --save --min-value=1 set $((current * 3 / 10))
         done
