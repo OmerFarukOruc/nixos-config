@@ -145,17 +145,17 @@ let
         n=$(basename "$f" _input)
         idx=''${n#fan}
         rpm=$(<"$f")
-        ((rpm == 0)) && continue
+        case $idx in
+          ${lib.concatMapStringsSep " | " toString owned}) owner=case-fans ;;
+          *) owner=BIOS ;;
+        esac
+        [[ $rpm == 0 && $owner == BIOS ]] && continue
         label=$(cat "$hw/''${n}_label" 2>/dev/null || echo "$n")
         pwm=$(cat "$hw/pwm$idx" 2>/dev/null || echo -)
         case $(cat "$hw/pwm''${idx}_enable" 2>/dev/null) in
           1) mode=manual ;;
           2) mode=auto ;;
           *) mode="?" ;;
-        esac
-        case $idx in
-          ${lib.concatMapStringsSep " | " toString owned}) owner=case-fans ;;
-          *) owner=BIOS ;;
         esac
         printf '%-16s %7s %5s %-7s %s\n' "$label" "$rpm" "$pwm" "$mode" "$owner"
       done

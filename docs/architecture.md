@@ -765,5 +765,6 @@ sensor, `ExecStopPost` hands the four channels back to the BIOS curves. The
 BIOS keeps the pump (channel 2) and the AIO's VRM fan (channel 4). `case-fans
 off` stops the daemon until `case-fans on` or the next boot (`on` also clears
 the start limit that 3 failures in 10 minutes set), `case-fans status`
-prints its state file, and `fan-status` lists every fan.
+prints its state file, and `fan-status` lists every fan that turns and every
+channel the daemon owns, so a stopped case fan shows 0 rpm.
 
