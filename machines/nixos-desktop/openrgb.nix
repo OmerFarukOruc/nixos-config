@@ -29,6 +29,7 @@ in
     after = [ "systemd-modules-load.service" ];
     wants = [ "systemd-modules-load.service" ];
     wantedBy = [ "multi-user.target" ];
+    restartIfChanged = false;
     environment.HOME = "/var/lib/openrgb-boot";
     serviceConfig = {
       Type = "oneshot";
@@ -49,7 +50,7 @@ in
     {
       imports = [
         (import ../../home-manager/modules/keyboard-light.nix {
-          ready = "systemctl is-active -q openrgb-boot.service";
+          lightService = "openrgb-boot.service";
           setColour = colour: "${openrgb} -c ${colour}";
         })
       ];

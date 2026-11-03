@@ -1,10 +1,23 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
   asusctl = lib.getExe' config.services.asusd.package "asusctl";
+  # asusd raises brightness Off to Med before it applies an effect
+  # (https://gitlab.com/asus-linux/asusctl/-/blob/main/asusd/src/aura_laptop/trait_impls.rs).
+  auraStatic = pkgs.writeShellApplication {
+    name = "aura-static";
+    text = ''
+      level=$(</sys/class/leds/asus::kbd_backlight/brightness)
+      ${asusctl} aura effect static -c "$1"
+      if ((level == 0)); then
+        ${asusctl} leds set off
+      fi
+    '';
+  };
   auraColour = {
     r = lib.toInt config.scheme."base09-rgb-r";
     g = lib.toInt config.scheme."base09-rgb-g";
@@ -299,6 +312,8 @@ assert lib.assertMsg (badCurves == [ ] && fanSetBad == [ ])
 
   home-manager.users.oruc = import ../../home-manager/modules/keyboard-light.nix {
     ready = "busctl --system get-property xyz.ljones.Asusd /xyz/ljones/aura/19b6_3_4 xyz.ljones.Aura LedMode >/dev/null 2>&1";
-    setColour = colour: "${asusctl} aura effect static -c ${colour}";
+    lightService = "asusd.service";
+    setColour = colour: "${lib.getExe auraStatic} ${colour}";
   };
+  systemd.services.home-manager-oruc.after = [ "asusd.service" ];
 }

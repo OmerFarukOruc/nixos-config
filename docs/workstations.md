@@ -223,8 +223,10 @@ reboot. A light scheme leaves the login screen on the record's colors, because
 it draws the form at 30 % opacity over the dark Jake video, where a light
 scheme's dark text loses contrast. The keyboard's Aura light on nixos-rog and
 the case lights on nixos-desktop also turn static in the scheme's base09 at
-each login; from boot until the login they show the record's color. `Fn+F4`
-still picks another Aura effect until the next switch, login or deploy.
+each login, and the keyboard stays dark when it was off; from boot until the
+login they show the record's color. `Fn+F4` still picks another Aura effect
+until the next login, a switch to a scheme with another base09, or a switch
+that restarts asusd.
 Telegram follows once it has loaded the palette: open Telegram's Settings, type
 `loadcolors` with no text field focused, and pick
 `~/.config/oruc/oruc.tdesktop-palette`; it then repaints at each switch.

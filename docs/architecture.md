@@ -617,9 +617,20 @@ These stay fixed on purpose, and the check does not cover them:
   from a system file (`machines/nixos-rog/asus.nix`) and `openrgb-boot`
   applies a fixed profile. After the login, `oruc-keyboard-light`
   (`home-manager/modules/keyboard-light.nix`) sets them to the stored scheme's
-  base09, and `theme` restarts that unit at each switch while a graphical
-  session runs. Before the login the reload does nothing, so the boot-time
-  `theme --reapply` leaves the record's colour.
+  base09. The unit writes the colour it set to
+  `$XDG_RUNTIME_DIR/oruc-keyboard-light`, together with the `InvocationID` of
+  the system service that drives the lights (`asusd` or `openrgb-boot`).
+  While a graphical session runs, `theme` restarts the unit only when the
+  stored base09 or that service's `InvocationID` differs from the file. A
+  switch with an unchanged scheme therefore leaves the lights as they are, so
+  lights turned off for the night stay off. A switch that restarts asusd sets
+  the scheme's colour again, because a restarted asusd shows the record's
+  colour; `home-manager-oruc` runs after `asusd`, so its `theme --reapply`
+  sees the new invocation. On nixos-rog the unit sets the colour and then turns
+  a keyboard that was off back off, because asusd raises brightness Off to Med
+  before it applies an effect. A switch does not restart a changed
+  `oruc-keyboard-light` or `openrgb-boot` unit. Before the login the reload
+  does nothing, so the boot-time `theme --reapply` leaves the record's colour.
 - Brave on other devices keeps its synced theme colour; on these PCs Brave
   draws with the desktop's Qt or GTK colours instead. `nixosModules/brave.nix` writes Brave's
   settings as policies, which Brave Origin reads from `/etc/brave/policies`. The
