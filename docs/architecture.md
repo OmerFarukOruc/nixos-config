@@ -470,7 +470,9 @@ named `oruc`. Their `oruc.appSettings` entries set `tui.theme`, the ChatGPT
 app's chrome and code theme in `~/.codex/config.toml` (from the pack's
 `codex-settings` fact), opencode's `cli.json` and pi's `settings.json` to that
 theme, and opencode's entry sends its terminal UI `SIGUSR2`, which makes it
-read its themes again.
+read its themes again. Ghostty's entry in `applications.nix` sets no file and
+only sends `SIGUSR2`, which makes each Ghostty window load its configuration
+again, also one started by name from a shell or from an older store path.
 
 `home-manager/modules/app-settings.nix` turns `oruc.appSettings` into one
 reload per app, each a run of `oruc-app-settings <app>`, which merges fixed

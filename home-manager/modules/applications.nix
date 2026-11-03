@@ -171,7 +171,41 @@ in
     };
   };
 
-  oruc.variantReloads.ghostty = lib.mkIf config.programs.ghostty.enable ''pkill -USR2 -u "$(id -u)" -f "^${config.programs.ghostty.package}/bin/ghostty" || true'';
+  oruc.appSettings.ghostty = lib.mkIf config.programs.ghostty.enable {
+    label = "Ghostty";
+    executables = [
+      {
+        package = "ghostty";
+        path = ''bin/\.ghostty-wrapped'';
+      }
+    ];
+    terminalSignal = {
+      name = "SIGUSR2";
+      subcommands = [
+        "+boo"
+        "+crash-report"
+        "+edit-config"
+        "+explain-config"
+        "+help"
+        "+list-actions"
+        "+list-colors"
+        "+list-fonts"
+        "+list-keybinds"
+        "+list-themes"
+        "+new-tab"
+        "+new-window"
+        "+show-config"
+        "+show-face"
+        "+ssh"
+        "+ssh-cache"
+        "+toggle-quick-terminal"
+        "+validate-config"
+        "+version"
+      ];
+      valueFlags = [ ];
+    };
+    files = [ ];
+  };
 
   programs.ghostty = lib.mkIf hasDesktop {
     enable = true;
