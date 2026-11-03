@@ -19,11 +19,10 @@ in
     requires = [ "power-profiles-daemon.service" ];
     serviceConfig = {
       Type = "oneshot";
-      RuntimeDirectory = "oruc-low-battery";
-      RuntimeDirectoryPreserve = true;
+      StateDirectory = "oruc-low-battery";
     };
     script = ''
-      marker=/run/oruc-low-battery/active
+      marker=/var/lib/oruc-low-battery/active
       online=$(cat /sys/class/power_supply/ACAD/online)
       capacity=$(cat /sys/class/power_supply/BAT1/capacity)
       if [[ $online == 0 && $capacity -le ${toString lowBatteryPercent} ]]; then

@@ -31,7 +31,7 @@ if [[ $online == 0 && $capacity -le $low_battery_percent ]]; then
   check ppd-profile "$profile on low battery (battery=$capacity%)" test "$profile" = power-saver
 fi
 if [[ $online == 1 ]]; then
-  check low-battery-undone "/run/oruc-low-battery/active absent on AC" test ! -e /run/oruc-low-battery/active
+  check low-battery-undone "/var/lib/oruc-low-battery/active absent on AC" test ! -e /var/lib/oruc-low-battery/active
 fi
 expected_boost=1
 [[ $profile == power-saver ]] && expected_boost=0
