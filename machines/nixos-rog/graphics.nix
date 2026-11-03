@@ -7,11 +7,8 @@
 let
   radeonRenderNode = import ./radeon-render-node.nix;
   nvidiaDriver = config.boot.kernelPackages.nvidiaPackages.mkDriver (import ./nvidia-driver.nix);
-  driverPatchelf = config.boot.kernelPackages.callPackage ({ patchelf }: patchelf) { };
 in
 {
-  nixpkgs.overlays = [ (import ../../overlays/nvidia-patchelf.nix) ];
-
   # Neither GPU has boot_vga set, so niri renders on whichever one udev lists
   # first. When that is the RTX 4070, niri, its shell and Xwayland hold it
   # awake for the whole session. nixosModules/desktop.nix and asus.nix also
@@ -56,16 +53,7 @@ in
 
   hardware.nvidia = {
     open = true;
-    # The driver's builder needs patchelf 0.15.2 while its package set has
-    # 0.19.2 (overlays/nvidia-patchelf.nix); the condition skips the override
-    # once that package set moves to another patchelf.
-    package =
-      if driverPatchelf.version == "0.19.2" then
-        nvidiaDriver.overrideAttrs (old: {
-          nativeBuildInputs = [ pkgs.patchelf_0_15 ] ++ old.nativeBuildInputs;
-        })
-      else
-        nvidiaDriver;
+    package = nvidiaDriver;
 
     prime = {
       offload = {
