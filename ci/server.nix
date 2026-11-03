@@ -58,9 +58,9 @@ let
 
   tailscaleOnlyFires =
     host:
-    lib.any (a: !a.assertion) (
-      lib.filter (a: lib.hasPrefix "networking.firewall opens a port" a.message) host.config.assertions
-    );
+    lib.any (
+      a: !a.assertion && lib.hasPrefix "networking.firewall opens a port" a.message
+    ) host.config.assertions;
   firewallVariants = {
     tcpPort.networking.firewall.allowedTCPPorts = [ 8080 ];
     tcpPortRange.networking.firewall.allowedTCPPortRanges = [

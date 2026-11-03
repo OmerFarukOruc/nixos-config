@@ -326,7 +326,9 @@ SSH with `powerprofilesctl get` and the asus-armoury `current_value` files
 instead.
 
 It prints the peak temperature, the clock over the last 40 s of load and the
-highest CPU and MID fan speeds. The samples file also records the GPU fan.
+highest CPU, GPU and MID fan speeds. When a load exits before its time is
+over, the test stops with exit 4, prints the load's errors and removes that
+run's samples.
 `--load gpu` runs gpu-burn on the RTX 4070 instead of stress-ng on the CPU, and
 `--load both` runs both; the summary then adds the RTX 4070's highest power draw
 and temperature. The samples go to `~/.local/state/nixos-config-thermal/`, and

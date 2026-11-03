@@ -195,8 +195,9 @@ def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
             break
         if not a.startswith("-"):
             continue
-        name = a.split("=", 1)[0]
-        taken = option_values(args, i, "" if "=" in a else opts.get(name, ""))
+        attached = not a.startswith("--") and len(a) > 2 and bool(opts.get(a[:2]))
+        name = a[:2] if attached else a.split("=", 1)[0]
+        taken = option_values(args, i, "" if attached or "=" in a else opts.get(name, ""))
         i += len(taken)
         if name not in NOT_CARRIED:
             out += [a, *taken]

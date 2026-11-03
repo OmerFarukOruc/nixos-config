@@ -109,7 +109,9 @@ function age(ts, now) {
 }
 
 function loginLeft(login) {
-    return login.login_left ? "login left: " + login.login_left : ""
+    if (!login.login_left)
+        return ""
+    return login.login_left === "expired" ? "login expired" : "login left: " + login.login_left
 }
 
 function stateText(state) {

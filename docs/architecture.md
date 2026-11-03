@@ -717,7 +717,7 @@ creates it empty when it is missing. Read it with
 (`oruc.warpProxy` holds the address). It carries only the traffic of an app that
 points at it. `usque` keeps one registered WARP device in
 `/var/lib/usque/config.json` (`sudo ls -l /var/lib/usque` lists it, owned by the
-`usque` user). `preStart` registers a device when that file is missing. When the
+`usque` user). `preStart` registers a device when that file is missing or empty. When the
 machine is offline at boot, registration fails and the service restarts with a
 growing delay (`RestartSec=3`, up to `RestartMaxDelaySec=5min`), so it does not
 ask Cloudflare every 3 s. Removing `config.json` therefore makes the next start

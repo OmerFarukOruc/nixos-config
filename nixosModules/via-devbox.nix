@@ -190,11 +190,12 @@ in
     '';
   };
 
+  oruc.failurePopupUnits = [ "tailscaled-${netns}" ];
+
   # tailscaled configures DNS through resolved or NetworkManager on the system
   # bus, which is the host's and would rewrite the host's DNS for an interface
   # index that only exists in the namespace. Without the bus it falls back to
   # /etc/resolv.conf, which the bind mount keeps read-only.
-  oruc.failurePopupUnits = [ "tailscaled-${netns}" ];
 
   systemd.services."tailscaled-${netns}" = {
     description = "Tailscale node of the ${netns} namespace, with devbox as its exit node";

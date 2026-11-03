@@ -171,8 +171,8 @@ keeps the parallel evaluations from fetching.
 ## Switch the scheme
 
 `theme` switches the Base16 scheme without a rebuild, on every workstation. It
-takes any scheme of the theme pack, which holds all 362 of tinted-theming and
-`assets/schemes` ([Theme](architecture.md#theme)):
+takes any scheme of the theme pack, which holds every tinted-theming and
+`assets/schemes` scheme ([Theme](architecture.md#theme)):
 
 ```sh
 theme                      # prints the active scheme and the record's
