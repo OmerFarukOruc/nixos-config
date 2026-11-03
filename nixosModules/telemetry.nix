@@ -383,7 +383,7 @@ in
             "-F path=/etc/shadow -F perm=wa -F key=identity"
             "-F path=/etc/group -F perm=wa -F key=identity"
             "-F dir=/etc -F perm=wa -F auid!=unset -F key=etc-change"
-            "-F path=/run/wrappers/bin/sudo -F perm=x -F key=sudo-exec"
+            "-F path=${config.security.wrappers.sudo.source} -F perm=x -F key=sudo-exec"
             "-F dir=/run/secrets.d -F perm=wa -F key=credstore"
             "-F dir=/run/secrets.d -F perm=r -F uid!=0 -F key=credstore"
           ]
@@ -394,11 +394,6 @@ in
           "-a always,exclude -F msgtype=BPF -F auid=unset"
         ])
       ];
-    };
-
-    systemd.services.audit-rules-nixos = {
-      after = [ "suid-sgid-wrappers.service" ];
-      restartTriggers = [ config.systemd.units."suid-sgid-wrappers.service".unit ];
     };
   };
 }

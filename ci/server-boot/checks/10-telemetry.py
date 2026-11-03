@@ -25,7 +25,9 @@ for tel_key in [
     "credstore",
 ]:
     assert f"key={tel_key}" in tel_rules, f"auditctl lists no rule with the key {tel_key}"
-assert "path=/run/wrappers/bin/sudo" in tel_rules, "the sudo rule does not watch the wrapper"
+assert re.search(r"path=/nix/store/[^ ]+-sudo-[^ ]+/bin/sudo .*key=sudo-exec", tel_rules), "the sudo rule does not watch the sudo binary"
+machine.succeed("systemctl restart suid-sgid-wrappers.service")
+assert "key=sudo-exec" in machine.succeed("auditctl -l"), "recreating /run/wrappers dropped the sudo rule"
 
 machine.succeed(f"sshd -T -C user={BOX_USER},host=x,addr=127.0.0.1 | grep -Fix 'loglevel verbose'")
 

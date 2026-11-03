@@ -177,7 +177,7 @@ shows today, ported to NixOS paths:
 | `audit-config` | `/etc/audit` |
 | `identity` | `/etc/passwd`, `/etc/shadow`, `/etc/group` |
 | `etc-change` | `/etc`, by a login session only |
-| `sudo-exec` | execution of `/run/wrappers/bin/sudo` |
+| `sudo-exec` | execution of the store `sudo` binary, which `/run/wrappers/bin/sudo` and `sudoedit` start |
 | `credstore` | `/run/secrets.d` (sops-nix): writes, and reads by a user other than root |
 
 The Debian watches of `/usr/lib/systemd/system`, `/etc/sudoers.d`,
@@ -188,8 +188,9 @@ exist fails to load and stops the rules after it. A file
 created in `/etc/sudoers.d` still logs as `etc-change`. The first matching rule
 decides, so the specific rules come first and the three excludes (network,
 promiscuous mode and BPF records of processes with no login session) come last.
-`audit-rules-nixos` loads the rules again whenever the sudo wrapper changes,
-because a rule follows the file it saw at load.
+The `sudo-exec` rule watches the store binary instead of the wrapper, because
+each switch recreates `/run/wrappers` and the kernel drops a watch whose path
+goes away.
 
 The audit records reach the journal through auditd's syslog plugin
 (`SYSLOG_IDENTIFIER=audisp-syslog`), and `systemd-journald-audit.socket` is off.
@@ -210,7 +211,8 @@ timer, adds noise. Add a filter when SigNoz shows it.
 The boot test covers it in `ci/server-boot/checks/10-telemetry.py`. Its module
 `ci/server-boot/modules/telemetry.nix` points the collector at a second
 collector on loopback (a sink that writes files). The check logs in as omer
-over SSH, runs `sudo` to change a file under `/etc`, reads a secret as
+over SSH, restarts `suid-sgid-wrappers` and checks that the `sudo-exec` rule
+stays, runs `sudo` to change a file under `/etc`, reads a secret as
 `nobody`, which the `credstore` rule logs although the read fails, stops the
 collector for a second login, and checks that the sink got each record after
 the restart, the unit journal line, the info line of a user unit of omer and
