@@ -9,6 +9,7 @@ let
   cfg = config.oruc.machine;
   hasPlasma = sessions.hasDesktop cfg "plasma";
   hm = config.home-manager.users.${cfg.user};
+  root = config.oruc.themeRoot;
   variants = import ../machines/variants.nix { inherit lib sessions; } cfg;
   driverVersion = if config.home-manager.enableLegacyProfileManagement then "0" else "1";
 
@@ -153,7 +154,9 @@ let
     usage = ''
       Usage: theme [SCHEME | --list | --reapply]
 
-      With no argument, prints the active Base16 scheme. --list prints the slug of
+      With no argument, prints the active Base16 scheme, the scheme of the console
+      and the login screen, and a line for each failed --reapply or console and
+      login screen apply after a switch or boot. --list prints the slug of
       every scheme in the installed theme pack, one per line.
       SCHEME activates that scheme and keeps it across deploys. Ghostty, tmux, Neovim
       and a Claude Code that selects custom:scheme take its colours at once, and so
@@ -180,14 +183,27 @@ let
       and case lights take its base09 at once. The
       console changes at once and the login screen at its next start; a light
       scheme leaves the login screen on the machine record's colours, because
-      its form is drawn see-through over a dark video.
+      its form is drawn see-through over a dark video. When the console, the
+      login screen or the boot menu fails, SCHEME still switches the rest and
+      exits 1.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
       default ones; it leaves the console, the login screen and the boot menu
       as they are. The Limine boot menu changes at the next boot.'';
     text = ''
       case ''${1:-} in
-        "") echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})" ;;
+        "")
+          echo "active: $(stored_scheme) (default: ${cfg.theme.scheme})"
+          ${lib.optionalString (root.stateDir != null) ''
+            echo "console and login screen: $(cat ${root.stateDir}/scheme 2>/dev/null || echo "${cfg.theme.scheme}, none stored")"
+            if [[ -e ${root.stateDir}/apply-failed ]]; then
+              echo "the last oruc-theme-root --apply failed: journalctl -b -u oruc-theme-root"
+            fi
+          ''}
+          if [[ -e $state/reapply-failed ]]; then
+            echo "the last theme --reapply after a switch failed: journalctl -u home-manager-${cfg.user}"
+          fi
+          ;;
         --list) "$pointer" --list ;;
         -h | --help) usage ;;
         --reapply)
@@ -208,22 +224,26 @@ let
           look=$(stored_look)
           "$pointer" --set "$1"
           reload
-          ${lib.optionalString (config.oruc.themeRoot.command != null) ''
-            if ! /run/wrappers/bin/sudo -n ${config.oruc.themeRoot.command} <<<"$1"; then
+          failed=0
+          ${lib.optionalString (root.command != null) ''
+            if ! /run/wrappers/bin/sudo -n ${root.command} <<<"$1"; then
               echo "theme: the console or the login screen failed" >&2
+              failed=1
             fi
           ''}
           shown="Ghostty, tmux, Neovim and VS Code"
           if live "$look"; then
             shown="Ghostty, tmux, Neovim, VS Code, KDE and GTK 4 apps"
           fi
-          ${lib.optionalString config.oruc.themeRoot.bootMenu ''
+          ${lib.optionalString root.bootMenu ''
             exec 8>&-
-            if ! /run/wrappers/bin/sudo -n ${config.oruc.themeRoot.command} --limine; then
+            if ! /run/wrappers/bin/sudo -n ${root.command} --limine; then
               echo "theme: the boot menu failed" >&2
+              failed=1
             fi
           ''}
           echo "$shown show $1 now; Starship, fzf and atuin at their next run."
+          exit "$failed"
           ;;
       esac
     '';

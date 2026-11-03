@@ -318,8 +318,10 @@ stored scheme, or the record's when none is stored. The helper holds
 `/var/lib/oruc/theme/lock` while it reads, stores and applies, so a switch and
 `theme` cannot leave the stored scheme and the applied colours apart. The unit
 always exits 0, so a failure never rolls back a deploy; it writes
-`/var/lib/oruc/theme/apply-failed` instead, which `scripts/verify-nixos-rog.sh`
-reports.
+`/var/lib/oruc/theme/apply-failed` instead. `theme` with no argument prints
+the console and login screen scheme next to the user's, and a line for this
+marker and for a failed `theme --reapply`, on every workstation;
+`scripts/verify-nixos-rog.sh` also checks both markers.
 A light scheme's `sddm.conf.user` holds the record's colours, because the
 login form is drawn at 30 % opacity over a dark video. `theme --reapply` does
 not call the helper.

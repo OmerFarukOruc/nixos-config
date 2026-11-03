@@ -225,6 +225,11 @@ in
       readOnly = true;
       description = "Path of oruc-theme-root, which theme runs through sudo with the scheme on stdin, or null on a host without a desktop.";
     };
+    stateDir = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      readOnly = true;
+      description = "Folder where oruc-theme-root stores the scheme in `scheme` and its unit marks a failed --apply in `apply-failed`, or null on a host without a desktop.";
+    };
     pack = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       readOnly = true;
@@ -242,6 +247,7 @@ in
       oruc.themeRoot = {
         colorsFile = if themed then colorsFile else null;
         command = if themed then command else null;
+        stateDir = if themed then stateDir else null;
         pack = if themed then pack else null;
         bootMenu = themed && limine;
       };
