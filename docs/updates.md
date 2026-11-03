@@ -243,7 +243,7 @@ repository's package record names SpaceXAI as the vendor.
 | Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 | airpods-tui, herdr web UI, KVitals, linctl, Smart Video Wallpaper | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the dependencies' hash: `cargoHash` for airpods-tui, `vendorHash` for linctl, and the `outputHash` of the Bun dependencies for the herdr web UI. `passthru.depsBun` holds the bun version that produced the herdr web UI's hash, so `update-app.sh` learns the hash again when nixpkgs' bun differs |
-| cf, impeccable, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
+| cf, impeccable, Oracle, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf, Oracle and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
 
 The wrapper `package.json` of cf depends on cf, because cf has only beta releases
 and its own `package.json` pins dev dependencies that do not resolve. The wrapper

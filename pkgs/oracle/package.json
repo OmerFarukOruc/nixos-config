@@ -1,0 +1,8 @@
+{
+  "name": "oracle-cli",
+  "version": "0.22.2",
+  "private": true,
+  "dependencies": {
+    "@steipete/oracle": "0.22.2"
+  }
+}
