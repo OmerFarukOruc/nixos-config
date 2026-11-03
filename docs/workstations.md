@@ -186,7 +186,7 @@ takes any scheme of the theme pack, which holds every tinted-theming and
 `assets/schemes` scheme ([Theme](architecture.md#theme)):
 
 ```sh
-theme                      # prints the active scheme and the record's
+theme                      # prints the active scheme, the record's, the console and login screen scheme, and any failed apply
 theme --list               # prints the slug of every scheme in the pack, one per line
 theme tokyo-night-dark
 ```

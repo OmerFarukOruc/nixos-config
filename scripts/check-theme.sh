@@ -57,8 +57,8 @@ names that cursor.
 
 For VS Code it checks that settings.json names the scheme's colour theme and
 holds its sidebar colour after each switch, and that `theme` leaves a
-settings.json that does not parse byte-identical and reports the failed
-reload. With --contrast it first checks, for every scheme in the pack, that
+settings.json that does not parse byte-identical, reports the failed
+reload and exits 1. With --contrast it first checks, for every scheme in the pack, that
 each text colour the VS Code theme draws on an accent background reaches
 4.5:1 against it, that its muted text and comments reach 4.5:1 on the editor
 and side bar backgrounds, that the Claude Code status line's segment colours
@@ -741,7 +741,9 @@ if [[ -e $vscode_settings ]]; then
   cp "$vscode_settings" "$vscode_saved"
   printf '{ "broken": \n' >"$vscode_settings"
   cp "$vscode_settings" "$scratch/vscode-broken.json"
-  output=$(theme "$1" 2>&1) || fail "theme $1 exited $? with a settings.json that does not parse"
+  rc=0
+  output=$(theme "$1" 2>&1) || rc=$?
+  ((rc == 1)) || fail "theme $1 exited $rc, not 1, with a settings.json that does not parse"
   cmp -s "$vscode_settings" "$scratch/vscode-broken.json" || fail "theme changed a settings.json that does not parse"
   grep -qF 'theme: vscode reload failed' <<<"$output" || fail "theme did not report the failed VS Code reload"
   cp "$vscode_saved" "$vscode_settings"

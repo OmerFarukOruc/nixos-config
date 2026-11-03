@@ -98,9 +98,10 @@ let
           return 0
         else
           echo "theme: the KDE colours, dark or light set, Plasma style or Glass glow failed" >&2
+          return 1
         fi
       ''}
-      return 1
+      return 2
     }
 
     reload() {
@@ -186,8 +187,8 @@ let
       and case lights take its base09 at once. The
       console changes at once and the login screen at its next start; a light
       scheme leaves the login screen on the machine record's colours, because
-      its form is drawn see-through over a dark video. When the console, the
-      login screen, the boot menu or an app's reload fails, SCHEME still switches
+      its form is drawn see-through over a dark video. When the KDE colours,
+      the console, the login screen, the boot menu or an app's reload fails, SCHEME still switches
       the rest and exits 1.
       --reapply points the colour files at the stored scheme again, activates the
       stored Plasma look and tells the running apps to reload. The Home Manager service runs it after it activates the
@@ -230,8 +231,12 @@ let
             fi
           ''}
           shown="Ghostty, tmux, Neovim and VS Code"
-          if live "$look"; then
+          rc=0
+          live "$look" || rc=$?
+          if ((rc == 0)); then
             shown="Ghostty, tmux, Neovim, VS Code, KDE and GTK 4 apps"
+          elif ((rc == 1)); then
+            failed=1
           fi
           ${lib.optionalString root.bootMenu ''
             exec 8>&-
