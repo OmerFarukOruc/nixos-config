@@ -11,6 +11,8 @@ in
 {
   oruc.verifyFacts.low_battery_percent = toString lowBatteryPercent;
 
+  oruc.failurePopupUnits = [ "oruc-low-battery" ];
+
   systemd.services.oruc-low-battery = {
     description = "Switch power-profiles-daemon to power-saver on low battery";
     after = [ "power-profiles-daemon.service" ];

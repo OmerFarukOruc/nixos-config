@@ -40,6 +40,8 @@ assert lib.assertMsg (
     }
   ) limits;
 
+  oruc.failurePopupUnits = [ "oruc-cpu-limits" ];
+
   systemd.services.oruc-cpu-limits = {
     description = "Set the CPU temperature limit and top clock of the power profile";
     # power-profiles-daemon starts after multi-user.target, so a unit ordered

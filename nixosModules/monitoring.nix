@@ -47,22 +47,23 @@ in
       fileSystems = [ "/" ];
     };
 
-    assertions =
-      lib.mapAttrsToList
-        (name: service: {
+    assertions = lib.optionals desktop (
+      map (
+        name:
+        let
+          service = config.systemd.services.${name};
+        in
+        {
           assertion = service.enable && (service.script != "" || service.serviceConfig ? ExecStart);
           message = "${name} notifies on failure but has no ExecStart=; turn its module on or drop it from oruc.failurePopupUnits.";
-        })
-        (
-          lib.filterAttrs (
-            _: service: lib.elem "notify-failure@%p.service" service.onFailure
-          ) config.systemd.services
-        );
+        }
+      ) config.oruc.failurePopupUnits
+    );
     # The popup names the unit without its instance (%p), because an instance
     # such as btrfs-scrub@-.service cannot be an instance name itself.
     systemd.services = lib.mkMerge [
       (lib.mkIf desktop (
-        lib.genAttrs (lib.unique config.oruc.failurePopupUnits) (_: {
+        lib.genAttrs config.oruc.failurePopupUnits (_: {
           onFailure = [ "notify-failure@%p.service" ];
         })
       ))

@@ -12,6 +12,8 @@ let
   file = "/sys/firmware/acpi/platform_profile";
 in
 {
+  oruc.failurePopupUnits = [ "oruc-profile-sync" ];
+
   systemd.services.oruc-profile-sync = {
     description = "Hand platform profile switches to power-profiles-daemon";
     # power-profiles-daemon starts after multi-user.target, so a unit ordered

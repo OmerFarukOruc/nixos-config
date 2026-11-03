@@ -25,13 +25,9 @@ turns itself on from the machine record. It reads `kind`, `gpu` or a
 A module that every host or every workstation wants goes in one of the two
 import lists and gates its own config on the record. A module that only some
 hosts want is imported from those hosts' files in `machines/<host>/`, so the
-other hosts do not get it. `nixos-desktop` and `nixos-rog` import `envfs.nix`,
-`nextdns.nix`, `nixpkgs-clone.nix`, `via-devbox.nix`, `warp.nix` and
-`zapret2.nix`; `nixos-rog` imports `zapret2.nix` from its own
-`machines/nixos-rog/zapret2.nix`, which sets the Wi-Fi uplink. `devbox` imports
-`envfs.nix`, `agent-runtime.nix`, `rootless-containers.nix` and
-`tailnet-web.nix`, and `nixos-latitude` imports none. A third workstation that
-wants one of them adds that import line to its own files.
+other hosts do not get it; the `imports` of each `machines/<host>/` file name
+them. A third workstation that wants one of them adds that import line to its
+own files.
 
 A machine of kind `server` gets none of the workstation modules. Each of them
 gates on `kind == "workstation"`, on a feature, on the machine's `gpu`
@@ -626,7 +622,8 @@ These stay fixed on purpose, and the check does not cover them:
   recommended policies set the values a new profile starts with, and the
   settings page can still change them. Notification permissions and the theme
   color are managed-only policies, and Brave Sync carries them, so they stay
-  in the profile. The module sets no managed policy.
+  in the profile. The one managed policy, `IdleDetectionAllowedForUrls`, lets
+  Teams use the Idle Detection API, a permission that does not sync.
 - The ChatGPT app's code view takes the nearest of its built-in code themes,
   so its syntax colors are the built-in theme's, not the scheme's.
 
@@ -659,9 +656,10 @@ the build when a listed service has no `ExecStart=` or script on that machine.
 
 The rule is that every long-running or timer-run system service that this
 repository defines on a desktop host is listed, unless it is on this list of
-exceptions. A shared module lists its own services, `fans.nix` lists `case-fans`,
-and `machines/nixos-rog/monitoring.nix` lists the units of nixos-rog's own
-modules.
+exceptions. The module that defines a service lists it next to the definition,
+as `fans.nix` does for `case-fans` and `via-devbox.nix` for
+`tailscaled-via-devbox`. No check finds a service that is missing from both
+lists, so a new service needs that line by hand.
 
 - `nixos-upgrade` has its own handler, `nixos-upgrade-failed`, which records the
   failed revision and shows an "Update failed" popup with its own text
@@ -673,8 +671,8 @@ modules.
 - `envfs-reap` is a oneshot ordered before the `/usr/bin` mount, so a failure
   shows as a failed mount in the switch.
 - `tailscaled-set` is a oneshot that follows `tailscaled`.
-- `oruc-stay-active` restarts every 10 s after a failure (`RestartSec`), and a
-  failure only stops the pointer nudge.
+- `via-devbox-netns` is a oneshot that makes the network namespace, and
+  `tailscaled-via-devbox` fails with it.
 
 A new service adds its name where its neighbours are listed. A service that
 needs no popup gets a line with its reason in the list of exceptions.

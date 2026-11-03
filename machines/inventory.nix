@@ -14,9 +14,6 @@ let
         }
       ];
       launcher = "vicinae";
-      theme = {
-        scheme = "warm-burnout-dark";
-      };
       kernel.profile = "cachyos-latest-lto-x86_64-v3";
       gpu = "intel";
       hasBattery = true;
@@ -48,10 +45,7 @@ let
         }
       ];
       launcher = "rofi";
-      theme = {
-        scheme = "warm-burnout-dark";
-        plasmaLook = "glass";
-      };
+      theme.plasmaLook = "glass";
       kernel.profile = "cachyos-latest-lto-zen4";
       bootloader = "limine";
       gpu = "hybrid";
@@ -79,10 +73,7 @@ let
         }
       ];
       launcher = "rofi";
-      theme = {
-        scheme = "warm-burnout-dark";
-        plasmaLook = "glass";
-      };
+      theme.plasmaLook = "glass";
       kernel.profile = "cachyos-latest-lto-zen4";
       bootloader = "limine";
       gpu = "amd";
@@ -102,9 +93,6 @@ let
       system = "x86_64-linux";
       kind = "server";
       formFactor = "desktop";
-      theme = {
-        scheme = "warm-burnout-dark";
-      };
       kernel.profile = "nixos";
       bootloader = "limine";
       biosDevice = "/dev/vda";

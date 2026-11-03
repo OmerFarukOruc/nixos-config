@@ -16,7 +16,6 @@
     ./graphics.nix
     ./low-battery.nix
     ./media.nix
-    ./monitoring.nix
     ./network.nix
     ../../nixosModules/nextdns.nix
     ../../nixosModules/nixpkgs-clone.nix

@@ -4,10 +4,11 @@ import os
 import select
 import termios
 
+from claude_tools.display import login_left, window_view
 from claude_tools.limits import WINDOWS
 from claude_tools.selection import BLOCKED, RESERVE, order, span
 from claude_tools.store import now
-from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, login_left, visible
+from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, visible
 
 PICKED, CANCELLED, REFRESH = range(3)
 KEYS = "↑↓ move   enter start   1-9 start that row   r check usage now   q quit"
@@ -38,7 +39,7 @@ class Picker:
         if not w:
             return cards.c(f"{label} {'no limit':<{cards.bar + 7}}", DIM)
         pct = cards.c(f"{w['used']:3.0f}%", cards.tone(w["used"]))
-        return f"{cards.c(label, DIM)} {cards.bar_cells(w['used'], stale)} {pct} {cards.pace_mark(w, length, at, False)}"
+        return f"{cards.c(label, DIM)} {cards.bar_cells(w['used'], stale)} {pct} {cards.pace_mark(window_view(w, length, at), False)}"
 
     def tags(self, cards: Cards, name: str, e: dict) -> list[str]:
         tags = []
@@ -88,7 +89,8 @@ class Picker:
         lines += cards.window_rows(e, at, stale)
         notes = []
         if t := e.get("login_expires_at"):
-            notes.append(f"login here ends in {login_left(t)}")
+            left = login_left(t)
+            notes.append("login here expired" if left == "expired" else f"login here ends in {left}")
         if stale:
             notes.append(f"numbers from {span(max(0, now() - at))} ago")
         if e.get("error"):

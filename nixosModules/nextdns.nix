@@ -1,15 +1,21 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   profile = config.sops.placeholder.nextdns-profile;
+  servers = [
+    "45.90.28.0"
+    "45.90.30.0"
+  ];
 in
 {
   services.resolved = {
     enable = true;
     settings.Resolve = {
-      DNS = [
-        "45.90.28.0#dns.nextdns.io"
-        "45.90.30.0#dns.nextdns.io"
-      ];
+      DNS = map (server: "${server}#dns.nextdns.io") servers;
       DNSOverTLS = "yes";
       DNSSEC = "allow-downgrade";
       Domains = [ "~." ];
@@ -24,9 +30,7 @@ in
     content = ''
       [Resolve]
       DNS=
-      DNS=45.90.28.0#${profile}.dns.nextdns.io
-      DNS=45.90.30.0#${profile}.dns.nextdns.io
-    '';
+      ${lib.concatMapStrings (server: "DNS=${server}#${profile}.dns.nextdns.io\n") servers}'';
   };
   environment.etc."systemd/resolved.conf.d/nextdns.conf".source =
     config.sops.templates."nextdns.conf".path;

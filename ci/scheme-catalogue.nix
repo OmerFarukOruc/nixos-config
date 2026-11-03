@@ -20,9 +20,11 @@ in
         passAsFile = [ "parsed" ];
       }
       ''
+        shopt -s nullglob
         for file in ${inputs.base16-schemes}/base16/*.y{,a}ml ${../assets/schemes}/*.y{,a}ml; do
+          slug=''${file##*/}
           yq -o=json -I=0 '{"name": .name, "author": .author, "variant": .variant, "palette": (.palette | map_values(downcase))}' "$file" |
-            jq -c --arg slug "$(basename "$file" | sed -E 's/\.ya?ml$//')" '{($slug): .}'
+            jq -c --arg slug "''${slug%.*}" '{($slug): .}'
         done | jq -S -s add >yaml.json
         jq -S . "$parsedPath" >parsed.json
         files=$(find ${inputs.base16-schemes}/base16 ${../assets/schemes} -type f | wc -l)

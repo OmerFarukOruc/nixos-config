@@ -7,7 +7,7 @@ from claude_tools.selection import span
 from claude_tools.store import now
 
 AMBER_FROM_PERCENT, RED_FROM_PERCENT = 70, 90
-PACE_BAND = 5
+PACE_BAND, PACE_FAR = 5, 20
 MINUTE, DAY = 60, 86400
 
 
@@ -29,6 +29,13 @@ def pace_state(d: float | None) -> str | None:
     return None if d is None else "ahead" if d > PACE_BAND else "behind" if d < -PACE_BAND else "even"
 
 
+def pace_tone(d: float | None) -> str | None:
+    state = pace_state(d)
+    if state == "ahead":
+        return "amber" if d < PACE_FAR else "red"
+    return {"behind": "green", "even": "dim"}.get(state)
+
+
 def login_left(t: int) -> str:
     left = t - now()
     return "expired" if left <= 0 else span(left) if left < DAY else f"{left // DAY} d"
@@ -39,7 +46,7 @@ def window_view(w: dict, length: int, at: int) -> dict:
     t = reset_minute(t) if t else None
     d = pace(w["used"], t, length, at)
     view = {"resets_at": t, "tone": tone(w["used"]), "pace": None if d is None else round(d),
-            "pace_state": pace_state(d), "reset_in": None, "reset_clock": None}
+            "pace_state": pace_state(d), "pace_tone": pace_tone(d), "reset_in": None, "reset_clock": None}
     if t:
         left = max(0, t - now())
         view["reset_in"] = span(left) if left else "now"

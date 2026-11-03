@@ -98,6 +98,7 @@ class Stop:
     session: str
     transcript: Path | None
     seen: int
+    cwd: str | None
 
     @classmethod
     def at_limit(cls, hook: dict) -> Stop:
@@ -106,7 +107,8 @@ class Stop:
             seen = transcript.stat().st_size if transcript else 0
         except OSError:
             seen = 0
-        return cls(hook["session_id"], transcript, seen)
+        cwd = hook.get("cwd")
+        return cls(hook["session_id"], transcript, seen, cwd if cwd and Path(cwd).is_dir() else None)
 
     def continued(self) -> bool:
         if not self.transcript:
@@ -219,12 +221,12 @@ class Runner:
         if self.child and self.child.poll() is None:
             self.child.send_signal(sig)
 
-    def start(self, argv: list[str], env: dict) -> None:
+    def start(self, argv: list[str], env: dict, cwd: str | None = None) -> None:
         def restore() -> None:
             signal.signal(signal.SIGINT, signal.SIG_DFL)
             signal.signal(signal.SIGQUIT, signal.SIG_DFL)
 
-        self.child = subprocess.Popen(argv, env=env, preexec_fn=restore)
+        self.child = subprocess.Popen(argv, env=env, cwd=cwd, preexec_fn=restore)
 
     def limit_hit(self, flag: Path) -> dict | None:
         if self.quit or not flag.exists():
@@ -292,7 +294,7 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
     return current
 
 
-def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[str, str] | int:
+def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[Stop, str] | int:
     stop: Stop | None = None
     wake: float | None = None
     while True:
@@ -313,7 +315,7 @@ def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[st
             stop = wake = None
             continue
         if nxt and not runner.quit:
-            return stop.session, nxt
+            return stop, nxt
         wake = r.wake_time(stop.session)
 
 
@@ -331,13 +333,14 @@ def run(settings: Settings, args: list[str]) -> int:
     base = {**os.environ, "CLAUDE_TOOLS_ROTATE_ID": rotate_id}
     settings.runtime.joinpath("rotate").mkdir(parents=True, exist_ok=True)
     runner = Runner()
-    argv = ["claude", *args]
+    argv, cwd = ["claude", *args], None
     while True:
-        runner.start(argv, env_for(base, r.dirs.get(current, "")))
+        runner.start(argv, env_for(base, r.dirs.get(current, "")), cwd)
         moved = supervise(r, runner, current, settings.runtime / "rotate" / f"{rotate_id}-{runner.child.pid}.json")
         if isinstance(moved, int):
             return moved
-        session, nxt = moved
+        stop, nxt = moved
+        session = stop.session
         if nxt == current:
             r.say(f"the usage limit of {current} has reset; resuming session {session} on it")
             message = (f"The usage limit of your Claude account {current} has reset, so claude-tools rotate resumed "
@@ -348,7 +351,7 @@ def run(settings: Settings, args: list[str]) -> int:
                        f"session on the {nxt} account. Continue where you stopped.")
         runner.stop()
         args = carried_args(args, opts)
-        argv = ["claude", *args, "--resume", session, message]
+        argv, cwd = ["claude", *args, "--resume", session, message], stop.cwd
         current = nxt
 
 

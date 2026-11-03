@@ -40,10 +40,7 @@ in
       }
     ];
 
-    oruc.verifyFacts = {
-      plasma_look_default = variants.defaultLook;
-    }
-    // lib.concatMapAttrs (
+    oruc.verifyFacts = lib.concatMapAttrs (
       look: lookConfig:
       let
         plasma = lookConfig.programs.plasma;

@@ -20,9 +20,10 @@ let
           ${spec.probe} >/dev/null 2>&1 && break
           sleep 0.5
         done
-        ${lib.trim spec.steps}
+        ${spec.steps}
       '';
     };
+  scripts = lib.mapAttrs applyScheme cfg;
 in
 {
   options.oruc.shellScheme = lib.mkOption {
@@ -53,12 +54,12 @@ in
   };
 
   config = {
-    systemd.user.services = lib.mapAttrs (shell: spec: {
-      Service.ExecStartPost = [ "-${lib.getExe (applyScheme shell spec)}" ];
-    }) cfg;
-    oruc.variantReloads = lib.mapAttrs (shell: spec: ''
+    systemd.user.services = lib.mapAttrs (_: script: {
+      Service.ExecStartPost = [ "-${lib.getExe script}" ];
+    }) scripts;
+    oruc.variantReloads = lib.mapAttrs (shell: script: ''
       systemctl --user is-active -q ${shell}.service || exit 0
-      ${lib.getExe (applyScheme shell spec)}
-    '') cfg;
+      ${lib.getExe script}
+    '') scripts;
   };
 }

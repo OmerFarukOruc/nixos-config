@@ -9,7 +9,7 @@ from claude_tools.selection import span
 from claude_tools.store import now
 
 GREEN, AMBER, RED, ACCENT, DIM, BOLD = "32", "33", "31", "34", "2", "1"
-TONE_CODES = {"green": GREEN, "amber": AMBER, "red": RED}
+TONE_CODES = {"green": GREEN, "amber": AMBER, "red": RED, "dim": DIM}
 ANSI = re.compile(r"\033\[[0-9;]*m")
 
 
@@ -37,16 +37,12 @@ class Cards:
         track = self.bar - full - (1 if half else 0)
         return self.c("━" * full + ("╸" if half else ""), *tone) + self.c("─" * track, DIM)
 
-    def pace_mark(self, w: dict, length: int, at: int, wide: bool) -> str:
-        v = window_view(w, length, at)
-        d = v["pace"]
+    def pace_mark(self, v: dict, wide: bool) -> str:
+        d, state = v["pace"], v["pace_state"]
         if d is None:
             return " " * 6 if wide else " "
-        if v["pace_state"] == "ahead":
-            return self.c(f"▲{d:+4d}%" if wide else "▲", AMBER if d < 20 else RED)
-        if v["pace_state"] == "behind":
-            return self.c(f"▽{d:+4d}%" if wide else "▽", GREEN)
-        return self.c("≈     " if wide else "≈", DIM)
+        mark = {"ahead": f"▲{d:+4d}%", "behind": f"▽{d:+4d}%"}.get(state, "≈     ")
+        return self.c(mark if wide else mark[0], TONE_CODES[v["pace_tone"]])
 
     def window_row(self, label: str, w: dict | None, length: int, at: int, stale: bool) -> str:
         head = "    " + self.c(f"{label:<7}", DIM)
@@ -56,7 +52,7 @@ class Cards:
         pct = self.c(f"{used:4.0f}%", self.tone(used), *((DIM,) if stale else ()))
         v = window_view(w, length, at)
         reset = f"resets {v['reset_in']} · {v['reset_clock']}" if v["resets_at"] else "not started"
-        return f"{head}{self.bar_cells(used, stale)} {pct}  {self.pace_mark(w, length, at, True)}  {self.c(reset, DIM)}"
+        return f"{head}{self.bar_cells(used, stale)} {pct}  {self.pace_mark(v, True)}  {self.c(reset, DIM)}"
 
     def window_rows(self, a: dict, at: int, stale: bool) -> list[str]:
         return [self.window_row("5h", a.get("five_hour"), WINDOWS["five_hour"], at, stale),

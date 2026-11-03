@@ -131,18 +131,21 @@ finish() {
 trap finish EXIT
 rog_pick_host
 
-running=$({
+remote_state=$({
   cat "$repo_dir/scripts/lib/running-revision.sh"
-  echo running_revision
+  cat <<'REMOTE'
+echo "revision $(running_revision)"
+plasma-look 2>/dev/null | sed -n 's/^active: /look /p'
+REMOTE
 } | ssh "${SSH_OPTS[@]}" "$ROG_HOST" bash -s || true)
-read -r running_sha running_dirty _ <<<"$running" || true
+read -r running_sha running_dirty _ <<<"$(sed -n 's/^revision //p' <<<"$remote_state")" || true
 if [[ -n $running_sha ]]; then
   revision=${running_sha:0:12}
   dirty=false
   [[ $running_dirty != true ]] || dirty=true
 fi
 
-plasma_look=$(ssh "${SSH_OPTS[@]}" "$ROG_HOST" plasma-look 2>/dev/null | sed -n 's/^active: //p' || true)
+plasma_look=$(sed -n 's/^look //p' <<<"$remote_state")
 if [[ ! $plasma_look =~ ^[a-z0-9]+$ ]]; then
   record plasma-look fail "plasma-look on $ROG_HOST printed no active look; the Plasma checks cannot pick their facts"
   plasma_look=none
@@ -165,12 +168,10 @@ for fact in low_battery_percent nvidia_version wifi \
   fi
 done
 plasma_look_file=$HOME/.local/state/oruc/plasma-look
-if [[ $plasma_look =~ ^[a-z0-9]+$ ]]; then
-  widgets_fact=plasma_widgets_$plasma_look
-  effects_fact=kwin_effects_$plasma_look
-  plasma_widgets=${!widgets_fact:-}
-  kwin_effects=${!effects_fact:-}
-fi
+widgets_fact=plasma_widgets_$plasma_look
+effects_fact=kwin_effects_$plasma_look
+plasma_widgets=${!widgets_fact:-}
+kwin_effects=${!effects_fact:-}
 cpu_limits() {
   local temp
   temp=$(sudo ryzenadj -i | awk -F'|' '/THM LIMIT CORE/ {printf "%d", $3}')

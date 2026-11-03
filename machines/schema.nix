@@ -98,7 +98,7 @@ let
 
     theme.scheme = mkOption {
       type = types.enum schemeNames;
-      default = "gruvbox-dark-medium";
+      default = "warm-burnout-dark";
       description = "Base16 scheme of this machine's record, named as in the pinned schemes input or assets/schemes. A deploy builds it into the theme pack, and it is the fallback for everything that follows the scheme `theme` stores. The console, the boot menu and the pack's files use it until `theme` stores another scheme, and the login screen until `theme` stores a dark one. The apps that build their colours from `config.scheme` keep it.";
     };
 

@@ -56,7 +56,11 @@ let
         true
     )).success;
 
-  failedAssertions = host: map (a: a.message) (lib.filter (a: !a.assertion) host.config.assertions);
+  tailscaleOnlyFires =
+    host:
+    lib.any (a: !a.assertion) (
+      lib.filter (a: lib.hasPrefix "networking.firewall opens a port" a.message) host.config.assertions
+    );
   firewallVariants = {
     tcpPort.networking.firewall.allowedTCPPorts = [ 8080 ];
     tcpPortRange.networking.firewall.allowedTCPPortRanges = [
@@ -139,12 +143,11 @@ in
     tailscalePort = config.services.tailscale.port;
   };
 
-  firewall = {
-    baseline = failedAssertions system;
-    variants = lib.mapAttrs (
-      _: module: failedAssertions (system.extendModules { modules = [ module ]; })
-    ) firewallVariants;
-  };
+  firewallVariantsNotFailing = lib.attrNames (
+    lib.filterAttrs (
+      _: module: !tailscaleOnlyFires (system.extendModules { modules = [ module ]; })
+    ) firewallVariants
+  );
 
   boot = {
     inherit (config.boot.loader.limine)

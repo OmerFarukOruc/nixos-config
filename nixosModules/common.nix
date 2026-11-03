@@ -135,8 +135,7 @@ in
 
     programs.nix-ld.enable = true;
 
-    # uv's standalone Pythons read the system CA bundle at /etc/ssl/cert.pem,
-    # and every host has uv through home-manager/modules/applications.nix.
+    # uv's standalone Pythons read the system CA bundle at /etc/ssl/cert.pem.
     environment.etc."ssl/cert.pem".source = config.security.pki.caBundle;
 
     security.sudo.execWheelOnly = true;
