@@ -4,10 +4,11 @@ let
   ppOverdriveBit = lib.fromHexString "4000";
 in
 {
-  # 0x400 turns on HDMI 2.1 FRL, which the 4K 160 Hz monitor on HDMI-A-1
-  # needs; mainline 7.3 still leaves it off (DC_FRL_MASK in amd_shared.h).
-  # 0x2 keeps the multi-monitor bit of the default mask, which 0x400 alone
-  # would clear.
+  # The 4K 160 Hz monitor runs on DisplayPort, where this mask changes
+  # nothing. 0x400 turns on HDMI 2.1 FRL, which its HDMI input needs for
+  # 4K 160 Hz; mainline 7.3 still leaves it off (DC_FRL_MASK in
+  # amd_shared.h). 0x2 keeps the multi-monitor bit of the default mask,
+  # which 0x400 alone would clear.
   boot.kernelParams = [ "amdgpu.dcfeaturemask=0x402" ];
 
   hardware.amdgpu.overdrive = {
