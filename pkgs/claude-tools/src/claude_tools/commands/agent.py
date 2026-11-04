@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -18,6 +19,7 @@ MODE_FOOTERS = {"acceptEdits": "accept edits on", "auto": "auto mode on", "bypas
                 "manual": "manual mode on", "dontAsk": "", "plan": "plan mode on"}
 MODE_WAIT_S = 15
 NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+BUSY = ("working", "blocked")
 
 
 def agent_name(text: str) -> str:
@@ -72,7 +74,7 @@ def stop_started(ag: Agents, name: str, pane: str) -> None:
 def start(settings: Settings, a: argparse.Namespace) -> None:
     ag = Agents(settings)
     if ag.running(a.name):
-        raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it")
+        raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it once it is idle")
     config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
     where = caller(settings, ag)
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
@@ -114,6 +116,12 @@ def stop(settings: Settings, a: argparse.Namespace) -> None:
         close_unlisted(ag, a.name, data)
         return
     agent = data["result"]["agent"]
+    status = agent.get("agent_status")
+    if status in BUSY and not a.force:
+        herdr = shlex.join(ag.herdr.cmd)
+        raise Failed(f"{a.name} is {status}. Read its pane with `{herdr} agent read {a.name} --source recent-unwrapped`, "
+                     f"then wait with `{herdr} agent wait {a.name} --until idle --until done` or answer its question. "
+                     "Pass --force only to cut it off on purpose.")
     try:
         ag.exit_claude(a.name, ag.claude_process(agent["pane_id"])[0])
     except NoProcess:
@@ -159,10 +167,13 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     st.add_argument("--brief", type=brief_file, help="a file the agent reads as its brief")
     st.set_defaults(action=start)
     sp = cmds.add_parser("stop", help="end an agent and close its tab",
-                         description="Type /exit in a claude agent's pane, or press ctrl+c in a codex agent's pane "
+                         description="Refuse while the agent is working or waits at a question or approval, unless --force. "
+                                     "Type /exit in a claude agent's pane, or press ctrl+c in a codex agent's pane "
                                      "until codex quits, wait until herdr frees the name, and close the tab when it "
                                      "is named NAME and has one pane.")
     sp.add_argument("name")
+    sp.add_argument("--force", action="store_true",
+                    help="stop the agent even while it is working or waits at a question or approval")
     sp.set_defaults(action=stop)
     wt = cmds.add_parser("watch", help="print one line when a named agent finishes a turn, blocks or leaves",
                          description="Follow herdr's agent events and print one line when an agent whose name "

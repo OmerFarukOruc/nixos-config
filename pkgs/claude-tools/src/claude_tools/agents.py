@@ -101,6 +101,8 @@ class Agents:
         h = self.herdr
         h("agent", "send-keys", name, "esc", check=False)
         time.sleep(1)
+        h("agent", "send-keys", name, "ctrl+c", check=False)
+        time.sleep(0.5)
         h("agent", "prompt", name, "/exit", check=False)
         deadline = time.time() + 10
         while not gone(pid, 1) and time.time() < deadline:

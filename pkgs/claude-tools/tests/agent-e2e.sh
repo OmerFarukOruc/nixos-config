@@ -22,7 +22,7 @@ stop_watch() {
 }
 cleanup() {
   stop_watch
-  "$tools" agent stop "$name" >/dev/null 2>&1 || true
+  "$tools" agent stop --force "$name" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
@@ -92,6 +92,11 @@ step 2 "an agent waiting at a question prints BLOCKED"
 blocked=$(lines_of "$name BLOCKED at a question or approval")
 h agent prompt "$name" "Use the AskUserQuestion tool to ask me one question, 'Continue?', with the options Yes and No. Do nothing else." >/dev/null
 wait_for 150 more_lines "$name BLOCKED at a question or approval" "$blocked" || fail "no BLOCKED line for the open question"
+rc=0
+err=$("$tools" agent stop "$name" 2>&1) || rc=$?
+[[ "$rc" == 1 ]] || fail "agent stop of a blocked agent exited $rc, wanted 1"
+grep -q "is blocked" <<<"$err" || fail "no 'is blocked' in: $err"
+agent_listed "$name" || fail "the refused agent stop removed the blocked agent"
 finished=$(lines_of "$name finished a turn")
 h agent send-keys "$name" esc >/dev/null
 h agent wait "$name" --until idle --until "done" --timeout 60000 >/dev/null || fail "the agent did not settle after the question was dismissed"
@@ -118,16 +123,33 @@ err=$("$tools" agent start "$name" --account "$account" --cwd "$work" 2>&1) || r
 grep -q "already running" <<<"$err" || fail "no 'already running' in: $err"
 [[ "$(tab_count "$name")" == 1 ]] || fail "the refused start changed the tabs"
 
-step 6 "agent stop removes the agent and its tab, and the watcher says it left; the name starts and stops again at once"
+step 6 "agent stop refuses a working agent and leaves it running"
+h agent prompt "$name" "Run the command python3 -c 'import time; time.sleep(60)' with the Bash tool in the foreground, without run_in_background, then reply with exactly one line: STATUS: slept" >/dev/null
+h agent wait "$name" --until working --timeout 30000 >/dev/null || fail "the agent did not start working"
+rc=0
+err=$("$tools" agent stop "$name" 2>&1) || rc=$?
+[[ "$rc" == 1 ]] || fail "agent stop of a working agent exited $rc, wanted 1"
+grep -q "is working" <<<"$err" || fail "no 'is working' in: $err"
+agent_listed "$name" || fail "the refused agent stop removed the working agent"
+h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null || fail "the agent did not settle after the refused stop"
+
+step 7 "agent stop removes the agent and its tab, and the watcher says it left; the name starts again and --force stops it while it works"
 "$tools" agent stop "$name" || fail "agent stop exited $?"
 agent_listed "$name" && fail "the agent is still listed after agent stop"
 tab_labelled "$name" && fail "the tab is still open after agent stop"
 wait_for 15 watch_matches "$name ALERT left the agent list" || fail "the watcher did not say $name left"
 "$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet || fail "the name could not start again"
-"$tools" agent stop "$name" || fail "the second agent stop exited $?"
+h agent prompt "$name" "Run the command python3 -c 'import time; time.sleep(60)' with the Bash tool in the foreground, without run_in_background, then reply with exactly one line: STATUS: slept" >/dev/null
+h agent wait "$name" --until working --timeout 30000 >/dev/null || fail "the restarted agent did not start working"
+rc=0
+err=$("$tools" agent stop "$name" 2>&1) || rc=$?
+[[ "$rc" == 1 ]] || fail "the plain stop before --force exited $rc, wanted 1"
+grep -q "is working" <<<"$err" || fail "the plain stop before --force did not refuse a working agent: $err"
+"$tools" agent stop --force "$name" || fail "agent stop --force of a working agent exited $?"
+agent_listed "$name" && fail "the agent is still listed after agent stop --force"
 tab_labelled "$name" && fail "the second tab is still open"
 
-step 7 "an agent whose claude exited on its own: agent stop still closes its tab"
+step 8 "an agent whose claude exited on its own: agent stop still closes its tab"
 "$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet || fail "the name could not start a third time"
 pane=$(agent_pane)
 h agent prompt "$name" "/exit" >/dev/null
@@ -137,7 +159,7 @@ wait_for 60 pane_has_no_agent "$pane" || fail "claude did not exit after /exit"
 agent_listed "$name" && fail "the agent is listed after agent stop"
 tab_labelled "$name" && fail "the tab of the exited agent is still open"
 
-step 8 "closing a live agent's tab prints that it left"
+step 9 "closing a live agent's tab prints that it left"
 appeared=$(lines_of "$name appeared")
 "$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet || fail "the name could not start a fourth time"
 wait_for 30 more_lines "$name appeared" "$appeared" || fail "the watcher did not see the fourth start"
@@ -145,7 +167,7 @@ left=$(lines_of "$name ALERT left the agent list")
 h tab close "$(h agent get "$name" | jq -r '.result.agent.tab_id')" >/dev/null
 wait_for 15 more_lines "$name ALERT left the agent list" "$left" || fail "no left line after the tab closed"
 
-step 9 "a watcher whose herdr server stops says so, follows the restarted server, and sees the next turn"
+step 10 "a watcher whose herdr server stops says so, follows the restarted server, and sees the next turn"
 h server stop >/dev/null
 wait_for 30 watch_matches "ALERT watcher cannot follow herdr" || fail "no ALERT after the server stopped"
 ps -p "$watch_pid" >/dev/null || fail "the watcher exited when the server stopped"
