@@ -1,5 +1,15 @@
-{ lib, osConfig, ... }:
 {
+  lib,
+  osConfig,
+  pkgs,
+  ...
+}:
+{
+  home.packages = [
+    pkgs.awscli2
+    pkgs.aws-signing-helper
+  ];
+
   imports = [
     ./easyeffects.nix
     ./hdr.nix

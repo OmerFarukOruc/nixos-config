@@ -41,6 +41,9 @@
 
   boot.kernelParams = [ "cfg80211.ieee80211_regdom=TR" ];
 
+  security.tpm2.enable = true;
+  users.users.oruc.extraGroups = [ "tss" ];
+
   programs.appimage = {
     enable = true;
     binfmt = true;
