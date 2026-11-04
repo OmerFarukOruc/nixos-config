@@ -6,7 +6,7 @@
 }:
 buildNpmPackage {
   pname = "openchamber-web";
-  version = "2.6.0";
+  version = "2.6.1";
 
   src = lib.fileset.toSource {
     root = ./openchamber-web;
@@ -17,7 +17,7 @@ buildNpmPackage {
   };
 
   nodejs = nodejs_26;
-  npmDepsHash = "sha256-0phVSA26NQPU5F0XWPrtn6t5mtI0E5qOvzV8ayBV2lQ=";
+  npmDepsHash = "sha256-++95pstAYfYGwzyORkZAzlxD8KSQ2MVVGL/HqN4Xkag=";
   dontNpmBuild = true;
 
   nativeBuildInputs = [ makeWrapper ];
