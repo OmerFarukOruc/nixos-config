@@ -183,8 +183,7 @@ let
       Obsidian or the Cursor editor runs, the settings it writes itself wait like Codex's: the Cursor
       editor lists the theme and Obsidian enables its snippet after that, and OBS
       switches between its dark and light theme at its next start. The wallpaper changes at once in Plasma, Noctalia and DMS,
-      and outside Plasma so do the GTK theme, cursor and icons in dconf. Keyboard
-      and case lights take its base09 at once. The
+      and outside Plasma so do the GTK theme, cursor and icons in dconf. The
       console changes at once and the login screen at its next start; a light
       scheme leaves the login screen on the machine record's colours, because
       its form is drawn see-through over a dark video. When the KDE colours,

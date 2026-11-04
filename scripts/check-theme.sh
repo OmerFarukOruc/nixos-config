@@ -26,7 +26,7 @@ It also checks that an unknown scheme exits 64 and changes nothing, that
 changed, that it falls back to the record scheme when no scheme is stored,
 that neither run changes the running session's KDE colour scheme, and that
 the pack is a GC root. It prints a skip line for each scheme whose Plasma,
-keyboard light, wallpaper or GTK polarity checks cannot run, one that lists
+wallpaper or GTK polarity checks cannot run, one that lists
 the app files this host's pack lacks, and one for the boot menu checks when
 sudo asks for a password or the host has no Limine. A file that every workstation's
 pack holds, such as the fzf, Starship, Neovim, Vesktop and Telegram colours,
@@ -47,8 +47,7 @@ the record scheme's for a light scheme, and that oruc-theme-root refuses an
 unknown scheme with exit 64 and changes neither the stored scheme, the console
 nor the login screen. On a Limine host it checks that limine.conf holds the
 scheme's base00 as backdrop and term_background, and that every other line
-stays as it was. On nixos-rog it checks that the keyboard's Aura light turns
-static in the scheme's base09 within 5 s. It checks that oruc-wallpaper-path
+stays as it was. It checks that oruc-wallpaper-path
 prints the scheme's own wallpaper from assets/wallpapers, or a PNG it rendered
 once into ~/.cache/oruc/wallpapers, and in a Plasma session that the desktop
 shows it. Outside Plasma, on a host with niri, it checks dconf's colour
@@ -433,28 +432,6 @@ check_system() {
     fail "$slug: $login_colors does not hold HeaderTextColor #$login_text"
 }
 
-aura_path=/xyz/ljones/aura/19b6_3_4
-aura_led() {
-  busctl --system get-property xyz.ljones.Asusd "$aura_path" xyz.ljones.Aura LedModeData
-}
-
-check_keyboard_light() {
-  local slug=$1 red green blue want
-  if ! aura_led >/dev/null 2>&1; then
-    [[ $(busctl --system call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s xyz.ljones.Asusd) == "b true" ]] &&
-      fail "$slug: asusd runs but shows no Aura device at $aura_path"
-    echo "skip keyboard light for $slug: asusd does not run"
-    return 0
-  fi
-  IFS=, read -r red green blue <<<"$(decimal "$(color "$slug" base09)")"
-  want="(uu(yyy)(yyy)ss) 0 0 $red $green $blue "
-  for _ in $(seq 25); do
-    [[ $(aura_led) == "$want"* ]] && return 0
-    sleep 0.2
-  done
-  fail "$slug: the keyboard's Aura mode is $(aura_led), not static $red $green $blue"
-}
-
 check_wallpaper() {
   local slug=$1 path inode extension own=
   command -v oruc-wallpaper-path >/dev/null || {
@@ -668,7 +645,6 @@ for slug in "$@"; do
   check_session "$slug"
   check_system "$slug"
   check_boot_menu "$slug"
-  check_keyboard_light "$slug"
   check_wallpaper "$slug"
   check_gtk_polarity "$slug" "$gtk_before" "$dconf_icons_before"
   if [[ $slug == warm-burnout-* ]]; then
