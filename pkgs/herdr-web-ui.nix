@@ -68,7 +68,7 @@ stdenv.mkDerivation {
   '';
 
   passthru.githubRepo = "devswha/ovis";
-  passthru.depsBun = "1.4.2";
+  passthru.depsBun = "1.4.4";
 
   meta = {
     description = "Web UI for herdr sessions";
