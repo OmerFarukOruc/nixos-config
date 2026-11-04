@@ -24,6 +24,10 @@ let
       protocol = "RDP";
       server = "devbox";
       username = "omer";
+      # Remmina reads the password from the Secret Service only when this key
+      # is "."; without it, it asks at every connect.
+      # https://gitlab.com/Remmina/Remmina/-/blob/v1.4.43/src/remmina_file.c#L427
+      password = ".";
       scale = remminaDynamicResolution;
       drive = config.home.homeDirectory;
       sound = "local";

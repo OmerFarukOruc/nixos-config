@@ -490,15 +490,22 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
 - **First use.** The workstations have Remmina
   (`home-manager/profiles/workstation.nix`): open its `devbox` profile and log
   in as omer with omer's password, the one `sudo` asks for on devbox (the hash
-  is in `secrets/devbox.yaml`). A Home Manager step writes that profile with
-  dynamic resolution, so the desktop follows the window size. Without it, a
-  quick connect from nixos-desktop on 2026-10-30 kept the size Remmina read
-  from its window before the window mapped, 644x480. The profile shares the
-  PC's home folder, which appears on devbox under `~/thinclient_drives` while
-  the session runs, where devbox's agents can read and write it too, and asks
-  for the session's sound (the Audio bullet below). The step also sets
-  Remmina's RDP keyboard layout to Turkish Q. Remmina's default colour depth
-  ("Automatic") gets H.264 from xrdp.
+  is in `secrets/devbox.yaml`). Turn on Save password at that login, and
+  Remmina keeps the password in the session's Secret Service and connects
+  without asking from then on. It does so only when the Secret Service has the
+  `default` alias, which step 2 of `home-manager/README.md` checks; without
+  it, Remmina keeps the password in the profile file, and the next Home
+  Manager switch replaces it. A Home Manager step writes the profile with
+  `password=.`, the value that tells Remmina to read the Secret Service, so a
+  profile the step writes anew still finds a password stored earlier. The
+  step also turns on dynamic resolution, so the desktop follows the window
+  size. Without it, a quick connect from nixos-desktop on 2026-10-30 kept the
+  size Remmina read from its window before the window mapped, 644x480. The
+  profile shares the PC's home folder, which appears on devbox under
+  `~/thinclient_drives` while the session runs, where devbox's agents can read
+  and write it too, and asks for the session's sound (the Audio bullet below).
+  The step also sets Remmina's RDP keyboard layout to Turkish Q. Remmina's
+  default colour depth ("Automatic") gets H.264 from xrdp.
 - **Scale.** Remmina on Wayland is drawn at a whole-number scale that KWin
   resamples to a fractional Plasma scale, so devbox's desktop looks soft.
   Under Plasma, Remmina's wrapper starts it on X11 at the whole-number scale
@@ -517,8 +524,9 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
 - **Remmina check.** A run in a NixOS VM on 2026-10-28 with
   Remmina 1.4.43 as the client showed the `tr` layout, H.264, ı, ş and ğ, and
   pointer moves that reach the desktop at once. sesman refuses root logins,
-  which it allows by default. The XFCE screensaver is off, because the login
-  and every reconnect ask for the password already.
+  which it allows by default. The XFCE screensaver is off, because it would
+  lock the Cursor worker's session, and xrdp checks the password at every
+  login and reconnect.
 - **Logs.** xrdp's logs go to the journal, where the NixOS module sends them to
   `/dev/null`, and `journalUnits` lists `xrdp.service` and
   `xrdp-sesman.service`.
