@@ -39,11 +39,11 @@
 }:
 stdenv.mkDerivation rec {
   pname = "grok-bot";
-  version = "0.78.1";
+  version = "0.78.4";
 
   src = fetchurl {
     url = "https://downloads.cursor.com/aptrepo/pool/grok-bot/g/gr/grok-bot_${version}_amd64.deb";
-    hash = "sha256-VdKjTP/3YjQiUf+psTIacPCLYD8if4huGLLBxec97R0=";
+    hash = "sha256-kJMPFOewJncg6Ne+D0DFwwEiQJQK50pSq1jspe4s8ao=";
   };
 
   nativeBuildInputs = [
