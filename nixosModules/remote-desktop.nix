@@ -11,6 +11,23 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
     # never started listening. KMS needs no approval. With settings set, the
     # web UI can no longer change the configuration, but pairing still works.
     settings.capture = "kms";
+    applications.apps = [
+      {
+        name = "Desktop";
+        image-path = "desktop.png";
+      }
+    ]
+    ++ lib.optional config.programs.steam.enable {
+      name = "Steam Big Picture";
+      image-path = "steam.png";
+      detached = [ "setsid steam steam://open/bigpicture" ];
+      prep-cmd = [
+        {
+          do = "";
+          undo = "setsid steam steam://close/bigpicture";
+        }
+      ];
+    };
   };
   # A restart from the tray menu or web UI exits with 75 (overlays/sunshine.nix).
   # systemd starts Sunshine again through the capability wrapper, and the unit

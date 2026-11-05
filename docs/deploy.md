@@ -166,10 +166,11 @@ hardware and services work after activation. To read the last deployed source on
    scheme parser with `yq`, the `theme-contrast` check, which runs
    `scripts/lib/theme-contrast.py` on nixos-rog's theme packs, and the
    `patches` check (`ci/patches.nix`), which unpacks each nixpkgs package that
-   this repository patches and applies its patches. The `patches` check fails
-   when an overlay in `overlays/` patches a package it does not list, so a
-   nixpkgs move after which a patch no longer applies fails without a build of
-   the package.
+   this repository patches and applies its patches, and builds each package
+   whose overlay edits it in `preFixup` or `postFixup`. The `patches` check
+   fails when an overlay in `overlays/` patches a package it does not list, so
+   a nixpkgs move after which a patch no longer applies fails without a build
+   of the whole system.
 6. `workstation builds`: builds each workstation's system from those
    `drvPath`s. `--evaluate-only` skips it, as the `update` workflow does; every
    other check runs under that flag too.

@@ -213,7 +213,7 @@ Seven services share the laptop's power settings. Each setting has one owner:
 | power-saver on low battery | `machines/nixos-rog/low-battery.nix` | `oruc-low-battery` |
 | battery charge limit (80%) | `machines/nixos-rog/asus.nix` | asusd, when it starts |
 | NVIDIA Dynamic Boost | `machines/nixos-rog/graphics.nix` | nvidia-powerd, which asusd runs on AC |
-| scheduler power mode | `machines/nixos-rog/configuration.nix` | scx_lavd, fixed at `--performance` |
+| scheduler power mode | `nixosModules/lavd-scheduler.nix` | scx_lavd, fixed at `--performance` |
 
 Edit the fan curve numbers in `machines/nixos-rog/fan-curves.json`. `asus.nix`
 only reads that file and hands each curve to asusd.
@@ -358,7 +358,7 @@ architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when anot
   `energy_performance_available_preferences` lists only `performance` (read
   2026-10-13).
 - scx_lavd runs in its performance mode in every profile
-  (`services.scx` in `machines/nixos-rog/configuration.nix`). Its balanced and
+  (`services.scx` in `nixosModules/lavd-scheduler.nix`). Its balanced and
   powersave modes use core compaction (packing tasks onto as few cores as the
   load needs), and with `--autopower` the scheduler picked powersave in
   power-saver, where the pointer lagged. On 2026-10-18 in power-saver, a

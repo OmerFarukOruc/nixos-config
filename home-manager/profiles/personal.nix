@@ -30,6 +30,7 @@ in
     ../modules/deskflow.nix
     ../modules/agent-cli.nix
     ../modules/app-themes.nix
+    ../modules/gaming.nix
     ../modules/playwright.nix
   ];
 

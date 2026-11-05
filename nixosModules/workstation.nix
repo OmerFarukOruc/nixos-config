@@ -3,6 +3,8 @@
     ./brave.nix
     ./chromium.nix
     ./docker.nix
+    ./gaming.nix
+    ./lavd-scheduler.nix
     ./connectivity.nix
     ./login.nix
     ./mission-center.nix

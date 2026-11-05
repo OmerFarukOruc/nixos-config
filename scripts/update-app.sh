@@ -16,6 +16,11 @@
 #                         With a passthru.depsBun line that outputHash also
 #                         changes with nixpkgs' bun, so the script learns it
 #                         again when bun is not that version.
+#                         With a passthru.releaseTagPrefix line, the release
+#                         is tagged that prefix and a dated Proton version,
+#                         such as cachyos-11.0-20261015-slr, and the hash
+#                         comes from the .sha512sum file published beside the
+#                         url's .tar.xz asset.
 # A package whose url also embeds a build ID names it in a buildId line, and
 # the script moves it to the build ID in the feed's URL for the new version.
 # Prints the new version, or nothing when the package is already current or
@@ -29,10 +34,19 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 file=$root/pkgs/$name.nix
 
 attr() { sed -n "s/^  $1 = \"\(.*\)\";$/\1/p" "$file"; }
+url_for() {
+  local url
+  url=$(sed -n 's|^    url = "\(.*\)";$|\1|p' "$file")
+  # shellcheck disable=SC2016 # the Nix ${version} and ${buildId}, not shell expansions
+  url=${url//'${version}'/$1}
+  # shellcheck disable=SC2016
+  printf '%s\n' "${url//'${buildId}'/${2:-}}"
+}
 index=$(attr passthru.aptIndex)
 feed=$(attr passthru.releaseFeed)
 npm=$(attr passthru.npmPackage)
 github=$(attr passthru.githubRepo)
+prefix=$(attr passthru.releaseTagPrefix)
 wrapper=$(dirname "$file")/$name
 current=$(attr version)
 build=$(attr buildId)
@@ -57,10 +71,20 @@ elif [[ -n $github ]]; then
   auth=()
   token=${GITHUB_TOKEN:-${GH_TOKEN:-}}
   [[ -n $token ]] && auth=(-H "Authorization: Bearer $token")
+  pattern='^v[0-9][0-9.]*$'
+  [[ -n $prefix ]] && pattern="^${prefix}[0-9]+\\.[0-9]+-[0-9]{8}(\\.[0-9]+)?(-slr)?\$"
   latest=$(curl -fsSL --max-time 20 --retry 2 "${auth[@]}" "https://api.github.com/repos/$github/releases?per_page=30" |
-    jq -r '.[] | select(.draft | not) | select(.prerelease | not) | .tag_name | select(test("^v[0-9][0-9.]*$"))' |
-    sed 's/^v//' | sort -V | tail -n 1) || latest=
-  sha=$([[ -n $latest ]] && nix flake prefetch --json "https://github.com/$github/archive/refs/tags/v$latest.tar.gz" | jq -r .hash) || sha=
+    jq -r --arg pattern "$pattern" --arg prefix "${prefix:-v}" '.[] | select(.draft | not) | select(.prerelease | not) | .tag_name | select(test($pattern)) | ltrimstr($prefix)' |
+    sort -V | tail -n 1) || latest=
+  if [[ -z $latest ]]; then
+    sha=
+  elif [[ -n $prefix ]]; then
+    asset=$(url_for "$latest")
+    hex=$(curl -fsSL --max-time 20 --retry 2 "${asset%.tar.xz}.sha512sum" | cut -d ' ' -f 1) || hex=
+    sha=$([[ -n $hex ]] && nix hash convert --hash-algo sha512 --to sri "$hex") || sha=
+  else
+    sha=$(nix flake prefetch --json "https://github.com/$github/archive/refs/tags/v$latest.tar.gz" | jq -r .hash) || sha=
+  fi
 elif [[ -n $npm ]]; then
   meta=$(curl -fsSL --max-time 20 --retry 2 "https://registry.npmjs.org/$npm") || meta=
   latest=$(jq -r '."dist-tags".latest // empty' <<<"$meta" 2>/dev/null) || latest=
@@ -74,11 +98,7 @@ else
     url=$(awk -v path="$path" '$1 == "-" && $2 == "url:" { n = split($3, part, "/"); if (part[n] == path) { print $3; exit } }' <<<"$yml")
     segment='/[^/]*-([0-9]+)/'
     [[ $url =~ $segment ]] && newbuild=${BASH_REMATCH[1]}
-    want=$(sed -n 's|^    url = "\(.*\)";$|\1|p' "$file")
-    # shellcheck disable=SC2016 # the Nix ${version} and ${buildId}, not shell expansions
-    want=${want//'${version}'/$latest}
-    # shellcheck disable=SC2016
-    want=${want//'${buildId}'/$newbuild}
+    want=$(url_for "$latest" "$newbuild")
     if [[ -n $latest && -z $url ]]; then
       echo "$feed lists no URL for $path" >&2
       exit 1
@@ -87,9 +107,8 @@ else
       exit 1
     fi
   else
-    asset=$(sed -n 's|^    url = ".*/\(.*\)";$|\1|p' "$file")
-    # shellcheck disable=SC2016 # the Nix ${version}, not a shell expansion
-    asset=${asset//'${version}'/$latest}
+    asset=$(url_for "$latest")
+    asset=${asset##*/}
     if [[ -n $latest && $path != "$asset" ]]; then
       echo "$feed points at $path, not $asset" >&2
       exit 1

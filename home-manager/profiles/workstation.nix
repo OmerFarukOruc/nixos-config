@@ -127,7 +127,6 @@ in
       kdePackages.dolphin
       kdePackages.kio-extras
       mission-center
-      moonlight-qt
       telegram-desktop
       wl-clipboard
       # keep-sorted end

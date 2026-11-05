@@ -22,8 +22,9 @@ again. Its run summary lists the moves and the
 warnings. `gh workflow run update.yml` starts it now. It builds no host's
 system. Besides each host's unit files and the theme checks, it builds the
 `patches` check (`ci/patches.nix`), which unpacks each package that this
-repository patches and applies its patches, so a move after which a patch no
-longer applies stays out. Any other move that evaluates but fails to build
+repository patches and applies its patches, and builds each package whose
+overlay edits it after the build (GE-Proton's `proton` script), so a move
+after which a patch or edit no longer applies stays out. Any other move that evaluates but fails to build
 reaches the hosts, which keep their system and show "Update failed"
 ([Updater](workstations.md#updater)).
 Such a move also stops every later push, because the pre-push hook builds each
@@ -243,6 +244,7 @@ repository's package record names SpaceXAI as the vendor.
 | Grok Bot | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 | airpods-tui, herdr web UI, KVitals, linctl, Smart Video Wallpaper | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the dependencies' hash: `cargoHash` for airpods-tui, `vendorHash` for linctl, and the `outputHash` of the Bun dependencies for the herdr web UI. `passthru.depsBun` holds the bun version that produced the herdr web UI's hash, so `update-app.sh` learns the hash again when nixpkgs' bun differs |
+| Proton-CachyOS, Proton Wineland | the newest GitHub release in `passthru.githubRepo` whose tag is `passthru.releaseTagPrefix` and a dated Proton version (`cachyos-11.0-20261015-slr`, `wineland-11.0-20261103`); other tags of those repositories, such as `wineland-bleeding-edge-*` or `cachyos-wineland-*`, are skipped. `update-app.sh` takes the hash from the `.sha512sum` file beside the `x86_64_v3` tarball. GE-Proton comes from nixpkgs as `proton-ge-bin` |
 | cf, impeccable, Oracle, OpenChamber's web server | the `latest` dist-tag of the npm package in `passthru.npmPackage`; for cf, Oracle and `openchamber-web`, whose `pkgs/NAME/` holds a wrapper `package.json` and its lockfile, `update-app.sh` writes both again and sets `npmDepsHash` |
 
 The wrapper `package.json` of cf depends on cf, because cf has only beta releases

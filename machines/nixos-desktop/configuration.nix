@@ -10,6 +10,7 @@
     ../../nixosModules/warp.nix
     ../../nixosModules/zapret2.nix
     ./fans.nix
+    ./gaming.nix
     ./gpu.nix
     ./openrgb.nix
   ];

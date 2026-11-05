@@ -8,6 +8,9 @@ let
     inherit (rog) sunshine;
     vscode = nixosConfigurations.nixos-rog.config.home-manager.users.oruc.programs.vscode.package;
   };
+  fixedUp = {
+    proton-ge-bin = rog.proton-ge-bin.steamcompattool;
+  };
   patchNeedsTools = [ "vscode" ];
   patchOnly =
     name: pkg:
@@ -28,7 +31,7 @@ let
         lib.hasSuffix ".nix" file
         &&
           builtins.length (
-            builtins.split "(pre|post)(Unpack|Patch)|patches = |fetchpatch|\\.(patch|diff)([^a-z_]|$)" (
+            builtins.split "(pre|post)(Unpack|Patch|Fixup)|patches = |fetchpatch|\\.(patch|diff)([^a-z_]|$)" (
               builtins.readFile file
             )
           ) > 1
@@ -46,12 +49,12 @@ let
     let
       name = lib.removeSuffix ".nix" file;
     in
-    !(patched ? ${name} || unchecked ? ${name})
+    !(patched ? ${name} || fixedUp ? ${name} || unchecked ? ${name})
   ) (map baseNameOf patchingFiles);
 in
 {
   patches =
     assert lib.assertMsg (unlisted == [ ])
-      "ci/patches.nix: list the package that ${lib.concatStringsSep ", " unlisted} patches in `patched`, or the file in `unchecked` with the reason.";
-    rog.linkFarm "patches" (builtins.mapAttrs patchOnly patched);
+      "ci/patches.nix: list the package that ${lib.concatStringsSep ", " unlisted} patches in `patched`, a package it edits after the build in `fixedUp`, or the file in `unchecked` with the reason.";
+    rog.linkFarm "patches" (builtins.mapAttrs patchOnly patched // fixedUp);
 }

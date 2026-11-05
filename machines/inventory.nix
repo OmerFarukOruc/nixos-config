@@ -56,6 +56,8 @@ let
         docker = true;
         diskSelfTests = false;
         audioEffects = true;
+        gaming = true;
+        lavdScheduler = true;
       };
     };
 
@@ -85,6 +87,8 @@ let
         docker = true;
         diskSelfTests = true;
         alwaysOn = true;
+        gaming = true;
+        lavdScheduler = true;
       };
     };
 

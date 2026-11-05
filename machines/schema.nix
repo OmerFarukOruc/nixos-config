@@ -183,6 +183,8 @@ let
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
           alwaysOn = mkFeature "Never sleep, and reboot after a panic or a hang (nixosModules/always-on.nix). It does not mean the machine stays powered on.";
           boxBrowser = mkFeature "Run a signed-in Chromium on a VNC display for coding agents, with the box-browser command (nixosModules/box-browser.nix).";
+          gaming = mkFeature "Run Steam with the Proton builds, ntsync and the themed MangoHud (nixosModules/gaming.nix, home-manager/modules/gaming.nix).";
+          lavdScheduler = mkFeature "Run the scx_lavd sched_ext scheduler in its performance mode (nixosModules/lavd-scheduler.nix).";
         };
       };
       description = "Explicit feature switches consumed by self-gating modules.";

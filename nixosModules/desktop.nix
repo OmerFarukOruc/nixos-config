@@ -65,6 +65,10 @@ in
 
       qt.enable = true;
       hardware.graphics.enable = true;
+      programs.moonlight-qt = {
+        enable = true;
+        capSysNice = true;
+      };
       users.users.${cfg.user}.extraGroups = [ "video" ];
       console.colors = systemThemeValues.consoleColors config.scheme;
     })

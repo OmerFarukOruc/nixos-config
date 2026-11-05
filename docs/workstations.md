@@ -4,6 +4,7 @@
 - [Failures and notifications](#failures-and-notifications)
 - [Heavy commands](#heavy-commands)
 - [Switch the scheme](#switch-the-scheme)
+- [Gaming](#gaming)
 
 These procedures hold for more than one PC, and each section names the hosts it
 covers. Facts that hold only for the laptop are in [nixos-rog.md](nixos-rog.md).
@@ -260,3 +261,65 @@ checks on the built pack before each push.
 
 A scheme that tinted-theming lacks goes in `assets/schemes`
 ([architecture.md](architecture.md#theme)).
+
+## Gaming
+
+`features.gaming` turns this on for nixos-desktop and nixos-rog
+(`nixosModules/gaming.nix`, `machines/<host>/gaming.nix`,
+`home-manager/modules/gaming.nix`).
+
+- Steam offers GE-Proton (`proton-ge-bin` from nixpkgs), Proton-CachyOS
+  (`pkgs/proton-cachyos.nix`) and Proton-Wineland (`pkgs/proton-wineland.nix`)
+  besides Valve's own Proton. All three carry the wine.inf fix in
+  `pkgs/proton-tarball/reapply-wine-inf.py`, which applies a new release's
+  `wine.inf` to a prefix an older release made; nixpkgs lacks it
+  (NixOS/nixpkgs#581490). The update workflow moves the two local packages
+  ([Apps](updates.md#apps)).
+- Proton uses ntsync once the `ntsync` module has made `/dev/ntsync`.
+- The login limit `nice -8` lets wineserver raise game threads.
+- nixos-desktop's Steam sets `PROTON_FSR4_UPGRADE=1`, which upgrades FSR 3.1
+  games to FSR 4 on the RX 7900 XTX, and `MANGOHUD=1`. gamescope is installed
+  without `capSysNice`, which breaks it inside Steam (NixOS/nixpkgs#351516).
+- nixos-rog's Steam runs Vulkan on the Radeon (`VK_LOADER_DRIVERS_SELECT=*radeon*`),
+  so the RTX 4070 sleeps. `game-nvidia %command%` runs a game on the RTX with
+  `PROTON_DLSS_UPGRADE=1` and the HUD pinned to the RTX. A game started on AC
+  holds the Performance profile until it exits, also when AC is unplugged
+  meanwhile.
+
+### Launch options
+
+Type these in a game's Steam properties. None of them suits a game with
+anti-cheat or an online game; those stay on Valve's Proton without options.
+
+| Option | Use |
+| --- | --- |
+| `game-nvidia %command%` | nixos-rog, a game for the RTX 4070 |
+| `mangohud %command%` | nixos-rog, the HUD on a Radeon game |
+| `PROTON_FSR4_INDICATOR=1 %command%` | the FSR 4 watermark, to see that the upgrade works |
+| `PROTON_USE_OPTISCALER=1 %command%` | GE-Proton, Proton-CachyOS or Wineland, an offline game that offers DLSS 2+, FSR 2+ or XeSS |
+| `ENABLE_LAYER_MESA_ANTI_LAG=1 %command%` | nixos-desktop, a game with Anti-Lag 2 |
+| `PROTON_DXVK_LOWLATENCY=1 %command%` | Proton-CachyOS or Wineland, a DirectX 9 to 11 game without frame generation |
+| `PROTON_VKD3D_LOWLATENCY=1 %command%` | Proton-CachyOS, a DirectX 12 game without frame generation |
+| `MANGOHUD=0 gamescope --mangoapp -w <width> -h <height> -f -F fsr -- %command%` | nixos-desktop, the game at a lower size scaled up with FSR 1 |
+
+The FSR 4 and DLSS options download the DLL at a game's first start; the
+version follows the manifest that GE-Proton's README names.
+
+### MangoHud
+
+`home-manager/modules/gaming.nix` writes `~/.config/MangoHud/MangoHud.conf`
+from a theme renderer (colors, font, position, the preset order and, on
+nixos-rog, `pci_dev` of the Radeon), and `~/.config/MangoHud/presets.conf` with
+the rows of each layout. On nixos-rog, `game-nvidia` points MangoHud at
+`MangoHud-nvidia.conf`, the same file with the RTX's `pci_dev`, through
+`MANGOHUD_CONFIGFILE`. `MANGOHUD_CONFIG=read_cfg` would draw every preset row
+twice in MangoHud 0.8.4, and that variable splits a PCI address at its colons.
+
+The HUD starts on full detail; Right Shift+F10 moves to the panel layout, then
+the compact one. Rows live only in `presets.conf`, because MangoHud applies
+`MangoHud.conf` after the preset and its row settings would win in every
+layout. Use GOverlay only to preview other settings: Home Manager owns these
+files, so copy a setting you keep into the module.
+
+The extra rows each read one sysfs file: EPP and the sched_ext scheduler on
+both PCs, and the platform profile and AC on nixos-rog only.
