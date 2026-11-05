@@ -27,6 +27,7 @@ in
     pkgs.awscli2
     (pkgs.callPackage ../../pkgs/cf.nix { })
     pkgs.defuddle
+    pkgs.devenv
     pkgs.glow
     (pkgs.callPackage ../../pkgs/impeccable.nix { })
     pkgs.openssl
