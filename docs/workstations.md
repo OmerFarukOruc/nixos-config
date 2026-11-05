@@ -112,6 +112,19 @@ and shows a critical "Update failed" popup through systembus-notify, which
 `nixosModules/monitoring.nix` turns on. The first `error:` line is in
 `journalctl -u nixos-upgrade`. `upgrade` tries that `main` again.
 
+A desktop app keeps running the store path it started from, so an update that
+a switch installs reaches it only after the app restarts.
+`home-manager/modules/stale-apps.nix` starts the `stale-apps` user service at
+every Home Manager activation. It looks at the apps that have a `.desktop` file
+in the user profile, and names each one whose running process uses a store
+path that an earlier system generation's user profile held and the current one
+no longer holds, in one "Restart to use the update" popup. That store path is
+the process's executable, or for a process of `bash` or `electron`, a store
+path in its arguments, as in `electron /nix/store/<app>/…/app.asar`. It names an old version once:
+`~/.local/state/stale-apps/notified` lists the store paths it already named,
+and each run rewrites that list with the old versions still running.
+`journalctl --user -u stale-apps` shows its runs.
+
 ## Heavy commands
 
 `heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog

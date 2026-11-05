@@ -72,6 +72,7 @@ in
     ../modules/airpods.nix
     ../modules/chat-themes.nix
     ../modules/spicetify.nix
+    ../modules/stale-apps.nix
   ];
 
   xdg.mimeApps.defaultApplications = {
