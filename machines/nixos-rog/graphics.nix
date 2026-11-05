@@ -77,4 +77,11 @@ in
     "nvidia.NVreg_TemporaryFilePath=/var/tmp"
     "nvidia.NVreg_EnableS0ixPowerManagement=1"
   ];
+
+  # The HDR Plasma session keeps the panel's backlight at 100 of 400000, so
+  # systemd-backlight saves 100 at shutdown. Its default floor of 1% leaves the
+  # login screen black on this OLED panel.
+  services.udev.extraRules = ''
+    ACTION!="remove", SUBSYSTEM=="backlight", KERNEL=="amdgpu_bl*", ENV{ID_BACKLIGHT_CLAMP}="30%%"
+  '';
 }
