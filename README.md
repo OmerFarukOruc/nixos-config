@@ -11,7 +11,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 
 [![NixOS unstable](https://img.shields.io/badge/NixOS-unstable-5277C3?style=flat-square&logo=nixos&logoColor=white)](https://github.com/NixOS/nixpkgs/tree/nixos-unstable)
 
-[Hosts](#hosts) · [Stack](#stack) · [Highlights](#highlights) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
+[Hosts](#hosts) · [Stack](#stack) · [Highlights](#highlights) · [Gaming](#gaming) · [Layout](#layout) · [Everyday commands](#everyday-commands) · [Docs](#docs) · [Built on](#built-on)
 
 <img src="assets/screenshots/nixos-rog-plasma-fastfetch.webp" width="90%" alt="nixos-rog running KDE Plasma with fastfetch in Ghostty">
 
@@ -53,9 +53,9 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Secrets | sops-nix with age on nixos-desktop, nixos-rog and devbox |
 | DNS | NextDNS over TLS and Tailscale MagicDNS on nixos-desktop and nixos-rog |
 | DPI bypass | zapret2 for Discord, and Cloudflare WARP launchers for Vesktop and Brave as its fallback, on nixos-desktop and nixos-rog ([DPI bypass and the WARP proxy](docs/architecture.md#dpi-bypass-and-the-warp-proxy)) |
-| Gaming | Steam with GE-Proton, Proton-CachyOS and Proton-Wineland, ntsync, FSR 4 on nixos-desktop, `game-nvidia` on nixos-rog, and a themed MangoHud ([Gaming](docs/workstations.md#gaming)) |
+| Gaming | Steam with GE-Proton, Proton-CachyOS and Proton-Wineland, FSR 4, DLSS and a themed MangoHud on nixos-desktop and nixos-rog ([Gaming](#gaming)) |
 | Per-app route abroad | IPTVnator through a network namespace whose Tailscale node exits at devbox, on nixos-desktop and nixos-rog ([Apps through devbox](docs/nixos-rog.md#apps-through-devbox)) |
-| Remote access | Tailscale, and Sunshine on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
+| Remote access | Tailscale, and Sunshine and Moonlight on nixos-desktop and nixos-rog; on devbox an XFCE desktop through xrdp, which the workstations reach with Remmina |
 | Binary cache | `cache.lantian.pub` for the PCs' kernel and `cache.numtide.com` |
 
 ## Highlights
@@ -114,6 +114,58 @@ This is my own setup, not a framework. Read it and copy the parts you need.
   tailnet names go to Tailscale's MagicDNS. A `captive-dns` switch handles Wi-Fi
   sign-in pages.
   [`nixosModules/nextdns.nix`](nixosModules/nextdns.nix)
+
+## Gaming
+
+<div align="center">
+
+**🎮 Steam with three extra Proton builds on nixos-desktop and nixos-rog,<br>
+each game on the right GPU, with a HUD in the desktop's colors.**
+
+</div>
+
+`features.gaming` in [`machines/inventory.nix`](machines/inventory.nix) turns it
+on; [`nixosModules/gaming.nix`](nixosModules/gaming.nix),
+[`machines/nixos-desktop/gaming.nix`](machines/nixos-desktop/gaming.nix),
+[`machines/nixos-rog/gaming.nix`](machines/nixos-rog/gaming.nix) and
+[`home-manager/modules/gaming.nix`](home-manager/modules/gaming.nix) hold it.
+
+| | nixos-desktop · RX 7900 XTX | nixos-rog · RTX 4070 + Radeon 890M |
+| --- | --- | --- |
+| 🍷 **Proton** | GE-Proton, Proton-CachyOS and Proton-Wineland, with ntsync | the same |
+| ✨ **Upscaling** | FSR 3.1 games upgraded to FSR 4 | DLSS upgraded in games on the RTX |
+| 🎯 **GPU** | 399 W, VRAM 2714 MHz and -50 mV through LACT | Steam on the Radeon, so the RTX sleeps; `game-nvidia %command%` for the RTX |
+| 📊 **HUD** | MangoHud on every Steam game | `mangohud %command%`, and on with `game-nvidia` |
+| ⚡ **CPU** | the scx_lavd scheduler in performance mode | scx_lavd, and the Performance profile while a `game-nvidia` game runs on AC |
+| 🔍 **Scaling** | gamescope with FSR 1 | not set up |
+| 📡 **Streaming** | Sunshine with Desktop and Steam Big Picture, and Moonlight | the same |
+
+```text
+nixos-rog   Steam ------------------> Radeon 890M   the RTX 4070 stays asleep
+            game-nvidia %command% --> RTX 4070      DLSS upgrade, HUD on the RTX,
+                                                    Performance profile on AC
+```
+
+- **🍷 Which Proton.** Proton-CachyOS suits most games. Proton-Wineland handles
+  launchers, fullscreen and Alt+Tab better under Wayland. GE-Proton is the fallback,
+  and games with anti-cheat stay on Valve's Proton. All three apply a new
+  release's `wine.inf` to a prefix an older release made, a fix nixpkgs still
+  lacks ([NixOS/nixpkgs#581490](https://github.com/NixOS/nixpkgs/pull/581490)).
+- **📊 One HUD, three layouts.** MangoHud takes the Base16 scheme's colors and
+  starts on full detail: frame times, GPU and CPU clocks, temperatures and
+  power, ntsync, the EPP and the scheduler. Right Shift+F10 moves to the panel
+  layout, then the compact one.
+- **⚡ A game gets the fast profile.** On nixos-rog, `game-nvidia` holds the
+  Performance profile while the game runs on AC, and power-profiles-daemon
+  returns to the profile picked before it
+  ([`overlays/power-profiles-daemon.nix`](overlays/power-profiles-daemon.nix)).
+- **📡 The PCs stream to the phone.** Sunshine offers the desktop and Steam
+  Big Picture over Tailscale to Moonlight
+  ([`nixosModules/remote-desktop.nix`](nixosModules/remote-desktop.nix)).
+
+[Gaming](docs/workstations.md#gaming) lists the Steam launch options and the
+HUD's files, and [nixos-desktop GPU](docs/architecture.md#nixos-desktop-gpu)
+how the RX 7900 XTX tune is kept.
 
 ## Layout
 
@@ -207,12 +259,12 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 
 | Guide | Covers |
 | --- | --- |
-| [Architecture](docs/architecture.md) | the inventory, login sessions, theme and Home Manager |
+| [Architecture](docs/architecture.md) | the inventory, login sessions, theme, Home Manager and the desktop GPU |
 | [Deploy](docs/deploy.md) | evaluation checks, the deploy and rollback steps, exit codes, release records |
 | [Box browser](docs/box-browser.md) | the shared signed-in Chromium for coding agents, the `box-view` command that opens it and its wrapper command |
 | [Updates](docs/updates.md) | the update by hand, the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
-| [Workstations](docs/workstations.md) | the hourly updater and its failures, heavy commands, and switching the scheme on every PC |
+| [Workstations](docs/workstations.md) | the hourly updater and its failures, heavy commands, switching the scheme on every PC, and gaming |
 | [nixos-rog](docs/nixos-rog.md) | secrets, DNS, apps through devbox, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
@@ -246,3 +298,12 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 | [hushmic-nix](https://github.com/Fovty/hushmic-nix) | the denoised microphone |
 | [nix-index-database](https://github.com/nix-community/nix-index-database) | comma and command-not-found |
 | [llm-agents.nix](https://github.com/numtide/llm-agents.nix) | coding agent CLIs |
+| [GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom) | the Proton fallback |
+| [Proton-CachyOS](https://github.com/CachyOS/proton-cachyos) | the Proton for most games |
+| [Proton-Wineland](https://github.com/nanomatters/proton-salkim) | the Proton for launchers and Wayland windows |
+| [keenanweaver/nix-config](https://github.com/keenanweaver/nix-config) | the `wine.inf` fix of the Proton builds |
+| [MangoHud](https://github.com/flightlessmango/MangoHud) | the game HUD |
+| [LACT](https://github.com/ilya-zlobintsev/LACT) | the RX 7900 XTX's fan, power and clocks |
+| [scx](https://github.com/sched-ext/scx) | the scx_lavd scheduler |
+| [Sunshine](https://github.com/LizardByte/Sunshine) | streaming the PCs |
+| [Moonlight](https://github.com/moonlight-stream/moonlight-qt) | the streaming client |
