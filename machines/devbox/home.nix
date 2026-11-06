@@ -222,6 +222,29 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
+  systemd.user.services.statuslantern-audit = {
+    Unit.Description = "Start the daily Status Lantern telemetry audit agent";
+    Service = {
+      Type = "oneshot";
+      WorkingDirectory = "%h/Desktop/workspace/statuslantern";
+      Environment = [
+        "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin"
+        "STATUSLANTERN_AUDIT_AGENT=claude"
+      ];
+      ExecStart = "${lib.getExe pkgs.devenv} shell -- audit-start";
+      TimeoutStartSec = "5min";
+    };
+  };
+  systemd.user.timers.statuslantern-audit = {
+    Unit.Description = "Run the Status Lantern telemetry audit every morning";
+    Timer = {
+      OnCalendar = "*-*-* 06:00 Europe/Istanbul";
+      RandomizedDelaySec = "5m";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   # /etc/zshenv replaces a unit's PATH, so every zsh, interactive or not, gets
   # the CLIs that installers put in the home: OpenCode's own update in
   # ~/.opencode/bin, and ~/.local/bin.
