@@ -6,7 +6,7 @@
 }:
 buildNpmPackage {
   pname = "oracle";
-  version = "0.22.2";
+  version = "0.23.0";
 
   src = lib.fileset.toSource {
     root = ./oracle;
@@ -17,7 +17,7 @@ buildNpmPackage {
   };
 
   nodejs = nodejs_26;
-  npmDepsHash = "sha256-BWwplZuoCF9o8JblJH3pZqlSsiEkPogBzvy83YFjKlc=";
+  npmDepsHash = "sha256-pNFH4iQRjFUQ0DmfEWw0fZB2AMnAa+LR61sfvaKxxvg=";
   dontNpmBuild = true;
 
   nativeBuildInputs = [ makeWrapper ];
