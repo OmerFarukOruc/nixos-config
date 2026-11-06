@@ -17,12 +17,8 @@ in
       "0x" + lib.toLower (lib.toHexString (lib.bitOr kernelDefaultPpFeatureMask ppOverdriveBit));
   };
 
-  # LACT owns the GPU fan. Power, clocks and voltage stay stock. The file is
-  # YAML, not services.lact.settings, because the fan curve's keys must be
-  # numbers and a Nix attribute name is always a string. /etc/lact/config.yaml
-  # is read-only, so the LACT window cannot save: its Apply changes the GPU
-  # until lactd restarts, and lactd logs "Could not write config". To keep a
-  # value, put it in lact.yaml and deploy.
+  # The file is YAML, not services.lact.settings, because the fan curve's keys
+  # must be numbers and a Nix attribute name is always a string.
   services.lact.enable = true;
   environment.etc."lact/config.yaml".source = ./lact.yaml;
   systemd.services.lactd.restartTriggers = [ ./lact.yaml ];

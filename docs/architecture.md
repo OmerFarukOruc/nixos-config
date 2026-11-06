@@ -8,6 +8,7 @@
 - [Home Manager](#home-manager)
 - [Failure popups](#failure-popups)
 - [DPI bypass and the WARP proxy](#dpi-bypass-and-the-warp-proxy)
+- [nixos-desktop GPU](#nixos-desktop-gpu)
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
 
 The flake builds `nixos-desktop`, `nixos-latitude`, `nixos-rog` and `devbox`.
@@ -725,6 +726,19 @@ register a new device; that step was not run.
 
 `sudo systemctl status nfqws2@default usque` shows whether either service runs,
 and both raise the failure popup ([Failure popups](#failure-popups)).
+
+## nixos-desktop GPU
+
+LACT (`services.lact` in `machines/nixos-desktop/gpu.nix`) runs the RX 7900
+XTX's fan curve, power limit, VRAM clock and voltage offset from
+`machines/nixos-desktop/lact.yaml`, which NixOS installs read-only as
+`/etc/lact/config.yaml`. The LACT window therefore cannot save: its Apply
+changes the GPU until lactd reloads the config, at the next restart or deploy,
+and lactd logs `Could not write config: Read-only file system`. To keep a
+value, write it in `lact.yaml` and deploy. The card reports a 402 W
+`power1_cap_max` but keeps 399 W for any higher write. When the LACT window
+changed the VRAM clock, the screen went black for a moment, with no GPU error
+in the kernel log.
 
 ## nixos-desktop case fans
 

@@ -24,5 +24,9 @@ gpus:
       zero_rpm: false
       zero_rpm_threshold: 25
     performance_level: auto
+    power_cap: 399.0
+    # sysfs MHz; LACT 0.10.1 shows twice this for GDDR6 (2714)
+    max_memory_clock: 1357
+    voltage_offset: -50
 current_profile: null
 auto_switch_profiles: false
