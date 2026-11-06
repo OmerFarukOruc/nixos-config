@@ -139,13 +139,22 @@ let
   ++ sysfsRow "Scheduler" "cut -d_ -f1,2 /sys/kernel/sched_ext/root/ops 2>/dev/null || echo eevdf"
   ++ lib.optionals laptop (sysfsRow "AC" "cat /sys/class/power_supply/AC*/online");
 
-  presets = lib.concatStringsSep "\n" [
-    (preset 10 compact)
-    (preset 11 panel)
-    (preset 12 fullDetail)
+  withoutRows = names: lib.filter (line: !lib.elem (lib.head (lib.splitString "=" line)) names);
+  presets =
+    missingGpuSensors:
+    lib.concatStringsSep "\n" [
+      (preset 10 compact)
+      (preset 11 panel)
+      (preset 12 (withoutRows missingGpuSensors fullDetail))
+    ];
+  radeonMissingSensors = lib.optionals hybrid [
+    "gpu_junction_temp"
+    "gpu_mem_temp"
+    "gpu_fan"
   ];
 
   nvidiaConfig = ".config/MangoHud/MangoHud-nvidia.conf";
+  nvidiaPresets = "MangoHud/presets-nvidia.conf";
   gameNvidia = pkgs.writeShellApplication {
     name = "game-nvidia";
     runtimeInputs = [ pkgs.power-profiles-daemon ];
@@ -154,6 +163,7 @@ let
       export PROTON_DLSS_UPGRADE=1
       export MANGOHUD=1
       export MANGOHUD_CONFIGFILE=${config.home.homeDirectory}/${nvidiaConfig}
+      export MANGOHUD_PRESETSFILE=${config.xdg.configHome}/${nvidiaPresets}
       run=(nvidia-offload "$@")
       if [[ $(</sys/class/power_supply/ACAD/online) == 1 ]]; then
         run=(powerprofilesctl launch --profile performance --reason game-nvidia -- "''${run[@]}")
@@ -168,11 +178,12 @@ lib.mkIf machine.features.gaming (
       oruc.themeFiles.".config/MangoHud/MangoHud.conf" = mangohudConfig (
         if hybrid then prime.amdgpuBusId else null
       );
-      xdg.configFile."MangoHud/presets.conf".text = presets;
+      xdg.configFile."MangoHud/presets.conf".text = presets radeonMissingSensors;
       home.packages = [ pkgs.goverlay ];
     }
     (lib.mkIf hybrid {
       oruc.themeFiles.${nvidiaConfig} = mangohudConfig prime.nvidiaBusId;
+      xdg.configFile.${nvidiaPresets}.text = presets (radeonMissingSensors ++ [ "gpu_voltage" ]);
       home.packages = [ gameNvidia ];
     })
   ]

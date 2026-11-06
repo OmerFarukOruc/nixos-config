@@ -280,8 +280,9 @@ A scheme that tinted-theming lacks goes in `assets/schemes`
 - nixos-desktop's Steam sets `PROTON_FSR4_UPGRADE=1`, which upgrades FSR 3.1
   games to FSR 4 on the RX 7900 XTX, and `MANGOHUD=1`. gamescope is installed
   without `capSysNice`, which breaks it inside Steam (NixOS/nixpkgs#351516).
-- nixos-rog's Steam runs Vulkan on the Radeon (`VK_LOADER_DRIVERS_SELECT=*radeon*`),
-  so the RTX 4070 sleeps. `game-nvidia %command%` runs a game on the RTX with
+- nixos-rog's Steam runs Vulkan on the Radeon
+  (`VK_LOADER_DRIVERS_SELECT=*radeon*`), so the RTX 4070 sleeps, and sets
+  `MANGOHUD=1`. `game-nvidia %command%` runs a game on the RTX with
   `PROTON_DLSS_UPGRADE=1` and the HUD pinned to the RTX. A game started on AC
   holds the Performance profile until it exits, also when AC is unplugged
   meanwhile.
@@ -294,7 +295,6 @@ anti-cheat or an online game; those stay on Valve's Proton without options.
 | Option | Use |
 | --- | --- |
 | `game-nvidia %command%` | nixos-rog, a game for the RTX 4070 |
-| `mangohud %command%` | nixos-rog, the HUD on a Radeon game |
 | `PROTON_FSR4_INDICATOR=1 %command%` | the FSR 4 watermark, to see that the upgrade works |
 | `PROTON_USE_OPTISCALER=1 %command%` | GE-Proton, Proton-CachyOS or Wineland, an offline game that offers DLSS 2+, FSR 2+ or XeSS |
 | `ENABLE_LAYER_MESA_ANTI_LAG=1 %command%` | nixos-desktop, a game with Anti-Lag 2 |
@@ -307,13 +307,18 @@ version follows the manifest that GE-Proton's README names.
 
 ### MangoHud
 
-`home-manager/modules/gaming.nix` writes `~/.config/MangoHud/MangoHud.conf`
-from a theme renderer (colors, font, position, the preset order and, on
-nixos-rog, `pci_dev` of the Radeon), and `~/.config/MangoHud/presets.conf` with
-the rows of each layout. On nixos-rog, `game-nvidia` points MangoHud at
+`home-manager/modules/gaming.nix` writes `~/.config/MangoHud/MangoHud.conf` from
+a theme renderer (colors, font, position, the preset order and, on nixos-rog,
+`pci_dev` of the Radeon), and `~/.config/MangoHud/presets.conf` with the rows of
+each layout. On nixos-rog, `game-nvidia` points MangoHud at
 `MangoHud-nvidia.conf`, the same file with the RTX's `pci_dev`, through
-`MANGOHUD_CONFIGFILE`. `MANGOHUD_CONFIG=read_cfg` would draw every preset row
-twice in MangoHud 0.8.4, and that variable splits a PCI address at its colons.
+`MANGOHUD_CONFIGFILE`, and at `presets-nvidia.conf` through
+`MANGOHUD_PRESETSFILE`. The full-detail layout shows only the GPU sensors a GPU
+reports: junction and memory temperature, fan and voltage on the RX 7900 XTX,
+voltage on the Radeon 890M, none of them on the RTX 4070 laptop GPU, where
+MangoHud 0.8.4 drew a fan of 1024% and 0 for the rest.
+`MANGOHUD_CONFIG=read_cfg` would draw every preset row twice in MangoHud 0.8.4,
+and that variable splits a PCI address at its colons.
 
 The HUD starts on full detail; Right Shift+F10 moves to the panel layout, then
 the compact one. Rows live only in `presets.conf`, because MangoHud applies
