@@ -134,7 +134,7 @@ on; [`nixosModules/gaming.nix`](nixosModules/gaming.nix),
 | --- | --- | --- |
 | 🍷 **Proton** | GE-Proton, Proton-CachyOS and Proton-Wineland, with ntsync | the same |
 | ✨ **Upscaling** | FSR 3.1 games upgraded to FSR 4 | DLSS upgraded in games on the RTX |
-| 🎯 **GPU** | 399 W, VRAM 2714 MHz and -50 mV through LACT | Steam on the Radeon, so the RTX sleeps; `game-nvidia %command%` for the RTX |
+| 🎯 **GPU** | 399 W and -50 mV through LACT, VRAM at stock | Steam on the Radeon, so the RTX sleeps; `game-nvidia %command%` for the RTX |
 | 📊 **HUD** | MangoHud on every Steam game | the same, pinned to the GPU the game runs on |
 | ⚡ **CPU** | the scx_lavd scheduler in performance mode | scx_lavd, and the Performance profile while a `game-nvidia` game runs on AC |
 | 🔍 **Scaling** | gamescope with FSR 1 | not set up |

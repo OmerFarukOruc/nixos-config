@@ -730,15 +730,21 @@ and both raise the failure popup ([Failure popups](#failure-popups)).
 ## nixos-desktop GPU
 
 LACT (`services.lact` in `machines/nixos-desktop/gpu.nix`) runs the RX 7900
-XTX's fan curve, power limit, VRAM clock and voltage offset from
+XTX's fan curve, power limit and voltage offset from
 `machines/nixos-desktop/lact.yaml`, which NixOS installs read-only as
 `/etc/lact/config.yaml`. The LACT window therefore cannot save: its Apply
 changes the GPU until lactd reloads the config, at the next restart or deploy,
 and lactd logs `Could not write config: Read-only file system`. To keep a
 value, write it in `lact.yaml` and deploy. The card reports a 402 W
-`power1_cap_max` but keeps 399 W for any higher write. When the LACT window
-changed the VRAM clock, the screen went black for a moment, with no GPU error
-in the kernel log.
+`power1_cap_max` but keeps 399 W for any higher write.
+
+The VRAM runs at its stock clock, 1250 MHz in sysfs (`OD_MCLK` in
+`pp_od_clk_voltage`; LACT 0.10.1 shows twice the sysfs value for GDDR6), and
+`lact.yaml` sets no `max_memory_clock`. With a second monitor connected, the
+VRAM stayed at its highest clock even at 85 W. At 1357 MHz games then showed
+glitches with no GPU error in the kernel log, and at 1250 MHz they did not.
+When the LACT window changed the VRAM clock, the screen went black for a
+moment, with no GPU error in the kernel log.
 
 ## nixos-desktop case fans
 
