@@ -21,13 +21,13 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "smart-video-wallpaper";
-  version = "2.16.0";
+  version = "2.17.0";
 
   src = fetchFromGitHub {
     owner = "luisbocanegra";
     repo = "plasma-smart-video-wallpaper-reborn";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-Ao1hBIt0VWhwJV6VTvjDKsHYNXyAR7yzHka3EF2dWOo=";
+    hash = "sha256-ACMu7/5IrF4+uLyE7AbIlicUWTuKpZAVz9B2VwXnxl0=";
   };
 
   nativeBuildInputs = [
