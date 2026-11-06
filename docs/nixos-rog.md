@@ -189,8 +189,12 @@ the first commit. Removing one stops its `devenv up`. Its
 `~/Desktop/workspace`. The prune removes each worktree and branch that is
 merged into the default branch, has no uncommitted changes and is older than a
 day. The sweep lists the worktrees it kept in
-`/tmp/agents/worktree-sweep/report.md` and in its log. A failed prune fails the
-unit, so `systemctl --user --failed` shows it; read
+`/tmp/agents/worktree-sweep/report.md` and in its log, marking as stale an
+entry whose folder is gone, such as one under `/tmp` that tmpfiles aged out;
+`wt` keeps such an entry while its commits are not merged. When the sweep fails
+in a repository, it still sweeps the others, then fails the unit, so
+`systemctl --user --failed` shows it and each new shell prints a
+`worktree-sweep:` line until a run succeeds; read
 `journalctl --user -u worktree-sweep`.
 
 `nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system

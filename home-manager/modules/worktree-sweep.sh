@@ -33,8 +33,11 @@ sweep() {
   wt -C "$repo" list --format=json </dev/null | jq -r '
     [.items[]
       | select(.worktree != null and .worktree.main == false)
-      | "- kept \(.worktree.path) (\(.branch // "detached HEAD"), \(.display.state // "unknown")"
-        + (if [.worktree.changes | del(.diff)[]] | any then ", uncommitted changes)" else ")" end)]
+      | (if .worktree.prunable then "stale: \(.worktree.prunable.reason)"
+          else (.display.state // "unknown")
+            + (if [.worktree.changes | del(.diff)[]] | any then ", uncommitted changes" else "" end)
+          end) as $status
+      | "- kept \(.worktree.path) (\(.branch // "detached HEAD"), \($status))"]
     | if length == 0 then "- no linked worktrees" else .[] end' || return 1
 }
 
