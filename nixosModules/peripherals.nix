@@ -22,6 +22,7 @@ lib.mkIf (cfg.kind == "workstation") {
   services.udisks2.enable = true;
   services.upower.enable = lib.mkDefault cfg.hasBattery;
 
+  nixpkgs.overlays = [ (import ../overlays/power-profiles-daemon.nix) ];
   services.power-profiles-daemon.enable = true;
   systemd.services.power-profiles-daemon.wantedBy = [ "graphical.target" ];
 }

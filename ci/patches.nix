@@ -5,7 +5,7 @@ let
   patched = {
     xrdp = nixosConfigurations.devbox.pkgs.xrdp;
     inherit (rog.kdePackages) ksystemstats plasma-desktop;
-    inherit (rog) sunshine;
+    inherit (rog) power-profiles-daemon sunshine;
     vscode = nixosConfigurations.nixos-rog.config.home-manager.users.oruc.programs.vscode.package;
   };
   fixedUp = {
