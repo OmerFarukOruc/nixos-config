@@ -746,6 +746,26 @@ glitches with no GPU error in the kernel log, and at 1250 MHz they did not.
 When the LACT window changed the VRAM clock, the screen went black for a
 moment, with no GPU error in the kernel log.
 
+The second monitor pins the VRAM clock because the display code of kernel 7.3
+finds no safe moment to change it with the 3840x2160 160 Hz monitor (DSC) and
+the 2560x1440 165 Hz monitor connected. It then sets the memory clock's
+minimum to its maximum (`dcn32_update_clocks` in
+`dc/clk_mgr/dcn32/dcn32_clk_mgr.c`). `dram_clk_change` 0.000 in `WM_Set[0]`
+of `/sys/kernel/debug/dri/1/amdgpu_dm_dtn_log` shows this decision: the driver
+writes that zero only when no switch method fits (`dc/dml/dcn32/dcn32_fpu.c`).
+One of those methods is FPO, where the firmware stretches one display's
+vertical blank so the memory clock can change. In a game with variable refresh
+active, the driver also refuses FPO whenever more than one display is
+connected, because `disable_fams_gaming` stays at its default
+(`dc/resource/dcn32/dcn32_resource_helpers.c`).
+
+About 0.5 s after a burst of DRM uevents, such as a monitor hotplug or wake,
+lactd reloads the GPU, resets the overdrive table and writes it again
+(`listen_netlink_kernel_event` in `lact-daemon/src/system.rs` and
+`reload_gpus` in `lact-daemon/src/server/handler.rs`, LACT 0.10.1). Each
+reload logs `GPU list reloaded`, so
+`journalctl -b -t lact | grep 'GPU list reloaded'` lists every rewrite.
+
 ## nixos-desktop case fans
 
 `machines/nixos-desktop/fans.nix` runs `case-fans.service`, a daemon
