@@ -141,16 +141,18 @@ let
 
   withoutRows = names: lib.filter (line: !lib.elem (lib.head (lib.splitString "=" line)) names);
   presets =
-    missingGpuSensors:
+    hiddenRows:
     lib.concatStringsSep "\n" [
       (preset 10 compact)
-      (preset 11 panel)
-      (preset 12 (withoutRows missingGpuSensors fullDetail))
+      (preset 11 (withoutRows hiddenRows panel))
+      (preset 12 (withoutRows hiddenRows fullDetail))
     ];
-  radeonMissingSensors = lib.optionals hybrid [
+  hybridGpuZeroRows = [
     "gpu_junction_temp"
     "gpu_mem_temp"
     "gpu_fan"
+    "gpu_voltage"
+    "gpu_power_limit"
   ];
 
   nvidiaConfig = ".config/MangoHud/MangoHud-nvidia.conf";
@@ -178,12 +180,14 @@ lib.mkIf machine.features.gaming (
       oruc.themeFiles.".config/MangoHud/MangoHud.conf" = mangohudConfig (
         if hybrid then prime.amdgpuBusId else null
       );
-      xdg.configFile."MangoHud/presets.conf".text = presets radeonMissingSensors;
+      xdg.configFile."MangoHud/presets.conf".text = presets (
+        lib.optionals hybrid (hybridGpuZeroRows ++ [ "cpu_power" ])
+      );
       home.packages = [ pkgs.goverlay ];
     }
     (lib.mkIf hybrid {
       oruc.themeFiles.${nvidiaConfig} = mangohudConfig prime.nvidiaBusId;
-      xdg.configFile.${nvidiaPresets}.text = presets (radeonMissingSensors ++ [ "gpu_voltage" ]);
+      xdg.configFile.${nvidiaPresets}.text = presets hybridGpuZeroRows;
       home.packages = [ gameNvidia ];
     })
   ]

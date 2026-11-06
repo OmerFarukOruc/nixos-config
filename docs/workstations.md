@@ -313,10 +313,11 @@ a theme renderer (colors, font, position, the preset order and, on nixos-rog,
 each layout. On nixos-rog, `game-nvidia` points MangoHud at
 `MangoHud-nvidia.conf`, the same file with the RTX's `pci_dev`, through
 `MANGOHUD_CONFIGFILE`, and at `presets-nvidia.conf` through
-`MANGOHUD_PRESETSFILE`. The full-detail layout shows only the GPU sensors a GPU
-reports: junction and memory temperature, fan and voltage on the RX 7900 XTX,
-voltage on the Radeon 890M, none of them on the RTX 4070 laptop GPU, where
-MangoHud 0.8.4 drew a fan of 1024% and 0 for the rest.
+`MANGOHUD_PRESETSFILE`. On nixos-rog the layouts leave out the rows MangoHud
+0.8.4 drew as 0 or nonsense on both laptop GPUs: junction and memory
+temperature, fan, voltage and power limit (the RTX showed a fan of 1024%). They
+also leave out CPU power on the Radeon, where it read 0.0 W, while the RTX
+layouts keep it. nixos-desktop's RX 7900 XTX shows every row.
 `MANGOHUD_CONFIG=read_cfg` would draw every preset row twice in MangoHud 0.8.4,
 and that variable splits a PCI address at its colons.
 
