@@ -9,6 +9,8 @@
 
   oruc.piTheme = true;
 
+  programs.zsh.envExtra = "export CLAUDE_CODE_WARN_MEMORY_FREE_GIB=4";
+
   home.packages = [
     agents.agent-browser
     agents.pi
