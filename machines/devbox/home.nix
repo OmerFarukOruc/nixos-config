@@ -229,7 +229,7 @@ in
       WorkingDirectory = "%h/Desktop/workspace/statuslantern";
       Environment = [ "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin" ];
       ExecStart = "${lib.getExe pkgs.devenv} shell -- audit-start";
-      TimeoutStartSec = "5min";
+      TimeoutStartSec = "15min";
     };
   };
   systemd.user.timers.statuslantern-audit = {
