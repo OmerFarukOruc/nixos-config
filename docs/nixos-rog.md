@@ -812,10 +812,15 @@ On nixos-desktop:
   prints on the other machine, without colons. Keep the Network IP
   setting automatic, because a fixed Tailscale address would stop the server
   whenever Tailscale is not up yet.
-- The server's screen for the laptop must be named exactly `nixos-rog`.
-  Deskflow 1.27 ignores a second alias for a screen, and the server then logs
-  `unrecognised client name "nixos-rog"`. When the laptop boots Windows, set the
-  Windows client's computer name to `nixos-rog` as well.
+- The server's screen for the laptop is named `nixos-rog`. When the laptop boots
+  Windows, its Deskflow client calls itself `laptop-windows`, so `computers` in
+  `home-manager/modules/deskflow.nix` gives `nixos-rog` that second name, and
+  Home Manager writes it as `aliases=laptop-windows` in the
+  `[computer_nixos-rog]` group. Deskflow 1.27 reads aliases only from that key
+  ([`Config::addComputer`](https://github.com/deskflow/deskflow/blob/v1.27.0/src/lib/server/Config.cpp));
+  it skips a `section: aliases` in the links file, as it skips `screens`. The
+  server logs `unrecognised client name "<name>"` and drops a client whose name
+  is neither a computer nor an alias.
 - Do not press Regenerate certificate. It changes the server's fingerprint, and
   the laptop refuses the server until you accept the new one there. A
   fingerprint prompt on the laptop that you did not cause is suspicious, so

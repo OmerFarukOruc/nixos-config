@@ -8,10 +8,10 @@ let
   inherit (config.oruc.deskflow) role;
   server = role == "server";
   dir = "${config.xdg.configHome}/Deskflow";
-  computers = [
-    "nixos-desktop"
-    "nixos-rog"
-  ];
+  computers = {
+    nixos-desktop = { };
+    nixos-rog.aliases = "laptop-windows";
+  };
   layout = pkgs.writeText "deskflow-server.conf" ''
     section: links
     	nixos-rog:
@@ -32,7 +32,9 @@ let
       };
       gui.startCoreWithGui = true;
     }
-    // lib.listToAttrs (map (name: lib.nameValuePair "computer_${name}" { inherit name; }) computers)
+    // lib.mapAttrs' (
+      name: computer: lib.nameValuePair "computer_${name}" ({ inherit name; } // computer)
+    ) computers
   );
 in
 {
