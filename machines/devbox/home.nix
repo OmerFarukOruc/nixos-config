@@ -227,7 +227,10 @@ in
     Service = {
       Type = "oneshot";
       WorkingDirectory = "%h/Desktop/workspace/statuslantern";
-      Environment = [ "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin" ];
+      Environment = [
+        "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin"
+        "STATUSLANTERN_AUDIT_AGENT=claude"
+      ];
       ExecStart = "${lib.getExe pkgs.devenv} shell -- audit-start";
       TimeoutStartSec = "15min";
     };
