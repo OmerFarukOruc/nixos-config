@@ -18,6 +18,7 @@ in
   imports = [
     ../../home-manager/modules/agent-cli.nix
     ../../home-manager/modules/desktop-sync.nix
+    ../../home-manager/modules/openrouter-free-guardrail.nix
     ../../home-manager/modules/playwright.nix
   ];
 

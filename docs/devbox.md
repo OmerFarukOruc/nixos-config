@@ -397,6 +397,18 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   failed run usually means the sign-in expired or was revoked; sign in again
   from a workstation with `stay-green login devbox`. Read a run with
   `journalctl --user -u stay-green.service -n 20`.
+- `openrouter-free-guardrail.timer` runs once a day
+  (`home-manager/modules/openrouter-free-guardrail.nix`). A run reads OpenRouter's
+  public model list, keeps the models whose prices are all 0 and that support
+  structured outputs, and sets them as the allowed models of the
+  `threadsift-free-only` guardrail through the management API, creating the
+  guardrail when it is missing. The unit starts the script through
+  `~/.local/bin/infisical-run.sh`, which injects `OPENROUTER_MANAGEMENT_KEY` from
+  the Infisical folder `/harness/openrouter-guardrail` with the host's machine
+  identity. A run that fails leaves `~/.local/state/openrouter-free-guardrail/failed`,
+  which each new shell prints, until a run succeeds; read a run with
+  `journalctl --user -u openrouter-free-guardrail -n 20`. A run that changes
+  nothing logs `threadsift-free-only unchanged: <models>`.
 
 ## CLIProxyAPI
 
