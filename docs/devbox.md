@@ -134,8 +134,11 @@ The host name defaults to `networking.hostName`. The module holds no host value.
 It runs one OpenTelemetry collector, the contrib build, as
 `opentelemetry-collector.service`, plus `auditd`. The collector exports over
 gRPC with TLS to the central endpoint (SigNoz) and keeps its queue and the
-journal cursors under `/var/lib/opentelemetry-collector`, so a restart or an
-outage loses nothing that the retry window covers.
+journal cursors under `/var/lib/opentelemetry-collector`. Each exporter's
+queue holds at most 256 MiB on disk (`queue_size`, by bytes), so a restart or
+an outage loses nothing that fits in it and in the retry window. While the
+export fails, a full queue drops new records: on this box both queues are full
+and drop data, because the export to SigNoz fails (Certificates, below).
 
 - **Metrics** every 60 s: CPU, disk, filesystem, load, memory, network (without
   `veth`, `br-` and `docker` interfaces), paging, processes and system, the
@@ -145,16 +148,19 @@ outage loses nothing that the retry window covers.
   receiver but does not check its output.
 - **Certificates** every hour: `tlscheck.time_left` for each file in
   `certificates`. This box lists its IAM Roles Anywhere certificate,
-  `~/.aws/rolesanywhere/leaf.pem` of omer, which the AWS profile `statuslantern`
-  signs with. Status Lantern's SigNoz rule "Certificate expires within 30
-  days" (`signoz/rules/certificate-expiring.json` in that repository) groups
-  by host and file and posts to Slack, so a certificate under 30 days alerts
-  there once the box's export reaches SigNoz. It does not today: Status
-  Lantern's tailnet policy opens the gateway's `tcp:4317` only to its own
-  hosts, so every export fails with `Unavailable`. systemd hands the collector a copy taken at its start
-  (`LoadCredential`), so the collector does not start while a listed file is
-  missing, and `opentelemetry-collector-certificates.path` restarts it when a
-  file changes, such as at a renewal.
+  `~/.aws/rolesanywhere/leaf.pem` of omer, which the AWS profile
+  `statuslantern` signs with. Status Lantern's SigNoz rule "Certificate
+  expires within 30 days" (`signoz/rules/certificate-expiring.json` in that
+  repository) groups by host and file and posts to Slack, so a certificate
+  under 30 days alerts there once the box's export reaches SigNoz. It does
+  not today: Status Lantern's tailnet policy opens the gateway's `tcp:4317`
+  only to its own hosts, so every export fails with `Unavailable`. systemd
+  hands the collector a copy of each file (`LoadCredential`, with an empty
+  `SetCredential` default), so a missing file only makes that receiver
+  report a scrape error. `opentelemetry-collector-certificates.path` reloads
+  the copies when a file changes, such as at a renewal, without a restart
+  (`RefreshOnReload=credentials`). The VM test checks that the metric of its
+  own test certificate reaches the sink.
 - **OTLP** on `127.0.0.1:4318` (HTTP) for host processes. Metrics and traces
   carry `host.id`, `host.name` and `deployment.environment.name`.
 - **Logs**, retried without a time limit. `service.name=host-audit` holds the

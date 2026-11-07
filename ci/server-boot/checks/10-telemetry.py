@@ -57,8 +57,8 @@ def tel_attr(file, key, value):
     return tel_count(file, f'"key":"{key}","value":{{"stringValue":"{value}"}}')
 
 
-def tel_records(file):
-    records = []
+def tel_batches(file):
+    batches = []
     out = ""
 
     def tel_whole(_last_try):
@@ -76,6 +76,13 @@ def tel_records(file):
                 f" {len(line)}-character line, {len(out)} characters in the file):"
                 f" {line[max(0, err.pos - 200):err.pos + 200]!r}"
             ) from err
+        batches.append(batch)
+    return batches
+
+
+def tel_records(file):
+    records = []
+    for batch in tel_batches(file):
         for resource_logs in batch.get("resourceLogs", []):
             resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}
             for scope_logs in resource_logs["scopeLogs"]:
@@ -133,6 +140,19 @@ tel_wait("logs.json", "telemetry-probe-2")
 machine.succeed("systemctl start telemetry-unit-probe.service")
 tel_wait("logs.json", "telemetry-unit-probe-line")
 tel_wait("metrics.json", "system.memory.usage")
+tel_wait("metrics.json", "tlscheck.time_left")
+tel_time_left = [
+    int(point.get("asInt", point.get("asDouble", 0)))
+    for batch in tel_batches("metrics.json")
+    for resource_metrics in batch.get("resourceMetrics", [])
+    for scope_metrics in resource_metrics["scopeMetrics"]
+    for metric in scope_metrics["metrics"]
+    if metric["name"] == "tlscheck.time_left"
+    for point in metric["gauge"]["dataPoints"]
+]
+assert tel_time_left and all(0 < seconds <= 3650 * 86400 for seconds in tel_time_left), (
+    f"tlscheck.time_left of the 3650-day test certificate: {tel_time_left}"
+)
 
 tel_uid = machine.succeed(f"id -u {BOX_USER}").strip()
 machine.succeed(f"systemctl start user@{tel_uid}.service")

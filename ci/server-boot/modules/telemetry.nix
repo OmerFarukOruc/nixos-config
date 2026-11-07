@@ -23,7 +23,7 @@ let
   testCertificate =
     pkgs.runCommand "telemetry-test-certificate.pem" { nativeBuildInputs = [ pkgs.openssl ]; }
       ''
-        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 \
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 \
           -subj /CN=telemetry-test -keyout /dev/null -out $out
       '';
 in

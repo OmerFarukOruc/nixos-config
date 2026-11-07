@@ -167,7 +167,7 @@ in
     };
 
     certificates = mkOption {
-      type = types.attrsOf types.str;
+      type = types.attrsOf types.path;
       default = { };
       example = {
         aws-agent = "/home/omer/.aws/rolesanywhere/leaf.pem";
@@ -175,8 +175,9 @@ in
       description = ''
         PEM certificate files, by name, whose time to expiry the collector
         reports every hour as `tlscheck.time_left`. The collector reads a copy
-        that systemd takes at its start (`LoadCredential`), so each file must
-        exist when it starts, and a change to a file restarts it.
+        that systemd takes (`LoadCredential`). A missing file leaves an empty
+        copy, so that receiver reports a scrape error while the other pipelines
+        run, and a change to a file reloads the copy without a restart.
       '';
     };
 
@@ -377,9 +378,16 @@ in
       };
     };
 
-    systemd.services.opentelemetry-collector.serviceConfig.LoadCredential = lib.mapAttrsToList (
-      name: path: "${name}:${path}"
-    ) cfg.certificates;
+    assertions = lib.mapAttrsToList (name: _: {
+      assertion = builtins.match "[A-Za-z0-9_.-]+" name != null;
+      message = "oruc.telemetry.certificates: the name ${name} must hold only letters, digits, '_', '.' and '-', because it becomes a credential name.";
+    }) cfg.certificates;
+
+    systemd.services.opentelemetry-collector.serviceConfig = lib.mkIf watchCertificates {
+      SetCredential = map (name: "${name}:") (lib.attrNames cfg.certificates);
+      LoadCredential = lib.mapAttrsToList (name: path: "${name}:${path}") cfg.certificates;
+      RefreshOnReload = "credentials";
+    };
 
     systemd.paths.opentelemetry-collector-certificates = lib.mkIf watchCertificates {
       description = "Watch the certificates the collector reports";
@@ -388,10 +396,11 @@ in
     };
 
     systemd.services.opentelemetry-collector-certificates = lib.mkIf watchCertificates {
-      description = "Restart the collector so it reads the changed certificates";
+      description = "Reload the collector's copies of the changed certificates";
+      unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${lib.getExe' config.systemd.package "systemctl"} try-restart opentelemetry-collector.service";
+        ExecStart = "${lib.getExe' config.systemd.package "systemctl"} try-reload-or-restart opentelemetry-collector.service";
       };
     };
 
