@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 checkout=${1:?usage: agents-pull CHECKOUT}
+repository=https://github.com/OmerFarukOruc/nixos-config.git
 
 github_reachable() {
   curl --silent --max-time 20 --output /dev/null https://github.com
 }
 
 if [[ ! -e $checkout/.git ]]; then
-  if ! git clone --quiet https://github.com/OmerFarukOruc/nixos-config.git "$checkout"; then
+  if ! git clone --quiet "$repository" "$checkout"; then
     github_reachable || {
       echo "GitHub is unreachable; the next run clones $checkout"
       exit 0
@@ -23,11 +24,11 @@ if [[ $branch != main ]]; then
   exit 1
 fi
 
-if git -C "$checkout" pull --quiet --ff-only; then
-  exit 0
+if ! git -C "$checkout" -c url.https://github.com/.insteadOf=git@github.com: fetch --quiet origin; then
+  github_reachable || {
+    echo "GitHub is unreachable; the next run pulls"
+    exit 0
+  }
+  exit 1
 fi
-github_reachable || {
-  echo "GitHub is unreachable; the next run pulls"
-  exit 0
-}
-exit 1
+git -C "$checkout" merge --quiet --ff-only '@{upstream}'

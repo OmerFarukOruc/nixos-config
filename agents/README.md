@@ -23,7 +23,7 @@ Private values stay out of these files ([Checks](#checks)). The Infisical projec
 
 - Edit `agents/` in the main checkout (`~/Desktop/workspace/nixos-config`, the option `oruc.agents.checkout`), commit to `main` there, then run `git pull --rebase` and `git push origin main`. Every other path of this repository still needs a worktree. The pull unit below sets `git config agents.mainCheckoutEditPaths agents/` in the checkout, and Claude Code's edit guard allows the main checkout only for those paths.
 - A main checkout needs `direnv allow` once, so the commit hooks find their config.
-- `agents-pull.timer` runs `agents-pull` every hour. It clones the checkout when the folder is missing and otherwise runs `git pull --ff-only` on `main`. A failed run leaves a line that each new shell prints until a run succeeds (`home-manager/modules/scheduled-unit.nix`); `journalctl --user -t agents-pull` shows the run. An unreachable GitHub is not a failure.
+- `agents-pull.timer` runs `agents-pull` every hour. It clones the checkout when the folder is missing and otherwise fetches `origin` and fast-forwards `main` to its upstream. The fetch rewrites GitHub's SSH URL to HTTPS for that one command, because the repository is public and the switch that also runs it has no `ssh` and no SSH agent; pushes keep SSH through the `pushInsteadOf` in `home-manager/modules/git.nix`. A failed run leaves a line that each new shell prints until a run succeeds (`home-manager/modules/scheduled-unit.nix`); `journalctl --user -t agents-pull` shows the run. An unreachable GitHub is not a failure.
 
 ## Checks
 
