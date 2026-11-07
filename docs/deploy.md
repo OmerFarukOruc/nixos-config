@@ -174,8 +174,8 @@ hardware and services work after activation. To read the last deployed source on
 6. `workstation builds`: builds each workstation's system from those
    `drvPath`s. `--evaluate-only` skips it, as the `update` workflow does; every
    other check runs under that flag too.
-7. `box browser feature`: evaluates a workstation with the box browser forced
-   on (`ci/box-browser.nix`), to check the display's command line.
+7. `box browser feature`: evaluates nixos-desktop's box browser
+   (`ci/box-browser.nix`), to check its units and the display's command line.
 8. `server record`: evaluates a bare server record (`ci/server.nix`) and
    checks that it gets no workstation piece, keeps its access setup (sshd on
    port 2222 by public key, Tailscale SSH, only Tailscale's UDP port) and the

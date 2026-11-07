@@ -4,15 +4,17 @@
 share. Omer signs in to a site once through a VNC viewer, and every agent session
 then drives the same logins with agent-browser, each in its own tab.
 `nixosModules/box-browser.nix` holds the box side and
-`home-manager/modules/box-view.nix` the viewer side. devbox turns the
-feature on in its record.
+`home-manager/modules/box-view.nix` the viewer side. devbox and nixos-desktop
+turn the feature on in their records. On nixos-desktop it is the agents' browser
+for signed-in work, because Omer's Brave asks him to Allow each new DevTools
+client, so an agent that drives Brave stops while he is away.
 
 ## Turn it on
 
 Set `features.boxBrowser = true` in the host's record in `machines/inventory.nix`
 and deploy it. The feature needs no secret and no tailnet policy change: the
-viewer reaches Xvnc only through an SSH tunnel, which Tailscale SSH already
-allows for `omer@<host>`.
+viewer reaches another host's Xvnc only through an SSH tunnel, over the host's
+SSH alias, which Tailscale SSH already allows.
 
 ## What runs
 
@@ -30,20 +32,24 @@ allows for `omer@<host>`.
   `AGENT_BROWSER_SESSION`; with none of the three it exits 2. `box-browser status`
   checks that both units are active and that DevTools answers.
 - `box-view` (command and menu entry "Box browser", on nixos-desktop and
-  nixos-rog) opens the viewer. It starts `ssh -N -L <port>:127.0.0.1:5920
-  omer@<host>` on the first free local port from 5920, waits up to 15 seconds for
-  the port, runs `vncviewer` on it, and stops the tunnel when the viewer exits. A
-  failure of the tunnel or the viewer also shows as a desktop notification, since
-  the menu entry has no terminal.
+  nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it runs
+  `vncviewer -via <host>`, and TigerVNC's viewer opens the SSH tunnel itself
+  with the command in `VNC_VIA_CMD`, which keeps `BatchMode` and
+  `ExitOnForwardFailure`. A failure of the viewer or its tunnel also shows as a
+  desktop notification, since the menu entry has no terminal.
 
 The wrapper runs the first `agent-browser` on `PATH`, which Home Manager installs
 from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
 
 ## Sign in
 
-Run `box-view`, or open Box browser from the menu. `box-view <host>` names another
-host, and the default is `devbox`. Sign in to the site in the Chromium
-window, then close the viewer. The session stays in the profile.
+Run `box-view <host>`, or open Box browser from the menu, and sign in to the
+site in the Chromium window, then close the viewer. The session stays in that
+host's profile. `box-view local` opens this host's own display with no tunnel,
+and so does the host's own name. With no argument, a host with
+`features.boxBrowser` opens its own display and any other host opens devbox's,
+so name the host when the agent that needs the login drives another host's
+browser.
 
 ## Limits
 
@@ -54,13 +60,13 @@ window, then close the viewer. The session stays in the profile.
   loopback bind is its only protection, so `ci/checks.sh` fails when the display
   command loses `-localhost` or `-SecurityTypes None`. Do not publish the port
   with `tailscale serve` or open it in a firewall.
-- The viewer needs `ssh` access to `omer@<host>`. The tunnel carries the VNC
-  traffic, and SSH encrypts it.
+- The viewer needs `ssh <host>` to work for another host, with the user the
+  host's SSH alias sets. The tunnel carries the VNC traffic, and SSH encrypts
+  it.
 
 ## Check
 
-`ci/checks.sh` evaluates the module in devbox's system. `ci/box-browser.nix` forces
-the feature on for nixos-desktop too, and `ci/checks.sh` evaluates that system's
-`drvPath`, checks the unit names and checks the display's command line. The check
-does not start the units; run `box-browser status` on the host after the first
-deploy.
+`ci/checks.sh` reads nixos-desktop's system through `ci/box-browser.nix`, checks
+the unit names and checks the display's command line, so it also fails when the
+record turns the feature off. The check does not start the units; run
+`box-browser status` on the host after the first deploy.

@@ -317,12 +317,14 @@ Write down what you checked and when (`date -u +%FT%TZ`) before step 1.
 cuts every process on the box, so neither an earlier yes nor this section
 authorizes it. Ask with one question that names what is down, since when, and
 the steps you will take, for example: "devbox is offline since 02:14 UTC after
-the night reboot. May I open netcup's console in your Brave on nixos-desktop,
+the night reboot. May I open netcup's console in the box browser on nixos-desktop,
 look at the screen, and if it hangs at boot, reset the box and pick the
 previous generation in the Limine menu?" Never use SCP's reinstall, rescue
 system, image, snapshot or disk options; those are Omer's to run.
 
-**Steps.** Drive Omer's Brave with the agent-browser skill (`brave-browser`).
+**Steps.** Drive nixos-desktop's box browser with the agent-browser skill
+(`box-browser`). When it lacks the netcup login, ask Omer to sign in there with
+`box-view local` ([box-browser.md](box-browser.md)).
 Save a screenshot of the console after each step under
 `/tmp/agents/<task>-<session8>/console/`, and report each step and its
 screenshot in the final message, so Omer can follow what was done.
