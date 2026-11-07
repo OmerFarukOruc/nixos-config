@@ -187,7 +187,9 @@ hardware and services work after activation. To read the last deployed source on
 9. `VM tests`: the flake still defines the `devbox-boot-bios` and
    `deploy-script` VM checks. It evaluates them and runs neither.
 10. `binary cache copies`: the substituters and keys in the install docs and
-    `.github/workflows/update.yml` match the hosts' `nix.settings`.
+    `.github/workflows/update.yml` match the hosts' `nix.settings`, except the
+    tailnet-only cache `cache.statuslantern.com`, which a GitHub runner and an install
+    medium cannot reach.
 
 `ci/unit-cycles.sh` runs the ordering-cycle check of the deploy's step 7
 ([What the deploy does](#what-the-deploy-does)) on each host's units. It builds the unit files without the programs

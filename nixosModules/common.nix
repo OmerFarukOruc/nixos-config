@@ -14,8 +14,14 @@ in
     nixpkgs.overlays = [ (import ../overlays/deskflow.nix) ];
 
     nix.settings = {
-      extra-substituters = [ "https://cache.numtide.com" ];
-      extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" ];
+      extra-substituters = [
+        "https://cache.numtide.com"
+        "http://cache.statuslantern.com:5000"
+      ];
+      extra-trusted-public-keys = [
+        "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+        "cache.statuslantern.com-1:YuiSL/ReMZsXcCknifqLZMwJBFeslPtxaiwEw2QbOwc="
+      ];
     };
 
     programs.ssh.knownHosts = {
