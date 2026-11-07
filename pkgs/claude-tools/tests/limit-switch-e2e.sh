@@ -15,12 +15,14 @@ sock="$HOME/.config/herdr/sessions/$run/herdr.sock"
 name="$run"
 h() { herdr --session "$run" "$@"; }
 
+ok=0
 cleanup() {
   h agent prompt "$name" /exit >/dev/null 2>&1 || true
   sleep 3
   h server stop >/dev/null 2>&1 || true
   sleep 2
   herdr session delete "$run" >/dev/null 2>&1 || true
+  if ((ok)); then rm -rf "$dir"; else echo "kept $dir"; fi
 }
 trap cleanup EXIT
 fail() {
@@ -141,9 +143,14 @@ sid=$(session)
 [[ -n "$sid" && "$sid" != null ]] || fail "herdr reports no session id"
 start_loop() {
   local out
-  out=$(h agent prompt "$name" "/loop 6h reply only with the word tick" 2>&1) || echo "setup: herdr agent prompt failed: $out"
-  sleep 3
-  h agent read "$name" --source visible | grep -q '❯ /loop' && h agent send-keys "$name" enter >/dev/null
+  if ! out=$(h agent prompt "$name" "/loop 6h reply only with the word tick" --wait --until working --until blocked \
+    --timeout 30000 2>&1); then
+    if grep -q agent_prompt_stalled <<<"$out"; then
+      h agent send-keys "$name" enter >/dev/null
+    else
+      echo "setup: herdr agent prompt failed: $out"
+    fi
+  fi
   h agent wait "$name" --until idle --until "done" --until blocked --timeout 120000 >/dev/null
   if h agent read "$name" --source visible | grep -q "This session only"; then
     h agent send-keys "$name" down >/dev/null
@@ -158,6 +165,11 @@ start_loop() {
 for attempt in 1 2 3; do
   [[ $mode == settings ]] && break
   start_loop
+  t=$(transcript)
+  routines=$(jq -rs '[.[] | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use"
+    and .name == "RemoteTrigger" and .input.action == "create") | .input.body.name // "unnamed"] | join(", ")' "$t")
+  [[ -z $routines ]] || fail "the /loop prompt created the cloud routine $routines on $start (transcript $t); \
+disable it there with RemoteTrigger update and the body {\"enabled\": false}"
   ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
   transcript_shows "$last_reply" 1j && break
   ((attempt < 3)) || fail "the agent has no scheduled job after three /loop prompts"
@@ -272,4 +284,5 @@ cls resume "$name" || fail "resume right after /exit exited $?"
 [[ -n "$(claude_in "$pane")" ]] || fail "resume right after /exit started nothing"
 check_agent "resume right after /exit"
 echo "resume right after /exit: back in $pane"
+ok=1
 echo PASS
