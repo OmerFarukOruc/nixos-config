@@ -826,6 +826,19 @@ On nixos-desktop:
   fingerprint prompt on the laptop that you did not cause is suspicious, so
   decline it.
 
+On Windows on the laptop:
+
+- The Deskflow client connects to nixos-desktop's tailnet address, because
+  nixos-desktop's firewall (`nixosModules/tailscale.nix`) accepts connections
+  only on tailscale0. Keep the client's Network IP setting automatic. Deskflow
+  1.27 binds each connection to the `interface=` address in
+  `%APPDATA%\Deskflow\Deskflow.conf`
+  ([`Client::bindNetworkInterface`](https://github.com/deskflow/deskflow/blob/v1.27.0/src/lib/client/Client.cpp)).
+  With `interface=<lan-ip>`, the client logged
+  `failed to connect to server: Timed out` every few seconds and the server
+  logged no connection, while `Test-NetConnection <tailnet-ip> -Port 24800`
+  succeeded. Clearing the setting let the client connect.
+
 After a deploy that changes Deskflow, the running client stays on the old build
 until you quit it and open it from the menu, or log in again. The new client
 may make Plasma ask on the laptop to allow remote control with clipboard
