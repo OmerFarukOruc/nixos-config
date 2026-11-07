@@ -59,6 +59,33 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
+  systemd.user.services.infisical-agent = {
+    Unit = {
+      Description = "Infisical Agent: keeps a token and the secret files under %t/infisical-agent current";
+      After = [ "network-online.target" ];
+      Wants = [ "network-online.target" ];
+    };
+    Service = {
+      ExecStart = "${lib.getExe pkgs.infisical} agent --config ${
+        osConfig.sops.templates."infisical-agent.yaml".path
+      }";
+      RuntimeDirectory = "infisical-agent";
+      RuntimeDirectoryMode = "0700";
+      UMask = "0077";
+      Restart = "on-failure";
+      RestartSec = 30;
+    };
+    Install.WantedBy = [ "default.target" ];
+  };
+
+  systemd.user.services.openrouter-free-guardrail = {
+    Unit = {
+      Requires = [ "infisical-agent.service" ];
+      After = [ "infisical-agent.service" ];
+    };
+    Service.EnvironmentFile = "%t/infisical-agent/openrouter-guardrail.env";
+  };
+
   systemd.user.services.herdr-web-ui = {
     Unit = {
       Description = "herdr web UI for the default session (loopback only)";

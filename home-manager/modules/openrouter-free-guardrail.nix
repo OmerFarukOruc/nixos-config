@@ -23,7 +23,7 @@ in
       name = "openrouter-free-guardrail";
       description = "Refresh the OpenRouter guardrail's allowlist of free models";
       timerDescription = "Daily refresh of the OpenRouter free-model guardrail";
-      execStart = "%h/.local/bin/infisical-run.sh --env secrets --path /harness/openrouter-guardrail -- ${guardrail}/bin/openrouter-free-guardrail";
+      execStart = lib.getExe guardrail;
       timeout = "1h";
       hint = "see journalctl --user -t openrouter-free-guardrail";
     })

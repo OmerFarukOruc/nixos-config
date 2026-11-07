@@ -3,10 +3,16 @@ let
   secrets = ../../secrets/devbox-services.yaml;
   cliproxy = ../../secrets/devbox-cliproxy.yaml;
   inherit (config.sops) placeholder;
+  user = config.oruc.machine.user;
+  infisicalAgentDir = "/run/user/${toString config.users.users.${user}.uid}/infisical-agent";
+  userSecret = {
+    sopsFile = secrets;
+    owner = user;
+  };
   cliproxySecret = key: {
     sopsFile = cliproxy;
     inherit key;
-    owner = config.oruc.machine.user;
+    owner = user;
   };
 in
 {
@@ -14,19 +20,49 @@ in
     secrets = {
       openchamber-ui-password.sopsFile = secrets;
       opencode-server-password.sopsFile = secrets;
-      herdr-web-token = {
-        sopsFile = secrets;
-        owner = config.oruc.machine.user;
-      };
+      herdr-web-token = userSecret;
       cliproxy-api-key-omer = cliproxySecret "api-key-omer";
       cliproxy-api-key-friend = cliproxySecret "api-key-friend";
       cliproxy-management-key = cliproxySecret "management-key";
       cliproxy-cloudflare-dns-token = cliproxySecret "cloudflare-dns-token";
       cliproxy-ts-authkey = cliproxySecret "ts-authkey";
       cliproxy-share-host = cliproxySecret "share-host";
+      infisical-client-id = userSecret;
+      infisical-client-secret = userSecret;
+      infisical-project-id = userSecret;
+    };
+    templates."infisical-agent.yaml" = {
+      owner = user;
+      content = builtins.toJSON {
+        infisical.address = "https://eu.infisical.com";
+        auth = {
+          type = "universal-auth";
+          config = {
+            client-id = config.sops.secrets.infisical-client-id.path;
+            client-secret = config.sops.secrets.infisical-client-secret.path;
+            remove_client_secret_on_read = false;
+          };
+        };
+        sinks = [
+          {
+            type = "file";
+            config.path = "${infisicalAgentDir}/token";
+          }
+        ];
+        templates = [
+          {
+            template-content = ''
+              {{- with listSecrets "${placeholder.infisical-project-id}" "secrets" "/harness/openrouter-guardrail" }}{{ range . }}
+              {{ .Key }}={{ .Value }}
+              {{- end }}{{ end }}
+            '';
+            destination-path = "${infisicalAgentDir}/openrouter-guardrail.env";
+          }
+        ];
+      };
     };
     templates."cliproxy-config.yaml" = {
-      owner = config.oruc.machine.user;
+      owner = user;
       content = builtins.toJSON {
         host = "";
         port = 8317;
@@ -48,14 +84,14 @@ in
       };
     };
     templates."cliproxy.env" = {
-      owner = config.oruc.machine.user;
+      owner = user;
       content = ''
         CLIPROXY_SHARE_HOST=${placeholder.cliproxy-share-host}
         CLIPROXY_TS_AUTHKEY=${placeholder.cliproxy-ts-authkey}
       '';
     };
     templates."openchamber.env" = {
-      owner = config.oruc.machine.user;
+      owner = user;
       content = ''
         OPENCHAMBER_UI_PASSWORD=${placeholder.openchamber-ui-password}
         OPENCODE_SERVER_PASSWORD=${placeholder.opencode-server-password}

@@ -87,10 +87,14 @@ sops-nix decrypts `secrets/devbox.yaml`,
 age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
 file, the Cloudflare token for the certificates from the second, the
-OpenChamber and OpenCode server passwords and the herdr web UI's token from the
-third, and CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key
+OpenChamber and OpenCode server passwords, the herdr web UI's token and the
+Infisical Agent's client id, client secret and project id from the third, and CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key
 and its share host from the fourth. `machines/devbox/services.nix` declares the
-secrets of the last two files.
+secrets of the last two files. On the box, `sudo` with that key decrypts and
+edits the last three without Omer's key: pass
+`SOPS_AGE_KEY_CMD="ssh-to-age -private-key -i /etc/ssh/ssh_host_ed25519_key"` to
+`sops`, and give `sops set` the value with `--value-file`, as
+`scripts/check-secrets.sh` does for its decrypt.
 An install that makes new host keys boots with no address, no password and no
 certificates. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
@@ -397,6 +401,20 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   failed run usually means the sign-in expired or was revoked; sign in again
   from a workstation with `stay-green login devbox`. Read a run with
   `journalctl --user -u stay-green.service -n 20`.
+- `infisical-agent.service` (`machines/devbox/home.nix`) runs the
+  [Infisical Agent](https://infisical.com/docs/integrations/platforms/infisical-agent)
+  as omer, with the config that the sops template `infisical-agent.yaml` in
+  `machines/devbox/services.nix` renders, so the project id stays out of this
+  repository. It logs in with the machine identity's universal-auth client id
+  and secret, keeps the access token in `$XDG_RUNTIME_DIR/infisical-agent/token`,
+  and writes each Infisical folder a unit needs as an env file next to it,
+  checking for changes every 5 minutes (the agent's default). The folder is mode
+  0700 and the files 0600 (`RuntimeDirectoryMode`, `UMask`), and systemd deletes
+  them when the unit stops. A one-off command reads a folder with that token:
+  `INFISICAL_TOKEN=$(<"$XDG_RUNTIME_DIR/infisical-agent/token") infisical run
+  --domain https://eu.infisical.com --projectId <project-id> --env secrets
+  --path /harness/<folder> -- <command>`. Read the agent's log with
+  `journalctl --user -u infisical-agent -n 20`.
 - `openrouter-free-guardrail.timer` runs once a day
   (`home-manager/modules/openrouter-free-guardrail.nix`). A run reads OpenRouter's
   public model list, keeps the models whose prices are all 0 and that support
@@ -413,10 +431,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   OpenRouter dashboard survives. It adds `threadsift-verify` to the key
   assignment and removes no key, so a key added by hand stays assigned. The
   create call (a POST) is not retried, because a retry after a server-side
-  commit would create a second policy. The unit starts the script through
-  `~/.local/bin/infisical-run.sh`, which injects `OPENROUTER_MANAGEMENT_KEY` from
-  the Infisical folder `/harness/openrouter-guardrail` with the host's machine
-  identity. Each call times out after 30 s and retries for at most 60 s, so a
+  commit would create a second policy. The unit reads `OPENROUTER_MANAGEMENT_KEY`
+  from `%t/infisical-agent/openrouter-guardrail.env`, which the Infisical Agent
+  writes, and requires `infisical-agent.service`. Each call times out after 30 s and retries for at most 60 s, so a
   run can take 33 calls of at most 90 s each (the 10 pages each of the
   workspace, key and policy lists, the model list, the policy read and the
   write), and the unit stops it after 1 hour. A run that changes nothing logs
@@ -431,7 +448,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
   The marker is `~/.local/state/<unit>/failed`. Any result except `success`
   writes it, including a non-zero exit, a kill by signal, a `TimeoutStartSec`
-  stop, and `infisical-run.sh` exiting 77 or 78 before the script starts. A
+  stop, and a missing `openrouter-guardrail.env` before the script starts. A
   successful run deletes it. Each new shell prints the marker's line until a
   run succeeds. A run that `systemctl --user stop` cuts short counts
   as a failure too (the result is `signal`).
