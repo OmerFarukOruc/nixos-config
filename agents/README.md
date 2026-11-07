@@ -1,6 +1,23 @@
 # agents
 
-This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and the others. `home-manager/modules/agents.nix`, which `nixosModules/agents.nix` imports on nixos-desktop, nixos-rog and devbox, keeps a main checkout of this repository current on each of them, so the CLIs can read this folder from it.
+This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and the others. `home-manager/modules/agents.nix`, which `nixosModules/agents.nix` imports on nixos-desktop, nixos-rog and devbox, keeps a main checkout of this repository current on each of them and links each home to this folder in that checkout, so an edit works at once.
+
+## Layout
+
+| Path | Read through | Holds |
+| --- | --- | --- |
+| `shared/` | `~/.claude/shared` | `core.md`, the rules every agent follows, and the rule files it points to |
+| `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Claude Code's user instructions, which import `core.md` |
+| `claude/rules/` | `~/.claude/rules` | Claude Code rule files |
+| `reference/` | `~/.claude/reference` | reference pages the rules send agents to |
+| `infisical.md` | `~/.claude/infisical.md` | the Infisical usage note |
+| `codex/codex.md` | `~/.codex/AGENTS.md` | the Codex-only rules |
+
+Each path except the last is a live link into the checkout. `~/.codex/AGENTS.md` is a file that Home Manager builds from `shared/core.md` and `codex/codex.md`, so a change to either reaches Codex at the next switch, within the hour on every host, the PCs only on AC power (the repository's `AGENTS.md`). Home Manager's `programs.codex` would also build it, but with `home.preferXdgDirectories` on these hosts it moves `CODEX_HOME` to `~/.config/codex`. `programs.claude-code` has `context` and `rulesDir`, but `context` would write the link's store path as text and `rulesDir` links file by file, so a new rule file would wait for a switch; raw `home.file` entries avoid both.
+
+Each entry sets `force`, because Home Manager backs up only a target that is not a symlink, and the links an earlier setup left there would otherwise stop the switch. Each switch also runs `agents-pull` before it ends, so the links never wait an hour for files the deployed commit added.
+
+Private values stay out of these files ([Checks](#checks)). The Infisical project IDs reach every zsh, interactive or not, through `.zshenv` as `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids`.
 
 ## Edit loop
 
@@ -14,4 +31,4 @@ The pre-push gate (`ci/gate.sh`) checks every commit between `origin/main` and t
 
 - `ci/private-scan.sh` runs on every push. It runs `gitleaks git` on those commits and refuses one whose message or added lines, binary files and merge results included, hold one of Omer's private values, such as an account email, an Infisical project ID or the tailnet name. This repository is public and keeps every pushed commit, so a value has to be gone from the commit itself, not only from a later one. The values come from the sops secret `agents-private-values` in `secrets/agents.yaml`, one per line, decrypted to `/run/secrets/agents-private-values` on nixos-desktop, nixos-rog and devbox; `AGENTS_PRIVATE_VALUES` names another file. The scan prints the commit and the file of a hit, never the value. Add a value with `sops secrets/agents.yaml` ([Secrets](../docs/architecture.md#secrets)).
 - `ci/agents-checks.sh` runs when those commits touch `agents/`. It runs shellcheck on each `.sh` file and ruff on each `.py` file, and parses each `.json` and `.toml` file, as the pushed revision holds them.
-- When every path those commits touch is under `agents/`, the gate skips the Nix checks.
+- When every path those commits touch is under `agents/`, the gate skips the Nix checks, unless a `.nix` file names one of those paths. `home-manager/modules/agents.nix` reads `shared/core.md` and `codex/codex.md` this way, so a change to either runs the Nix checks.

@@ -1,0 +1,75 @@
+# nixos-desktop and nixos-rog for Omer's own user
+
+nixos-desktop is Omer's desktop PC and nixos-rog his laptop. Both run NixOS. Home Manager in `OmerFarukOruc/nixos-config` (checkout `~/Desktop/workspace/nixos-config`, host files `machines/<host>/home.nix`) owns the shell, editors, and tools. Install a tool there and deploy, never by hand. `desktop-sync.sh` runs hourly on both and links or syncs the agent config, Claude Code's `settings.json`, and account preferences (`desktop/README.md`, "Sync").
+
+## No standard Linux layout
+
+- nix-ld is on (`nixosModules/common.nix`, `programs.nix-ld.enable`), so generic binaries from npm or GitHub releases, such as workerd, find their libraries. A prebuilt native addon that a nixpkgs binary loads, such as sharp under nixpkgs Bun, does not get them, and fails with `libstdc++.so.6: cannot open shared object file`.
+- `/etc/ssl/cert.pem` and `/etc/ssl/certs/ca-certificates.crt` resolve to the same system CA bundle on both hosts (`nixos-config`'s `nixosModules/common.nix`, `security.pki.caBundle`). uv's standalone Pythons use the former path.
+- envfs is on (`nixosModules/envfs.nix`, `services.envfs.enable`), so a `#!/bin/bash` script finds bash through the caller's PATH. envfs answers only an exec, so `ls /bin/bash` still reports no such file. A test fake that sits first on PATH and runs `exec /usr/bin/<tool>` therefore runs itself again, forever, and a fake `git` called from `subprocess.run` once forked over 3000 `python3 /usr/bin/git` processes. Resolve the real tool before the fake's folder goes on PATH (`command -v <tool>`, or `shutil.which` in Python) and exec that path.
+- `node`, `npm`, `npx`, and `pnpm` are on PATH only inside a repository's dev shell, so a session started outside the repository has none of them. Run a repository's tool as `cd <checkout> && direnv exec . <command>` (Project toolchains below), and a one-off CLI such as `npx -y <package>` as `heavy nix shell nixpkgs#nodejs --command npx -y <package>`.
+- `shellcheck` is on PATH only inside a repository's dev shell. infra's pre-commit hook runs it and infra has no `.envrc`, so put `$(heavy nix build --no-link --print-out-paths nixpkgs#shellcheck.bin)/bin` on PATH for the commit.
+- Home Manager sets `PLAYWRIGHT_BROWSERS_PATH` to the nixpkgs Playwright browsers and `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true` (`home-manager/modules/playwright.nix`, imported by `profiles/personal.nix`), so `~/.cache/ms-playwright` stays empty. Those browsers match only the Playwright version of nixos-config's nixpkgs. A repository dev shell that sets neither still runs Playwright here, so check its own wiring with both variables unset (`env -u PLAYWRIGHT_BROWSERS_PATH -u PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS <cmd>`).
+- `/tmp` is a directory on the btrfs root, not a tmpfs, so a large file there uses disk, not memory. Swap is zram.
+
+## Heavy commands
+
+- `heavy <command>` runs a heavy command at nice 10 in a user scope capped at 14 GiB, and never waits for another one (nixos-config `docs/nixos-rog.md`, Heavy commands). Both hosts have it. Run a Nix evaluation of a NixOS flake, a full test suite, or a build as `heavy <command>` on the host the agent runs on; gastrodili's `scripts/heavy.ts` and nixos-config's Nix helper scripts already do, and wrapping them in `heavy` again is harmless. Do not send such work to the other host over SSH, because agents on nixos-desktop once filled nixos-rog's memory that way.
+
+## Project toolchains
+
+A repository that needs Bun, Node, or system libraries gets them from its devenv shell, which direnv loads (`home-manager/modules/shell.nix`, `programs.direnv`). An agent's Bash calls start with the environment direnv loaded for the session's start directory: `DIRENV_DIR` points there, and `cd` into another checkout does not reload it.
+
+- `wt switch --create` (the worktrees skill) runs `direnv allow` in the new worktree; after a bare `git worktree add`, run `direnv allow <worktree>` yourself. Run each repository command as `cd <worktree> && direnv exec . <command>`. `direnv exec <dir>` loads that directory's environment but runs the command in the current directory, so `pnpm install` without the `cd` installs into whatever checkout the shell is in.
+- `direnv exec` on the main checkout evaluates the main checkout's pins, whatever directory it runs from. A worktree on another branch then gets that branch's Bun, Node, or Playwright browsers instead of its own.
+- A worktree whose branch has no `.envrc` uses the session's start environment.
+- pnpm reads `minimumReleaseAge: 4320` (3 days, `releaseAgeDays` in nixos-config `home-manager/modules/applications.nix`) from `~/.config/pnpm/config.yaml`. Because the value is set explicitly, pnpm makes the check strict (`minimumReleaseAgeStrict`, [pnpm docs](https://pnpm.io/settings/dependency-resolution)). Resolution then fails on a newer version instead of falling back, and an install also checks every entry already in the lockfile. Prefix a one-off command such as `pnpm import` with `pnpm_config_minimum_release_age=0`.
+
+## A tailnet site does not load
+
+`signoz.statuslantern.com` and the `risoluto.dev` names resolve to Tailscale addresses (`100.x`). Check the name from here with `getent hosts <name>`, then `curl -sS -o /dev/null -w '%{http_code}\n' https://<name>/`.
+
+- The name resolves to `0.0.0.0`: NextDNS's rebinding protection answers it, because the profile's Allowlist lacks the domain (nixos-config `docs/nixos-rog.md`, DNS).
+- The name resolves to `100.x` and port 443 refuses the connection: the proxy on that host is down. For `signoz.statuslantern.com` it is the container `infra-traefik-traefik-1` on statuslantern-observability-1; infra `roles/traefik/` deploys it and infra `docs/telemetry.md`, "Traefik access log and metrics", explains how it fails. Read the host with infra's `scripts/host-check.sh <host> '<command>'`.
+
+## A public site fails TLS or resets the connection
+
+zapret2, the DPI bypass from nixos-config `nixosModules/zapret2.nix`, runs as `nfqws2@default.service`, so `systemctl status zapret` finds no unit. It rewrites the first packets to every host in `/var/lib/zapret2/auto-hosts.txt`, and it adds a host to that file itself after 3 failed connections within 60 s. An RST in the first 4096 bytes or 3 retransmissions count as a failure (zapret2 manual defaults; nixos-config sets none of them). A client that aborts its handshakes, such as a Python that finds no CA certificates, can get a host listed. When that host's servers accept zapret2's fake ClientHello, every TLS connection to it from this machine fails, with curl exit 35 or `unsolicited extension`.
+
+- Check: `sudo -n grep -n -x '<host>' /var/lib/zapret2/auto-hosts.txt`.
+- Repair: remove only that line, in place, because the file holds other learned hosts and nfqws2 reloads it when it changes: `sudo -n grep -v -x '<host>' /var/lib/zapret2/auto-hosts.txt > /tmp/auto-hosts.new && sudo -n tee /var/lib/zapret2/auto-hosts.txt < /tmp/auto-hosts.new > /dev/null`. `tee` keeps the file's owner, mode, and inode.
+- Keep the host off the list: add its domain to `hosts.exclude` in `zapret2.nix`, as the Microsoft domains are, and deploy.
+- On nixos-desktop, `*.r2.dev` fails for another reason: the ISP blocks it (nixos-desktop below).
+
+## Secret Service
+
+- KDE's `ksecretd` serves `org.freedesktop.secrets` from the `kdewallet` wallet. A client such as gh finds it only through the `default` alias; before a login that stores a token, check that `busctl --user tree org.freedesktop.secrets` lists `/org/freedesktop/secrets/aliases/default` (nixos-config `home-manager/README.md`, per-host credentials, has the fix).
+- The gcr ssh-agent (`$SSH_AUTH_SOCK`) unlocks `~/.ssh/id_ed25519_omer` with the password KWallet holds under the `unique` attribute `ssh-store:<key path>`. The item also needs `xdg:schema org.freedesktop.Secret.Generic`, or the agent misses it and refuses to sign.
+- nixos-desktop logs in automatically and locks the screen at once, so KWallet asks for its password once per boot. nixos-rog logs in with a password, and PAM unlocks KWallet.
+
+## Brave Origin CDP for agent-browser
+
+- Which browser an agent drives on each host is in the agent-browser skill, Pick the browser. The bullets below cover Omer's Brave Origin when that table sends you to it.
+- Enable remote debugging at `brave://inspect/#remote-debugging`, then drive it with `brave-browser` (`desktop/bin/brave-browser`). Its helper `brave-cdp` reads the websocket from Brave Origin's `~/.config/BraveSoftware/Brave-Origin/DevToolsActivePort`, since `/json` answers 404.
+- Lend Brave to agents on devbox with `browser-lend on` and take it back with `browser-lend off` (`desktop/bin/browser-lend`; it also runs on Enes's Mac, and `desktop/bin/browser-lend.ps1` on windows-rog, with any Chromium browser). It forwards tailnet TCP 9222 to the CDP port and publishes the websocket path on tailnet HTTPS 9223. Leave it off when no task needs it: CDP has no password, so every `oruc` process on the box, fleet agents included, can drive the logged-in browser while it is on.
+- Each new debugging client waits for an allow prompt inside Brave (observed 14-09-2026). A websocket handshake that hangs while `/json/version` still answers 404 means the prompt is unanswered; ask Omer to accept it in Brave, and do not restart the daemon or Brave.
+- A hidden tab can pause rendering: `document.visibilityState` reads `hidden`, scrolling times out and a Radix dropdown stays closed (observed 10-10-2026). Bring the tab to the front only when that happens; it switches Omer's visible tab.
+- Secret transfer, only when the task authorizes it: click the page's Copy button, pipe `wl-paste -n` into the consumer's stdin, then run `qdbus org.kde.klipper /klipper org.kde.klipper.klipper.clearClipboardHistory` and `wl-copy --clear`. Klipper restores the last entry after a plain `wl-copy --clear` and keeps it in its history (observed 09-10-2026). An `agent-browser eval` call returns no secret value.
+- A copy click sent over CDP can show "Copied!" without reaching the system clipboard while Brave lacks desktop focus (observed 09-10-2026 and 10-10-2026). Check the clipboard's shape before piping it. When it does not match and the page has a Download control, `agent-browser download <sel> <path>` saves the file into a 0700 folder; shred it after use.
+- VaultProxies is `https://vaultproxies.net/dashboard`. `vaultproxies.com` redirects to the home page, whose dashboard preview shows a demo account, not Omer's. Each plan has its own proxy login under Proxy Generator, "Reset credentials", and the reset needs "Yes, break the old login" before the new login replaces the old one.
+
+## nixos-desktop
+
+- Home network: the ISP blocks `*.r2.dev` (Cloudflare R2 public buckets). HTTPS fails with `wrong version number` and HTTP redirects to the ISP's block page (checked 22-10-2026). Fetch such a file on a Netcup host and copy it over with `scp`.
+- Tailscale: the node is `tag:desktop-relay`, with Tailscale SSH off and no exit node. Reach it with `ssh nixos-desktop`; `tailscale ssh` does not work. The tailnet policy lets the tag reach only Omer's own devices, cliproxy on TCP 443, and the infra hosts.
+- From nixos-desktop, `tailscale ssh admin@statuslantern-deploy-1 </dev/null` opens a shell with Docker on the Coolify host (checked 25-10-2026). A Coolify API token's abilities are the `abilities` JSON of its row in `personal_access_tokens`, read and changed with `docker exec coolify-db psql -U coolify -d coolify`. The row id is the part of the token before `|`. Coolify's UI cannot edit abilities, so change the row instead of making a new token.
+- Sensors: the nct6687 "PCIe x1" channel is a phantom pinned near 80 °C, and M2_1 reads 0 °C (checked 22-10-2026). Mislabeled channels are known on MSI boards; ignore both. nixos-config `machines/nixos-desktop/fans.nix` runs `case-fans`, an RPM loop that owns nct6687 channels 1, 3, 5 and 7 (radiator, rear and both intake chains) and hands them back to the BIOS whenever it stops; the BIOS keeps the pump (channel 2) and the AIO's VRM fan (channel 4), and LACT the GPU fan (`machines/nixos-desktop/gpu.nix`). `case-fans status` prints its live targets and RPMs.
+- AWS CLI: the profiles `default`, `statuslantern` and `statuslantern-admin` get 12-hour credentials of the IAM role `statuslantern-admin` in the Status Lantern account (`us-east-1`) through IAM Roles Anywhere (`aws_signing_helper`, from nixos-config `machines/<host>/home.nix`), with no browser login or stored access key. The role's trust policy admits only the trust anchor `nixos-desktop-ca` and the certificate CNs `omer@nixos-desktop` and `omer@nixos-rog` (Status Lantern `aws/access.yaml`); the Roles Anywhere profile is `statuslantern-admin`. `statuslantern-old-admin` and `statuslantern-omer-console` reach the old account (`us-west-1`) until the Status Lantern cleanup ticket closes it.
+- The keys in `~/.aws/rolesanywhere/` (`ca.key`, `leaf.key`) are TPM-sealed `TSS2 PRIVATE KEY` files, so they work only on this machine and for members of `tss`. The leaf certificate expires 22-10-2027 and the CA 22-10-2031. nixos-rog has its own TPM-sealed `leaf.key` with CN `omer@nixos-rog`, whose certificate the nixos-desktop CA signed and which expires 04-11-2027; to renew it, make a CSR on nixos-rog with the same provider and sign it on nixos-desktop. Reissue the leaf there with OpenSSL's TPM provider from nixpkgs: set `OPENSSL_MODULES=$(nix build --no-link --print-out-paths nixpkgs#tpm2-openssl)/lib/ossl-modules`, then run `openssl req` and `openssl x509 -req` with `-provider tpm2 -provider default`, `leaf.cnf`, and `-extensions v3_leaf`.
+- Boot: forcing `video=` on a connector with no EDID made amdgpu spam "No EDID found" and stall the initramfs for about two minutes on this machine (observed before the NixOS install). Check the connector's `status` and EDID before adding the parameter.
+
+## Out of memory
+
+After an OOM kill, run `oom-report` (dotfiles `desktop/bin/oom-report`) before reading the journal by hand. It names what the kernel killed, the processes in its task table by name with RSS and swap, the units that stopped with their memory and swap peaks, and the Claude sessions that wrote during the incident and then went quiet, with their resume commands. Some of those may only be idle. The kernel's task table has no parent or command line; read those in the newest files in `~/.local/state/oom-snapshots/`, which nixos-config's memory-pressure-snapshot user service writes when memory pressure rises.
+
+Each Ghostty tab is a systemd scope with `MemoryMax` 20 GiB (`memory.max` of `app-ghostty-surface-transient-*.scope`, read on 25-10-2026), and the Claude session and every process it starts share it. A runaway test there makes the kernel kill the session too; `.claude-wrapped` has died that way. Run a test suite, a gate, or a subagent's test run under `heavy` or `systemd-run --user --scope -p TasksMax=512 -p MemoryMax=8G`, so a fork loop or a memory leak dies in its own scope.

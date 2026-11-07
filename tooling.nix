@@ -84,6 +84,12 @@ in
             "--no-progress"
           ];
           includes = [ "*.md" ];
+          # Verbatim vendor pages: their root-relative links point into the vendor's site.
+          excludes = [
+            "agents/reference/headless-clis/*-headless*.md"
+            "agents/reference/headless-clis/chatgpt-*.md"
+            "agents/reference/headless-clis/opencode-cli.md"
+          ];
         };
         exit-codes = {
           command = lib.getExe pkgs.bash;

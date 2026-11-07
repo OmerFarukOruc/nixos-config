@@ -1,0 +1,96 @@
+# devbox for Omer's own user
+
+devbox is Omer's main dev machine. He and his agents work there as `omer`, reached with `ssh omer@devbox` (Tailscale SSH) from nixos-desktop or nixos-rog. Root work logs in as `ssh root@devbox`; this host has no `admin`. `omer` is not in the `docker` group, and its `sudo` asks for a password (Sudo, below).
+
+## Where each tool comes from
+
+Add a tool or setting to the layer that owns it, never by hand on the host.
+
+| Layer | Holds | Kept current by |
+|---|---|---|
+| nixos-config (`machines/devbox/`, `home-manager/`) | The system, `omer`'s shell, editors, agent CLIs and user units | the deploy timer, and the update workflow that moves inputs and apps |
+| dotfiles `desktop/` | Claude Code and Codex config, skills | `desktop-sync.sh`, and the hourly `desktop-sync.timer` that commits app config changes |
+| dotfiles `desktop/shell/mise.toml` | The ruff and shellcheck that dotfiles' own scripts run; mise is not on any shell's PATH | `desktop-sync.sh` installs the pins; Renovate moves them |
+| Infisical `personal-secrets` `/harness/shell` | Omer's API keys; no shell exports them, so a command that needs one runs under `infisical run` with the Infisical Agent's token (Accounts and logins) | Omer, in Infisical |
+
+Renovate opens one dotfiles PR per tool release. Keeper merges the ones that pass its 07:00 review (risoluto-fleet `bots/keeper/tool-updates.md`) and asks Omer about the rest. The next hourly `desktop-sync.timer` run installs merged updates on each host.
+
+## Shell and disk
+
+- A project brings its own runtimes (Node, Bun, Go and the rest) through its devenv or mise config; no global runtime is on PATH.
+- `omer`'s PATH has no `/usr/sbin`, so call `/usr/sbin/<tool>` (`swapon`, `sysctl`) or read `/proc` (`/proc/swaps`).
+- `docker` as `omer` talks to `omer`'s rootless Docker (`docker.service`); the box runs no system Docker daemon. Rootless Podman still holds cliproxy and containers made before rootless Docker existed (`podman ps -a`); nixos-config `nixosModules/rootless-containers.nix` points the docker CLI at Docker's socket through `DOCKER_HOST`.
+- `/tmp` deletes files nobody touched for 7 days (`systemd-tmpfiles`, `q /tmp ... 7d`). Put build output and anything that must last under `~/`, and worktrees under `~/Desktop/workspace/worktrees/` (the worktrees skill).
+- The box has no `heavy` command; nixos-config installs it (`home-manager/modules/heavy.nix`) on nixos-desktop and nixos-rog only. Run a heavy suite, such as Gradle `:app:test`, the scraper's all-local suites or `pytest -n`, one at a time.
+- The locale is `en_US.UTF-8`, whose `sort` orders case ties differently from `LC_ALL=C sort -f`. Merge into a list kept with `LC_ALL=C sort -f` using that same command.
+
+## Services under `omer`
+
+nixos-config `machines/devbox/home.nix` installs these user units.
+- `infisical-agent.service` runs the Infisical Agent as the `omer-machines` identity. It keeps an access token in `$XDG_RUNTIME_DIR/infisical-agent/token` and writes `openrouter-guardrail.env`, which `openrouter-free-guardrail.service` reads, next to it (nixos-config `docs/devbox.md`, Agent runtime).
+
+- `cursor-worker.service` is the Cursor Cloud Agent worker `devbox` (pick it at cursor.com/agents, or put `worker=devbox` in a Linear issue). `amp-runner.service` is the Amp runner `devbox` for every checkout up to two levels under `~/Desktop/workspace`.
+- `openchamber.service` listens on 127.0.0.1:3000 and starts OpenCode itself on a random loopback port, so its Restart OpenCode and update buttons work. Omer opens it at `https://openchamber.risoluto.dev` from the tailnet.
+- `cliproxy.service` runs CLIProxyAPI on rootless Podman, API on 127.0.0.1:8317, shared on the tailnet as `https://cliproxy.risoluto.dev`; details in nixos-config `docs/devbox.md` (CLIProxyAPI).
+- `herdr-default.service` runs herdr's default session, where Omer's Claude agents live, and `claude-tools-limit-switch.timer` keeps them running (nixos-config `pkgs/claude-tools/README.md`). To start an agent again after it exited, run `claude-tools limit-switch resume NAME`, which restores its account, flags, and pane; a hand-written start loses the account or the flag. Before leaving agents running while Omer is away, read `unattended-agents.md` next to this file. To start, stop, read, or watch a named Claude agent in a herdr tab, read `~/.claude/reference/headless-clis/herdr.md` "Orchestrating agents" first (`claude-tools agent start|stop|watch`, `herdr agent prompt`).
+- `herdr-web-ui.service` (`https://herdr.risoluto.dev`) serves herdr's web UI on the tailnet. Files pasted there land in `~/.local/state/herdr-web-ui/paste`, not in the pane's repository.
+- `docker.service` is the rootless Docker daemon. Restarting it disconnects the SigNoz MCP server (a `docker run -i` container from statuslantern-scraper's `.mcp.json`) in every session until `/mcp` reconnects it. nixos-config `nixosModules/rootless-containers.nix` keeps published host ports below the ephemeral range.
+
+## Show Omer a file
+
+Omer reads the box's files from nixos-desktop or nixos-rog through herdr, VS Code, or Dolphin (`desktop/README.md`, "Read remote files"). For a markdown report, run `mdv PATH` from your herdr pane; it opens the rendered file in a new herdr tab and returns at once. For an HTML page, give him `xdg-open ~/remote/devbox<PATH>` to run on nixos-desktop or nixos-rog, because `ropen` shows HTML as source.
+
+## Sudo
+
+`sudo` as `omer` asks for a password, so `sudo -n` fails. The password is the Infisical record `DEVBOX_OMER_SUDO_PASSWORD` in project `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`), environment `prod`, path `/infra`. The box cannot read it: its CLI has no login, and the `omer-machines` token gets an empty answer for that path (checked 07-11-2026). So run the read on nixos-desktop or nixos-rog, where the CLI has Omer's login, and pipe it to `sudo -S` on the box so the value stays on stdin. From those hosts, for one-off root work:
+
+```bash
+infisical secrets get DEVBOX_OMER_SUDO_PASSWORD --plain --silent \
+  --projectId "$INFISICAL_STATUSLANTERN_PROJECT" --domain https://eu.infisical.com --env prod --path /infra |
+  ssh omer@devbox "sudo -S -p '' <command>"
+```
+
+- The pipe takes the command's stdin. For a command that reads stdin, or for several commands, run `sudo -S -p '' sh -c '<commands>'` with the input in a file.
+- End the root work with `sudo -k`, because sudo caches the login for some minutes.
+- Root follows the approval rules in `~/.claude/shared/core.md`. Host state that must last goes into nixos-config (`machines/devbox/`), which the box's deploy timer applies.
+- As `omer`, `journalctl` for a system unit prints only `-- No entries --` and exits 0, so a count through `grep -c` reads 0. Read the system journal through the pipe above.
+- The same password logs omer in to devbox's desktop over RDP. Before you ask Omer to open the `devbox` profile in Remmina on a workstation, store the password in that profile's keyring entry from that workstation, so Remmina logs in without asking. `tr -d '\n'` drops the newline that `--plain` adds, which devbox would refuse as part of the password:
+
+  ```bash
+  infisical secrets get DEVBOX_OMER_SUDO_PASSWORD --plain --silent \
+    --projectId "$INFISICAL_STATUSLANTERN_PROJECT" --domain https://eu.infisical.com --env prod --path /infra |
+    tr -d '\n' |
+    secret-tool store --label='Remmina: devbox - password' xdg:schema org.remmina.Password \
+      filename ~/.local/share/remmina/group_rdp_devbox_devbox.remmina key password
+  ```
+- To change the password, change `omer-password-hash` in nixos-config `secrets/devbox.yaml` (nixos-config `docs/devbox.md`, "Network and secrets") and update the Infisical record in the same change.
+
+## Other hosts
+
+The box carries `tag:infra-agent`, and the tailnet policy decides what it reaches.
+
+- Agents cannot open a shell on nixos-desktop, nixos-rog or `statuslantern-staging-1`; ask Omer instead. From this box the NixOS hosts' names do not resolve (`ssh nixos-desktop` prints `Could not resolve hostname`, checked 22-10-2026). Omer's browser there is reachable over CDP once he runs `browser-lend on` (Browsers, below).
+- `tailscale ssh admin@<host>` works for `statuslantern-ci-1`, `statuslantern-observability-1`, `statuslantern-deploy-1`, `statuslantern-prod-backend-1`, and `statuslantern-prod-scraper-1`, with `sudo -n`. Production activation and deployments still need recorded owner authority (statuslantern-scraper `AGENTS.md`).
+- For staging, the `infra-reconcile/<host>` commit status on the infra commit proves an apply. Report any other staging fact as unconfirmed, with the one command for Omer to run.
+- A `!` command that Omer types in an agent session here runs on devbox with your own reach, so it adds nothing you could not run. Run every command yourself that this box reaches or that Sudo above covers. A step that needs Omer's machine or login, such as `browser-lend on` or a staging check, names the machine first: "In a terminal on nixos-desktop, run ...".
+- Pass `</dev/null` to `tailscale ssh` in a loop or a script, because it reads stdin.
+- The Coolify API (`statuslantern-deploy-1`) and the SigNoz API (`statuslantern-observability-1`) answer this box on TCP 443, so their MCP servers work here. When one times out at session start, `/mcp` reconnects it.
+
+## Browsers
+
+Agents drive browsers with agent-browser; the agent-browser skill says which browser to use and how.
+
+- The box browser holds Omer's logins: Chromium on the VNC display `:20`, DevTools on `127.0.0.1:9344`, profile in `~/.local/share/box-browser/profile`. Agents drive it with `box-browser`, and Omer signs in from his PC with `box-view devbox`. nixos-config `nixosModules/box-browser.nix` runs the display and the browser as user units.
+- Omer's lent Brave (`browser-lend on` on his PC, `brave-browser --on <machine>` here) is for copying a passkey-only site's cookies into the box browser.
+- A public page needs no lent browser: `agent-browser --session <name> open <url>` starts a throwaway headless Chrome.
+
+## Accounts and logins
+
+- `claude-tools accounts names` lists the Claude Code accounts, each with its own `CLAUDE_CONFIG_DIR` (`claude-tools accounts dir NAME`) and its own login; a credentials file is never copied between machines. Omer runs Claude as `clauded`, the zshrc alias for `claude --dangerously-skip-permissions`. Start or resume an agent for him with that flag; a script or `herdr agent start` passes it itself, because the alias exists only in interactive shells.
+- Sessions that `claude daemon` starts show "Auto-update channel: disabled (set by env: DISABLE_UPDATES)" and the full model ID in /config. The daemon sets that variable, so neither is config drift.
+- The AWS profile `statuslantern` (`us-east-1`, the Status Lantern account) needs no login. It trades the host certificate in `~/.aws/rolesanywhere/` for 1-hour AdministratorAccess credentials of the IAM role `devbox-agent` through IAM Roles Anywhere (Status Lantern `docs/aws.md`, Access), and the Status Lantern repository's `aws-mcp` MCP server signs with it. `statuslantern-omer-console` (`us-west-1`) trades the same certificate for the old account's `devbox-agent` role, and `aws login --remote --profile statuslantern-omer-login` is Omer's console login there; both go when the Status Lantern cleanup ticket closes that account. The certificate expires 29-10-2027; `desktop/README.md` "Renew the AWS certificate" has the steps.
+- The Infisical CLI on the box has no login of its own (`~/.infisical` holds only `update-check.json`, checked 07-11-2026). A command authenticates with the token that `infisical-agent.service` keeps for the `omer-machines` identity: `INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token") infisical run --domain https://eu.infisical.com --projectId <project-id> --env secrets --path /harness/<folder> -- <command>`. That identity reads `/harness/**` in `personal-secrets` and statuslantern `dev`, so every `omer` process can reach those.
+- Enes (`<enes-email>`) is a co-admin on purpose (Omer, 18-10-2026), with root through `/root/.ssh/authorized_keys` and the tailnet `group:admins` SSH rule, and an AWS `Admins` user.
+- gh uses the SSH key `~/.ssh/id_ed25519`, with scopes `delete:packages`, `gist`, `read:org`, `repo`, `write:packages` and no `admin:public_key`. To add a scope, Omer types `! gh auth refresh -h github.com -s <scope>` in the session, so it runs on the box; the box has no clipboard or browser, so he opens https://github.com/login/device himself and enters the printed code. The same command in his own terminal changes another machine's login. Codex, Grok CLI, amp, Cursor Agent, and linctl are logged in too.
+- OpenCode holds API keys for OpenCode, OpenRouter, DeepSeek, Exa, Firecrawl, Parallel, Tavily, and TinyFish. Omer signs in to OpenAI, xAI, and Cursor himself in OpenChamber. A ChatGPT sign-in calls back to `127.0.0.1:<port>` on the machine with the browser, so from elsewhere use Codex device code, or run the callback URL with `curl` on the box while OpenChamber waits.
+- Risoluto's domains (`risolu.to`, `risoluto.dev`) live in the Cloudflare account `risoluto`, not Omer's primary account. The token `STATUSLANTERN_CLOUDFLARE_DNS_API_TOKEN` failed from this box on 14-10-2026, likely a client address allowlist, so test it with a read call before planning a DNS write here.
