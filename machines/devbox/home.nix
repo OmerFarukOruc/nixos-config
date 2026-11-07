@@ -39,6 +39,7 @@ in
   # Node from a project's mise.toml comes prebuilt and runs through nix-ld;
   # mise's default on NixOS compiles it, which fails.
   home.sessionVariables.MISE_NODE_COMPILE = "false";
+  home.sessionVariables.PYTHONNOUSERSITE = "true";
 
   systemd.user.services.openchamber = {
     Unit = {

@@ -13,7 +13,6 @@
       sync_status=~/Desktop/workspace/dotfiles/desktop/shell/sync-status.zsh
       [[ -r $sync_status ]] && . "$sync_status"
       unset sync_status
-      [[ -r ~/.zshrc.local ]] && . ~/.zshrc.local
     '';
   };
 
