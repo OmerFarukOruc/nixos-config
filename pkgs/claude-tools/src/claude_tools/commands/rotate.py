@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -186,8 +187,8 @@ def option_values(args: list[str], i: int, kind: str) -> list[str]:
     return taken
 
 
-def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
-    out, i = [], 0
+def parsed_flags(args: list[str], opts: dict[str, str]) -> Iterator[tuple[str, list[str]]]:
+    i = 0
     while i < len(args):
         a = args[i]
         i += 1
@@ -199,9 +200,11 @@ def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
         name = a[:2] if attached else a.split("=", 1)[0]
         taken = option_values(args, i, "" if attached or "=" in a else opts.get(name, ""))
         i += len(taken)
-        if name not in NOT_CARRIED:
-            out += [a, *taken]
-    return out
+        yield name, [a, *taken]
+
+
+def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
+    return [t for name, tokens in parsed_flags(args, opts) if name not in NOT_CARRIED for t in tokens]
 
 
 def exit_code(code: int) -> int:

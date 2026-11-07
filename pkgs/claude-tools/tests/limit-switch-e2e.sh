@@ -28,6 +28,14 @@ fail() {
   exit 1
 }
 
+mode=${CLS_E2E_AGENT_ARGS:-skip}
+if [[ $mode == settings ]]; then
+  jq -n '{permissions: {defaultMode: "dontAsk", allow: []}}' >"$dir/settings.json"
+  agent_args=(--settings "$dir/settings.json" --permission-mode dontAsk --model haiku)
+else
+  agent_args=(--dangerously-skip-permissions --model haiku)
+fi
+
 claude_in() {
   local p env
   for p in $(pgrep -x 'claude|\.claude-wrapped'); do
@@ -68,10 +76,18 @@ check_agent() {
   h agent wait "$name" --timeout 180000 >/dev/null
   [[ "$(session)" == "$sid" ]] || fail "$1 changed the session id"
   claude_in "$pane" | cut -f2 | grep -q -- "--model haiku" || fail "$1 dropped --model haiku"
-  claude_in "$pane" | cut -f2 | grep -q -- "--dangerously-skip-permissions" || fail "$1 dropped --dangerously-skip-permissions"
+  if [[ $mode == settings ]]; then
+    cmdline=$(claude_in "$pane" | cut -f2)
+    grep -q -- "--settings $dir/settings.json" <<<"$cmdline" || fail "$1 dropped --settings"
+    grep -q -- "--permission-mode dontAsk" <<<"$cmdline" || fail "$1 dropped --permission-mode dontAsk"
+    ! grep -q -- "--dangerously-skip-permissions" <<<"$cmdline" || fail "$1 added --dangerously-skip-permissions"
+  else
+    claude_in "$pane" | cut -f2 | grep -q -- "--dangerously-skip-permissions" || fail "$1 dropped --dangerously-skip-permissions"
+  fi
   check_word "$1"
 }
 check_loop() {
+  [[ $mode == settings ]] && return 0
   ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
   transcript_shows "$last_reply" 1j || fail "the agent does not have exactly one scheduled job after $1"
 }
@@ -109,7 +125,7 @@ cls restore || fail "restore could not start the $run server"
 ws_json=$(h workspace create --cwd "$dir" --label "$run" --env "CLAUDE_CONFIG_DIR=$(profiles dir "$start")" --no-focus)
 pane=$(jq -r .result.root_pane.pane_id <<<"$ws_json")
 for _ in $(seq 60); do
-  out=$(h agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- --dangerously-skip-permissions --model haiku 2>&1) && break
+  out=$(h agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- "${agent_args[@]}" 2>&1) && break
   grep -q agent_pane_busy <<<"$out" || break
   sleep 1
 done
@@ -140,6 +156,7 @@ start_loop() {
     }
 }
 for attempt in 1 2 3; do
+  [[ $mode == settings ]] && break
   start_loop
   ask "Run CronList and reply with only the number of scheduled jobs followed directly by the letter j, no space."
   transcript_shows "$last_reply" 1j && break
@@ -161,11 +178,13 @@ h agent wait "$name" --until idle --timeout 120000 >/dev/null || fail "the agent
 cls switch "$name" || fail "switch exited $?"
 first=$(account "$pane")
 check_move switch "$start" "$start"
-grep -q "answered the background-work dialog of $name" "$state/events.log" ||
-  fail "switch did not answer the background-work dialog"
-answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$state/events.log" | cut -d' ' -f1)" +%s)
-moved=$(date -d "$(grep -m1 "$name: moved from" "$state/events.log" | cut -d' ' -f1)" +%s)
-((moved - answered < 25)) || fail "the move came $((moved - answered)) s after the dialog answer, so Enter did not end claude"
+if [[ $mode != settings ]]; then
+  grep -q "answered the background-work dialog of $name" "$state/events.log" ||
+    fail "switch did not answer the background-work dialog"
+  answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$state/events.log" | cut -d' ' -f1)" +%s)
+  moved=$(date -d "$(grep -m1 "$name: moved from" "$state/events.log" | cut -d' ' -f1)" +%s)
+  ((moved - answered < 25)) || fail "the move came $((moved - answered)) s after the dialog answer, so Enter did not end claude"
+fi
 check_loop switch
 
 rm -f "$state/switched.json"
@@ -212,7 +231,7 @@ cls scan || fail "scan after the server stop exited $?"
 check_agent restore
 echo "restore: back in $pane on $first"
 
-ask "Delete every scheduled job with CronDelete. Reply only OK."
+[[ $mode == settings ]] || ask "Delete every scheduled job with CronDelete. Reply only OK."
 h agent prompt "$name" /exit >/dev/null
 for _ in $(seq 30); do
   [[ -z "$(claude_in "$pane")" ]] && break

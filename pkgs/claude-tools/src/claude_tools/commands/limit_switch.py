@@ -8,6 +8,7 @@ from datetime import datetime
 
 from claude_tools.accounts import account_of, read_accounts
 from claude_tools.agents import SKIP_PERMISSIONS, Agents
+from claude_tools.commands.rotate import claude_help, parse_help, parsed_flags
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
 from claude_tools.limits import recorded_limit
@@ -19,8 +20,17 @@ COOLDOWN = 300
 ENDED_KEEP = 30 * 86400
 
 
-def resume_args(argv: list[str], session: str) -> list[str]:
-    out, skip = [] if SKIP_PERMISSIONS in argv else [SKIP_PERMISSIONS], False
+OWN_PERMISSIONS = {"--settings", "--permission-mode"}
+ALLOWS_BYPASS = "--allow-dangerously-skip-permissions"
+
+
+def own_permissions(argv: list[str], opts: dict[str, str]) -> bool:
+    names = {name for name, _ in parsed_flags(argv, opts)}
+    return bool(names & OWN_PERMISSIONS) and ALLOWS_BYPASS not in names
+
+
+def resume_args(argv: list[str], session: str, opts: dict[str, str]) -> list[str]:
+    out, skip = [] if SKIP_PERMISSIONS in argv or own_permissions(argv, opts) else [SKIP_PERMISSIONS], False
     for a in argv:
         if skip:
             skip = False
@@ -79,6 +89,13 @@ class Switcher:
         msg_file = self.settings.config / "resume" / name
         return msg_file.read_text().strip() if msg_file.is_file() else default
 
+    def resume_args(self, argv: list[str], session: str) -> list[str]:
+        try:
+            opts, _ = parse_help(claude_help(self.settings.cache / "rotate"))
+        except OSError:
+            opts = {}
+        return resume_args(argv, session, opts)
+
     def switch(self, name: str, to: str | None, after_limit: bool = False) -> bool:
         agent = self.herdr("agent", "get", name)["result"]["agent"]
         if agent.get("agent") != "claude" or agent.get("agent_status") == "working":
@@ -109,10 +126,10 @@ class Switcher:
             raise Failed(f"unknown account {to}")
         self.agents.exit_claude(name, pid)
         try:
-            self.agents.start_claude(pane, name, dirs[to], resume_args(argv[1:], session))
+            self.agents.start_claude(pane, name, dirs[to], self.resume_args(argv[1:], session))
         except Failed as e:
             self.log(f"{name}: start on {to} failed ({e}); starting it on {current} again")
-            self.agents.start_claude(pane, name, found.local[current], resume_args(argv[1:], session))
+            self.agents.start_claude(pane, name, found.local[current], self.resume_args(argv[1:], session))
             raise
         self.herdr("agent", "prompt", name, self.resume_message(name, (
             f"Your Claude account {current} hit its usage limit, so this session now runs on the {to} account. "
@@ -130,7 +147,7 @@ class Switcher:
             ws = self.herdr("workspace", "create", "--cwd", r["cwd"], "--label", r["workspace"] or name, "--no-focus")
             pane, workspace = ws["result"]["root_pane"]["pane_id"], ws["result"]["workspace"]["workspace_id"]
         try:
-            self.agents.start_claude(pane, name, r["config_dir"], resume_args(r["args"], r["session"]))
+            self.agents.start_claude(pane, name, r["config_dir"], self.resume_args(r["args"], r["session"]))
         except Failed:
             if workspace:
                 try:
@@ -139,7 +156,7 @@ class Switcher:
                     self.log(f"{name}: could not close workspace {workspace} after the failed start: {e}")
             raise
         self.herdr("agent", "prompt", name, self.resume_message(name, (
-            f"{why}, and this session was resumed with clauded --resume on the same account. "
+            f"{why}, and this session was resumed with --resume on the same account. "
             "Continue where you stopped.")))
         return pane
 
