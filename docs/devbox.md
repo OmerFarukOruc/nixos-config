@@ -402,13 +402,36 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   public model list, keeps the models whose prices are all 0 and that support
   structured outputs, and sets them as the allowed models of the
   `threadsift-free-only` guardrail through the management API, creating the
-  guardrail when it is missing. The unit starts the script through
+  guardrail when it is missing. A run refuses an empty list, because a guardrail
+  with no allowed models allows every model, and it fails before any write when
+  the account has no workspace or key it expects once (the workspace `default`
+  and the key `threadsift-verify`) or two policies named `threadsift-free-only`.
+  The update (a PUT) replaces only `allowed_models`. It sends back every other
+  field of the policy's `config` that the API accepts when it writes a
+  policy, such as `allowed_providers`, `enforce_zdr` or `ignored_models`, and
+  the policy's members and opted-out lists, so a setting made in the
+  OpenRouter dashboard survives. It adds `threadsift-verify` to the key
+  assignment and removes no key, so a key added by hand stays assigned. The
+  create call (a POST) is not retried, because a retry after a server-side
+  commit would create a second policy. The unit starts the script through
   `~/.local/bin/infisical-run.sh`, which injects `OPENROUTER_MANAGEMENT_KEY` from
   the Infisical folder `/harness/openrouter-guardrail` with the host's machine
-  identity. A run that fails leaves `~/.local/state/openrouter-free-guardrail/failed`,
-  which each new shell prints, until a run succeeds; read a run with
-  `journalctl --user -u openrouter-free-guardrail -n 20`. A run that changes
-  nothing logs `threadsift-free-only unchanged: <models>`.
+  identity. Each call times out after 30 s and retries for at most 60 s, so a
+  run can take 33 calls of at most 90 s each (the 10 pages each of the
+  workspace, key and policy lists, the model list, the policy read and the
+  write), and the unit stops it after 1 hour. A run that changes nothing logs
+  `threadsift-free-only unchanged: <models>`; read a run with
+  `journalctl --user -u openrouter-free-guardrail -n 20`.
+- The failure marker. `openrouter-free-guardrail.service` and
+  `worktree-sweep.service` (`home-manager/modules/daily-unit.nix`) each run a
+  marker command as `ExecStopPost=`, which systemd runs after every run with
+  `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
+  The marker is `~/.local/state/<unit>/failed`. Any result except `success`
+  writes it, including a non-zero exit, a kill by signal, a `TimeoutStartSec`
+  stop, and `infisical-run.sh` exiting 77 or 78 before the script starts. A
+  successful run deletes it. Each new shell prints the marker's line until a
+  run succeeds. A run that `systemctl --user stop` cuts short counts
+  as a failure too (the result is `signal`).
 
 ## CLIProxyAPI
 

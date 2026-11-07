@@ -1,4 +1,9 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   sweep = pkgs.writeShellApplication {
     name = "worktree-sweep";
@@ -10,34 +15,19 @@ let
     ];
     text = builtins.readFile ./worktree-sweep.sh;
   };
+  dailyUnit = import ./daily-unit.nix { inherit config lib pkgs; };
 in
 {
-  home.packages = [ sweep ];
-
-  programs.zsh.initContent = ''
-    if [[ -r ''${XDG_STATE_HOME:-$HOME/.local/state}/worktree-sweep/failed ]]; then
-      print -r -- "worktree-sweep: $(<''${XDG_STATE_HOME:-$HOME/.local/state}/worktree-sweep/failed)"
-    fi
-  '';
-
-  systemd.user.services.worktree-sweep = {
-    Unit.Description = "Remove merged, clean worktrees under ~/Desktop/workspace";
-    Service = {
-      Type = "oneshot";
-      ExecStart = "${sweep}/bin/worktree-sweep";
-      Environment = [
-        "PATH=/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin"
-      ];
-      TimeoutStartSec = "30min";
-    };
-  };
-  systemd.user.timers.worktree-sweep = {
-    Unit.Description = "Daily sweep of merged worktrees";
-    Timer = {
-      OnCalendar = "daily";
-      Persistent = true;
-      RandomizedDelaySec = "1h";
-    };
-    Install.WantedBy = [ "timers.target" ];
-  };
+  config = lib.mkMerge [
+    { home.packages = [ sweep ]; }
+    (dailyUnit {
+      name = "worktree-sweep";
+      description = "Remove merged, clean worktrees under ~/Desktop/workspace";
+      timerDescription = "Daily sweep of merged worktrees";
+      execStart = "${sweep}/bin/worktree-sweep";
+      timeout = "30min";
+      hint = "see /tmp/agents/worktree-sweep/report.md and journalctl --user -u worktree-sweep";
+      stopPost = [ "${pkgs.coreutils}/bin/rm -f /tmp/agents/worktree-sweep/.report.draft" ];
+    })
+  ];
 }

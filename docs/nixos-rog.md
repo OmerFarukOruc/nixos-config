@@ -194,7 +194,8 @@ entry whose folder is gone, such as one under `/tmp` that tmpfiles aged out;
 `wt` keeps such an entry while its commits are not merged. When the sweep fails
 in a repository, it still sweeps the others, then fails the unit, so
 `systemctl --user --failed` shows it and each new shell prints a
-`worktree-sweep:` line until a run succeeds; read
+`worktree-sweep:` line until a run succeeds
+([what the marker covers](devbox.md#agent-runtime)); read
 `journalctl --user -u worktree-sweep`.
 
 `nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system

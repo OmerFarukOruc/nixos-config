@@ -1,22 +1,8 @@
 #!/usr/bin/env bash
 workspace=$HOME/Desktop/workspace
 report_dir=/tmp/agents/worktree-sweep
-state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/worktree-sweep
-draft=
+draft=$report_dir/.report.draft
 failed=()
-
-finish() {
-  local code=$?
-  [ -z "$draft" ] || rm -f "$draft"
-  if ((code)); then
-    mkdir -p "$state_dir"
-    printf 'the run at %s exited %s, see %s/report.md and journalctl --user -u worktree-sweep\n' \
-      "$(date -u +%FT%TZ)" "$code" "$report_dir" >"$state_dir/failed"
-  else
-    rm -f "$state_dir/failed"
-  fi
-}
-trap finish EXIT
 
 sweep() {
   local repo=$1 pruned
@@ -42,7 +28,6 @@ sweep() {
 }
 
 mkdir -p "$report_dir"
-draft=$(mktemp "$report_dir/.report.XXXXXX")
 printf '# Worktree sweep on %s at %s\n' "$(uname -n)" "$(date -u +%FT%TZ)" >"$draft"
 for git_dir in "$workspace"/*/.git; do
   [ -d "$git_dir" ] || continue
@@ -53,7 +38,6 @@ for git_dir in "$workspace"/*/.git; do
   fi
 done
 mv "$draft" "$report_dir/report.md"
-draft=
 cat "$report_dir/report.md"
 
 if ((${#failed[@]})); then
