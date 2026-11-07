@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Open a path on devbox from nixos-desktop or nixos-rog: in VS Code over Remote-SSH, or with -f in Dolphin
+# through the mount of sshfs-devbox.service (home-manager/modules/sshfs-devbox.nix in nixos-config). Without PATH it takes the path from the clipboard, so a path copied from a herdr pane
+# needs no typing. A PATH:LINE[:COL] suffix opens VS Code at that line.
+set -euo pipefail
+usage="usage: ropen [-f] [PATH[:LINE[:COL]]]"
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  echo "$usage"
+  exit 0
+fi
+
+host=devbox
+box_home=/home/omer
+mount="$HOME/remote/$host"
+fail() {
+  echo "ropen: $1" >&2
+  # Started from a keyboard shortcut there is no terminal to show the error.
+  [[ -t 2 ]] || notify-send -a ropen ropen "$1"
+  exit 1
+}
+
+files=0
+[[ "${1:-}" == -f ]] && { files=1; shift; }
+(( $# <= 1 )) || { echo "$usage" >&2; exit 2; }
+if (( $# )); then
+  arg=$1
+else
+  arg=$(wl-paste --no-newline 2>/dev/null || true)
+  # A path copied from rendered markdown or a quoted log line brings its backticks or quotes along.
+  arg=$(sed -E "s/^[[:space:]\`'\"]+//; s/[[:space:]\`'\"]+\$//" <<<"$arg")
+fi
+[[ "$arg" == \~/* ]] && arg="$box_home/${arg#\~/}"
+[[ "$arg" == "$HOME"/* ]] && arg="$box_home/${arg#"$HOME"/}"
+loc=
+if [[ "$arg" =~ ^(.+)(:[0-9]+:[0-9]+)$ || "$arg" =~ ^(.+)(:[0-9]+)$ ]]; then
+  arg=${BASH_REMATCH[1]}
+  loc=${BASH_REMATCH[2]}
+fi
+
+(( files )) && [[ -z "$arg" ]] && arg=$box_home
+[[ "$arg" == /* && "$arg" != *$'\n'* ]] || fail "not an absolute path on $host: ${arg:0:80}"
+# Both modes stat the path through the mount, VS Code to tell a folder from a file.
+mountpoint -q "$mount" || systemctl --user start "sshfs-$host.service" || fail "the sshfs mount of $host did not start"
+if [[ -d "$mount$arg" ]]; then
+  select=() open=("$arg")
+elif [[ -e "$mount$arg" ]]; then
+  select=(--select) open=(--goto "$arg$loc")
+else
+  fail "no such path on $host: $arg"
+fi
+
+if (( files )); then
+  setsid -f dolphin --new-window "${select[@]}" "$mount$arg" >/dev/null 2>&1
+else
+  # The host is a Host entry in ~/.ssh/config, so this window matches the one Remote Explorer opens.
+  code --remote "ssh-remote+$host" "${open[@]}"
+fi

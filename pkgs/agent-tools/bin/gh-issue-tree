@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Save a GitHub issue, every comment on it, and its sub-issues (recursively) as Markdown files.
+#   gh-issue-tree <owner/repo> <number> <dir>
+# Writes <dir>/<owner>-<repo>-<number>.md per issue (title, state, labels, body, then each comment with its
+# author, time and URL) and <dir>/INDEX.tsv (repo, number, state, parent, comment count, title).
+# Sub-issues come from the sub_issues API, so they may live in another repository.
+# Exit 0 = done, 2 = bad usage, any other code = a gh call failed (its stderr says why).
+set -euo pipefail
+
+usage() { sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; }
+die() { printf 'gh-issue-tree: %s\n' "$*" >&2; exit 2; }
+
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  usage
+  exit 0
+fi
+[[ $# -eq 3 ]] || { usage >&2; exit 2; }
+[[ $1 == */* && $2 =~ ^[0-9]+$ ]] || die "expected <owner/repo> <number> <dir>"
+command -v gh >/dev/null || die "gh is required"
+command -v jq >/dev/null || die "jq is required"
+dir=$3
+mkdir -p "$dir"
+index="$dir/INDEX.tsv"
+printf 'repo\tnumber\tstate\tparent\tcomments\ttitle\n' >"$index"
+declare -A seen
+
+save() {
+  local repo=$1 number=$2 parent=$3 issue comments file
+  [[ -z ${seen[$repo#$number]:-} ]] || return 0
+  seen[$repo#$number]=1
+  issue=$(gh api "repos/$repo/issues/$number")
+  comments=$(gh api --paginate "repos/$repo/issues/$number/comments?per_page=100" | jq -s 'add // []')
+  file="$dir/${repo/\//-}-$number.md"
+  {
+    jq -r '"# \(.title)\n\n\(.html_url)\nState: \(.state)\nLabels: \([.labels[].name] | join(", "))\n\n\(.body // "")"' <<<"$issue"
+    jq -r '"\n## Comments (\(length))",
+      (.[] | "\n### Comment by \(.user.login), \(.created_at)\n\(.html_url)\n\n\(.body // "")")' <<<"$comments"
+  } >"$file"
+  jq -r --arg repo "$repo" --arg parent "$parent" --argjson n "$(jq length <<<"$comments")" \
+    '[$repo, .number, .state, $parent, $n, .title] | @tsv' <<<"$issue" >>"$index"
+
+  # Read the children into a variable first: a failure inside < <(...) would not stop the script.
+  local children child_repo child
+  children=$(gh api --paginate "repos/$repo/issues/$number/sub_issues?per_page=100" \
+    | jq -rs 'add // [] | .[] | [(.repository_url | sub("^.*/repos/"; "")), .number] | @tsv')
+  while IFS=$'\t' read -r child_repo child; do
+    if [[ -n $child ]]; then save "$child_repo" "$child" "$repo#$number"; fi
+  done <<<"$children"
+}
+
+save "$1" "$2" ""
+printf '%s issues, %s comments saved in %s (index: %s)\n' \
+  "$(($(wc -l <"$index") - 1))" "$(awk -F'\t' 'NR > 1 { s += $5 } END { print s + 0 }' "$index")" "$dir" "$index"

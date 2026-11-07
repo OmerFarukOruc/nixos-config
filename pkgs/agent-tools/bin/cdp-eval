@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+# Load pages in a headless Chromium-family browser and print what a JavaScript expression returns on each.
+#   cdp-eval [--browser CMD] [--arg FLAG]... EXPRESSION URL...
+#   cdp-eval 'navigator.permissions.query({name: "idle-detection"}).then(s => s.state)' https://example.com/
+# A fresh profile means only the browser's defaults and its system policies apply. EXPRESSION runs with a user
+# gesture, and a returned promise is awaited; each URL prints "URL<TAB>JSON value". It talks to the DevTools port
+# because Brave Origin opens chrome://brave-origin-startup/ first, so --dump-dom never returns. It stops the browser's
+# whole process group, because the nixpkgs wrapper keeps Brave running after the wrapper itself is killed.
+# On a host without this file: ssh <host> "python3 - ${(q)expression} URL..." < "$(command -v cdp-eval)" (zsh quoting)
+# Exit 0 when every page evaluated, 1 when one threw or timed out, 2 when the browser did not start.
+from __future__ import annotations
+
+import argparse
+import base64
+import contextlib
+import json
+import os
+import shutil
+import signal
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+LOADED = 'location.href !== "about:blank" && document.readyState === "complete"'
+
+
+class CdpError(Exception):
+    pass
+
+
+class Tab:
+    """A minimal WebSocket client for one DevTools target."""
+
+    def __init__(self, ws_url: str) -> None:
+        hostport, path = ws_url.removeprefix("ws://").split("/", 1)
+        host, port = hostport.rsplit(":", 1)
+        self.sock = socket.create_connection((host, int(port)), timeout=30)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.sock.sendall(
+            f"GET /{path} HTTP/1.1\r\nHost: {hostport}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode()
+        )
+        self.buf = b""
+        while b"\r\n\r\n" not in self.buf:
+            self._read()
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        if b" 101 " not in head.split(b"\r\n")[0]:
+            raise CdpError(f"websocket handshake failed: {head[:80]!r}")
+
+    def _read(self) -> None:
+        chunk = self.sock.recv(65536)
+        if not chunk:
+            raise CdpError("websocket closed")
+        self.buf += chunk
+
+    def _need(self, n: int) -> None:
+        while len(self.buf) < n:
+            self._read()
+
+    def _send(self, obj: dict) -> None:
+        data = json.dumps(obj).encode()
+        n = len(data)
+        if n < 126:
+            head = bytes([0x81, 0x80 | n])
+        elif n < 65536:
+            head = bytes([0x81, 0x80 | 126]) + struct.pack(">H", n)
+        else:
+            head = bytes([0x81, 0x80 | 127]) + struct.pack(">Q", n)
+        mask = os.urandom(4)
+        self.sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+    def _recv(self) -> dict:
+        message = b""
+        while True:
+            self._need(2)
+            fin, n, off = self.buf[0] & 0x80, self.buf[1] & 0x7F, 2
+            if n == 126:
+                self._need(4)
+                n, off = struct.unpack(">H", self.buf[2:4])[0], 4
+            elif n == 127:
+                self._need(10)
+                n, off = struct.unpack(">Q", self.buf[2:10])[0], 10
+            self._need(off + n)
+            message += self.buf[off : off + n]
+            self.buf = self.buf[off + n :]
+            if fin:
+                return json.loads(message)
+
+    def evaluate(self, expression: str) -> dict:
+        # One request is in flight at a time, so a fixed id identifies its reply among the events.
+        self._send({"id": 1, "method": "Runtime.evaluate", "params": {
+            "expression": expression, "awaitPromise": True, "userGesture": True, "returnByValue": True,
+        }})
+        while True:
+            reply = self._recv()
+            if reply.get("id") == 1:
+                if "error" in reply:
+                    raise CdpError(reply["error"].get("message", str(reply["error"])))
+                return reply["result"]
+
+
+def devtools_port(profile: Path, browser: subprocess.Popen) -> str | None:
+    port_file = profile / "DevToolsActivePort"
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and browser.poll() is None:
+        if port_file.exists() and (port := port_file.read_text().split("\n", 1)[0].strip()):
+            return port
+        time.sleep(0.2)
+    return None
+
+
+def evaluate_on(base: str, url: str, expression: str) -> str:
+    request = urllib.request.Request(f"{base}/json/new?{url}", method="PUT")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        target = json.load(response)
+    try:
+        tab = Tab(target["webSocketDebuggerUrl"])
+        deadline = time.monotonic() + 30
+        while True:
+            # A navigation that commits during the check destroys its context; the next poll succeeds.
+            with contextlib.suppress(CdpError):
+                if tab.evaluate(LOADED).get("result", {}).get("value") is True:
+                    break
+            if time.monotonic() > deadline:
+                raise CdpError("timeout: the page did not load in 30 s")
+            time.sleep(0.5)
+        result = tab.evaluate(expression)
+        if "exceptionDetails" in result:
+            details = result["exceptionDetails"]
+            text = details.get("exception", {}).get("description") or details.get("text", "")
+            raise CdpError("exception: " + text.partition("\n")[0])
+        return json.dumps(result["result"].get("value"))
+    finally:
+        urllib.request.urlopen(f"{base}/json/close/{target['id']}", timeout=30).close()
+
+
+def stop(browser: subprocess.Popen) -> None:
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(browser.pid, signal.SIGTERM)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        browser.poll()  # reaps the wrapper, so its zombie does not keep the group alive
+        try:
+            os.killpg(browser.pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.2)
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(browser.pid, signal.SIGKILL)
+    browser.wait()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Print what EXPRESSION returns on each URL in a headless browser.")
+    parser.add_argument("--browser", default="brave-origin", help="browser command (default: brave-origin)")
+    parser.add_argument("--arg", action="append", default=[], help="extra browser flag, repeatable")
+    parser.add_argument("expression")
+    parser.add_argument("urls", nargs="+", metavar="URL")
+    args = parser.parse_args()
+    profile = Path(tempfile.mkdtemp(prefix="cdp-eval-"))
+    try:
+        browser = subprocess.Popen(
+            [args.browser, "--headless", "--no-first-run", "--password-store=basic", "--remote-debugging-port=0",
+             f"--user-data-dir={profile}", *args.arg],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+        )
+    except OSError as error:
+        shutil.rmtree(profile)
+        print(f"cdp-eval: cannot start {args.browser}: {error.strerror}", file=sys.stderr)
+        return 2
+    ok = True
+    try:
+        port = devtools_port(profile, browser)
+        if port is None:
+            print(f"cdp-eval: {args.browser} did not open a DevTools port within 30 s", file=sys.stderr)
+            return 2
+        base = f"http://127.0.0.1:{port}"
+        for url in args.urls:
+            try:
+                value = evaluate_on(base, url, args.expression)
+            except (CdpError, OSError) as error:
+                value, ok = str(error), False
+            print(f"{url}\t{value}", flush=True)
+    finally:
+        stop(browser)
+        shutil.rmtree(profile, ignore_errors=True)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

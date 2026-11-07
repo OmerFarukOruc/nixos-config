@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Infisical secret descriptions (secretComment): find records without one, write one.
+# The audit requests viewSecretValue=false; writes compare the PATCH response description.
+#
+#   infisical-describe check --projectId <id>
+#       Lists env, path, and key of every record whose description is empty or still
+#       a template ("Active Case ..."). Exit 1 when any exist.
+#   infisical-describe set KEY --projectId <id> --env <env> --path </folder> < description.txt
+#       Writes the description from stdin, compares the PATCH response, exits 1 on mismatch.
+#   infisical-describe get KEY --projectId <id> --env <env> --path </folder>
+#       Prints env:path/key, a tab, and the description, never the value. Exit 1 when the record is absent.
+#
+# Auth: the logged-in CLI user (`infisical login`). The CLI has no comment flag, so the
+# script uses the REST API; Cloudflare rejects requests without a User-Agent (error 1010).
+set -euo pipefail
+
+DOMAIN="${INFISICAL_DOMAIN:-https://eu.infisical.com}"
+UA="infisical-describe/1"
+
+help_text() { sed -n '2,/^[^#]/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
+usage() { help_text >&2; exit 2; }
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  help_text
+  exit 0
+fi
+
+token() {
+  infisical user get token --plain 2>/dev/null | tail -1
+}
+
+api() { # method path [json-file]
+  local method=$1 path=$2 body=${3:-}
+  if [ -n "$body" ]; then
+    printf 'Authorization: Bearer %s\n' "$TOKEN" | \
+      curl -sS -X "$method" -H @- -H "User-Agent: $UA" \
+        -H 'Content-Type: application/json' -d @"$body" "$DOMAIN/api$path"
+  else
+    printf 'Authorization: Bearer %s\n' "$TOKEN" | \
+      curl -sS -X "$method" -H @- -H "User-Agent: $UA" "$DOMAIN/api$path"
+  fi
+}
+
+cmd=${1:-}; shift || true
+[ -n "$cmd" ] || usage
+key=""; project=""; env=""; path=""
+case "$cmd" in
+  set|get) key=${1:-}; shift || true; [ -n "$key" ] || usage ;;
+  check) ;;
+  *) usage ;;
+esac
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --projectId) project=$2; shift 2 ;;
+    --env) env=$2; shift 2 ;;
+    --path) path=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ -n "$project" ] || usage
+TOKEN=$(token)
+[ -n "$TOKEN" ] || { echo "infisical-describe: no CLI login token; run infisical login" >&2; exit 1; }
+
+if [ "$cmd" = check ]; then
+  envs=$(api GET "/v1/workspace/$project" | jq -r '.workspace.environments[].slug')
+  [ -n "$envs" ] || { echo "infisical-describe: project $project has no readable environments" >&2; exit 1; }
+  bad=0; total=0
+  for e in $envs; do
+    rows=$(api GET "/v3/secrets/raw?workspaceId=$project&environment=$e&secretPath=%2F&recursive=true&viewSecretValue=false" \
+      | jq -r --arg e "$e" '.secrets[] | [$e, .secretPath, .secretKey, (.secretComment // "")] | @tsv')
+    n=$(printf '%s\n' "$rows" | grep -c . || true); total=$((total + n))
+    while IFS=$'\t' read -r renv rpath rkey rcomment; do
+      [ -n "$rkey" ] || continue
+      if [ -z "$rcomment" ] || [[ "$rcomment" == "Active Case"* ]]; then
+        printf '%s\t%s\t%s\t%s\n' "$renv" "$rpath" "$rkey" "$([ -z "$rcomment" ] && echo empty || echo template)"
+        bad=$((bad + 1))
+      fi
+    done <<< "$rows"
+  done
+  echo "infisical-describe: $bad of $total records need a description" >&2
+  [ "$bad" -eq 0 ]
+  exit
+fi
+
+[ -n "$env" ] && [ -n "$path" ] || usage
+
+if [ "$cmd" = get ]; then
+  row=$(api GET "/v3/secrets/raw/$key?workspaceId=$project&environment=$env&secretPath=$(jq -rn --arg p "$path" '$p|@uri')&viewSecretValue=false" |
+    jq -r --arg e "$env" 'if .secret.secretKey then "\($e):\(.secret.secretPath)/\(.secret.secretKey)\t\(.secret.secretComment // "")" else "!\(.message // "")" end' 2>/dev/null)
+  if [ -n "$row" ] && [ "${row:0:1}" != "!" ]; then
+    printf '%s\n' "$row"
+  else
+    echo "infisical-describe: $env:$path/$key not found: ${row:1:120}" >&2
+    exit 1
+  fi
+  exit
+fi
+
+comment=$(cat)
+[ -n "$comment" ] || { echo "infisical-describe: empty description on stdin" >&2; exit 1; }
+body=$(mktemp); chmod 600 "$body"; trap 'rm -f "$body"' EXIT
+jq -cn --arg w "$project" --arg e "$env" --arg p "$path" --arg c "$comment" \
+  '{workspaceId:$w, environment:$e, secretPath:$p, secretComment:$c}' > "$body"
+got=$(api PATCH "/v3/secrets/raw/$key" "$body" | jq -r '.secret.secretComment // .message // ""')
+if [ "$got" = "$comment" ]; then
+  echo "infisical-describe: $env:$path/$key PATCH response matched the requested description"
+else
+  echo "infisical-describe: PATCH response mismatch for $env:$path/$key: ${got:0:120}" >&2
+  exit 1
+fi

@@ -17,6 +17,8 @@ Each path except the last is a live link into the checkout. `~/.codex/AGENTS.md`
 
 Each entry sets `force`, because Home Manager backs up only a target that is not a symlink, and the links an earlier setup left there would otherwise stop the switch. Each switch also runs `agents-pull` before it ends, so the links never wait an hour for files the deployed commit added.
 
+The commands these files name, such as `pr-land`, `wait-exit` and `sandbox-run`, come from `pkgs/agent-tools`, which the same module installs ([its README](../pkgs/agent-tools/README.md)).
+
 Private values stay out of these files ([Checks](#checks)). The Infisical project IDs reach every zsh, interactive or not, through `.zshenv` as `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids`.
 
 ## Edit loop

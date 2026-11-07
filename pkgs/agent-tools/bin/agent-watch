@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+# Waits for a named Claude Code subagent's report file, and ends early when the agent stalls without writing it:
+#   agent-watch NAME REPORT SECONDS
+# Exits 0 when REPORT exists and is not empty, 3 when the agent ended its turn at least AGENT_WATCH_IDLE seconds
+# ago (default 180) with no report, 124 at the deadline, and 2 on bad arguments. Exit 3 prints the transcript path
+# and the agent's last answer, so the parent can SendMessage it at once instead of waiting out the deadline.
+# The transcript is the newest $CLAUDE_CONFIG_DIR/projects/*/*/subagents/agent-a<NAME>-<hex>.jsonl (default
+# ~/.claude). The agent counts as idle when its last user or assistant entry is an assistant entry with
+# stop_reason end_turn; a tool call in progress or a message that woke it again counts as working.
+# Prints what it waits for, then one progress line per check. AGENT_WATCH_INTERVAL sets the seconds between
+# checks (default 30).
+# The 180 s grace is chosen, not measured: long enough for a turn boundary, short enough that a stall costs
+# minutes, not the whole deadline.
+import json
+import os
+import re
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+
+def number(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+def transcript(name: str) -> Path | None:
+    root = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+    pattern = re.compile(rf"^agent-a{re.escape(name)}-[0-9a-f]+\.jsonl$")
+    found = [path for path in root.glob("*/*/subagents/*.jsonl") if pattern.match(path.name)]
+    return max(found, key=lambda path: path.stat().st_mtime, default=None)
+
+
+def last_turn(path: Path) -> tuple[dict | None, str]:
+    """The last user or assistant entry, and the text of the last assistant answer."""
+    last, answer = None, ""
+    for line in path.read_text(errors="replace").splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict) or entry.get("type") not in ("user", "assistant"):
+            continue
+        last = entry
+        content = (entry.get("message") or {}).get("content")
+        if entry["type"] == "assistant" and isinstance(content, list):
+            text = " ".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text").strip()
+            answer = text or answer
+    return last, answer
+
+
+def idle_seconds(entry: dict | None) -> float | None:
+    if not entry or entry.get("type") != "assistant" or (entry.get("message") or {}).get("stop_reason") != "end_turn":
+        return None
+    try:
+        ended = datetime.fromisoformat(entry["timestamp"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return time.time() - ended.timestamp()
+
+
+def main() -> int:
+    usage = "usage: agent-watch NAME REPORT SECONDS"
+    if sys.argv[1:2] in (["-h"], ["--help"]):
+        print(usage)
+        return 0
+    if len(sys.argv) != 4 or not sys.argv[3].isdigit():
+        print(usage, file=sys.stderr)
+        return 2
+    name, report, seconds = sys.argv[1], Path(sys.argv[2]), int(sys.argv[3])
+    grace = number("AGENT_WATCH_IDLE", 180)
+    interval = number("AGENT_WATCH_INTERVAL", 30)
+    deadline = time.monotonic() + seconds
+    print(f"agent-watch: waiting up to {seconds}s for {report} from agent {name}; exits early if {name} sits idle {grace:.0f}s without it", flush=True)
+    while True:
+        if report.is_file() and report.stat().st_size > 0:
+            print(f"agent-watch: {report} written", flush=True)
+            return 0
+        path = transcript(name)
+        state = "no transcript yet"
+        if path:
+            entry, answer = last_turn(path)
+            idle = idle_seconds(entry)
+            state = "working" if idle is None else f"idle {idle:.0f}s"
+            if idle is not None and idle >= grace:
+                print(f"agent-watch: {name} ended its turn {idle:.0f}s ago without {report}", flush=True)
+                print(f"agent-watch: transcript {path}", flush=True)
+                print(f"agent-watch: last answer: {answer[:400]}", flush=True)
+                return 3
+        left = deadline - time.monotonic()
+        if left <= 0:
+            print(f"agent-watch: deadline of {seconds}s passed; {report} missing, {name} {state}", flush=True)
+            return 124
+        print(f"agent-watch: {left:.0f}s left; {name} {state}", flush=True)
+        time.sleep(min(interval, max(left, 0.05)))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

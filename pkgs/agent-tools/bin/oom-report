@@ -1,0 +1,331 @@
+#!/usr/bin/env python3
+# Summarizes the latest kernel OOM incident on this host from the journal.
+#
+#   oom-report [--since TIME] [--all]
+#
+# An incident is a run of kernel OOM kills less than 5 minutes apart. For each one it prints what the kernel killed,
+# the processes in the biggest task table grouped by name with their RSS and swap, the systemd units that the kernel
+# killed in or that stopped soon after, largest memory plus swap peak first, and the Claude Code sessions that wrote
+# in that window and then went quiet, with the command that resumes each. Some of those may only be idle. The
+# kernel's task table names no parent and no command line; nixos-config's memory-pressure-snapshot service writes
+# those to ~/.local/state/oom-snapshots/ before memory runs out.
+#
+# TIME is anything `journalctl --since` takes, -24h by default. --all prints every incident since TIME instead of
+# only the latest. It reads the kernel journal of every boot, because an OOM often ends in a reset. Exit codes: 0
+# with a report, 1 when no OOM kill happened since TIME, 2 on a usage or journalctl error, including a user who may
+# not read the kernel journal.
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import resource
+import shlex
+import subprocess
+import sys
+from collections import Counter
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+
+# Kills closer together than this belong to one incident. A guess: the 11:18 incident on 24-10-2026 had three
+# kills within 27 s, and the next one came 25 minutes later.
+INCIDENT_GAP = timedelta(minutes=5)
+# A unit that stops this long after the last kill still counts: on 24-10-2026 the tabs stopped 90 s after it.
+STOP_AFTER = timedelta(minutes=3)
+TOP = 10
+
+LINE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:?\d\d) \S+ ([^\[:]+)(?:\[\d+\])?: (.*)$")
+# pid, uid, tgid, total_vm, rss, rss_anon, rss_file, rss_shmem, pgtables_bytes, swapents, oom_score_adj, name
+TASK = re.compile(r"^\[\s*(\d+)\]" + r"\s+(-?\d+)" * 10 + r"\s+(.+)$")
+# The prefixes mm/oom_kill.c gives oom_kill_process.
+KILL = re.compile(
+    r"(Out of memory(?: \(oom_kill_allocating_task\))?|Memory cgroup out of memory): "
+    r"Killed process (\d+) \((.*)\) total-vm.*?anon-rss:(\d+)kB"
+)
+# systemd appends IO and IP fields after the memory ones when that accounting is on.
+CONSUMED = re.compile(r"^(\S+): Consumed .*?, (\S+) memory peak(?:, (\S+) memory swap peak)?(?:,|\.$)")
+FAILED = re.compile(r"^(\S+): Failed with result '([^']+)'\.$")
+KILLED_IN = re.compile(r"^(\S+): The kernel OOM killer killed some processes in this unit\.$")
+STAMP = re.compile(r'"timestamp":"([^"]+)"')
+CWD = re.compile(r'"cwd":"((?:[^"\\]|\\.)*)"')
+# A session that wrote nothing for this long after the window counts as stopped. A guess: a live session writes
+# every few seconds while it works, and an idle one may stay quiet for longer, so the list says it may be idle.
+QUIET = timedelta(seconds=60)
+SIZE = {"B": 1, "K": 1 << 10, "M": 1 << 20, "G": 1 << 30, "T": 1 << 40}
+
+
+@dataclass
+class Entry:
+    time: datetime
+    ident: str
+    message: str
+
+
+@dataclass
+class Task:
+    pid: int
+    name: str
+    rss_pages: int
+    swap_pages: int
+
+
+@dataclass
+class Event:
+    time: datetime
+    invoker: str
+    tasks: list[Task] = field(default_factory=list)
+
+
+@dataclass
+class Kill:
+    time: datetime
+    pid: int
+    name: str
+    anon_kib: int
+    cgroup: str
+    memcg: bool
+
+
+@dataclass
+class Incident:
+    start: datetime
+    end: datetime
+    events: list[Event] = field(default_factory=list)
+    kills: list[Kill] = field(default_factory=list)
+
+    @property
+    def memcg(self) -> bool:
+        return bool(self.kills) and all(k.memcg for k in self.kills)
+
+
+@dataclass
+class Row:
+    name: str
+    count: int
+    rss_mib: int
+    swap_mib: int
+
+
+@dataclass
+class UnitStop:
+    unit: str
+    time: datetime
+    memory: str
+    swap: str | None
+    result: str | None
+
+
+@dataclass
+class Units:
+    killed: Counter
+    stopped: list[UnitStop]
+
+
+@dataclass
+class Transcript:
+    time: datetime
+    session: str
+    cwd: str | None
+
+
+def parse_journal(lines) -> list[Entry]:
+    """Reads `journalctl -o short-iso` lines. Lines that are not entries, such as `-- No entries --`, are skipped."""
+    out = []
+    for line in lines:
+        m = LINE.match(line)
+        if m:
+            out.append(Entry(datetime.fromisoformat(m.group(1)), m.group(2), m.group(3)))
+    return out
+
+
+def find_incidents(kernel: list[Entry]) -> list[Incident]:
+    incidents: list[Incident] = []
+    event = None
+    in_table = False
+    # The cgroup of the constraint line's victim pid. A victim that is already exiting gets that line and no kill.
+    victim = (0, "")
+
+    def incident_at(t: datetime) -> Incident:
+        if not incidents or t - incidents[-1].end > INCIDENT_GAP:
+            incidents.append(Incident(t, t))
+        incidents[-1].end = max(incidents[-1].end, t)
+        return incidents[-1]
+
+    for e in kernel:
+        msg = e.message
+        if " invoked oom-killer:" in msg:
+            event = Event(e.time, msg.split(" invoked oom-killer:")[0])
+            incident_at(e.time).events.append(event)
+            # Lines of a long dump can go missing, the `[  pid  ]` header among them (12:01:59 on 24-10-2026), so
+            # rows count from here on.
+            in_table = True
+        elif in_table and (m := TASK.match(msg)):
+            event.tasks.append(Task(int(m.group(1)), m.group(12), int(m.group(5)), int(m.group(10))))
+        elif msg.startswith("oom-kill:constraint="):
+            in_table = False
+            fields = dict(p.split("=", 1) for p in msg[len("oom-kill:") :].split(",") if "=" in p)
+            cgroup = (fields.get("task_memcg") or fields.get("oom_memcg") or "").rsplit("/", 1)[-1]
+            victim = (int(fields["pid"]) if fields.get("pid", "").isdigit() else 0, cgroup)
+        elif m := KILL.search(msg):
+            in_table = False
+            pid = int(m.group(2))
+            memcg = m.group(1) == "Memory cgroup out of memory"
+            cgroup = victim[1] if victim[0] == pid else ""
+            incident_at(e.time).kills.append(Kill(e.time, pid, m.group(3), int(m.group(4)), cgroup, memcg))
+    return incidents
+
+
+def summarize(tasks: list[Task]) -> list[Row]:
+    page_mib = resource.getpagesize() / (1 << 20)
+    count, rss, swap = Counter(), Counter(), Counter()
+    for t in tasks:
+        count[t.name] += 1
+        rss[t.name] += t.rss_pages
+        swap[t.name] += t.swap_pages
+    rows = [Row(n, count[n], int(rss[n] * page_mib), int(swap[n] * page_mib)) for n in count]
+    return sorted(rows, key=lambda r: r.rss_mib + r.swap_mib, reverse=True)
+
+
+def size_bytes(text: str | None) -> float:
+    if not text:
+        return 0
+    return float(text[:-1]) * SIZE.get(text[-1], 1) if text[-1] in SIZE else float(text)
+
+
+def unit_report(user: list[Entry], incident: Incident) -> Units:
+    until = incident.end + STOP_AFTER
+    window = [e for e in user if incident.start <= e.time <= until]
+    killed: Counter = Counter()
+    results = {}
+    stopped = []
+    for e in window:
+        if m := KILLED_IN.match(e.message):
+            killed[m.group(1)] += 1
+        elif m := FAILED.match(e.message):
+            results[m.group(1)] = m.group(2)
+        elif m := CONSUMED.match(e.message):
+            stopped.append(UnitStop(m.group(1), e.time, m.group(2), m.group(3), None))
+    for s in stopped:
+        s.result = results.get(s.unit)
+    stopped.sort(key=lambda s: size_bytes(s.memory) + size_bytes(s.swap), reverse=True)
+    return Units(killed, stopped)
+
+
+def find_transcripts(home: Path, start: datetime, end: datetime) -> list[Transcript]:
+    """Returns the transcripts with an entry between start and end and none in the QUIET after end: a killed
+    session goes quiet until someone resumes it, which appends to the same file. The account folders share
+    `projects`, so one transcript can show up under several of them."""
+    seen = set()
+    out = []
+    for path in home.glob(".claude*/projects/*/*.jsonl"):
+        try:
+            found = quiet_after(path.resolve(), seen, start, end)
+        except (OSError, ValueError, TypeError):
+            # A dangling link, an unreadable file or a bad timestamp says nothing about the incident.
+            continue
+        if found:
+            out.append(found)
+    return sorted(out, key=lambda t: t.time)
+
+
+def quiet_after(real: Path, seen: set, start: datetime, end: datetime) -> Transcript | None:
+    if real in seen or real.stat().st_mtime < start.timestamp():
+        return None
+    seen.add(real)
+    last = after = cwd = None
+    with real.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            m = STAMP.search(line)
+            if not m:
+                continue
+            when = datetime.fromisoformat(m.group(1))
+            if when > end:
+                after = when
+                break
+            # `claude --resume` looks a session up in the project of the folder it started in.
+            if cwd is None and (c := CWD.search(line)):
+                cwd = json.loads(f'"{c.group(1)}"')
+            if when >= start:
+                last = when
+    if last and (after is None or after - end > QUIET):
+        return Transcript(last.astimezone(start.tzinfo), real.stem, cwd)
+    return None
+
+
+def journal(args: list[str]) -> list[Entry]:
+    try:
+        p = subprocess.run(["journalctl", "--no-pager", "-o", "short-iso", *args], capture_output=True, text=True, check=False)
+    except OSError as e:
+        print(f"oom-report: cannot run journalctl: {e}", file=sys.stderr)
+        sys.exit(2)
+    # Without access to the kernel journal journalctl exits 0 with a hint on stderr and no entries.
+    if p.returncode != 0 or "not seeing messages" in p.stderr:
+        print(f"oom-report: journalctl {' '.join(args)} exited {p.returncode}: {p.stderr.strip()}", file=sys.stderr)
+        sys.exit(2)
+    return parse_journal(p.stdout.splitlines())
+
+
+def hms(t: datetime) -> str:
+    return t.strftime("%H:%M:%S")
+
+
+def report(incident: Incident, user: list[Entry], home: Path) -> None:
+    kind = "memory cgroup" if incident.memcg else "global"
+    kills = len(incident.kills)
+    print(f"OOM incident {incident.start:%Y-%m-%d %H:%M:%S} (first OOM message) to {hms(incident.end)}, "
+          f"{kills} kernel {'kill' if kills == 1 else 'kills'} ({kind})")
+    print("Killed by the kernel:")
+    for k in incident.kills:
+        anon = f"{k.anon_kib >> 10} MiB" if k.anon_kib >= 1024 else f"{k.anon_kib} kB"
+        print(f"  {hms(k.time)} {k.name} pid {k.pid}, {anon} anon, in {k.cgroup or 'unknown cgroup'}")
+    tables = [ev for ev in incident.events if ev.tasks]
+    if tables:
+        biggest = max(tables, key=lambda ev: sum(t.rss_pages + t.swap_pages for t in ev.tasks))
+        print(f"Biggest task table ({hms(biggest.time)}, {len(biggest.tasks)} processes, invoked by {biggest.invoker}):")
+        print("  name, processes, RSS MiB, swap MiB (RSS counts pages that processes share once per process)")
+        for r in summarize(biggest.tasks)[:TOP]:
+            print(f"  {r.name} {r.count} {r.rss_mib} {r.swap_mib}")
+    units = unit_report(user, incident)
+    if units.killed:
+        print("Units the kernel killed in (systemd), with the number of kill messages:")
+        for unit, n in units.killed.most_common(TOP):
+            print(f"  {unit} {n}")
+    window_end = incident.end
+    if units.stopped:
+        print(f"Units stopped by {hms(incident.end + STOP_AFTER)}, largest memory plus swap peak first:")
+        for s in units.stopped[:TOP]:
+            swap = f", {s.swap} swap peak" if s.swap else ""
+            result = f", result {s.result}" if s.result else ""
+            print(f"  {s.unit} at {hms(s.time)}: {s.memory} memory peak{swap}{result}")
+        window_end = max(s.time for s in units.stopped)
+    window_end += timedelta(seconds=10)
+    transcripts = find_transcripts(home, incident.start, window_end)
+    print(f"Claude sessions that wrote between {hms(incident.start)} and {hms(window_end)} and then went quiet"
+          " (stopped, or idle):")
+    for t in transcripts:
+        cd = f"cd {shlex.quote(t.cwd)} && " if t.cwd else ""
+        print(f"  {hms(t.time)} {cd}claude --resume {t.session}")
+    if not transcripts:
+        print("  none")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="oom-report", description="Summarize the latest kernel OOM incident.")
+    parser.add_argument("--since", default="-24h", help="journalctl --since value (default -24h)")
+    parser.add_argument("--all", action="store_true", help="print every incident since TIME")
+    args = parser.parse_args()
+    incidents = find_incidents(journal(["-k", "-b", "all", "--since", args.since]))
+    if not incidents:
+        print(f"oom-report: no OOM kill since {args.since}", file=sys.stderr)
+        sys.exit(1)
+    user = journal(["--user", "--since", args.since])
+    chosen = incidents if args.all else incidents[-1:]
+    for i, incident in enumerate(chosen):
+        if i:
+            print()
+        report(incident, user, Path.home())
+
+
+if __name__ == "__main__":
+    main()

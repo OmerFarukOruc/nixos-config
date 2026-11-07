@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Lend this machine's logged-in Chromium browser (Brave, Chrome, Chromium, Edge) to agents on devbox over
+# the tailnet, on Linux or macOS, only while a task needs it. The Windows version is browser-lend.ps1.
+#   browser-lend on [name]   forward tailnet TCP 9222 to the browser's CDP port and publish its websocket path on
+#                            tailnet HTTPS 9223; [name] picks a browser whose profile folder contains it, e.g. chrome
+#   browser-lend off         stop both
+#   browser-lend status      show whether this machine lends a browser
+# First turn on remote debugging at <browser>://inspect/#remote-debugging. On the box an agent connects with
+# brave-browser --on <this machine>, and the browser asks you to Allow it.
+# CDP has no password: while it is on, every omer process on the box can drive this browser.
+set -euo pipefail
+help_text() { sed -n 4,7p "$0" | sed 's/^# *//'; }
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  help_text
+  exit 0
+fi
+
+ts=$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)
+if [[ $(uname) == Darwin ]]; then
+  base="$HOME/Library/Application Support"
+  dirs=(BraveSoftware/Brave-Browser Google/Chrome Chromium "Microsoft Edge")
+else
+  base="${XDG_CONFIG_HOME:-$HOME/.config}"
+  dirs=(BraveSoftware/Brave-Origin BraveSoftware/Brave-Browser google-chrome chromium microsoft-edge)
+fi
+
+listening() { (exec 3<> "/dev/tcp/127.0.0.1/$1") 2> /dev/null; }
+
+active_port_file() {
+  local d f
+  while IFS= read -r f; do
+    [[ -n ${1:-} ]] && ! grep -qi -- "$1" <<< "$f" && continue
+    listening "$(sed -n 1p "$f")" && { echo "$f"; return; }
+  done < <(for d in "${dirs[@]}"; do f="$base/$d/DevToolsActivePort"; [[ -s $f ]] && echo "$(stat -c %Y "$f" 2> /dev/null || stat -f %m "$f") $f"; done | sort -rn | cut -d' ' -f2-)
+  return 1
+}
+
+case "${1:-}" in
+  on)
+    me=$("$ts" status --json | jq -r '.Self.DNSName | split(".")[0]')
+    # A `!` command in an agent session on the box runs on the box, not on the machine whose browser it means.
+    [[ $me != devbox ]] || { echo "browser-lend: this is devbox, where agents connect; run browser-lend on in a terminal on the machine whose browser you lend, such as nixos-desktop" >&2; exit 1; }
+    f=$(active_port_file "${2:-}") || { echo "browser-lend: no browser with remote debugging on; turn it on at <browser>://inspect/#remote-debugging" >&2; exit 1; }
+    "$ts" serve --bg --tcp 9222 "tcp://127.0.0.1:$(sed -n 1p "$f")" > /dev/null
+    "$ts" serve --bg --https=9223 "text:$(sed -n 2p "$f")" > /dev/null
+    echo "browser-lend: lending ${f%/DevToolsActivePort}; on devbox run brave-browser --on $me"
+    ;;
+  off)
+    "$ts" serve --tcp 9222 off > /dev/null 2>&1 || true
+    "$ts" serve --https=9223 off > /dev/null 2>&1 || true
+    echo "browser-lend: off"
+    ;;
+  status)
+    if "$ts" serve status --json | jq -e '.TCP // {} | has("9222")' > /dev/null; then echo on; else echo off; fi
+    ;;
+  *)
+    help_text >&2
+    exit 2
+    ;;
+esac

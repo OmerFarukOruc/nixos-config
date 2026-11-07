@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Waits until every GitHub check run on a commit has completed, then exits with their verdict.
+#   gh-wait-checks <owner/repo> <sha> <seconds> [name-regex ...]
+# Each name-regex (grep -E) must match at least one check run before the wait can end, so a check that
+# starts late, such as Cloudflare Workers Builds, is not missed. With no regex, one check run is enough.
+# Reads check runs only, not commit statuses. Prints what it waits for, then one line per poll.
+# Exits 0 when all completed as success, neutral or skipped; 1 when one ended otherwise; 2 on bad
+# arguments, a bad regex, or a repo or SHA GitHub refuses (401, 403, 404, 422); 124 at the deadline.
+# GH_WAIT_CHECKS_INTERVAL sets the seconds between polls (default 30).
+set -uo pipefail
+
+help_text() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() {
+	help_text >&2
+	exit 2
+}
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+	help_text
+	exit 0
+fi
+[[ $# -ge 3 && $3 =~ ^[0-9]+$ && ${GH_WAIT_CHECKS_INTERVAL:-30} =~ ^[1-9][0-9]*$ ]] || usage
+repo=$1
+sha=$2
+seconds=$((10#$3))
+interval=$((10#${GH_WAIT_CHECKS_INTERVAL:-30}))
+shift 3
+names=("$@")
+for re in "${names[@]}"; do
+	grep -E -- "$re" <<<'' >/dev/null
+	if (($? == 2)); then
+		echo "gh-wait-checks: bad name-regex: $re" >&2
+		exit 2
+	fi
+done
+
+quoted() { (($# == 0)) || printf ' "%s"' "$@"; }
+echo "waiting up to ${seconds}s for every check run on ${repo}@${sha:0:12} to complete${names[*]:+, including:$(quoted "${names[@]}")}"
+end=$((SECONDS + seconds))
+while :; do
+	left=$((end - SECONDS))
+	if rows=$(timeout "$((left > 10 ? left : 10))" gh api "repos/$repo/commits/$sha/check-runs?per_page=100" --paginate \
+		--jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv'); then
+		missing=()
+		[[ -n $rows ]] || missing=("any check run")
+		for re in "${names[@]}"; do
+			cut -f1 <<<"$rows" | grep -E -- "$re" >/dev/null || missing+=("$re")
+		done
+		echo "$(date -u +%T) $(awk -F'\t' 'NF {printf "%s=%s/%s  ", $1, $2, $3}' <<<"$rows")${missing[*]:+not started:$(quoted "${missing[@]}")}"
+		if ((${#missing[@]} == 0)) && ! cut -f2 <<<"$rows" | grep -vx completed >/dev/null; then
+			failed=$(awk -F'\t' '$3 != "success" && $3 != "neutral" && $3 != "skipped" {print $1 "=" $3}' <<<"$rows")
+			if [[ -z $failed ]]; then
+				echo "all check runs passed"
+				exit 0
+			fi
+			echo "failed: $failed"
+			exit 1
+		fi
+	else
+		status=$(jq -r '.status // empty' <<<"$rows" 2>/dev/null)
+		if [[ $status =~ ^(401|403|404|422)$ ]]; then
+			echo "gh-wait-checks: GitHub refused ${repo}@${sha} with HTTP $status" >&2
+			exit 2
+		fi
+		echo "$(date -u +%T) reading check runs failed${status:+ (HTTP $status)}; retrying"
+	fi
+	if ((SECONDS >= end)); then
+		echo "deadline of ${seconds}s reached"
+		exit 124
+	fi
+	sleep "$((interval < end - SECONDS ? interval : end - SECONDS))"
+done

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Waits until a log ends with the `exit N` line that `cmd > log 2>&1; ec=$?; echo "exit $ec" >> log; exit $ec` appends, then exits N.
+# Only the last line counts. Without --pid, an `exit 0` that a test runner prints mid-run ends the wait with 0 when it
+# is the last line at a check, though the command still runs; with --pid, an exit line counts only once `ps -p` no
+# longer finds that process.
+# Prints what it waits for, then a progress line with the time left and the log's last line at each check that does not
+# end the wait, so a background shell's details panel shows the state. Exits 124 at the first check at or after the
+# deadline, up to one interval late, and 2 on bad arguments. With --pid, exits 125 once `ps -p` no longer finds that
+# process and the log's last line is not an exit line, because nothing will write it.
+# WAIT_EXIT_INTERVAL sets the seconds between checks (default 30).
+set -euo pipefail
+usage="usage: wait-exit [--pid <pid>] <log> <seconds>, with WAIT_EXIT_INTERVAL a positive whole number"
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+	echo "$usage"
+	exit 0
+fi
+
+pid=
+if [[ ${1:-} == --pid ]]; then
+	pid=${2:-}
+	shift 2 || true
+fi
+if [[ $# -ne 2 || ! $2 =~ ^[0-9]+$ || ! $pid =~ ^([1-9][0-9]*)?$ || ! ${WAIT_EXIT_INTERVAL:-30} =~ ^[1-9][0-9]*$ ]]; then
+	echo "$usage" >&2
+	exit 2
+fi
+log=$1
+seconds=$((10#$2))
+interval=$((10#${WAIT_EXIT_INTERVAL:-30}))
+deadline=$((SECONDS + seconds))
+echo "wait-exit: waiting up to ${seconds}s for $log to end with its exit line"
+
+while :; do
+	gone=0
+	[[ -z $pid ]] || ps -p "$pid" >/dev/null || gone=1
+	last=""
+	[[ -s $log ]] && last=$(tail -n 1 "$log")
+	if [[ $last =~ ^exit\ ([0-9]+)$ ]] && { [[ -z $pid ]] || ((gone)); }; then
+		echo "wait-exit: $last"
+		exit "${BASH_REMATCH[1]}"
+	fi
+	if ((gone)); then
+		echo "wait-exit: process $pid is gone and the last line of $log is not an exit line"
+		exit 125
+	fi
+	left=$((deadline - SECONDS))
+	if ((left <= 0)); then
+		echo "wait-exit: deadline of ${seconds}s passed; $log has no exit line yet"
+		exit 124
+	fi
+	echo "wait-exit: ${left}s left; last line: ${last:0:120}"
+	sleep "$interval"
+done

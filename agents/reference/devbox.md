@@ -38,7 +38,7 @@ nixos-config `machines/devbox/home.nix` installs these user units.
 
 ## Show Omer a file
 
-Omer reads the box's files from nixos-desktop or nixos-rog through herdr, VS Code, or Dolphin (`desktop/README.md`, "Read remote files"). For a markdown report, run `mdv PATH` from your herdr pane; it opens the rendered file in a new herdr tab and returns at once. For an HTML page, give him `xdg-open ~/remote/devbox<PATH>` to run on nixos-desktop or nixos-rog, because `ropen` shows HTML as source.
+Omer reads the box's files from nixos-desktop or nixos-rog through herdr, VS Code, or Dolphin ([agent-tools README](../../pkgs/agent-tools/README.md#read-remote-files)). For a markdown report, run `mdv PATH` from your herdr pane; it opens the rendered file in a new herdr tab and returns at once. For an HTML page, give him `xdg-open ~/remote/devbox<PATH>` to run on nixos-desktop or nixos-rog, because `ropen` shows HTML as source.
 
 ## Sudo
 

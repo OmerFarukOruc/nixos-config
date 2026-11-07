@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+# Classify what a git diff changes in Python files, so a deletion diff is checked by name and not read line by line.
+#   removed-defs <base> <head> [--ids FILE] [-- <path>...]
+# Run it inside the repository. It prints every removed test, helper, and module-level name, every function whose
+# decorators alone changed (a dropped parametrize case), every file whose imports changed, and under "read these"
+# everything else: a changed body, an added definition, a changed module statement, and each non-Python file.
+# Only the "read these" entries need a human or agent read.
+# --ids FILE names the tests that should be gone, one per line as path::Class::test or path::test[case]; text before
+# a tab is ignored. The script then prints each listed test that is still there and each removed test not listed.
+# Exit 0 when the diff holds nothing to read and the list matches, 1 otherwise, 2 on a usage or git error.
+from __future__ import annotations
+
+import argparse
+import ast
+import subprocess
+import sys
+from collections import Counter
+
+
+def git(*args: str) -> str:
+    done = subprocess.run(["git", *args], check=False, capture_output=True, text=True)
+    if done.returncode != 0:
+        print(f"removed-defs: git {' '.join(args)} failed: {done.stderr.strip()}", file=sys.stderr)
+        raise SystemExit(2)
+    return done.stdout
+
+
+def source(rev: str, path: str, present: bool) -> str:
+    return git("show", f"{rev}:{path}") if present else ""
+
+
+def shape(node: ast.AST) -> str:
+    return ast.dump(node, include_attributes=False)
+
+
+def body_shape(node: ast.AST) -> str:
+    kept = getattr(node, "decorator_list", [])
+    node.decorator_list = []  # type: ignore[attr-defined]
+    try:
+        return shape(node)
+    finally:
+        node.decorator_list = kept  # type: ignore[attr-defined]
+
+
+class Module:
+    def __init__(self, text: str, path: str) -> None:
+        tree = ast.parse(text, filename=path)
+        self.defs: dict[str, ast.AST] = {}
+        self.names: dict[str, str] = {}
+        self.imports: set[tuple[str, str, str | None]] = set()
+        self.other: Counter[str] = Counter()
+        for statement in tree.body:
+            if isinstance(statement, (ast.Import, ast.ImportFrom)):
+                origin = ""
+                if isinstance(statement, ast.ImportFrom):
+                    origin = "." * statement.level + (statement.module or "")
+                self.imports.update((origin, alias.name, alias.asname) for alias in statement.names)
+            elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+                bound = [n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name)]
+                for name in bound:
+                    self.names[name] = shape(statement)
+                if not bound:
+                    self.other[shape(statement)] += 1
+            elif isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                self._add(statement, "")
+            elif not (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant)):
+                self.other[shape(statement)] += 1
+
+    def _add(self, node: ast.AST, prefix: str) -> None:
+        name = prefix + node.name  # type: ignore[attr-defined]
+        if isinstance(node, ast.ClassDef):
+            methods = [
+                s for s in node.body if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            ]
+            for method in methods:
+                self._add(method, name + "::")
+            shell = ast.ClassDef(
+                name=node.name,
+                bases=node.bases,
+                keywords=node.keywords,
+                body=[s for s in node.body if s not in methods],
+                decorator_list=node.decorator_list,
+            )
+            self.defs[name] = shell
+        else:
+            self.defs[name] = node
+
+
+def is_test(qualname: str) -> bool:
+    return qualname.rsplit("::", 1)[-1].startswith("test")
+
+
+def listed_ids(path: str) -> list[str]:
+    with open(path, encoding="utf-8") as handle:
+        return [line.rstrip("\n").rsplit("\t", 1)[-1].strip() for line in handle if line.strip()]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="removed-defs", add_help=True)
+    parser.add_argument("base")
+    parser.add_argument("head")
+    parser.add_argument("--ids")
+    parser.add_argument("paths", nargs="*")
+    args = parser.parse_args()
+
+    removed_tests: list[str] = []
+    removed_helpers: list[str] = []
+    removed_names: list[str] = []
+    decorators: list[str] = []
+    imports: list[str] = []
+    read: list[str] = []
+
+    status = git("diff", "--no-renames", "--name-status", args.base, args.head, "--", *args.paths)
+    for line in status.splitlines():
+        kind, path = line.split("\t", 1)
+        if not path.endswith(".py"):
+            read.append(f"{path} ({kind}, not Python)")
+            continue
+        try:
+            old = Module(source(args.base, path, kind != "A"), path)
+            new = Module(source(args.head, path, kind != "D"), path)
+        except SyntaxError as error:
+            read.append(f"{path} (does not parse: {error.msg})")
+            continue
+        for name, node in old.defs.items():
+            ident = f"{path}::{name}"
+            if name not in new.defs:
+                if is_test(name):
+                    removed_tests.append(ident)
+                elif name.rsplit("::", 1)[0] in new.defs or "::" not in name:
+                    removed_helpers.append(ident)
+            elif shape(node) != shape(new.defs[name]):
+                if body_shape(node) == body_shape(new.defs[name]):
+                    decorators.append(ident)
+                else:
+                    read.append(f"{ident} (body or signature changed)")
+        read.extend(f"{path}::{name} (added)" for name in new.defs if name not in old.defs)
+        for name, value in old.names.items():
+            if name not in new.names:
+                removed_names.append(f"{path}::{name}")
+            elif value != new.names[name]:
+                read.append(f"{path}::{name} (value changed)")
+        read.extend(f"{path}::{name} (added)" for name in new.names if name not in old.names)
+        if old.imports != new.imports:
+            added = new.imports - old.imports
+            imports.append(f"{path} (-{len(old.imports - new.imports)} +{len(added)})")
+            if added:
+                read.append(f"{path} (import added: {', '.join(sorted(name for _, name, _ in added))})")
+        if old.other != new.other:
+            read.append(f"{path} (module-level statement changed)")
+
+    def section(title: str, items: list[str]) -> None:
+        print(f"## {title}: {len(items)}")
+        for item in sorted(items):
+            print(f"  {item}")
+
+    section("removed tests", removed_tests)
+    section("removed helpers and classes", removed_helpers)
+    section("removed module-level names", removed_names)
+    section("decorators changed, body the same", decorators)
+    section("files with changed imports", imports)
+    section("read these", read)
+
+    mismatch = False
+    if args.ids:
+        listed = listed_ids(args.ids)
+        whole = {item for item in listed if "[" not in item}
+        cases = {item.split("[", 1)[0] for item in listed if "[" in item}
+        removed = set(removed_tests)
+        still = sorted(whole - removed)
+        unlisted = sorted(removed - whole)
+        loose_cases = sorted(cases - set(decorators) - removed)
+        section("listed tests still present", still)
+        section("removed tests not listed", unlisted)
+        section("listed cases whose test kept its decorators", loose_cases)
+        mismatch = bool(still or unlisted or loose_cases)
+    return 1 if read or mismatch else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

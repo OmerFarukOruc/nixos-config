@@ -1,0 +1,409 @@
+#!/usr/bin/env python3
+"""Says where Claude Code keeps a setting, read from the installed claude binary.
+
+  cc-setting KEY...
+
+For each KEY it prints the settings.json schema line (type and description) when the schema has one, or the type of
+the environment variable when KEY is one Claude Code reads, such as CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS.
+A dotted KEY, such as worktree.bgIsolation, names a settings key nested in the object of the key before the dot.
+An upper-case KEY that the code reads from the environment outside that schema, such as BASH_DEFAULT_TIMEOUT_MS,
+gets the code around the read, which often holds its default. Otherwise it says whether ~/.claude.json, where Claude
+Code keeps per-account preferences, holds KEY. Last, it lists the environment variables whose names contain KEY,
+ignoring case, so `cc-setting concurrent` finds the concurrency caps.
+A per-account key that every account shares goes in dotfiles desktop/claude-code/account-prefs.json.
+"""
+import json
+import mmap
+import os
+import re
+import shutil
+import sys
+
+# A settings declaration is `key:()=>TYPE.describe("...")` in the main schema, or `key:TYPE.describe("...")` in a
+# feature block's `shape:()=>({...})`. Its value ends at the first `,`, `)`, `]` or `}` outside brackets,
+# strings, regex literals, comments and templates, and a value longer than VALUE_MAX bytes is not a declaration.
+# VALUE_MAX is a guess well above the longest 2.1.309 declaration seen.
+VALUE_MAX = 1 << 16
+OPEN, CLOSE = b"([{", b")]}"
+# A `/` after one of these bytes or words starts a regex literal; after anything else it divides.
+REGEX_AFTER = b"(,=:[!&|?{};+-*%<>~^"
+REGEX_KEYWORDS = {b"return", b"typeof", b"case", b"void", b"in", b"of", b"delete", b"new", b"throw", b"else", b"do"}
+DESCRIBE = b".describe("
+SHAPE = b"shape:()=>({"
+SHAPE_ENTRY = re.compile(rb"[{,](?:\.\.\.|[\w$]+:|\"[^\"]*\":)")
+# A nested object schema starts its value inline, as `u({` or `{let l=u({`, or behind a call, as `ze(()=>GLr())`,
+# `ze(()=>Cd(e))` or `ph()`. An entry of it is a schema when its value starts with a call, such as `O()` or `A(o())`.
+INLINE_OBJECT = re.compile(rb"(?:\{let [\w$]+=)?[\w$]+\(\{")
+CALLEE = re.compile(rb"(?:[\w$]+\(\(\)=>)?([\w$]+)\([\w$]*\)")
+SCHEMA_CALL = re.compile(rb"[\w$.]+\(")
+# Bytes of code shown before and after a property read of an environment variable. The default often sits in a
+# variable defined just before the read, as BASH_MAX_TIMEOUT_MS's 600000 does 180 bytes before it in 2.1.309.
+READ_BEFORE, READ_AFTER = 240, 100
+# Bytecode string sections hold names among control bytes; JavaScript text has none but tab and newlines.
+CONTROL = re.compile(rb"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]{2,}")
+# The table of environment variables maps each name to a getter: `,NAME:()=>getter,`. Other lookup tables in the
+# binary have the same form, so a name counts as an environment variable only when its getter is defined with one
+# of the methods that build the environment schema, such as `aC=H.int({min:1,max:256})`. The method list is what
+# 2.1.309 uses; with it, 1184 of 1825 such entries count, and every CLAUDE_CODE_ name among them.
+ENV_ENTRY = re.compile(rb"[,{]([A-Z][A-Z0-9_]{2,}):\(\)=>([\w$]+)(?=[,}])")
+ENV_METHODS = rb"(?:bool|triBool|str|rawStr|int|enum)"
+# Minified getter names repeat across bundled chunks, so a getter's type is the definition nearest the table, and
+# only one within this many bytes of it counts. In 2.1.309 each of the four tables has its definitions within 1 MiB,
+# and at 8 MiB other lookup tables picked up definitions from them.
+TYPE_WINDOW = 1 << 20
+
+
+def binary_path(claude):
+    """Returns the file that holds Claude Code's code. On NixOS `claude` is a small shell wrapper that execs the
+    real binary, `.claude-wrapped`, from the same folder."""
+    real = os.path.realpath(claude)
+    wrapped = os.path.join(os.path.dirname(real), f".{os.path.basename(real)}-wrapped")
+    return wrapped if os.path.isfile(wrapped) else real
+
+
+def env_table(data):
+    """Returns {name: (getter, offset)} for every entry of the environment variable table."""
+    return {m.group(1).decode(): (m.group(2), m.start()) for m in ENV_ENTRY.finditer(data)}
+
+
+def env_types(data, entries):
+    """Takes {name: (getter, offset)} and returns {name: definition}, such as `H.int({min:1,max:256})`, for each
+    name whose getter has a definition within TYPE_WINDOW of its entry. One scan covers every entry."""
+    if not entries:
+        return {}
+    getters = sorted({g for g, _ in entries.values()}, key=len, reverse=True)
+    pattern = re.compile(
+        rb"[,; ](" + b"|".join(map(re.escape, getters)) + rb")=([\w$]+\." + ENV_METHODS + rb"\(.*?\))(?=[,;])",
+        re.DOTALL,
+    )
+    # Scan only the windows around the entries, merged where they overlap.
+    spans = []
+    for at in sorted(at for _, at in entries.values()):
+        start, end = max(0, at - TYPE_WINDOW), min(len(data), at + TYPE_WINDOW)
+        if spans and start <= spans[-1][1]:
+            spans[-1][1] = end
+        else:
+            spans.append([start, end])
+    found = {}
+    for start, end in spans:
+        for m in pattern.finditer(data, start, end):
+            found.setdefault(m.group(1), []).append((m.start(), m.group(2)))
+    out = {}
+    for name, (getter, near) in entries.items():
+        near_defs = [d for d in found.get(getter, []) if abs(d[0] - near) <= TYPE_WINDOW]
+        if near_defs:
+            out[name] = min(near_defs, key=lambda d: abs(d[0] - near))[1].decode("utf-8", "replace")
+    return out
+
+
+def skip_string(data, i, stop):
+    """Returns the offset just past the '...' or "..." string that starts at offset i."""
+    quote = data[i]
+    i += 1
+    while i < stop and data[i] != quote:
+        i += 2 if data[i] == 0x5C else 1
+    return i + 1
+
+
+def skip_regex(data, i, stop):
+    """Returns the offset just past the /.../flags regex literal that starts at offset i. A `/` inside a [...]
+    class does not end it."""
+    i += 1
+    in_class = False
+    while i < stop:
+        c = data[i]
+        if c == 0x5C:
+            i += 2
+            continue
+        if c == 0x5B:
+            in_class = True
+        elif c == 0x5D:
+            in_class = False
+        elif c == 0x2F and not in_class:
+            break
+        i += 1
+    i += 1
+    while i < stop and (0x61 <= data[i] <= 0x7A):
+        i += 1
+    return i
+
+
+def regex_can_start(data, last):
+    """Says whether a `/` after the byte at offset last opens a regex literal and not a division: after an
+    operator or an opening bracket, at the start of the value, or after a keyword such as `return`. A postfix `++`
+    or `--`, and a property named like a keyword, as in `x.in`, end an operand, so a `/` after them divides."""
+    if last < 0:
+        return True
+    if data[last] in b"+-" and last > 0 and data[last - 1] == data[last]:
+        return False
+    if data[last] in REGEX_AFTER:
+        return True
+    word = re.search(rb"[\w$]+$", data[max(0, last - 15) : last + 1])
+    if word is None or word.group() not in REGEX_KEYWORDS:
+        return False
+    before = max(0, last - 15) + word.start() - 1
+    return before < 0 or data[before] != ord(".")
+
+
+def scan_value(data, start):
+    """Returns (end, described) for the JavaScript expression at start: the offset where it ends, and whether its
+    own call chain, outside every bracket, calls .describe(. end is None when the value is longer than VALUE_MAX.
+
+    It steps over strings, regex literals, comments and templates, and through each `${...}` of a template back
+    into code, so a bracket or quote inside one of them does not count."""
+    depth = 0
+    # The depths at which a template's `${` opened; the `}` that brings depth back to the last of them returns to
+    # that template.
+    templates = []
+    in_template = False
+    described = False
+    last = -1
+    i = start
+    stop = min(len(data), start + VALUE_MAX)
+    while i < stop:
+        c = data[i]
+        if in_template:
+            if c == 0x5C:
+                i += 2
+                continue
+            if c == 0x60:
+                in_template = False
+                last = i
+            elif c == 0x24 and data[i + 1 : i + 2] == b"{":
+                templates.append(depth)
+                depth += 1
+                in_template = False
+                last = i + 1
+                i += 1
+            i += 1
+            continue
+        if c in b" \t\r\n":
+            i += 1
+            continue
+        if c in b"'\"":
+            i = skip_string(data, i, stop)
+            last = i - 1
+            continue
+        if c == 0x60:
+            in_template = True
+        elif c == 0x2F:
+            nxt = data[i + 1 : i + 2]
+            if nxt == b"/":
+                end = data.find(b"\n", i, stop)
+                i = stop if end < 0 else end
+                continue
+            if nxt == b"*":
+                end = data.find(b"*/", i + 2, stop)
+                i = stop if end < 0 else end + 2
+                continue
+            if regex_can_start(data, last):
+                i = skip_regex(data, i, stop)
+                last = i - 1
+                continue
+        elif c in OPEN:
+            if depth == 0 and data[i - len(DESCRIBE) + 1 : i + 1] == DESCRIBE:
+                described = True
+            depth += 1
+        elif c in CLOSE or (c == 0x2C and depth == 0):
+            if depth == 0:
+                return i, described
+            depth -= 1
+            if c == 0x7D and templates and depth == templates[-1]:
+                templates.pop()
+                in_template = True
+        last = i
+        i += 1
+    return None, False
+
+
+def entries(data, brace):
+    """Yields (offset, name, value_start, value_end) for each entry of the object literal whose `{` is at offset
+    brace, where offset is the `{` or `,` before the entry and value_end the `,` or bracket after its value. It stops
+    at the last entry or at one it cannot read."""
+    entry = brace
+    while True:
+        m = SHAPE_ENTRY.match(data, entry)
+        if not m:
+            return
+        end, _ = scan_value(data, m.end())
+        if end is None:
+            return
+        yield entry, m.group()[1:].rstrip(b":").strip(b'"'), m.end(), end
+        if data[end] != 0x2C:
+            return
+        entry = end
+
+
+def in_shape(data, at):
+    """Says whether the `{` or `,` at offset at starts a top-level entry of the nearest `shape:()=>({...})` before
+    it. A key nested in an entry's value, such as autoMode's `allow`, is no settings key of its own."""
+    # The first entry's `{` is the last byte of SHAPE.
+    shape = data.rfind(SHAPE, max(0, at - VALUE_MAX), at + 1)
+    if shape < 0:
+        return False
+    for entry, *_ in entries(data, shape + len(SHAPE) - 1):
+        if entry >= at:
+            return entry == at
+    return False
+
+
+def settings_decl(data, key):
+    """Returns the schema text of settings.json key, such as `O().optional().describe("...")`, or None. A dotted
+    key names a key nested in the object schema of the key before the dot."""
+    span = nested_span(data, key.split("."))
+    return None if span is None else data[span[0] : span[1]].decode("utf-8", "replace")
+
+
+def nested_span(data, parts):
+    """Returns the (start, end) offsets of the schema of the key path parts, or None."""
+    span = settings_span(data, parts[0])
+    for part in parts[1:]:
+        if span is None:
+            return None
+        span = child_span(data, span[0], part.encode())
+    return span
+
+
+def child_span(data, start, name):
+    """Returns the offsets of the schema of entry name in the object schema that starts at offset start, or None.
+    The object is inline, as `u({...})` or `{let l=u({...`, or behind a call at the start, as `ze(()=>GLr())` or
+    `ph()`. A call resolves to a definition `GLr=p(()=>u({...` or `function Cd(e){return u({...`; minified names
+    repeat across bundled chunks, so the definitions nearest the declaration are tried first. The entry counts only
+    when its value is itself a schema call, which rules out a `.meta({...})` object or a runtime expression."""
+    inline = INLINE_OBJECT.match(data, start)
+    if inline:
+        return schema_entry(data, inline.end() - 1, name)
+    call = CALLEE.match(data, start)
+    if not call:
+        return None
+    callee = re.escape(call.group(1))
+    definition = re.compile(
+        rb"[,; ]" + callee + rb"=[\w$]+\(\(\)=>[\w$]+\(\{|function " + callee + rb"\([\w$,]*\)\{return [\w$]+\(\{"
+    )
+    found = [m.end() - 1 for m in definition.finditer(data, max(0, start - TYPE_WINDOW), start + TYPE_WINDOW)]
+    for brace in sorted(found, key=lambda b: abs(b - start)):
+        span = schema_entry(data, brace, name)
+        if span:
+            return span
+    return None
+
+
+def schema_entry(data, brace, name):
+    """Returns the offsets of the value of entry name in the object literal whose `{` is at offset brace when that
+    value is a schema call, or None."""
+    for _, label, start, end in entries(data, brace):
+        if label == name:
+            return (start, end) if SCHEMA_CALL.match(data, start) else None
+    return None
+
+
+def settings_span(data, key):
+    """Returns the (start, end) offsets of the schema of top-level settings.json key, or None."""
+    k = key.encode()
+    undescribed = None
+    for direct in (False, True):
+        for sep in (b",", b"{"):
+            needle = sep + k + (b":" if direct else b":()=>")
+            at = data.find(needle)
+            while at >= 0:
+                body = at + len(needle)
+                # A direct declaration lives only in a feature block. A `key:()=>` value there or in code is the
+                # other form, which the first pass read.
+                if not direct or (data[body : body + 4] != b"()=>" and in_shape(data, at)):
+                    end, described = scan_value(data, body)
+                    if described:
+                        return body, end
+                    if end is not None and undescribed is None and not direct and after_described(data, at):
+                        undescribed = body, end
+                at = data.find(needle, at + 1)
+    return undescribed
+
+
+def after_described(data, at):
+    """Says whether the entry ending at offset at, the `,` before a key, ends with a .describe(...) call, as the
+    entries of the settings schema do. A schema key such as `sandbox:()=>Pe(()=>zrr())` has no description of its
+    own, and its neighbour shows that it sits in the schema."""
+    describe = data.rfind(DESCRIBE, max(0, at - VALUE_MAX), at)
+    if describe < 0:
+        return False
+    end, _ = scan_value(data, describe + len(DESCRIBE) - 1)
+    return end == at
+
+
+def code_read(data, key):
+    """Returns the code around the first read of KEY from the environment in JavaScript text, or None. A read is
+    `env.KEY`, or `x.KEY` where `x=process.env` comes shortly before it, as in `function f(n=process.env){n.KEY}`."""
+    needle = b"." + key.encode()
+    at = data.find(needle)
+    while at >= 0:
+        end = at + len(needle)
+        if not re.match(rb"[\w$]", data[end : end + 1]):
+            before = data[max(0, at - READ_BEFORE) : at]
+            after = data[end : end + READ_AFTER]
+            # Text from a string section stops at its control bytes; a name right next to one is in the section.
+            cut = [m.end() for m in CONTROL.finditer(before)]
+            before = before[cut[-1] :] if cut else before
+            stop = CONTROL.search(after)
+            after = after[: stop.start()] if stop else after
+            obj = re.search(rb"[\w$]+$", before)
+            bound = obj and re.search(rb"(?<![\w$])" + re.escape(obj.group()) + rb"=process\.env(?![\w$.])", before)
+            if before and after and obj and (obj.group() == b"env" or bound):
+                return (before + needle + after).decode("utf-8", "replace").replace("\n", " ")
+        at = data.find(needle, at + 1)
+    return None
+
+
+def shorten(text, head=200, tail=400):
+    """Keeps the start of a long declaration and its end, where the description is."""
+    return text if len(text) <= head + tail else f"{text[:head]} ... {text[-tail:]}"
+
+
+def main():
+    keys = sys.argv[1:]
+    if keys[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return
+    if not keys:
+        sys.exit(__doc__.strip())
+    claude = shutil.which("claude")
+    if not claude:
+        sys.exit("cc-setting: claude is not on PATH")
+    binary = binary_path(claude)
+    with open(binary, "rb") as f:
+        # A wrapper script is a few hundred bytes. An npm install's cli.js also starts with `#!` and holds the code.
+        if f.read(2) == b"#!" and os.fstat(f.fileno()).st_size < 1 << 20:
+            sys.exit(f"cc-setting: {binary} is a wrapper script, not the Claude Code binary; find the file it execs")
+        data = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+    try:
+        with open(os.path.expanduser("~/.claude.json")) as f:
+            account = json.load(f)
+    except (OSError, ValueError):
+        account = {}
+    table = None
+    print(f"schema from {binary}")
+    for key in keys:
+        decl = settings_decl(data, key)
+        if decl:
+            print(f"{key}: settings.json key: {shorten(decl)}")
+            continue
+        if table is None:
+            table = env_table(data)
+        kind = env_types(data, {key: table[key]}).get(key) if key in table else None
+        if kind:
+            print(f"{key}: environment variable, {kind}")
+            continue
+        read = code_read(data, key) if ENV_NAME.fullmatch(key) else None
+        if read:
+            print(f"{key}: environment variable outside the environment schema; the code reads it here: {read}")
+        elif key in account:
+            print(f"{key}: no settings.json key; ~/.claude.json holds {json.dumps(account[key])}")
+        else:
+            print(f"{key}: no settings.json key, and ~/.claude.json does not hold it")
+        names = sorted(env_types(data, {n: e for n, e in table.items() if key.lower() in n.lower()}))
+        if names:
+            print(f"  environment variables containing {key!r}: {', '.join(names)}")
+
+
+if __name__ == "__main__":
+    main()

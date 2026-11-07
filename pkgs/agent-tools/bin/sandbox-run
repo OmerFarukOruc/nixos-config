@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Runs one command in a bubblewrap sandbox that sees no host process, network, or user socket, so a command run to
+# watch its effect (a guard hook's sample `pkill -f x`, an `rm -rf` probe) cannot reach the live agents and services
+# of this user. Inside, the system folders and the current folder are read-only, /tmp is an empty tmpfs, and HOME is
+# /tmp. Each --rw PATH is bound writable and each --ro PATH read-only, at the same path, which may run through a symlink.
+#   sandbox-run [--rw PATH]... [--ro PATH]... [--] CMD [ARG...]
+# Exits with CMD's status. Needs bwrap and unprivileged user namespaces (devbox has both).
+set -euo pipefail
+
+usage_line="usage: sandbox-run [--rw PATH]... [--ro PATH]... [--] CMD [ARG...]"
+usage() { echo "$usage_line" >&2; exit 2; }
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  echo "$usage_line"
+  exit 0
+fi
+command -v bwrap >/dev/null || { echo "sandbox-run: bwrap is not installed on $(hostname)" >&2; exit 2; }
+
+extra=()
+while (( $# )); do
+  case "$1" in
+    --rw|--ro)
+      (( $# >= 2 )) || usage
+      p=$(realpath -e -- "$2") || { echo "sandbox-run: $2 does not exist" >&2; exit 2; }
+      bind=--ro-bind; [[ "$1" == --rw ]] && bind=--bind
+      extra+=("$bind" "$p" "$p")
+      # The command names the path as the caller wrote it, so a path through a symlink is bound there as well.
+      # Under the read-only binds bwrap cannot create the mount point, and the link resolves there anyway.
+      alias=$(realpath -s -- "$2")
+      if [[ "$alias" != "$p" ]]; then
+        case "$alias" in
+          "$PWD"/*|"$(pwd -P)"/*|/usr/*|/etc/*|/nix/*|/opt/*|/run/current-system/*|/bin/*|/sbin/*|/lib/*|/lib32/*|/lib64/*) ;;
+          *) extra+=("$bind" "$p" "$alias") ;;
+        esac
+      fi
+      shift 2
+      ;;
+    --) shift; break ;;
+    -*) usage ;;
+    *) break ;;
+  esac
+done
+(( $# )) || usage
+
+args=(--unshare-all --die-with-parent --new-session --clearenv --ro-bind /usr /usr --ro-bind /etc /etc)
+# Merged-/usr hosts have these as symlinks into /usr; a bind would follow the link, so recreate the link instead.
+for d in /bin /sbin /lib /lib32 /lib64; do
+  if [[ -L "$d" ]]; then
+    args+=(--symlink "$(readlink "$d")" "$d")
+  elif [[ -d "$d" ]]; then
+    args+=(--ro-bind "$d" "$d")
+  fi
+done
+path=/usr/local/bin:/usr/bin:/bin
+for d in /opt /nix; do
+  [[ -d "$d" ]] && args+=(--ro-bind "$d" "$d")
+done
+args+=(--proc /proc --dev /dev --tmpfs /tmp --tmpfs /run)
+if [[ -d /run/current-system ]]; then
+  args+=(--ro-bind /run/current-system /run/current-system)
+  path=/run/current-system/sw/bin:$path
+fi
+# Home Manager puts python3, uv and the like in the user's profile under /etc, so `#!/usr/bin/env python3` needs it.
+profile=/etc/profiles/per-user/${USER:-$(id -un)}/bin
+[[ -d "$profile" ]] && path=$profile:$path
+args+=(--ro-bind "$PWD" "$PWD" "${extra[@]}" --chdir "$PWD"
+  --setenv PATH "$path" --setenv HOME /tmp --setenv LANG C.UTF-8 --setenv TERM "${TERM:-dumb}")
+exec bwrap "${args[@]}" -- "$@"

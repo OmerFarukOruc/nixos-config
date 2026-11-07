@@ -66,7 +66,7 @@ cd ~/Desktop/workspace && \
 ```
 
 A record whose value is empty also reads `missing` here. To prove a record exists or is gone,
-use the exit status of `infisical-describe.sh get` (Descriptions, below): 0 when the record
+use the exit status of `infisical-describe get` (Descriptions, below): 0 when the record
 exists, 1 when it does not.
 
 Compare a stored value with a file without printing either. Compare the strings, not
@@ -145,13 +145,13 @@ the PATCH response with the requested description. It does not perform a separat
 complete that check as described below:
 
 ```bash
-~/Desktop/workspace/dotfiles/desktop/bin/infisical-describe.sh check --projectId <project-id>   # lists env, path, key of records without one; exit 1 if any
-printf '%s' 'the description' | ~/Desktop/workspace/dotfiles/desktop/bin/infisical-describe.sh set KEY --projectId <project-id> --env <env> --path /the-folder
+infisical-describe check --projectId <project-id>   # lists env, path, key of records without one; exit 1 if any
+printf '%s' 'the description' | infisical-describe set KEY --projectId <project-id> --env <env> --path /the-folder
 ```
 
 Before reporting an Infisical change as done:
 
-1. Read back metadata for each changed record with `~/Desktop/workspace/dotfiles/desktop/bin/infisical-describe.sh get KEY
+1. Read back metadata for each changed record with `infisical-describe get KEY
    --projectId <id> --env <env> --path /the-folder`, which prints no value. Check its
    project, environment, path, key, and description against the intended change and the
    format above. For a rename or move, also check that `get` exits 1 at the old location.

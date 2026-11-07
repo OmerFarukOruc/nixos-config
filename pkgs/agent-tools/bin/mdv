@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Show a markdown file rendered by glow in less, or a folder of them in glow's file browser. Inside a herdr pane it
+# opens a new tab next to that pane, so it also works from a pane that runs an agent (`! mdv FILE` in Claude Code);
+# quitting the viewer closes the tab. Outside herdr it runs in the current terminal.
+set -euo pipefail
+
+usage="usage: mdv FILE.md|DIR"
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  echo "$usage"
+  exit 0
+fi
+(( $# == 1 )) || { echo "$usage" >&2; exit 2; }
+target=$(realpath -e -- "$1")
+glow=$(command -v glow)
+if [[ -d "$target" ]]; then
+  view=("$glow" "$target")
+  dir=$target
+else
+  view=("$glow" -p "$target")
+  dir=$(dirname "$target")
+fi
+PAGER="$(command -v less) -Ri"
+export PAGER
+
+if [[ "${HERDR_ENV:-}" == 1 ]]; then
+  pane=$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$dir" --label "${target##*/}" --focus |
+    jq -er .result.root_pane.pane_id)
+  herdr pane run "$pane" "PAGER=${PAGER@Q} exec ${view[*]@Q}"
+else
+  exec "${view[@]}"
+fi

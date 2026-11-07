@@ -84,7 +84,7 @@ Claude Code's Bash tool runs bash. Codex runs `zsh -lc`, and a remote login shel
 
 ## Headless browsers
 
-- For a headless page check, such as whether an API exists or what a permission's state is, run `cdp-eval EXPRESSION URL...`. Brave Origin opens `chrome://brave-origin-startup/` first, so `--dump-dom` never returns, and the nixpkgs wrapper keeps Brave running after `timeout` kills the wrapper; `cdp-eval` reads the page over the DevTools port and stops the browser's whole process group. On a host without dotfiles, such as nixos-rog, run `ssh <host> "python3 - ${(q)expression} URL..." < ~/.local/bin/cdp-eval`.
+- For a headless page check, such as whether an API exists or what a permission's state is, run `cdp-eval EXPRESSION URL...`. Brave Origin opens `chrome://brave-origin-startup/` first, so `--dump-dom` never returns, and the nixpkgs wrapper keeps Brave running after `timeout` kills the wrapper; `cdp-eval` reads the page over the DevTools port and stops the browser's whole process group. On a host without agent-tools, run `ssh <host> "python3 - ${(q)expression} URL..." < "$(command -v cdp-eval)"`.
 
 ## Searching and reading
 
@@ -92,4 +92,4 @@ Claude Code's Bash tool runs bash. Codex runs `zsh -lc`, and a remote login shel
 
 ## Claude Code settings
 
-- To learn whether Claude Code has a `settings.json` key or an environment variable for something, run `cc-setting KEY` (dotfiles `desktop/bin/cc-setting`), with the exact name or a word in it, such as `cc-setting concurrent`. For a variable the code reads outside its environment schema, such as `BASH_DEFAULT_TIMEOUT_MS`, it prints the code around the read, which often shows the default. It reads the installed binary and takes 0.06 s for a settings key, up to 1.5 s for another exact name, and about 4 s for a word as broad as `_` (measured on nixos-desktop). `grep` prints only "Binary file matches" for the 280 MiB binary, so read it through `cc-setting`.
+- To learn whether Claude Code has a `settings.json` key or an environment variable for something, run `cc-setting KEY` (nixos-config `pkgs/agent-tools`), with the exact name or a word in it, such as `cc-setting concurrent`. For a variable the code reads outside its environment schema, such as `BASH_DEFAULT_TIMEOUT_MS`, it prints the code around the read, which often shows the default. It reads the installed binary and takes 0.06 s for a settings key, up to 1.5 s for another exact name, and about 4 s for a word as broad as `_` (measured on nixos-desktop). `grep` prints only "Binary file matches" for the 280 MiB binary, so read it through `cc-setting`.

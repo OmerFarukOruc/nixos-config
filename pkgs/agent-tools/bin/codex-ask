@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Starts a read-only Codex session detached and returns at once, so the caller keeps working and no tool-call limit of
+# the caller ends the session.
+# Usage: codex-ask [--model <model>] [--effort <level>] [--search] <advise|review|plain> <checkout> <brief-file> <out-dir>
+# The default is gpt-6.1-sol at medium effort; --search turns on Codex's web search. advise appends the consult
+# instructions, review the reviewer instructions, and plain sends the brief alone. <out-dir> must be new or empty.
+# <out-dir>/answer.md gets the final message, <out-dir>/codex.log the session's output, and <out-dir>/status the line
+# `exit N` once the session ends; N is 3 when Codex exits 0 with an empty answer. The last line printed is a `wait-exit`
+# command that fits one Claude Code Bash call: its exit 124 means the session still runs, so run it again, and its exit
+# 125 means the session died without a status. `kill <pid>` with the printed PID stops the session and writes the status.
+set -euo pipefail
+
+usage_line="usage: codex-ask [--model <model>] [--effort <level>] [--search] <advise|review|plain> <checkout> <brief-file> <out-dir>"
+usage() {
+	echo "$usage_line" >&2
+	exit 2
+}
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+	echo "$usage_line"
+	exit 0
+fi
+
+if [[ ${1:-} == --run ]]; then
+	out=$2
+	ec=143
+	child=
+	stop=0
+	forward() {
+		stop=1
+		{ [[ -n $child ]] && kill -TERM "$child"; } 2>/dev/null || true
+	}
+	trap 'echo "exit $ec" >"$out/status.tmp" && mv "$out/status.tmp" "$out/status"' EXIT
+	trap forward TERM INT
+	web=()
+	[[ $6 == 0 ]] || web=(--search)
+	codex "${web[@]}" exec --ephemeral --sandbox read-only --disable unbounded_connection_retries -m "$4" \
+		-c model_reasoning_effort="$5" -C "$3" -o "$out/answer.md" - <"$out/prompt.md" >"$out/codex.log" 2>&1 &
+	child=$!
+	[[ $stop == 0 ]] || forward
+	while :; do
+		set +e
+		wait "$child"
+		ec=$?
+		set -e
+		kill -0 "$child" 2>/dev/null || break
+	done
+	if [[ $ec -eq 0 && ! -s $out/answer.md ]]; then
+		ec=3
+	fi
+	exit "$ec"
+fi
+
+model=gpt-6.1-sol
+effort=medium
+search=0
+wait_slice=540
+while [[ ${1:-} == --* ]]; do
+	case $1 in
+	--model) model=${2:-}; [[ -n $model ]] || usage; shift 2 ;;
+	--effort) effort=${2:-}; [[ -n $effort ]] || usage; shift 2 ;;
+	--search) search=1; shift ;;
+	*) usage ;;
+	esac
+done
+case ${1:-} in
+advise) role="Advise only: change no file, commit nothing, and start no subagents. Mark each claim VERIFIED or INFER, and give each VERIFIED claim its file:line or primary source. Your final message is the answer: the recommendation first, then the claims it rests on." ;;
+review) role="You are a read-only code reviewer: change no file, commit nothing. Read every changed file in full and the callers of each changed function. Your final message is the report: one verdict line with the base and head SHAs, then the findings ranked high, medium, low, each with file:line, the input or state that breaks it, the evidence you read or ran, and the concrete fix." ;;
+plain) role= ;;
+*) usage ;;
+esac
+[[ $# -eq 4 && -d $2 && -s $3 ]] || usage
+if [[ -e $4 && -n $(ls -A "$4") ]]; then
+	echo "codex-ask: $4 is not empty; give each run a new folder" >&2
+	exit 2
+fi
+checkout=$(cd "$2" && pwd)
+mkdir -p "$4"
+out=$(cd "$4" && pwd)
+{
+	cat "$3"
+	[[ -z $role ]] || printf '\n\n%s\n' "$role"
+} >"$out/prompt.md"
+setsid "$0" --run "$out" "$checkout" "$model" "$effort" "$search" </dev/null >"$out/launch.log" 2>&1 &
+pid=$!
+until [[ -e $out/codex.log || -e $out/status ]]; do
+	if ! ps -p "$pid" >/dev/null; then
+		echo "codex-ask: the session ended before Codex started; $out/launch.log:" >&2
+		cat "$out/launch.log" >&2
+		exit 1
+	fi
+	sleep 0.05
+done
+echo "codex-ask: $model $effort $1 started for $checkout as pid $pid"
+printf 'wait-exit --pid %s %q %s\n' "$pid" "$out/status" "$wait_slice"

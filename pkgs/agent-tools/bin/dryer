@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Runs unclebob/dryer, which pkgs/agent-tools.nix builds from its pinned commit, over the whole git repository around
+# the current directory, at ub-mode's 0.8 threshold.
+# dryer writes .metrics/dry.edn into its --root, so the root is a scratch directory and the repository stays clean;
+# Codex's read-only sandbox leaves only /dev/shm writable.
+# dryer's --changed compares changed files only with each other and reads git status in --root, so this wrapper refuses it.
+# Other arguments go to dryer, such as --min-lines 3, --threshold 0.9, or a text that filters file paths.
+set -euo pipefail
+
+for arg in "$@"; do
+	if [[ $arg == --changed ]]; then
+		echo "dryer: --changed misses duplicates of unchanged files; run without it and read the pairs that touch your change" >&2
+		exit 2
+	fi
+done
+top=$(git rev-parse --show-toplevel)
+metrics=$(mktemp -d 2>/dev/null || mktemp -d -p /dev/shm)
+trap 'rm -r -- "${metrics:?}"' EXIT
+# Upstream dryer walks every file under the source folder and reads no JavaScript. The bootstrap keeps the files git
+# lists (tracked, plus untracked ones not ignored) so build output stays out, and parses .js, .mjs and .cjs with the
+# TypeScript grammar, which fails on JSX.
+read -r -d '' bootstrap <<'EOF' || true
+import os, subprocess, sys
+from pathlib import Path
+from dryer import discover
+javascript = (".js", ".mjs", ".cjs")
+discover.EXTENSIONS.update(dict.fromkeys(javascript, "typescript"))
+upstream_is_test_file = discover.is_test_file
+javascript_tests = tuple(f".{kind}{ext}" for kind in ("test", "spec") for ext in javascript)
+discover.is_test_file = lambda path: upstream_is_test_file(path) or str(path).endswith(javascript_tests)
+top = Path(os.environ["DRYER_TOP"])
+listed = subprocess.run(["git", "-C", str(top), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], check=True, capture_output=True).stdout
+in_git = {(top / name).resolve() for name in listed.decode().split("\0") if name}
+upstream_walk = discover._walk
+discover._walk = lambda root: [path for path in upstream_walk(root) if path.resolve() in in_git]
+from dryer.cli import main
+sys.exit(main())
+EOF
+DRYER_TOP="$top" @python@ -I -c "$bootstrap" --root "$metrics" -s "$top" --threshold 0.8 "$@"

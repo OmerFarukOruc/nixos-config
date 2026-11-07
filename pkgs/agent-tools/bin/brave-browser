@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Run agent-browser against Omer's Brave: this host's Brave Origin, or with --on <machine> the Brave that machine lends
+# with browser-lend. The session is AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, and is pinned to its own tab.
+#   brave-browser [--on <machine>] <agent-browser command...>
+# Every call except `close` passes --cdp: a session whose attach failed would otherwise launch a local browser on its
+# next command, and `close` with --cdp would start a new attach when the session has no daemon. Write `close` as the
+# first word after --on, so it skips the wait for Allow.
+# A call before the session has attached waits up to 10 min for Omer to click Allow in Brave, and brings the session's
+# tab to the front, because Brave leaves a background tab that CDP created without a working page.
+set -euo pipefail
+
+usage="usage: brave-browser [--on <machine>] <agent-browser command...>"
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  echo "$usage"
+  exit 0
+fi
+on=
+if [[ ${1-} == --on ]]; then
+  on=${2-}
+  [[ -n $on && $on != -* ]] || { echo "$usage" >&2; exit 2; }
+  shift 2
+fi
+export AGENT_BROWSER_SESSION=${AGENT_BROWSER_SESSION:-${CLAUDE_CODE_SESSION_ID:-}}
+[[ -n $AGENT_BROWSER_SESSION ]] || { echo "brave-browser: set AGENT_BROWSER_SESSION to a session name" >&2; exit 2; }
+
+state=${XDG_RUNTIME_DIR:-/tmp}/brave-browser
+mkdir -p "$state"
+attached=$state/$AGENT_BROWSER_SESSION.attached
+exec 9> "$state/$AGENT_BROWSER_SESSION.lock"
+if ! flock -n 9; then
+  echo "brave-browser: waiting for another call of session $AGENT_BROWSER_SESSION" >&2
+  flock 9
+fi
+
+if [[ ${1-} == close ]]; then
+  rm -f "$attached"
+  exec 9>&-
+  exec agent-browser "$@"
+fi
+
+if [[ -n $on ]]; then
+  where=$on
+  ws=$(lend-cdp "$on" 9>&-)
+else
+  where=$(hostname)
+  ws=$(brave-cdp 9>&-)
+fi
+
+# agent-browser lists a session as soon as its daemon starts, before Allow. Brave holds the CDP connection open until
+# Allow, and agent-browser's client stops reading after 30 s with "os error 11" while its daemon keeps waiting on that
+# connection. A repeat call joins the pending connection instead of opening a new one, so retrying gives the 10 min
+# wait without a second Allow dialog. Each agent-browser call closes fd 9, so a daemon it starts does not hold the lock.
+if [[ ! -e $attached ]] || ! agent-browser session list 9>&- | awk 'NR > 1 { print $NF }' | grep -qxF "$AGENT_BROWSER_SESSION"; then
+  rm -f "$attached"
+  echo "brave-browser: waiting for Allow in Brave on $where" >&2
+  deadline=$((SECONDS + 600))
+  until err=$(agent-browser --pin-tab --cdp "$ws" wait --fn true 2>&1 > /dev/null 9>&-); do
+    # agent-browser 0.41.1 keeps a session's tab pin after `close` (`agent-browser tab --help`), so the first attach after
+    # the pinned tab closed fails with tab_gone until the wrapper opens a new tab.
+    if [[ $err == *tab_gone* && -z ${new_tab-} ]] && agent-browser --cdp "$ws" tab new > /dev/null 9>&-; then
+      new_tab=1
+      continue
+    fi
+    if [[ $err != *"(os error 11)"* ]] || ((SECONDS >= deadline)); then
+      printf '%s\n' "$err" >&2
+      exit 1
+    fi
+  done
+  tab=$(agent-browser --cdp "$ws" --json tab list 9>&- | jq -r '.data.tabs[] | select(.active) | .targetId')
+  agent-browser --cdp "$ws" tab "$tab" > /dev/null 9>&-
+  : > "$attached"
+fi
+exec 9>&-
+exec agent-browser --cdp "$ws" "$@"

@@ -63,6 +63,21 @@ in
             "*.sh"
             "pkgs/claude-tools/libexec/claude-accounts"
             "pkgs/claude-tools/libexec/login-browser"
+            "pkgs/agent-tools/bin/brave-browser"
+            "pkgs/agent-tools/bin/brave-cdp"
+            "pkgs/agent-tools/bin/browser-lend"
+            "pkgs/agent-tools/bin/codex-ask"
+            "pkgs/agent-tools/bin/dryer"
+            "pkgs/agent-tools/bin/gh-issue-tree"
+            "pkgs/agent-tools/bin/gh-wait-checks"
+            "pkgs/agent-tools/bin/infisical-describe"
+            "pkgs/agent-tools/bin/lend-cdp"
+            "pkgs/agent-tools/bin/mdv"
+            "pkgs/agent-tools/bin/path-claims"
+            "pkgs/agent-tools/bin/pr-land"
+            "pkgs/agent-tools/bin/ropen"
+            "pkgs/agent-tools/bin/sandbox-run"
+            "pkgs/agent-tools/bin/wait-exit"
           ];
           priority = 2;
         };
@@ -74,7 +89,14 @@ in
             "--config"
             "pkgs/claude-tools/ruff.toml"
           ];
-          includes = [ "pkgs/claude-tools/src/**/*.py" ];
+          includes = [
+            "pkgs/claude-tools/src/**/*.py"
+            "pkgs/agent-tools/bin/agent-watch"
+            "pkgs/agent-tools/bin/cc-setting"
+            "pkgs/agent-tools/bin/cdp-eval"
+            "pkgs/agent-tools/bin/oom-report"
+            "pkgs/agent-tools/bin/removed-defs"
+          ];
         };
         lychee = {
           command = "lychee";

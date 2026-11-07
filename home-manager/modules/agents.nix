@@ -31,7 +31,13 @@ in
   };
 
   config = lib.mkMerge [
-    { home.packages = [ pull ]; }
+    {
+      home.packages = [
+        pull
+        (pkgs.callPackage ../../pkgs/agent-tools.nix { })
+        pkgs.bubblewrap
+      ];
+    }
     {
       home.file = {
         ".claude/CLAUDE.md" = live "claude/CLAUDE.md";

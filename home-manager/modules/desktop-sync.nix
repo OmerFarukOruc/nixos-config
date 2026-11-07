@@ -11,7 +11,6 @@ in
   imports = [ ./claude-tools.nix ];
 
   home.packages = [
-    pkgs.bubblewrap
     pkgs.mise
     pkgs.jq
   ];

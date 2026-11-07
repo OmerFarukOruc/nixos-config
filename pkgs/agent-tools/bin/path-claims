@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+usage="usage: path-claims PATH... (paths relative to the repository root)"
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+  echo "$usage"
+  exit 0
+fi
+if (($# == 0)); then
+  echo "$usage" >&2
+  exit 2
+fi
+self=$(git rev-parse --show-toplevel)
+base=$(git rev-parse --abbrev-ref origin/HEAD 2>/dev/null) || base=origin/main
+specs=("${@/#/:(top)}")
+found=0
+self_id=${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}
+readarray -t roots < <(realpath -e ~/.claude*/projects ~/.codex/sessions 2>/dev/null | sort -u)
+
+print_creator_sessions() {
+  local wt=$1 branch=$2 f kind id name
+  local head="✓ Created branch $branch from " tail=" and worktree @ ${wt/#$HOME/\~}"
+  ((${#roots[@]})) || return 0
+  { grep -rlF --include='*.jsonl' -- "$head" "${roots[@]}" 2>/dev/null || true; } |
+    while IFS= read -r f; do
+      [[ -z $self_id || $f != *"$self_id"* ]] || continue
+      grep -F -- "$head" "$f" | jq -Rr --arg head "$head" --arg tail "$tail" --arg file "$f" '
+        fromjson? |
+        . as $entry |
+        [ (.toolUseResult | objects | .stdout | strings),
+          (.message.content? | arrays | .[] | select(.type? == "tool_result") | .content | strings),
+          (.payload.item? | objects | .aggregated_output | strings),
+          (.payload.output? | strings) ] |
+        map(gsub("\u001b\\[[0-9;]*m"; "") | split("\n")[]) |
+        select(any(.[]; startswith($head) and endswith($tail))) |
+        if $entry.sessionId then "claude\t\($entry.sessionId)"
+        else "codex\t\($file | capture("(?<id>[0-9a-f-]{36})\\.jsonl$").id // $file)" end
+      ' 2>/dev/null || true
+    done | sort -u |
+    while IFS=$'\t' read -r kind id; do
+      name=$(for r in "${roots[@]}"; do cat "$r"/*/"$id.jsonl"; done 2>/dev/null | grep -F '"type":"agent-name"' | jq -Rr 'fromjson? | .agentName // empty' | tail -1 || true)
+      printf '  %s session %s%s\n' "$kind" "$id" "${name:+ ($name)}"
+    done
+}
+
+while IFS= read -r wt; do
+  [[ $wt != "$self" && -d $wt ]] || continue
+  ahead=$(git -C "$wt" log -n 5 --format='  commit %h %cd %s' --date=format:%FT%T "$base..HEAD" -- "${specs[@]}")
+  dirty=$(git -C "$wt" status --porcelain -- "${specs[@]}" | sed -n '1,5s/^/  dirty /p')
+  [[ -n $ahead || -n $dirty ]] || continue
+  found=1
+  branch=$(git -C "$wt" branch --show-current)
+  printf '%s [%s]\n' "$wt" "$branch"
+  printf '%s\n' "$ahead" "$dirty" | grep -v '^$' || true
+  [[ -z $branch ]] || print_creator_sessions "$wt" "$branch"
+done < <(git worktree list --porcelain | sed -n 's/^worktree //p')
+exit $((found ? 3 : 0))
