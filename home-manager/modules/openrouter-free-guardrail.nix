@@ -14,12 +14,12 @@ let
     ];
     text = builtins.readFile ./openrouter-free-guardrail.sh;
   };
-  dailyUnit = import ./daily-unit.nix { inherit config lib pkgs; };
+  scheduledUnit = import ./scheduled-unit.nix { inherit config lib pkgs; };
 in
 {
   config = lib.mkMerge [
     { home.packages = [ guardrail ]; }
-    (dailyUnit {
+    (scheduledUnit {
       name = "openrouter-free-guardrail";
       description = "Refresh the OpenRouter guardrail's allowlist of free models";
       timerDescription = "Daily refresh of the OpenRouter free-model guardrail";

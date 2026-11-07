@@ -11,6 +11,7 @@
     ./asus.nix
     ./claude-tools-usage-read.nix
     ./cpu-limits.nix
+    ../../nixosModules/agents.nix
     ../../nixosModules/envfs.nix
     ./gaming.nix
     ./graphics.nix

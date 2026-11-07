@@ -11,12 +11,14 @@
   timeout,
   hint,
   stopPost ? [ ],
+  onCalendar ? "daily",
+  randomizedDelay ? "1h",
 }:
 let
   marker = pkgs.writeShellApplication {
     name = "${name}-marker";
     runtimeInputs = [ pkgs.coreutils ];
-    text = builtins.readFile ./daily-unit-marker.sh;
+    text = builtins.readFile ./scheduled-unit-marker.sh;
   };
   markerFile = "\${XDG_STATE_HOME:-$HOME/.local/state}/${name}/failed";
 in
@@ -44,9 +46,9 @@ in
   systemd.user.timers.${name} = {
     Unit.Description = timerDescription;
     Timer = {
-      OnCalendar = "daily";
+      OnCalendar = onCalendar;
       Persistent = true;
-      RandomizedDelaySec = "1h";
+      RandomizedDelaySec = randomizedDelay;
     };
     Install.WantedBy = [ "timers.target" ];
   };

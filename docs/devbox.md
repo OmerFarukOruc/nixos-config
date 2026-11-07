@@ -462,8 +462,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   can drop the unit fields from the last line of a process that exits at once,
   so `-u` missed the `updated` line of a run on 2026-11-07, and the unit sets
   `SyslogIdentifier=` to its name.
-- The failure marker. `openrouter-free-guardrail.service` and
-  `worktree-sweep.service` (`home-manager/modules/daily-unit.nix`) each run a
+- The failure marker. `openrouter-free-guardrail.service`,
+  `worktree-sweep.service` and `agents-pull.service`
+  (`home-manager/modules/scheduled-unit.nix`) each run a
   marker command as `ExecStopPost=`, which systemd runs after every run with
   `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
   The marker is `~/.local/state/<unit>/failed`. Any result except `success`

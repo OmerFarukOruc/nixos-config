@@ -3,6 +3,7 @@
 {
   imports = [
     inputs.sops-nix.nixosModules.sops
+    ../../nixosModules/agents.nix
     ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
     ../../nixosModules/nixpkgs-clone.nix

@@ -13,6 +13,7 @@ in
     ./disk.nix
     ./services.nix
     ../../nixosModules/agent-runtime.nix
+    ../../nixosModules/agents.nix
     ../../nixosModules/envfs.nix
     ../../nixosModules/rootless-containers.nix
     ../../nixosModules/tailnet-web.nix

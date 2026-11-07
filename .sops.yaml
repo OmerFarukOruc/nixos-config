@@ -19,3 +19,10 @@ creation_rules:
       - age:
           - *omer-all-devices
           - *devbox
+  - path_regex: secrets/agents\.yaml$
+    key_groups:
+      - age:
+          - *omer-all-devices
+          - *nixos-rog
+          - *nixos-desktop
+          - *devbox

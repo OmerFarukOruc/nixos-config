@@ -634,8 +634,10 @@ These stay fixed on purpose, and the check does not cover them:
 edits them with the SSH key he shares across his devices,
 `~/.ssh/id_ed25519_omer`. Each host decrypts its own file with the age key
 derived from its SSH host key (`ssh-to-age` on
-`/etc/ssh/ssh_host_ed25519_key.pub`). [Secrets](nixos-rog.md#secrets) says how
-to edit a file.
+`/etc/ssh/ssh_host_ed25519_key.pub`). `secrets/agents.yaml` is the one file
+shared by several hosts: nixos-desktop, nixos-rog and devbox each decrypt it
+for the private-value scan of [agents/README.md](../agents/README.md#checks).
+[Secrets](nixos-rog.md#secrets) says how to edit a file.
 
 ## Home Manager
 

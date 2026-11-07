@@ -7,10 +7,13 @@ in
 {
   packages = with pkgs; [
     deadnix
+    gitleaks
     jq
     keep-sorted
     lychee
     nixfmt
+    python3
+    ruff
     shellcheck
     shfmt
     sops

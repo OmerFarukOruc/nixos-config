@@ -15,12 +15,12 @@ let
     ];
     text = builtins.readFile ./worktree-sweep.sh;
   };
-  dailyUnit = import ./daily-unit.nix { inherit config lib pkgs; };
+  scheduledUnit = import ./scheduled-unit.nix { inherit config lib pkgs; };
 in
 {
   config = lib.mkMerge [
     { home.packages = [ sweep ]; }
-    (dailyUnit {
+    (scheduledUnit {
       name = "worktree-sweep";
       description = "Remove merged, clean worktrees under ~/Desktop/workspace";
       timerDescription = "Daily sweep of merged worktrees";

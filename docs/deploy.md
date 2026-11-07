@@ -56,7 +56,7 @@ commit that a person pushes.
 | Hook | Runs | Took on nixos-rog |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/gate.sh` (`ci/checks.sh`, then `ci/unit-cycles.sh`) on the working tree, under `heavy` where it exists | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
+| pre-push | `ci/gate.sh` under `heavy` where it exists: the private-value scan and the `agents/` checks on the pushed commits ([agents/README.md](../agents/README.md#checks)), then `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, which a push that changes only `agents/` skips | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
 
 The times come from a test clone on 2026-11-01. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
