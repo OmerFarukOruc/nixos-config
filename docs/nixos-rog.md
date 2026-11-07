@@ -196,7 +196,7 @@ in a repository, it still sweeps the others, then fails the unit, so
 `systemctl --user --failed` shows it and each new shell prints a
 `worktree-sweep:` line until a run succeeds
 ([what the marker covers](devbox.md#agent-runtime)); read
-`journalctl --user -u worktree-sweep`.
+`journalctl --user -t worktree-sweep`.
 
 `nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system
 hook layer. Codex runs a system hook without the trust prompt that a hook in

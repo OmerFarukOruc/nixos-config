@@ -421,7 +421,10 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   workspace, key and policy lists, the model list, the policy read and the
   write), and the unit stops it after 1 hour. A run that changes nothing logs
   `threadsift-free-only unchanged: <models>`; read a run with
-  `journalctl --user -u openrouter-free-guardrail -n 20`.
+  `journalctl --user -t openrouter-free-guardrail -n 20`, because journald
+  can drop the unit fields from the last line of a process that exits at once,
+  so `-u` missed the `updated` line of a run on 2026-11-07, and the unit sets
+  `SyslogIdentifier=` to its name.
 - The failure marker. `openrouter-free-guardrail.service` and
   `worktree-sweep.service` (`home-manager/modules/daily-unit.nix`) each run a
   marker command as `ExecStopPost=`, which systemd runs after every run with

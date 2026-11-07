@@ -26,7 +26,7 @@ in
       timerDescription = "Daily sweep of merged worktrees";
       execStart = "${sweep}/bin/worktree-sweep";
       timeout = "30min";
-      hint = "see /tmp/agents/worktree-sweep/report.md and journalctl --user -u worktree-sweep";
+      hint = "see /tmp/agents/worktree-sweep/report.md and journalctl --user -t worktree-sweep";
       stopPost = [ "${pkgs.coreutils}/bin/rm -f /tmp/agents/worktree-sweep/.report.draft" ];
     })
   ];

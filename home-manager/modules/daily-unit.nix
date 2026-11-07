@@ -34,6 +34,7 @@ in
       ExecStart = execStart;
       ExecStopPost = [ "${marker}/bin/${name}-marker ${lib.escapeShellArg hint}" ] ++ stopPost;
       StateDirectory = name;
+      SyslogIdentifier = name;
       Environment = [
         "PATH=/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin"
       ];

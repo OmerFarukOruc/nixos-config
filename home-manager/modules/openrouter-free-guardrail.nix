@@ -25,7 +25,7 @@ in
       timerDescription = "Daily refresh of the OpenRouter free-model guardrail";
       execStart = "%h/.local/bin/infisical-run.sh --env secrets --path /harness/openrouter-guardrail -- ${guardrail}/bin/openrouter-free-guardrail";
       timeout = "1h";
-      hint = "see journalctl --user -u openrouter-free-guardrail";
+      hint = "see journalctl --user -t openrouter-free-guardrail";
     })
   ];
 }

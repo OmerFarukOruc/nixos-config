@@ -34,7 +34,7 @@ for git_dir in "$workspace"/*/.git; do
   repo=${git_dir%/.git}
   if ! sweep "$repo" "$@" >>"$draft"; then
     failed+=("${repo##*/}")
-    printf -- '- sweep failed, see journalctl --user -u worktree-sweep\n' >>"$draft"
+    printf -- '- sweep failed, see journalctl --user -t worktree-sweep\n' >>"$draft"
   fi
 done
 mv "$draft" "$report_dir/report.md"
