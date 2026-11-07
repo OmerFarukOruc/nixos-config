@@ -4,7 +4,6 @@ let
   cliproxy = ../../secrets/devbox-cliproxy.yaml;
   inherit (config.sops) placeholder;
   user = config.oruc.machine.user;
-  infisicalAgentDir = "/run/user/${toString config.users.users.${user}.uid}/infisical-agent";
   userSecret = {
     sopsFile = secrets;
     owner = user;
@@ -46,7 +45,7 @@ in
         sinks = [
           {
             type = "file";
-            config.path = "${infisicalAgentDir}/token";
+            config.path = "token";
           }
         ];
         templates = [
@@ -56,7 +55,7 @@ in
               {{ .Key }}={{ .Value }}
               {{- end }}{{ end }}
             '';
-            destination-path = "${infisicalAgentDir}/openrouter-guardrail.env";
+            destination-path = "openrouter-guardrail.env";
           }
         ];
       };

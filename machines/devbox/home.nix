@@ -64,12 +64,26 @@ in
       Description = "Infisical Agent: keeps a token and the secret files under %t/infisical-agent current";
       After = [ "network-online.target" ];
       Wants = [ "network-online.target" ];
+      X-Restart-Triggers = [
+        (builtins.hashString "sha256" osConfig.sops.templates."infisical-agent.yaml".content)
+      ];
     };
     Service = {
       ExecStart = "${lib.getExe pkgs.infisical} agent --config ${
         osConfig.sops.templates."infisical-agent.yaml".path
       }";
+      ExecStartPost = toString (
+        pkgs.writeShellScript "infisical-agent-rendered" ''
+          for _ in {1..60}; do
+            [[ -s $RUNTIME_DIRECTORY/openrouter-guardrail.env ]] && exit 0
+            ${pkgs.coreutils}/bin/sleep 1
+          done
+          echo "the agent wrote no openrouter-guardrail.env within 60 s" >&2
+          exit 1
+        ''
+      );
       RuntimeDirectory = "infisical-agent";
+      WorkingDirectory = "%t/infisical-agent";
       RuntimeDirectoryMode = "0700";
       UMask = "0077";
       Restart = "on-failure";
@@ -80,10 +94,10 @@ in
 
   systemd.user.services.openrouter-free-guardrail = {
     Unit = {
-      Requires = [ "infisical-agent.service" ];
+      Wants = [ "infisical-agent.service" ];
       After = [ "infisical-agent.service" ];
     };
-    Service.EnvironmentFile = "%t/infisical-agent/openrouter-guardrail.env";
+    Service.EnvironmentFile = "-%t/infisical-agent/openrouter-guardrail.env";
   };
 
   systemd.user.services.herdr-web-ui = {
