@@ -20,10 +20,17 @@ let
       };
     };
   };
+  testCertificate =
+    pkgs.runCommand "telemetry-test-certificate.pem" { nativeBuildInputs = [ pkgs.openssl ]; }
+      ''
+        openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 \
+          -subj /CN=telemetry-test -keyout /dev/null -out $out
+      '';
 in
 {
   oruc.telemetry = {
     endpoint = lib.mkForce "127.0.0.1:4317";
+    certificates = lib.mkForce { aws-agent = "${testCertificate}"; };
     insecure = true;
     journalUnits = [ "telemetry-unit-probe.service" ];
     journalUserUnits = [ "telemetry-user-probe.service" ];

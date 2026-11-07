@@ -86,6 +86,9 @@ in
     environment = "development";
     endpoint = "signoz.statuslantern.com:4317";
     filesystemMounts = [ "/tmp" ];
+    certificates.aws-agent = "${
+      config.users.users.${config.oruc.machine.user}.home
+    }/.aws/rolesanywhere/leaf.pem";
     journalUnits = [
       "caddy.service"
       "acme-*.service"

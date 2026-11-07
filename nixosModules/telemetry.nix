@@ -9,6 +9,8 @@ let
   inherit (lib) mkOption types;
 
   stateDirectory = "/var/lib/opentelemetry-collector";
+  credentialsDirectory = "/run/credentials/opentelemetry-collector.service";
+  watchCertificates = cfg.certificates != { };
   journalctl = lib.getExe' pkgs.systemd "journalctl";
 
   resource =
@@ -164,6 +166,20 @@ in
       '';
     };
 
+    certificates = mkOption {
+      type = types.attrsOf types.str;
+      default = { };
+      example = {
+        aws-agent = "/home/omer/.aws/rolesanywhere/leaf.pem";
+      };
+      description = ''
+        PEM certificate files, by name, whose time to expiry the collector
+        reports every hour as `tlscheck.time_left`. The collector reads a copy
+        that systemd takes at its start (`LoadCredential`), so each file must
+        exist when it starts, and a change to a file restarts it.
+      '';
+    };
+
     unitsServiceName = mkOption {
       type = types.str;
       default = "infra-units";
@@ -193,6 +209,12 @@ in
             }
           ];
           "otlp/applications".protocols.http.endpoint = "127.0.0.1:${toString cfg.localOtlpPort}";
+          tls_check = lib.mkIf watchCertificates {
+            collection_interval = "1h";
+            targets = lib.mapAttrsToList (name: _: {
+              file_path = "${credentialsDirectory}/${name}";
+            }) cfg.certificates;
+          };
           hostmetrics = {
             collection_interval = "60s";
             scrapers = {
@@ -318,7 +340,8 @@ in
                 "otlp/applications"
                 "hostmetrics"
               ]
-              ++ lib.optional (cfg.filesystemMounts != [ ]) "hostmetrics/virtual_filesystems";
+              ++ lib.optional (cfg.filesystemMounts != [ ]) "hostmetrics/virtual_filesystems"
+              ++ lib.optional watchCertificates "tls_check";
               processors = [
                 "memory_limiter"
                 "filter/unread_metrics"
@@ -351,6 +374,24 @@ in
             };
           };
         };
+      };
+    };
+
+    systemd.services.opentelemetry-collector.serviceConfig.LoadCredential = lib.mapAttrsToList (
+      name: path: "${name}:${path}"
+    ) cfg.certificates;
+
+    systemd.paths.opentelemetry-collector-certificates = lib.mkIf watchCertificates {
+      description = "Watch the certificates the collector reports";
+      wantedBy = [ "multi-user.target" ];
+      pathConfig.PathChanged = lib.attrValues cfg.certificates;
+    };
+
+    systemd.services.opentelemetry-collector-certificates = lib.mkIf watchCertificates {
+      description = "Restart the collector so it reads the changed certificates";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${lib.getExe' config.systemd.package "systemctl"} try-restart opentelemetry-collector.service";
       };
     };
 

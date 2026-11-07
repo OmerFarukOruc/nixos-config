@@ -143,6 +143,18 @@ outage loses nothing that the retry window covers.
   it. `/tmp` is not a mount on the Debian box today (observed on 2026-10-27),
   so the Debian collector reported nothing for it. The VM test runs that
   receiver but does not check its output.
+- **Certificates** every hour: `tlscheck.time_left` for each file in
+  `certificates`. This box lists its IAM Roles Anywhere certificate,
+  `~/.aws/rolesanywhere/leaf.pem` of omer, which the AWS profile `statuslantern`
+  signs with. Status Lantern's SigNoz rule "Certificate expires within 30
+  days" (`signoz/rules/certificate-expiring.json` in that repository) groups
+  by host and file and posts to Slack, so a certificate under 30 days alerts
+  there once the box's export reaches SigNoz. It does not today: Status
+  Lantern's tailnet policy opens the gateway's `tcp:4317` only to its own
+  hosts, so every export fails with `Unavailable`. systemd hands the collector a copy taken at its start
+  (`LoadCredential`), so the collector does not start while a listed file is
+  missing, and `opentelemetry-collector-certificates.path` restarts it when a
+  file changes, such as at a renewal.
 - **OTLP** on `127.0.0.1:4318` (HTTP) for host processes. Metrics and traces
   carry `host.id`, `host.name` and `deployment.environment.name`.
 - **Logs**, retried without a time limit. `service.name=host-audit` holds the
