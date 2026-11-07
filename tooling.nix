@@ -63,6 +63,7 @@ in
             "*.sh"
             "pkgs/claude-tools/libexec/claude-accounts"
             "pkgs/claude-tools/libexec/login-browser"
+            "pkgs/claude-tools/libexec/rotate-on-limit"
             "pkgs/agent-tools/bin/brave-browser"
             "pkgs/agent-tools/bin/brave-cdp"
             "pkgs/agent-tools/bin/browser-lend"

@@ -301,7 +301,7 @@ reuse the generation's pack, and root's Home Manager and the servers get a
 pack with the record scheme alone. `oruc.themeFacts` adds a value per
 scheme to the pack as `.oruc/<name>`, such as the Glass glow colour.
 `claude-code-theme.nix` writes `.oruc/statusline`, the segment backgrounds,
-text colours and usage colours that dotfiles' `desktop/claude-code/statusline.sh`
+text colours and usage colours that `agents/claude/statusline.sh`
 reads; when the fact is missing or lacks a key, that script keeps its fixed
 colour for it.
 

@@ -40,7 +40,7 @@ herdr agent start NAME --kind codex --pane PANE -- -m <model> -c model_reasoning
 
 ## Agent state
 
-- Claude Code reports its states through `desktop/claude-code/hooks/herdr-agent-state.sh`; `herdr integration status` shows the installed integrations.
+- Claude Code reports its states through `~/.claude/hooks/herdr-agent-state.sh`, which `herdr integration install claude` writes; `herdr integration status` shows the installed integrations.
 - `herdr agent wait` fails at once with `agent_not_found` when the pane has no agent yet, so a watcher retries.
 - `herdr pane report-agent` ignores a report whose `--seq` is missing or lower than the last one, so pass a growing value such as `date +%s%N` on every call.
 

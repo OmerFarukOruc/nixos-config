@@ -24,6 +24,18 @@ in
 
   oruc.plasma.claudeAccountsWidget = true;
 
+  programs.claude-code.settings.hooks.StopFailure = [
+    {
+      matcher = "rate_limit";
+      hooks = [
+        {
+          type = "command";
+          command = "${claudeTools}/libexec/claude-tools/rotate-on-limit";
+        }
+      ];
+    }
+  ];
+
   systemd.user.services.claude-tools-usage = {
     Unit = {
       Description = "Read the usage limits and login state of every Claude Code account";

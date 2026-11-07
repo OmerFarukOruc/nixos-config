@@ -1,6 +1,7 @@
 {
   agents,
   config,
+  lib,
   pkgs,
   ...
 }:
@@ -21,7 +22,10 @@
   programs.worktrunk = {
     enable = true;
     enableZshIntegration = true;
-    claudeCodeIntegration.enable = false;
+    claudeCodeIntegration = {
+      enable = true;
+      statusLine = false;
+    };
     settings = {
       worktree-path = "${config.home.homeDirectory}/Desktop/workspace/worktrees/{{ repo }}/{{ branch | sanitize }}";
       skip-shell-integration-prompt = true;
@@ -30,4 +34,15 @@
       pre-remove.devenv = "if [ -e devenv.nix ] && command -v devenv >/dev/null && devenv processes list >/dev/null 2>&1; then devenv down; fi";
     };
   };
+
+  programs.claude-code.settings.hooks.WorktreeRemove = lib.mkForce [
+    {
+      hooks = [
+        {
+          type = "command";
+          command = "bash -c 'p=$(${lib.getExe pkgs.jq} -er .worktree_path) || exit 1; [ -e \"$p/.git\" ] || exit 0; ${lib.getExe config.programs.worktrunk.package} -C \"$p\" remove --foreground --force \"$p\"'";
+        }
+      ];
+    }
+  ];
 }

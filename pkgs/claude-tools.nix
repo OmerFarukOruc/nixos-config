@@ -14,7 +14,7 @@ python3Packages.buildPythonApplication {
     substituteInPlace libexec/claude-accounts share/claude-tools.sh --replace-fail @bin@ $out/bin
   '';
   postInstall = ''
-    install -Dm755 -t $out/libexec/claude-tools libexec/claude-accounts libexec/login-browser
+    install -Dm755 -t $out/libexec/claude-tools libexec/claude-accounts libexec/login-browser libexec/rotate-on-limit
     install -Dm644 -t $out/libexec/claude-tools libexec/config-lock.sh
     install -Dm644 -t $out/share/claude-tools share/claude-tools.sh README.md
   '';

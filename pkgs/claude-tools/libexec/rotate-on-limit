@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Claude Code ignores this hook's output and exit code (hooks docs, StopFailure).
+[[ -n "${CLAUDE_TOOLS_ROTATE_ID:-}" ]] || exit 0
+
+# On a Nix host Claude runs as .claude-wrapped.
+is_claude() {
+  local name
+  name=$(cat "/proc/$1/comm" 2>/dev/null) || return 1
+  [[ "$name" == claude || "$name" == .claude-wrapped ]]
+}
+
+nearest_claude_pid() {
+  local pid=$PPID stat
+  for _ in 1 2 3 4 5 6; do
+    is_claude "$pid" && { echo "$pid"; return 0; }
+    stat=$(cat "/proc/$pid/stat" 2>/dev/null) || return 1
+    read -r _ pid _ <<<"${stat##*) }"
+    (( pid > 1 )) || return 1
+  done
+  is_claude "$pid" && echo "$pid"
+}
+
+claude_pid=$(nearest_claude_pid) || exit 0
+dir="${XDG_RUNTIME_DIR:-/tmp/claude-tools-$(id -u)}/claude-tools/rotate"
+flag="$dir/${CLAUDE_TOOLS_ROTATE_ID}-${claude_pid}.json"
+mkdir -p "$dir"
+tmp=$(mktemp "$dir/.hook.XXXXXX")
+cat > "$tmp"
+mv "$tmp" "$flag"

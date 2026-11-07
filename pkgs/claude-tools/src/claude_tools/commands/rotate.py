@@ -125,9 +125,19 @@ class Stop:
                 entry = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(entry, dict) and entry.get("type") == "user" and not entry.get("isMeta"):
+            if typed_prompt(entry):
                 return True
         return False
+
+
+BASH_MODE = ("<bash-input>", "<bash-stdout>", "<bash-stderr>")
+
+
+def typed_prompt(entry: object) -> bool:
+    if not isinstance(entry, dict) or entry.get("type") != "user" or entry.get("isMeta"):
+        return False
+    content = (entry.get("message") or {}).get("content")
+    return not (isinstance(content, str) and content.startswith(BASH_MODE))
 
 
 def when(t: float) -> str:

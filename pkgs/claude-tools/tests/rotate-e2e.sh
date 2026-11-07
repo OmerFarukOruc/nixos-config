@@ -169,7 +169,6 @@ t new-session -d -s "$m" -x 200 -y 50 \
 $tools rotate --session-id $sid --model haiku --dangerously-skip-permissions"
 t set-option -t "$m" remain-on-exit on
 mwrapper=$(t display -p -t "$m" '#{pane_pid}')
-runtime="${XDG_RUNTIME_DIR:-/tmp/claude-tools-$(id -u)}/claude-tools/rotate"
 settle "$m" "$mwrapper"
 type_line "Reply only OK." "$m"
 for _ in $(seq 60); do
@@ -189,12 +188,9 @@ quiet() {
   fail "the transcript of $sid did not settle in 600 s"
 }
 limit() {
-  local c tmp
-  c=$(child "$mwrapper" | cut -f1)
-  tmp=$(mktemp "$runtime/.e2e.XXXXXX")
   jq -n --arg s "$sid" --arg t "$transcript" --arg m "You've hit your 5-hour limit · resets $1 (UTC)" \
-    '{session_id: $s, transcript_path: $t, hook_event_name: "StopFailure", last_assistant_message: $m}' >"$tmp"
-  mv "$tmp" "$runtime/$mwrapper-$c.json"
+    '{session_id: $s, transcript_path: $t, hook_event_name: "StopFailure", last_assistant_message: $m}' >"$dir/limit.json"
+  type_line "! ${tools%/bin/claude-tools}/libexec/claude-tools/rotate-on-limit < $dir/limit.json" "$m"
 }
 moved() {
   local c

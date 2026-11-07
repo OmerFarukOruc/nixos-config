@@ -45,6 +45,9 @@ in
         ".claude/shared" = live "shared";
         ".claude/reference" = live "reference";
         ".claude/infisical.md" = live "infisical.md";
+        ".claude/hooks" = live "claude/hooks";
+        ".claude/statusline.sh" = live "claude/statusline.sh";
+        ".claude/agents" = live "claude/agents";
         ".codex/AGENTS.md" = {
           text =
             builtins.readFile ../../agents/shared/core.md
@@ -52,6 +55,18 @@ in
             + builtins.readFile ../../agents/codex/codex.md;
           force = true;
         };
+      };
+      programs.claude-code = {
+        mutableSettings = true;
+        settings = lib.mkMerge [
+          (lib.importJSON ../../agents/claude/settings.json)
+          {
+            env = {
+              CLAUDE_ENV_FILE = "${config.home.homeDirectory}/.claude/hooks/bash-env.sh";
+              CLAUDE_CODE_PLUGIN_DIRS = "${cfg.checkout}/agents/claude/mods/paste-card";
+            };
+          }
+        ];
       };
       home.activation.agentsPull = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         run ${lib.getExe' pkgs.coreutils "timeout"} 2m ${lib.getExe pull} ${lib.escapeShellArg cfg.checkout} \

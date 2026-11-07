@@ -11,9 +11,23 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | `claude/rules/` | `~/.claude/rules` | Claude Code rule files |
 | `reference/` | `~/.claude/reference` | reference pages the rules send agents to |
 | `infisical.md` | `~/.claude/infisical.md` | the Infisical usage note |
+| `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `bash-env.sh`, `stop-sound.sh` and its sounds |
+| `claude/statusline.sh` | `~/.claude/statusline.sh` | the status line |
+| `claude/agents/` | `~/.claude/agents` | the `code-reviewer` and `comment-sicko` agents |
+| `claude/mods/paste-card/` | `CLAUDE_CODE_PLUGIN_DIRS` | the `paste-card` mod |
+| `claude/settings.json` | `~/.claude/settings.json` | Claude Code's settings |
 | `codex/codex.md` | `~/.codex/AGENTS.md` | the Codex-only rules |
 
-Each path except the last is a live link into the checkout. `~/.codex/AGENTS.md` is a file that Home Manager builds from `shared/core.md` and `codex/codex.md`, so a change to either reaches Codex at the next switch, within the hour on every host, the PCs only on AC power (the repository's `AGENTS.md`). Home Manager's `programs.codex` would also build it, but with `home.preferXdgDirectories` on these hosts it moves `CODEX_HOME` to `~/.config/codex`. `programs.claude-code` has `context` and `rulesDir`, but `context` would write the link's store path as text and `rulesDir` links file by file, so a new rule file would wait for a switch; raw `home.file` entries avoid both.
+Each path above `claude/settings.json` is a live link into the checkout or, for the mod, its path. `programs.claude-code.settings` merges `claude/settings.json` into `~/.claude/settings.json` at each switch with `mutableSettings`, so Claude Code and `herdr integration install claude` can still write to that file and keep their keys, such as each host's `autoMode.environment`. A declared key overwrites the live one, a declared list replaces the live list, and a key removed from `claude/settings.json` stays in the live file until someone deletes it there. Other hooks come from elsewhere:
+
+- herdr writes its `SessionStart` hook.
+- `programs.worktrunk.claudeCodeIntegration` (`home-manager/modules/agent-cli.nix`) adds the `WorktreeCreate` and `WorktreeRemove` hooks, which run `wt`, and activity hooks that set a marker for `wt list` in the repository's `.git/config` at each prompt, question, and stop. `agent-cli.nix` replaces its `WorktreeRemove` command with one that passes `--force`, so a discard at exit removes a worktree with uncommitted changes. `WorktreeCreate` runs `wt switch --create`, so it fails for a branch that already exists, and an `isolation: "worktree"` agent's worktree starts from the default branch, not from the parent session's commit.
+- `home-manager/modules/claude-tools.nix` adds the `StopFailure` hook that `claude-tools rotate` reads.
+- The impeccable plugin adds a `SessionStart` hook, a `PostToolUse` hook on `Edit|Write`, and a `Stop` hook, each running its `impeccable hook` script.
+
+Enabled plugins and their marketplaces are settings keys. Claude Code fetches a plugin that user settings enable once a session starts, and loads it from the next session on. `autoUpdate` on a marketplace makes Claude Code update it and its plugins after a session starts; Anthropic's own marketplaces update without it.
+
+`~/.codex/AGENTS.md` is a file that Home Manager builds from `shared/core.md` and `codex/codex.md`, so a change to either reaches Codex at the next switch, within the hour on every host, the PCs only on AC power (the repository's `AGENTS.md`). Home Manager's `programs.codex` would also build it, but with `home.preferXdgDirectories` on these hosts it moves `CODEX_HOME` to `~/.config/codex`. `programs.claude-code` has `context` and `rulesDir`, but `context` would write the link's store path as text and `rulesDir` links file by file, so a new rule file would wait for a switch; raw `home.file` entries avoid both.
 
 Each entry sets `force`, because Home Manager backs up only a target that is not a symlink, and the links an earlier setup left there would otherwise stop the switch. Each switch also runs `agents-pull` before it ends, so the links never wait an hour for files the deployed commit added.
 
