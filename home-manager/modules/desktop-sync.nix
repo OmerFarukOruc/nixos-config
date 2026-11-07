@@ -16,14 +16,14 @@ in
     pkgs.jq
   ];
 
-  systemd.user.services.desktop-sync-config = {
+  systemd.user.services.desktop-sync = {
     Unit = {
-      Description = "Omer's desktop-sync, config only";
+      Description = "Omer's desktop-sync";
       ConditionPathExists = "${dotfiles}/desktop/bin/desktop-sync.sh";
     };
     Service = {
       Type = "oneshot";
-      ExecStart = "${dotfiles}/desktop/bin/desktop-sync.sh --config";
+      ExecStart = "${dotfiles}/desktop/bin/desktop-sync.sh";
       WorkingDirectory = dotfiles;
       Environment = [
         "PATH=${
@@ -37,8 +37,8 @@ in
       TimeoutStartSec = "10min";
     };
   };
-  systemd.user.timers.desktop-sync-config = {
-    Unit.Description = "Hourly config-only desktop-sync for Omer's user";
+  systemd.user.timers.desktop-sync = {
+    Unit.Description = "Hourly desktop-sync for Omer's user";
     Timer = {
       OnCalendar = "hourly";
       Persistent = true;

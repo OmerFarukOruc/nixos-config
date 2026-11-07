@@ -366,15 +366,6 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   [NixOS wiki](https://wiki.nixos.org/wiki/Playwright) says. A Chromium that
   Playwright downloads itself does not run on NixOS, so the agents must not
   call `playwright install`.
-- envfs serves `/usr/bin` by the PATH of the caller. The units from the
-  dotfiles checkout call `/usr/bin/zsh` and `/usr/bin/bash` with a PATH that
-  holds nothing of NixOS, so the module adds `bash`, `zsh`, `systemctl` and
-  `podman` to the fallback directory. The units find herdr, claude and the other
-  profile tools through their PATH, which lists `/etc/profiles/per-user/%u/bin`,
-  and coreutils such as `dirname` through `/run/current-system/sw/bin`, which
-  the PATH also lists; there is no `/usr/local/bin` on this host, so a
-  tool that only infra installed there (micro, lazygit, node and
-  others) is missing until the profile or mise provides it.
 - The Cursor worker's computer use drives XFCE on Xvnc, and the Amp runner
   drives labwc. The module installs both desktops with their NixOS modules, and
   the tools they call (tigervnc, xdotool, X utilities, ffmpeg, ImageMagick,
@@ -389,7 +380,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 - `features.boxBrowser` is on in the host record, so `box-browser` and its two
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
-  hourly `desktop-sync.sh --config`, the Claude account tools of
+  hourly `desktop-sync.sh`, the Claude account tools of
   `pkgs/claude-tools` with their usage timer, and
   `claude-tools-limit-switch.timer` (next bullet).
 - `claude-tools-limit-switch.timer` runs `claude-tools limit-switch scan` of

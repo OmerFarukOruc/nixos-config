@@ -53,24 +53,6 @@ for svc_tool in [
     machine.succeed(f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:$PATH command -v {svc_tool}")
 machine.succeed(f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:$PATH python3 -I -c 'import yaml; from PIL import Image'")
 machine.succeed("docker compose version")
-svc_unit_path = (
-    f"/home/{BOX_USER}/.local/bin:/etc/profiles/per-user/{BOX_USER}/bin:/usr/local/bin:/usr/bin:/bin"
-)
-svc_found = svc_user(
-    f"systemd-run --user --quiet --wait --pipe --collect -p Environment=PATH={svc_unit_path} "
-    "/usr/bin/zsh -c 'command -v herdr claude'"
-)
-assert svc_found.split() == [
-    f"/etc/profiles/per-user/{BOX_USER}/bin/herdr",
-    f"/etc/profiles/per-user/{BOX_USER}/bin/claude",
-], f"herdr and claude are not in the profile: {svc_found!r}"
-svc_usr_path = "env -i PATH=/usr/local/bin:/usr/bin:/bin"
-for svc_name in ["zsh", "bash"]:
-    machine.succeed(
-        f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/{svc_name} -c 'exit 0'"
-    )
-machine.succeed(f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/systemctl --version")
-machine.succeed(f"runuser -u {BOX_USER} -- {svc_usr_path} /usr/bin/podman --version")
 
 machine.succeed("test $(stat -c '%a' /run/secrets/cloudflare-acme-dns-token) = 400")
 machine.succeed(
@@ -197,10 +179,6 @@ svc_user(f"{svc_docker} rm -f {svc_cid}")
 svc_podman_docker = f"env DOCKER_HOST=unix://{svc_rt}/podman/podman.sock docker"
 svc_user(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
 svc_user(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")
-machine.succeed(
-    f"runuser -u {BOX_USER} -- {svc_usr_path} HOME=/home/{BOX_USER} XDG_RUNTIME_DIR={svc_rt} "
-    "/usr/bin/podman run --rm probe:1 echo podman-direct-ok | grep -Fx podman-direct-ok"
-)
 
 machine.wait_until_succeeds(
     f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status"

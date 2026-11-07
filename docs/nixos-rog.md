@@ -144,8 +144,8 @@ the Tailscale admin console, so it stays logged in.
 
 The Claude Code and Codex setup comes from the dotfiles checkout at
 `~/Desktop/workspace/dotfiles`. Every hour, the user timer
-`desktop-sync-config.timer` runs that checkout's
-`desktop/bin/desktop-sync.sh --config`. Query it with `systemctl --user`. The
+`desktop-sync.timer` runs that checkout's
+`desktop/bin/desktop-sync.sh`. Query it with `systemctl --user`. The
 script links the rules, skills, hooks and agents. It also syncs Claude Code's
 `settings.json` in both directions. The service sets `DESKTOP_SYNC_COMMIT=1`, so
 the script also commits the config files it recorded and pushes them to `main`,
