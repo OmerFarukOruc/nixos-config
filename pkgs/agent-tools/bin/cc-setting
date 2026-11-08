@@ -10,7 +10,7 @@ An upper-case KEY that the code reads from the environment outside that schema, 
 gets the code around the read, which often holds its default. Otherwise it says whether ~/.claude.json, where Claude
 Code keeps per-account preferences, holds KEY. Last, it lists the environment variables whose names contain KEY,
 ignoring case, so `cc-setting concurrent` finds the concurrency caps.
-A per-account key that every account shares goes in dotfiles desktop/claude-code/account-prefs.json.
+A per-account key that every account shares goes in the account-prefs.json set of nixos-config home-manager/modules/claude-tools.nix.
 """
 import json
 import mmap

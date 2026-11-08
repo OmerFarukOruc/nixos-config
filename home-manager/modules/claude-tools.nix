@@ -1,14 +1,27 @@
 {
   config,
   lib,
+  osConfig,
   pkgs,
   ...
 }:
 let
   claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
-  accounts = "${config.home.homeDirectory}/Desktop/workspace/dotfiles/desktop/claude-code/accounts.json";
+  accounts = osConfig.sops.secrets.claude-tools-accounts.path;
 in
 {
+  xdg.configFile = {
+    "claude-tools/accounts.json".source = config.lib.file.mkOutOfStoreSymlink accounts;
+    "claude-tools/account-prefs.json".text = builtins.toJSON { leftArrowOpensAgents = false; };
+  };
+
+  home.activation.claudeToolsPrefs = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+    run env PATH="${
+      lib.makeBinPath [ pkgs.util-linux ]
+    }:$PATH" ${claudeTools}/bin/claude-tools accounts prefs ||
+      warnEcho "claude-tools accounts prefs failed; the lines above name the account file or lock that stopped it"
+  '';
+
   home.packages = [
     claudeTools
     pkgs.gum

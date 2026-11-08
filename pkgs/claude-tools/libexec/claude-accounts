@@ -9,7 +9,7 @@ session_dirs=(projects plans file-history)
 libexec="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 tools="@bin@/claude-tools"
 source "$libexec/config-lock.sh"
-data="${CLAUDE_TOOLS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}"
+data="${CLAUDE_TOOLS_DATA:-$HOME/.config/claude-tools}"
 accounts_file="$data/accounts.json"
 accent=4
 
@@ -24,10 +24,10 @@ usage: claude-tools accounts [command]
   rename OLD NEW    rename an account; while a session runs with it, or for ~/.claude, only its name changes
   update            repair links (moving a profile's own copy of a shared folder into ~/.claude) and sync config
                     (MCP servers, onboarding, trusted folders, preferences) into every profile
-  prefs             apply claude-code/account-prefs.json to every account, also while a session runs
+  prefs             apply account-prefs.json to every account, also while a session runs
   delete NAME       log out and remove the account's folder (asks first; --yes skips the question)
   login NAME [--on HOST]
-                    log in to NAME in its Brave profile (claude-code/accounts.json), creating its folder when this
+                    log in to NAME in its Brave profile (accounts.json), creating its folder when this
                     device has none; --on logs in on HOST, such as devbox, through this device's browser
   login-window NAME [--on HOST]
                     run login in a new terminal window (the Claude accounts widget's Log in button)
@@ -142,8 +142,20 @@ fold_dir() {
 }
 
 prefs="$data/account-prefs.json"
+
+jq_rewrite() {
+  local f="$1" tmp
+  shift
+  tmp="$(mktemp "$f.XXXXXX")" || return 1
+  if jq "$@" "$f" > "$tmp" && chmod --reference="$f" "$tmp" && mv "$tmp" "$f"; then
+    return 0
+  fi
+  rm -f -- "$tmp"
+  return 1
+}
+
 cmd_prefs() {
-  local d f rc=0 configs=("$HOME/.claude.json") locked=()
+  local d f changed rc=0 configs=("$HOME/.claude.json") locked=()
   trap claude_config_unlock_all EXIT
   while read -r d; do configs+=("$d/.claude.json"); done < <(profile_folders)
   for f in "${configs[@]}"; do
@@ -151,7 +163,23 @@ cmd_prefs() {
   done
   claude_config_lock_all "${locked[@]}" || rc=1
   if (( ! rc )); then
-    python3 "$data/../bin/json-config.py" prefs "$prefs" "$main/backups/desktop-sync/account-prefs.json.last-sync" "${configs[@]}" || rc=$?
+    for f in "${locked[@]}"; do
+      # shellcheck disable=SC2016
+      if ! changed=$(jq -r --slurpfile p "$prefs" \
+        '. as $a | [$p[0] | to_entries[] | select($a[.key] != .value) | .key] | join(", ")' "$f"); then
+        echo "prefs: could not read $f" >&2
+        rc=1
+        continue
+      fi
+      [[ -n "$changed" ]] || continue
+      # shellcheck disable=SC2016
+      if jq_rewrite "$f" --slurpfile p "$prefs" '. + $p[0]'; then
+        echo "applied $changed to $f"
+      else
+        echo "prefs: could not write $f" >&2
+        rc=1
+      fi
+    done
   fi
   claude_config_unlock_all
   trap - EXIT
@@ -159,7 +187,7 @@ cmd_prefs() {
 }
 
 sync_config() {
-  local f="$1/.claude.json" tmp ok=0
+  local f="$1/.claude.json" ok=0
   if [[ ! -f "$f" ]]; then
     echo "  config: skipped, $f does not exist yet"
     return
@@ -170,16 +198,14 @@ sync_config() {
   fi
   trap claude_config_unlock_all EXIT
   claude_config_lock "$f" || { trap - EXIT; return 1; }
-  if tmp="$(mktemp "$f.XXXXXX")" && jq --slurpfile m "$HOME/.claude.json" --slurpfile prefs "$prefs" \
+  # shellcheck disable=SC2016
+  if jq_rewrite "$f" --slurpfile m "$HOME/.claude.json" --slurpfile prefs "$prefs" \
     '.mcpServers = ($m[0].mcpServers // {}) | .hasCompletedOnboarding = true
      | if $m[0].lastOnboardingVersion then .lastOnboardingVersion = $m[0].lastOnboardingVersion else . end
      | reduce ($m[0].projects // {} | to_entries[] | select(.value.hasTrustDialogAccepted == true) | .key) as $p
          (.; .projects[$p].hasTrustDialogAccepted = true)
-     | . + $prefs[0]' \
-    "$f" > "$tmp" && chmod --reference="$f" "$tmp" && mv "$tmp" "$f"; then
+     | . + $prefs[0]'; then
     ok=1
-  else
-    [[ -z "${tmp:-}" ]] || rm -f -- "$tmp"
   fi
   claude_config_unlock "$f"
   trap - EXIT

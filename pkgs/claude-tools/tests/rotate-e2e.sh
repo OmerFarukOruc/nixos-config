@@ -40,7 +40,7 @@ D=$(profiles names | grep -vxF -e "$A" -e "$C" -e "$R" | head -n 1) M=e2e-no-fol
 [[ -n "$D" ]] || fail "no fourth account here to leave out of accounts.json"
 mkdir -p "$dir/data"
 jq --arg d "$D" --arg m "$M" 'del(.accounts[$d]) | .accounts[$m] = {email: "e2e@example.invalid", org: "personal"}' \
-  "${CLAUDE_TOOLS_DATA:-$HOME/Desktop/workspace/dotfiles/desktop/claude-code}/accounts.json" >"$dir/data/accounts.json"
+  "${CLAUDE_TOOLS_DATA:-$HOME/.config/claude-tools}/accounts.json" >"$dir/data/accounts.json"
 
 jq --arg a "$A" --arg c "$C" --arg r "$R" --arg d "$D" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};

@@ -161,16 +161,16 @@ The unit does nothing until that checkout exists.
 `home-manager/modules/claude-tools.nix`, which `desktop-sync.nix` imports,
 installs the `claude-tools` command of `pkgs/claude-tools` (its README describes
 it) and the `claude` shell function. Its `claude-tools-usage.timer` runs
-`claude-tools usage` every 10 minutes while the checkout's
-`desktop/claude-code/accounts.json` exists. It writes each Claude Code
+`claude-tools usage` every 10 minutes while sops-nix provides its account list,
+the `claude-tools-accounts` key of `secrets/agents.yaml`. It writes each Claude Code
 account's usage limits and login state to `~/.cache/claude-tools/usage.json`,
 and reads the files of devbox and nixos-desktop over SSH. nixos-desktop's
 everyday SSH key has a passphrase that no timer can type, so it reads this
 host's file with a key of its own. `machines/nixos-rog/claude-tools-usage-read.nix`
 allows that key only to print the file: its entry in `authorized_keys` forces
 `cat .cache/claude-tools/usage.json` and sets `restrict`, which turns off the
-terminal and every forwarding. The account list and the shared preferences stay in
-the private checkout, because this repository is public.
+terminal and every forwarding. The account list stays in sops, because it holds
+account emails and this repository is public.
 The Claude accounts widget in the top bar shows that file.
 `oruc.plasma.claudeAccountsWidget` installs it from
 `pkgs/claude-accounts-widget.nix` and puts it on the panel. Its Log in button

@@ -29,12 +29,13 @@ class Settings:
     def from_env(cls, env: Mapping[str, str]) -> Settings:
         home = Path.home()
         state = Path(env.get("CLAUDE_TOOLS_STATE") or home / ".local/state/claude-tools")
+        config = home / ".config/claude-tools"
         return cls(
             home=home,
-            data=Path(env.get("CLAUDE_TOOLS_DATA") or home / "Desktop/workspace/dotfiles/desktop/claude-code"),
+            data=Path(env.get("CLAUDE_TOOLS_DATA") or config),
             cache=Path(env.get("CLAUDE_TOOLS_CACHE") or home / ".cache/claude-tools"),
             state=state,
-            config=home / ".config/claude-tools",
+            config=config,
             runtime=Path(env.get("XDG_RUNTIME_DIR") or f"/tmp/claude-tools-{os.getuid()}") / "claude-tools",
             herdr=shutil.which("herdr") or "/usr/local/bin/herdr",
             herdr_session=env.get("CLAUDE_TOOLS_HERDR_SESSION", ""),
