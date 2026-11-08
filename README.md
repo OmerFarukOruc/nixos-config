@@ -184,7 +184,7 @@ deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
 docs/                  operating guides and the architecture
 assets/                screenshots and wallpapers
-AGENTS.md  CONTEXT.md  agent rules; domain terms and SSH aliases
+AGENTS.md  GLOSSARY.md agent rules; domain terms and SSH aliases
 ```
 
 [docs/architecture.md](docs/architecture.md) explains how the inventory, the
@@ -271,7 +271,7 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
 | [Install nixos-desktop](docs/install-nixos-desktop.md) | a first install from the NixOS ISO |
 | [Home Manager](home-manager/README.md) | the user layer and the services a switch leaves running |
-| [CONTEXT.md](CONTEXT.md) | the domain terms and each host's SSH alias |
+| [GLOSSARY.md](GLOSSARY.md) | the domain terms and each host's SSH alias |
 
 ## Built on
 

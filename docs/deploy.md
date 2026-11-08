@@ -15,7 +15,7 @@
 
 Run deploy commands from nixos-desktop or nixos-rog. `deploy.sh` builds on the
 target; a deploy of a host from that host runs locally. The SSH alias of each
-host in `~/.ssh/config` selects the target and its SSH key. [CONTEXT.md](../CONTEXT.md)
+host in `~/.ssh/config` selects the target and its SSH key. [GLOSSARY.md](../GLOSSARY.md)
 lists the aliases. A server is the exception, because its deploys log in as
 root ([Deploy to a server](#deploy-to-a-server)).
 
