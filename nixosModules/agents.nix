@@ -22,5 +22,7 @@ in
     };
   };
 
+  environment.etc."grok/managed_config.toml".source = ../agents/grok/managed_config.toml;
+
   home-manager.users.${user}.imports = [ ../home-manager/modules/agents.nix ];
 }

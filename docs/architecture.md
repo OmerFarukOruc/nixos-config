@@ -570,7 +570,7 @@ nearest by Oklab distance (`contrast.nix`) over background, text and accent,
 weighted .55, .27 and .18. pi's theme comes only on hosts that set
 `oruc.piTheme`, which `agent-cli.nix` does. grok, gum and the usage cards and
 account list of `pkgs/claude-tools` draw with the terminal's 16 colours:
-dotfiles' grok config selects its `terminal` theme, `agent-theme.nix` points
+`agents/grok/managed_config.toml` selects grok's `terminal` theme, `agent-theme.nix` points
 gum's colour variables at ANSI slots, and `terminal.py` and `picker.py` name
 ANSI codes.
 
@@ -634,9 +634,13 @@ These stay fixed on purpose, and the check does not cover them:
 edits them with the SSH key he shares across his devices,
 `~/.ssh/id_ed25519_omer`. Each host decrypts its own file with the age key
 derived from its SSH host key (`ssh-to-age` on
-`/etc/ssh/ssh_host_ed25519_key.pub`). `secrets/agents.yaml` is the one file
-shared by several hosts: nixos-desktop, nixos-rog and devbox each decrypt it
-for the private-value scan of [agents/README.md](../agents/README.md#checks).
+`/etc/ssh/ssh_host_ed25519_key.pub`). Two files are shared by several hosts.
+nixos-desktop, nixos-rog and devbox each decrypt `secrets/agents.yaml` for the
+private-value scan of [agents/README.md](../agents/README.md#checks).
+nixos-desktop and nixos-rog decrypt `secrets/workstations.yaml`, whose
+`ssh-config` key is Omer's SSH client config; `nixosModules/ssh-hosts.nix`
+links `~/.ssh/config` to the decrypted file, because its host names, addresses
+and users are private.
 [Secrets](nixos-rog.md#secrets) says how to edit a file.
 
 ## Home Manager

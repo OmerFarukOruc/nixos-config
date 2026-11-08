@@ -19,6 +19,7 @@
     ./media.nix
     ./network.nix
     ../../nixosModules/nextdns.nix
+    ../../nixosModules/ssh-hosts.nix
     ../../nixosModules/nixpkgs-clone.nix
     ./powertop.nix
     ./profile-sync.nix

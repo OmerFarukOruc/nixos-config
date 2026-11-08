@@ -5,7 +5,9 @@ description: "Asks GPT-6 Pro in ChatGPT for a second opinion on a hard problem t
 
 # Oracle
 
-`oracle` (nixos-config `pkgs/oracle.nix`) pastes a brief and files into ChatGPT in its own Brave Origin window, signed in as Omer, and saves the answer. `~/.oracle/config.json` sets browser mode, GPT-6 at Pro effort, the saved login, a background window, and a 60-minute wait for the answer, so a plain `oracle` call needs no model or browser flags. Keep that model: Oracle 0.22.2 has no ChatGPT picker entry for `gpt-6.1-sol`, and `--reasoning-mode` works only in API mode. The model starts with no knowledge of the project and remembers nothing between runs, and each run spends Omer's ChatGPT Pro allowance. A full consult was verified on 03-11-2026 on nixos-rog with Oracle 0.22.2.
+`oracle` (nixos-config `pkgs/oracle.nix`) pastes a brief and files into ChatGPT in its own Brave Origin window, signed in as Omer, and saves the answer. `~/.oracle/config.json`, which nixos-config `home-manager/profiles/personal.nix` writes, sets browser mode, GPT-6 at Pro effort, the saved login, a background window, and a 60-minute wait for the answer, so a plain `oracle` call needs no model or browser flags. Keep that model: Oracle 0.22.2 has no ChatGPT picker entry for `gpt-6.1-sol`, and `--reasoning-mode` works only in API mode. The model starts with no knowledge of the project and remembers nothing between runs, and each run spends Omer's ChatGPT Pro allowance. A full consult was verified on 03-11-2026 on nixos-rog with Oracle 0.22.2.
+
+Ask from the command line, not `oracle tui`: in Oracle 0.22.2 the TUI reads this config but builds its browser settings from its own prompts (`dist/src/cli/tui/index.js`), so it starts no Brave Origin window and no manual login. Run `oracle bridge client` only with `--no-write-config`, because it otherwise replaces `~/.oracle/config.json` with its own copy, and the next Home Manager switch overwrites that copy with no backup.
 
 ## Before the run
 

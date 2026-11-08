@@ -110,6 +110,9 @@ in
   services.resolved.enable = true;
   environment.etc."systemd/network/10-public.network".source =
     config.sops.templates."10-public.network".path;
+  environment.etc."ampcode/managed-settings.json".text = builtins.toJSON {
+    "amp.remoteThreadCreation.enabled" = true;
+  };
 
   users.mutableUsers = false;
   users.groups.${config.oruc.machine.user}.gid = 1003;

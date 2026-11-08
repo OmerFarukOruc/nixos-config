@@ -1,0 +1,7 @@
+name = "default"
+description = "General-purpose agent for tasks that do not need a specialized role."
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+developer_instructions = """
+Complete the assigned task and return the result with supporting evidence.
+"""

@@ -1,5 +1,6 @@
 {
   agents,
+  config,
   inputs,
   lib,
   osConfig,
@@ -123,4 +124,18 @@ in
         '';
       })
     ];
+
+  home.file.".oracle/config.json" = {
+    text = builtins.toJSON {
+      engine = "browser";
+      model = "gpt-6-pro";
+      browser = {
+        manualLogin = true;
+        chromePath = "${config.home.profileDirectory}/bin/brave-origin";
+        noFocus = true;
+        timeoutMs = 3600000;
+      };
+    };
+    force = true;
+  };
 }

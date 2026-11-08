@@ -405,6 +405,11 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   (`X-SwitchMethod = "keep-old"`), so the new version starts at their next
   restart. Their secrets come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
+  `configuration.nix` writes Amp's `/etc/ampcode/managed-settings.json`, which
+  Amp reads above its user settings, with `amp.remoteThreadCreation.enabled`,
+  so ampcode.com can open threads on the box. OpenChamber and OpenCode keep
+  their own settings files, which they write themselves; nothing copies them
+  elsewhere, so a reinstall starts them from their defaults.
 - `stay-green.timer` starts a run every 4 minutes around the clock. A run keeps
   Omer's Teams status Available on weekdays from 09:00 to 18:00 Istanbul time
   with `pkgs/stay-green.nix`, built from the `stay-green` flake input, and does

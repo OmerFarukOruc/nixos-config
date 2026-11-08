@@ -144,12 +144,13 @@ the Tailscale admin console, so it stays logged in.
 
 The Claude Code and Codex setup comes from this repository's `agents/` folder,
 which Home Manager links into the agents' folders
-([agents/README.md](../agents/README.md)). The dotfiles checkout at
-`~/Desktop/workspace/dotfiles` still holds the Codex agent files and the configs
-of grok, amp, OpenCode, OpenChamber and oracle. Every hour, the user timer
-`desktop-sync.timer` runs that checkout's `desktop/bin/desktop-sync.sh`, which
-links or copies them. Query it with `systemctl --user`. The service sets
-`DESKTOP_SYNC_COMMIT=1`, so the script also commits the config files it recorded
+([agents/README.md](../agents/README.md)). Home Manager also links
+the Codex agent files (`home-manager/modules/agents.nix`) and writes the oracle
+config (`home-manager/profiles/personal.nix`). The dotfiles checkout at
+`~/Desktop/workspace/dotfiles` still holds the Grok keys that each host's
+`~/.grok/config.toml` keeps. Every hour, the user timer `desktop-sync.timer`
+runs that checkout's `desktop/bin/desktop-sync.sh`, which copies them. Query it
+with `systemctl --user`. The service sets `DESKTOP_SYNC_COMMIT=1`, so the script also commits the config files it recorded
 and pushes them to `main`, only while the checkout is on `main` and equal to
 `origin/main`.
 

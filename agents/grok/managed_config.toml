@@ -1,0 +1,45 @@
+[ui]
+max_thoughts_width = 220
+theme = "terminal"
+fork_secondary_model = "grok-4.7"
+yolo = false
+compact_mode = false
+render_mermaid = "on"
+keep_text_selection = "word_select"
+permission_mode = "always-approve"
+remember_tool_approvals = true
+show_timeline = true
+collapsed_edit_blocks = true
+combine_queued_prompts = true
+auto_dark_theme = "groknight"
+show_thinking_blocks = true
+group_tool_verbs = true
+confirm_before_rewind = true
+tool_call_density = "compact-all-grouped"
+voice_stt_language = "en"
+hunk_tracker_mode = "all_dirty"
+
+[ui.display_refresh]
+auto_cadence_enabled = true
+
+[toolset.ask_user_question]
+timeout_enabled = false
+
+[[marketplace.sources]]
+name = "xAI Official"
+git = "https://github.com/xai-org/plugin-marketplace.git"
+
+[models]
+default = "grok-4.7-build-fast"
+default_reasoning_effort = "high"
+
+[model."grok-4.7"]
+context_window = 500000
+context_windows = [500000, 256000]
+
+[plugins]
+enabled = ["supabase", "cloudflare"]
+
+[features]
+terminal_theme = true
+subagent_model_inheritance = true

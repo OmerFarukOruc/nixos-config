@@ -6,6 +6,7 @@
     ../../nixosModules/agents.nix
     ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
+    ../../nixosModules/ssh-hosts.nix
     ../../nixosModules/nixpkgs-clone.nix
     ../../nixosModules/via-devbox.nix
     ../../nixosModules/warp.nix

@@ -41,23 +41,27 @@ in
       ];
     }
     {
-      home.file = {
-        ".claude/CLAUDE.md" = live "claude/CLAUDE.md";
-        ".claude/rules" = live "claude/rules";
-        ".claude/shared" = live "shared";
-        ".claude/reference" = live "reference";
-        ".claude/infisical.md" = live "infisical.md";
-        ".claude/hooks" = live "claude/hooks";
-        ".claude/statusline.sh" = live "claude/statusline.sh";
-        ".claude/agents" = live "claude/agents";
-        ".codex/AGENTS.md" = {
-          text =
-            builtins.readFile ../../agents/shared/core.md
-            + "\n"
-            + builtins.readFile ../../agents/codex/codex.md;
-          force = true;
+      home.file =
+        lib.mapAttrs' (name: _: lib.nameValuePair ".codex/agents/${name}" (live "codex/agents/${name}")) (
+          builtins.readDir ../../agents/codex/agents
+        )
+        // {
+          ".claude/CLAUDE.md" = live "claude/CLAUDE.md";
+          ".claude/rules" = live "claude/rules";
+          ".claude/shared" = live "shared";
+          ".claude/reference" = live "reference";
+          ".claude/infisical.md" = live "infisical.md";
+          ".claude/hooks" = live "claude/hooks";
+          ".claude/statusline.sh" = live "claude/statusline.sh";
+          ".claude/agents" = live "claude/agents";
+          ".codex/AGENTS.md" = {
+            text =
+              builtins.readFile ../../agents/shared/core.md
+              + "\n"
+              + builtins.readFile ../../agents/codex/codex.md;
+            force = true;
+          };
         };
-      };
       programs.claude-code = {
         mutableSettings = true;
         settings = lib.mkMerge [
