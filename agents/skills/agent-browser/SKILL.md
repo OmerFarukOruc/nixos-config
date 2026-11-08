@@ -51,7 +51,7 @@ Omer's Brave asks him to click Allow once for each new session. The first `brave
 - Screenshot the element you need, `screenshot <selector> <path>`, because a full page on a HiDPI Brave is 3841x1840 and costs far more to read.
 - Tailscale trust-credential descriptions allow 50 characters; above that, Continue stays disabled with no message.
 - "Sign in with GitHub" on Tailscale, in a Brave signed in to two GitHub accounts, went through GitHub's account picker and landed on `https://tailscale.com/a/oauth_response`, a 404, with no login (2026-11-05). The same sign-in in the box browser, signed in to one GitHub account, reached the console.
-- When a button's `click` does nothing on a sign-in or OAuth page (Tailscale's provider buttons, GitHub's account picker), submit its form with `eval` and `button.form.requestSubmit(button)`.
+- When a button's `click` does nothing on a sign-in or OAuth page (Tailscale's provider buttons, GitHub's account picker), submit its form with `eval` and `button.form.requestSubmit(button)`. A button with no form, such as Save in Tailscale's JSON policy editor, ignored `click @ref` and `find role button click` on 2026-11-08 and sent no request; `eval` that calls the visible button's `.click()` saved it. Confirm a save by reloading the page and comparing what it shows.
 
 ## Mail links
 
