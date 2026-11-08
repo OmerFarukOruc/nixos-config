@@ -650,7 +650,7 @@ and users are private.
 `machines/<host>/home.nix`. Shared app sets are in `home-manager/profiles/`:
 `workstation.nix` for every workstation, and `personal.nix` for the machines
 Omer works at every day, with GPU tools that follow the machine record. Units a
-host can share, such as desktop-sync, are in `home-manager/modules/`.
+host can share, such as `agents-pull`, are in `home-manager/modules/`.
 
 ## Failure popups
 

@@ -9,11 +9,6 @@
         export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/gcr/ssh
       fi
     '';
-    initContent = lib.mkOrder 1500 ''
-      sync_status=~/Desktop/workspace/dotfiles/desktop/shell/sync-status.zsh
-      [[ -r $sync_status ]] && . "$sync_status"
-      unset sync_status
-    '';
   };
 
   programs.atuin = {

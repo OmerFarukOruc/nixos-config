@@ -163,6 +163,7 @@ what you keep first. Before you start, have these ready:
 
 10. Set up Omer's own credentials with
     [Per-host credentials](../home-manager/README.md#per-host-credentials): the
-    shared SSH key, `gh auth login` and commit signing. Then clone
-    nixos-config and the dotfiles checkout into `~/Desktop/workspace`, so
-    `home-manager/modules/desktop-sync.nix` links the agent config.
+    shared SSH key, `gh auth login` and commit signing. The first switch
+    clones nixos-config into `~/Desktop/workspace/nixos-config` through
+    `agents-pull` ([agents/README.md](../agents/README.md)), so the agent
+    config links resolve.

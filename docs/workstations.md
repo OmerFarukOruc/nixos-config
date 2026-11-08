@@ -209,8 +209,8 @@ theme tokyo-night-dark
 start or open, or at the next login or boot. It is the one list, so this
 section holds only what the help text leaves out.
 
-Claude Code follows the scheme because its dotfiles `settings.json`
-selects `custom:scheme`, and its status line reads the pack's `statusline`
+Claude Code follows the scheme because its `settings.json`
+(`agents/claude/settings.json`) selects `custom:scheme`, and its status line reads the pack's `statusline`
 fact at its next refresh. Every segment's text reaches 4.5:1 on its background
 in every scheme. The usage bars take the scheme's green, yellow and red, each
 lightened or darkened only as far as 4.5:1 needs. VS Code's text, button text,

@@ -7,7 +7,7 @@ description: Creates, finishes, and removes git worktrees with worktrunk (wt) in
 
 Every editing task runs in its own worktree, and the main checkout is for reading and landing. Every worktree lives at `~/Desktop/workspace/worktrees/<repo>/<branch>`, where each `/` in the branch name becomes `-`: branch `fix/cart-total` of gastrodili sits in `~/Desktop/workspace/worktrees/gastrodili/fix-cart-total`. worktrunk's config (`~/.config/worktrunk/config.toml`, from nixos-config `home-manager/modules/agent-cli.nix`) holds that path, so `wt` puts it there for you.
 
-The `guard-main-edit` hook refuses Edit, Write, and NotebookEdit in Claude Code in a main checkout. A repository whose own tooling needs its main checkout opts out with `git config agents.mainCheckoutEdits true`; dotfiles does, because its sync runs only from the main checkout. `git config agents.mainCheckoutEditPaths <folder>/` opts out one folder only; nixos-config's `agents-pull` unit sets it to `agents/`, the folder its `agents/README.md` says to edit in the main checkout. A shell command that writes a file passes the hook, so the rule binds those too.
+The `guard-main-edit` hook refuses Edit, Write, and NotebookEdit in Claude Code in a main checkout. A repository whose own tooling needs its main checkout opts out with `git config agents.mainCheckoutEdits true`. `git config agents.mainCheckoutEditPaths <folder>/` opts out one folder only; nixos-config's `agents-pull` unit sets it to `agents/`, the folder its `agents/README.md` says to edit in the main checkout. A shell command that writes a file passes the hook, so the rule binds those too.
 
 ## Create
 

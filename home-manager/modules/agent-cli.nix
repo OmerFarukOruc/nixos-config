@@ -16,6 +16,7 @@
     agents.agent-browser
     agents.pi
     (pkgs.callPackage ../../pkgs/linctl.nix { })
+    pkgs.mise
     pkgs.mitmproxy
   ];
 

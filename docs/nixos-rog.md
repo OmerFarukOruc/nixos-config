@@ -146,22 +146,14 @@ The Claude Code and Codex setup comes from this repository's `agents/` folder,
 which Home Manager links into the agents' folders
 ([agents/README.md](../agents/README.md)). Home Manager also links
 the Codex agent files (`home-manager/modules/agents.nix`) and writes the oracle
-config (`home-manager/profiles/personal.nix`). The dotfiles checkout at
-`~/Desktop/workspace/dotfiles` still holds the Grok keys that each host's
-`~/.grok/config.toml` keeps. Every hour, the user timer `desktop-sync.timer`
-runs that checkout's `desktop/bin/desktop-sync.sh`, which copies them. Query it
-with `systemctl --user`. The service sets `DESKTOP_SYNC_COMMIT=1`, so the script also commits the config files it recorded
-and pushes them to `main`, only while the checkout is on `main` and equal to
-`origin/main`.
+config (`home-manager/profiles/personal.nix`).
 
 Home Manager also adds `~/.claude/skills/claude-code-home-manager`, a plugin
 that gives Claude Code the `nixos` MCP server from
 `home-manager/modules/applications.nix`. The same
 server list is in `~/.config/mcp/mcp.json`.
 
-The unit does nothing until that checkout exists.
-
-`home-manager/modules/claude-tools.nix`, which `desktop-sync.nix` imports,
+`home-manager/modules/claude-tools.nix`, which `personal.nix` and devbox's `home.nix` import,
 installs the `claude-tools` command of `pkgs/claude-tools` (its README describes
 it) and the `claude` shell function. Its `claude-tools-usage.timer` runs
 `claude-tools usage` every 10 minutes while sops-nix provides its account list,
@@ -183,8 +175,8 @@ widget code it loaded, so a switch that installs a new widget package restarts
 `home-manager/modules/plasma-panels.nix`), and the panels flicker.
 
 `home-manager/modules/agent-cli.nix` installs worktrunk (`wt`) on nixos-desktop,
-nixos-rog and devbox, with the worktree layout that the dotfiles `worktrees`
-skill gives every agent: `~/Desktop/workspace/worktrees/<repo>/<branch>`, with
+nixos-rog and devbox, with the worktree layout that the `worktrees`
+skill (`agents/skills/worktrees`) gives every agent: `~/Desktop/workspace/worktrees/<repo>/<branch>`, with
 each `/` in the branch name turned into `-`. A new worktree runs
 `direnv allow` and loads its devenv shell, so the devenv git hooks exist before
 the first commit. Removing one stops its `devenv up`. Its
@@ -203,8 +195,8 @@ in a repository, it still sweeps the others, then fails the unit, so
 
 `nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system
 hook layer. Codex runs a system hook without the trust prompt that a hook in
-`~/.codex/hooks.json` needs. The hook sends each `apply_patch` to the dotfiles
-`guard-main-edit.py`, which refuses an edit in a repository's main checkout, as
+`~/.codex/hooks.json` needs. The hook sends each `apply_patch` to
+`guard-main-edit.py` (`agents/claude/hooks/`), which refuses an edit in a repository's main checkout, as
 it does for Claude Code. A user without that file in `~/.claude/hooks` edits
 freely.
 

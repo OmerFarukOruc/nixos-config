@@ -1,6 +1,6 @@
 # nixos-desktop and nixos-rog for Omer's own user
 
-nixos-desktop is Omer's desktop PC and nixos-rog his laptop. Both run NixOS. Home Manager in `OmerFarukOruc/nixos-config` (checkout `~/Desktop/workspace/nixos-config`, host files `machines/<host>/home.nix`) owns the shell, editors, and tools. Install a tool there and deploy, never by hand. `desktop-sync.sh` runs hourly on both and links or syncs the agent config, Claude Code's `settings.json`, and account preferences (`desktop/README.md`, "Sync").
+nixos-desktop is Omer's desktop PC and nixos-rog his laptop. Both run NixOS. Home Manager in `OmerFarukOruc/nixos-config` (checkout `~/Desktop/workspace/nixos-config`, host files `machines/<host>/home.nix`) owns the shell, editors, and tools. Install a tool there and deploy, never by hand. It also links the agent config from nixos-config `agents/` and merges Claude Code's `settings.json` (`agents/README.md`).
 
 ## No standard Linux layout
 

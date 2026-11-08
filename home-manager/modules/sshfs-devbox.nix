@@ -1,7 +1,6 @@
 # Mounts the whole of devbox read-only, as omer over Tailscale SSH, so
 # local apps open its paths: /tmp/x on the box is ~/remote/devbox/tmp/x
-# here. Keep the unit name sshfs-devbox.service, because dotfiles'
-# `ropen` starts it when the mount is down.
+# here.
 #
 # The mount point is under $XDG_RUNTIME_DIR and ~/remote/devbox is a
 # symlink to it, because Baloo, find and rg walk the home folder without

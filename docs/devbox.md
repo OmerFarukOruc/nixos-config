@@ -6,6 +6,7 @@
 - [Install](#install)
 - [Network and secrets](#network-and-secrets)
 - [Telemetry](#telemetry)
+- [AWS certificate](#aws-certificate)
 - [Deploys](#deploys)
 - [Web names](#web-names)
 - [Containers](#containers)
@@ -246,6 +247,50 @@ sshd records travel through the journal into the collector's pipeline and out
 over OTLP. It does not prove TLS, the real endpoint, or
 delivery to SigNoz, which the cutover proves.
 
+## AWS certificate
+
+The AWS profile `statuslantern` signs with the IAM Roles Anywhere certificate
+`~/.aws/rolesanywhere/leaf.pem` of omer. The role `devbox-agent` trusts only
+the CN `devbox` from the trust anchor `statuslantern-agent-ca`; `arns.env` in
+the same folder holds the trust anchor and profile ARNs. The daily user unit
+`aws-certificate-check` (`machines/devbox/home.nix`) fails when the certificate
+expires within 30 days or is missing, and each new shell then prints a line
+until a run passes, because the SigNoz alert of [Telemetry](#telemetry) does
+not reach Slack while the box's export fails.
+
+To renew it, first copy the CA key to the box from nixos-desktop or nixos-rog,
+whose Infisical CLI is signed in; the box's CLI has no login
+([agents/reference/devbox.md](../agents/reference/devbox.md#accounts-and-logins)):
+
+```bash
+infisical secrets get ROLES_ANYWHERE_CA_KEY_B64 --plain --silent --projectId "$INFISICAL_STATUSLANTERN_PROJECT" \
+  --domain https://eu.infisical.com --env prod --path /agent-aws |
+  ssh devbox 'umask 077; base64 -d > ~/.aws/rolesanywhere/ca.key'
+```
+
+Then run this on the box as omer. It stops at the first failed step, replaces
+`leaf.key` and `leaf.pem` only after the new certificate is valid and matches
+the new key, and deletes the CA key on every exit:
+
+```bash
+(
+  set -euo pipefail
+  umask 077
+  cd ~/.aws/rolesanywhere
+  trap 'rm -f ca.key ca.srl leaf.key.new leaf.pem.new' EXIT
+  openssl ecparam -name prime256v1 -genkey -noout -out leaf.key.new
+  openssl req -new -sha256 -key leaf.key.new -config leaf.cnf |
+    openssl x509 -req -sha256 -days 365 -CA ca.pem -CAkey ca.key -CAcreateserial \
+      -extfile leaf.cnf -extensions v3_leaf -out leaf.pem.new
+  openssl x509 -noout -checkend 0 -in leaf.pem.new
+  cmp <(openssl pkey -in leaf.key.new -pubout) <(openssl x509 -in leaf.pem.new -pubkey -noout)
+  mv leaf.key.new leaf.key
+  mv leaf.pem.new leaf.pem
+)
+aws sts get-caller-identity --profile statuslantern
+systemctl --user start aws-certificate-check
+```
+
 ## Deploys
 
 The box installs `main` every hour with `system.autoUpgrade`, as the PCs do
@@ -380,8 +425,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 - `features.boxBrowser` is on in the host record, so `box-browser` and its two
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
-  hourly `desktop-sync.sh`, the Claude account tools of
-  `pkgs/claude-tools` with their usage timer, and
+  daily `aws-certificate-check` ([AWS certificate](#aws-certificate)), the
+  Claude account tools of `pkgs/claude-tools` with their usage timer, and
   `claude-tools-limit-switch.timer` (next bullet).
 - `claude-tools-limit-switch.timer` runs `claude-tools limit-switch scan` of
   `pkgs/claude-tools` every minute. A run starts herdr's default session through
@@ -467,9 +512,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   can drop the unit fields from the last line of a process that exits at once,
   so `-u` missed the `updated` line of a run on 2026-11-07, and the unit sets
   `SyslogIdentifier=` to its name.
-- The failure marker. `openrouter-free-guardrail.service`,
-  `worktree-sweep.service` and `agents-pull.service`
-  (`home-manager/modules/scheduled-unit.nix`) each run a
+- The failure marker. Every unit built with
+  `home-manager/modules/scheduled-unit.nix` runs a
   marker command as `ExecStopPost=`, which systemd runs after every run with
   `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
   The marker is `~/.local/state/<unit>/failed`. Any result except `success`

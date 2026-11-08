@@ -22,7 +22,7 @@ in
 {
   imports = [
     ./workstation.nix
-    ../modules/desktop-sync.nix
+    ../modules/claude-tools.nix
     ../modules/heavy.nix
     ../modules/box-view.nix
     ../modules/sshfs-devbox.nix
