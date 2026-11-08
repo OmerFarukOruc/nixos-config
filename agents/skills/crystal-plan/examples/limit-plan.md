@@ -3,6 +3,7 @@
 Readiness: DRAFT
 Revision: 1
 Repository: teaching fixture `limit.py` and `test_limit.py` at `<fixture-sha>` on `main`, a git repository with one commit; local changes: none
+Landing: none, because no PR, push, or deploy is part of this teaching example (Out of scope)
 
 ## Outcome
 

@@ -160,7 +160,7 @@ Use the approved relationship representation.
 
 Prefer native parent and blocked-by relationships when available.
 
-Use text relationships only after the owner approves them during tracker capability binding.
+Use text relationships only when tracker capability binding found native ones unavailable and the approved write set shows the text form.
 
 Create only approved hard edges.
 

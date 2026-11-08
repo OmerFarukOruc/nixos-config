@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Test audit
 
-The rules come from `~/.claude/shared/testing-discipline.md`. Read it in full first; this skill holds only the order of work. The caller supplies the repository, the scope (the whole suite or one subsystem), the command that runs one test file, the full gate command, the landing workflow, and the agent budget. Ask for any of these the repository's `AGENTS.md` does not answer.
+The rules come from `~/.claude/shared/testing-discipline.md`. Read it in full first; this skill holds only the order of work. The caller supplies the repository, the scope (the whole suite or one subsystem), and the agent budget. Take the one-file test command and the gate command from the repository's `AGENTS.md`, README, task runner, or CI config, and the landing workflow from core.md (Git) and the repository's rules. Ask for the scope when the request does not name it, and for the agent budget when the request does not name it, because budget is spending; ask before step 3 dispatches agents.
 
 Keep the open items in `/tmp/agents/<task>-<session8>/TASKS.md`, one check per line, ticked only after its command ran. Each step ends on its completion criterion; start the next step only after it holds.
 

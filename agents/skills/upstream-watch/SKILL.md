@@ -10,7 +10,7 @@ A standalone repository started from another project, the upstream, and shares n
 
 ## Steps
 
-1. **Open the ledger** for the repository, named after its GitHub repository (`<repo>.md` for `<owner>/<repo>`). It names the upstream URL and branch, the last reviewed upstream commit, the paths the repository replaced, the rules for taking a change, and the decision log. When no ledger exists, ask Omer for the upstream URL and the upstream commit the repository started from, and create one with the layout of an existing ledger. Done when you hold the upstream URL, the branch and the last reviewed commit.
+1. **Open the ledger** for the repository, named after its GitHub repository (`<repo>.md` for `<owner>/<repo>`). It names the upstream URL and branch, the last reviewed upstream commit, the paths the repository replaced, the rules for taking a change, and the decision log. When no ledger exists, find the upstream URL and the upstream commit the repository started from in its README, license notice, `SOURCES` file, or first commit message, ask Omer only when none names them, and create one with the layout of an existing ledger. Done when you hold the upstream URL, the branch and the last reviewed commit.
 
 2. **List what shipped.** In the repository's main checkout:
 

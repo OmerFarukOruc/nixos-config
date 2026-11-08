@@ -143,12 +143,12 @@ Check these common edges:
 - Client to daemon.
 - Gateway or cache image to persisted data and rollback format.
 
-When two approved latest releases conflict:
+When two selected latest releases conflict:
 
 1. Verify the conflict from official sources.
 2. Find supported distributions or acquisition paths.
 3. Present the smallest owner decision.
-4. Keep the approved target unless the owner changes it.
+4. Keep the recorded target unless the owner changes it.
 
 Never silently downgrade.
 

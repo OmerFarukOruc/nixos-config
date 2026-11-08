@@ -56,9 +56,12 @@ Decisions cites a Sources line.
 
 Fill [plan-template.md](assets/plan-template.md) so the plan passes every row of
 [readiness-checklist.md](references/readiness-checklist.md). Settle every choice the
-Contract gap row lists, because the executor chooses none of them. For a plan Omer
-requests by hand, settle the landing shape with him before you cut slices: one pull
-request or a stack, and who merges.
+Contract gap row lists, because the executor chooses none of them. Settle the landing
+shape yourself from core.md (Git): one squash PR per code slice, which the executor lands
+with `pr-land`, a direct push to the default branch for a standalone docs, config, skill,
+or hook change, or a gh-stack when two slices must both be built before either lands
+(below). Use another shape or merger only when Omer's request, the issue, or the
+repository's `AGENTS.md` names one. Record the shape in the plan header.
 
 When a product rule is undecided, the plan is BLOCKED. Cut slices only for the work that
 does not depend on the rule, and write the rule under Open decisions with each option,

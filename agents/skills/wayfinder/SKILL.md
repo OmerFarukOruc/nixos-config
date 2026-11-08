@@ -22,7 +22,7 @@ Never mix implementation tracer-bullets onto this map.
 
 1. Name the destination (grill if needed).
 2. Fan out breadth-first across the space.
-3. **If this surfaces no fog** — the way is already clear and the journey fits one session — **do not make a map**. Stop and ask how the human wants to proceed (usually a single plan, which the human can write with the crystal-plan skill).
+3. **If this surfaces no fog**, so the way is already clear and the journey fits one session, **do not make a map**. Report that the way is clear, with the fan-out evidence, and recommend one plan written with the crystal-plan skill; that report ends the skill.
 
 ## The map artifact
 

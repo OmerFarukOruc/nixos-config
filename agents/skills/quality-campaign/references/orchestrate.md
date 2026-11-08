@@ -50,11 +50,11 @@ Escalate to the user when a fix trades one failure mode for another. Abandoning 
 After the last slice merges:
 
 1. Full verification sweep on integration: every suite the repo has.
-2. If the repo has an end-to-end verification script, run it on the user's request. Attribute every failure through the baseline worktree; file a fresh issue for each pre-existing defect. Watch for scripts that mutate the invoking clone's git state: a shallow fetch inside a verify script truncated the dev clone's history in the live trial.
+2. If the repo has an end-to-end verification script, run it. Attribute every failure through the baseline worktree; file a fresh issue for each pre-existing defect. Watch for scripts that mutate the invoking clone's git state: a shallow fetch inside a verify script truncated the dev clone's history in the live trial.
 3. If any slice restructured build inputs, build the container images too. Unit gates do not cover image builds.
-4. Hardening passes over the full campaign diff, on the user's request: the internal deep review, then `/tidy`. Every finding takes the necessity test; accepted fixes follow the slice cycle.
-5. Push and open a PR only on explicit authorization, so CI and external PR reviewers run. Treat the external PR review as a second gate: the live trial's only escaped regression was caught there, by no internal gate.
-6. Squash-merge on explicit authorization. Sync local. Close the parent with the full evidence ledger: gate results, abandoned slices with reasons, defects fixed, defects filed as follow-ups, findings deliberately not fixed.
+4. Run the hardening passes over the full campaign diff when the request asked for them: the internal deep review, then `/tidy`. Otherwise name them as available in step 5's question. Every finding takes the necessity test; accepted fixes follow the slice cycle.
+5. Once steps 1-4 pass, ask for authorization to push and open the PR, naming any hardening passes step 4 skipped. On that yes, push and open the PR, so CI and external PR reviewers run. Treat the external PR review as a second gate: the live trial's only escaped regression was caught there, by no internal gate.
+6. Once CI and the external PR review pass, ask for authorization to squash-merge, with their results; on that yes, merge. Sync local. Close the parent with the full evidence ledger: gate results, abandoned slices with reasons, defects fixed, defects filed as follow-ups, findings deliberately not fixed.
 7. Cleanup: scan every worktree for uncommitted work before removing it. Before deleting any branch, confirm its commits stay reachable elsewhere; the integration branch or the PR head ref is the pre-squash audit trail.
 8. Late trivial fixes may take the hygiene path: a direct commit is allowed, but it still gets a tracking issue, a push, and a remote-landing check. Everything else follows the slice cycle.
 9. The campaign is closed only when local and origin agree on every ref you touched. Nothing may exist only on this machine.

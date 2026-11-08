@@ -51,7 +51,7 @@ Use the documented tracker CLI only for missing operations.
 
 Stop before campaign design when no safe tracker adapter can prove the required operations.
 
-When native relationships are unavailable, get owner approval for an explicit text representation before ticket design.
+When native relationships are unavailable, choose an explicit text representation yourself before ticket design, and show it in the Phase 6 write set.
 
 Ask only for unresolved owner decisions.
 
@@ -99,9 +99,9 @@ Give a recommended answer with each question.
 
 Never ask the owner to discover a repository or release fact.
 
-Resolve unavailable targets through an approved distribution or acquisition decision.
+Resolve unavailable targets through a distribution or acquisition decision recorded in the brief ledger, and ask the owner when it changes cost, licensing, or support policy.
 
-**Complete when:** the owner approves the complete exact target matrix.
+**Complete when:** every row of the exact target matrix is recorded in the brief ledger with its evidence, and each owner decision it needed is answered.
 
 ## Phase 4: Fix the verification seam
 
@@ -117,7 +117,7 @@ Account for workflows that can run only after merge.
 
 Keep affected runtime issues open until their required environment proof exists.
 
-**Complete when:** the owner approves the seam and closure rules.
+**Complete when:** the seam and closure rules are recorded in the brief ledger with their evidence.
 
 ## Phase 5: Design tracer tickets
 
@@ -147,15 +147,9 @@ Send no secrets or irrelevant private context to critics.
 
 Reconcile critic findings against repository evidence and confirmed decisions.
 
-Present the revised breakdown.
+Check granularity, blocking edges, and merges or splits against this phase's rules yourself, and record each choice with its reason.
 
-Ask these approval questions one at a time:
-
-1. Is the granularity correct?
-2. Are the blocking edges correct?
-3. Should any ticket merge or split?
-
-**Complete when:** the owner approves boundaries, edges, and merge decisions.
+**Complete when:** the revised breakdown, with its boundaries, edges, and merge decisions, is recorded in the brief ledger with its evidence.
 
 ## Phase 6: Publish the campaign
 
@@ -165,13 +159,11 @@ Recheck tracker authentication and every required write operation.
 
 Compare the repository baseline and dirty paths with the Phase 2 snapshot.
 
-Re-audit affected surfaces and renew approvals when drift changes the proposed campaign.
+Re-audit affected surfaces, and ask again each owner decision that the drift changes.
 
-Show the exact write set before publication.
+Show the exact write set together with the target matrix, the seam and closure rules, and the ticket graph it rests on, and ask once for approval to publish.
 
 Include the target tracker and repository, exact labels or label rule, complete issue bodies, relationships, and integration branch when used.
-
-Ask the owner to approve this exact write set and authorize publication.
 
 Create nothing until the owner approves.
 
@@ -222,7 +214,7 @@ Report the failing invariant, affected identifiers, and proposed correction befo
 
 When repository drift occurs after publication, list affected surfaces and keep the baseline provisional.
 
-Require owner approval to accept the new baseline or re-audit affected tickets.
+Re-audit the affected tickets. Show the changed bodies and every approved choice the drift changes, such as a target, the seam and closure rules, the graph, or the delivery model, and ask once before writing them; write without asking only the tracker-only defects above.
 
 Report the parent, ordered subissues, approved graph, late discoveries, and preserved local state.
 

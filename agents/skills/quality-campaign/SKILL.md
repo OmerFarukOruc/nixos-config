@@ -31,6 +31,6 @@ Roles. Every reference uses these exact words:
 - Tests in every slice follow `~/.claude/shared/testing-discipline.md`, and that file wins where a reference here says something different about tests. Name it in each writer's prompt.
 - Apply the necessity test to every finding before it becomes work. Rejecting a finding with a recorded reason is a normal outcome.
 - Stay local. Push, PR creation, squash merge, and any direct commit to the default branch are each a separate user authorization.
-- Run long external processes as `run_in_background` Bash and keep working. This overrides the global tmux rule: the harness notifies on completion and the output file stays readable mid-run. Use tmux only for work that must survive this session.
+- Run long external processes as `run_in_background` Bash and keep working, because the harness notifies on completion and the output file stays readable mid-run. Use tmux only for work that must survive this session.
 - Measure machine resources live before each dispatch batch. Never pre-commit to a concurrency number or a resource threshold.
 - End every stage report with the parent issue URL.

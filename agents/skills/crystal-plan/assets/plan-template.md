@@ -5,6 +5,7 @@
 Readiness: <READY | DRAFT | BLOCKED (smallest missing decision)>
 Revision: 1
 Repository: <owner/repo> at `<full SHA>` on `<branch>`; local changes: <none | paths>
+Landing: <one squash PR per code slice, landed with `pr-land` | direct push for a standalone docs, config, skill, or hook change | gh-stack (why) | the shape the request, issue, or AGENTS.md names>
 
 ## Outcome
 
