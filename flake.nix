@@ -29,7 +29,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     dms = {
-      url = "github:AvengeMedia/DankMaterialShell/v2.1.1";
+      url = "github:AvengeMedia/DankMaterialShell/v2.1.2";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # No nixpkgs follows, because cache.numtide.com holds builds for its own nixpkgs.
