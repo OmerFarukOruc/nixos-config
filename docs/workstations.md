@@ -137,7 +137,8 @@ nixos-desktop, gets a scope of its own on nixos-rog.
 `scripts/lib/work-copy.sh` runs the Nix calls of `scripts/eval.sh`,
 `scripts/build.sh`, `scripts/check.sh` and `scripts/run-unit-on-rog.sh` under
 it. `scripts/affected-hosts.sh`, `scripts/thermal-test-rog.sh`, `deploy.sh`'s
-build of the system and the checks of the git hooks (`devenv.nix`) use it too.
+build of the system, the checks of the git hooks (`devenv.nix`) and the Codex
+session of `codex-ask` use it too.
 `nixos-upgrade.service` runs outside heavy; its `MemoryHigh` slows it above
 12 GiB (`nixosModules/auto-upgrade.nix`) but never stops it.
 

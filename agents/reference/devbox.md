@@ -18,7 +18,7 @@ Add a tool or setting to the layer that owns it, never by hand on the host.
 - `omer`'s PATH has no `/usr/sbin`, so call `/usr/sbin/<tool>` (`swapon`, `sysctl`) or read `/proc` (`/proc/swaps`).
 - `docker` as `omer` talks to `omer`'s rootless Docker (`docker.service`); the box runs no system Docker daemon. Rootless Podman still holds cliproxy and containers made before rootless Docker existed (`podman ps -a`); nixos-config `nixosModules/rootless-containers.nix` points the docker CLI at Docker's socket through `DOCKER_HOST`.
 - `/tmp` deletes files nobody touched for 7 days (`systemd-tmpfiles`, `q /tmp ... 7d`). Put build output and anything that must last under `~/`, and worktrees under `~/Desktop/workspace/worktrees/` (the worktrees skill).
-- The box has no `heavy` command; nixos-config installs it (`home-manager/modules/heavy.nix`) on nixos-desktop and nixos-rog only. Run a heavy suite, such as Gradle `:app:test`, the scraper's all-local suites or `pytest -n`, one at a time.
+- The box has no `heavy` command; nixos-config installs it (`home-manager/modules/heavy.nix`) on nixos-desktop and nixos-rog only, so `codex-ask` runs Codex there without a cap of its own. Run a heavy suite, such as Gradle `:app:test`, the scraper's all-local suites or `pytest -n`, one at a time.
 - The locale is `en_US.UTF-8`, whose `sort` orders case ties differently from `LC_ALL=C sort -f`. Merge into a list kept with `LC_ALL=C sort -f` using that same command.
 
 ## Services under `omer`

@@ -33,7 +33,9 @@ if [[ ${1:-} == --run ]]; then
 	trap forward TERM INT
 	web=()
 	[[ $6 == 0 ]] || web=(--search)
-	heavy codex "${web[@]}" exec --ephemeral --sandbox read-only --disable unbounded_connection_retries -m "$4" \
+	scope=()
+	if command -v heavy >/dev/null; then scope=(heavy); fi
+	"${scope[@]}" codex "${web[@]}" exec --ephemeral --sandbox read-only --disable unbounded_connection_retries -m "$4" \
 		-c model_reasoning_effort="$5" -C "$3" -o "$out/answer.md" - <"$out/prompt.md" >"$out/codex.log" 2>&1 &
 	child=$!
 	[[ $stop == 0 ]] || forward

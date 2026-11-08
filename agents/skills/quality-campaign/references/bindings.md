@@ -32,9 +32,9 @@ The `--tools` list leaves Grok no shell, write, edit, or subagent tool, so it ca
 
 ## Writer
 
-Codex, GPT 6.1 sol at medium, workspace-write. Pass the effort explicitly, because `~/.codex/config.toml` changes across sessions and `gpt-6.1-sol` defaults to `low`:
+Codex, GPT 6.1 sol at medium, workspace-write. Pass the effort explicitly, because `~/.codex/config.toml` changes across sessions and `gpt-6.1-sol` defaults to `low`. Start it under `heavy`, so a build or test suite it runs gets a capped scope of its own instead of the caller's; on devbox, which has no `heavy`, drop that word:
 
-    codex exec --sandbox workspace-write -m gpt-6.1-sol \
+    heavy codex exec --sandbox workspace-write -m gpt-6.1-sol \
       -c model_reasoning_effort="medium" -C <worktree> \
       --add-dir <repo>/.git -o <last-message-file> "<prompt>"
 
@@ -42,7 +42,7 @@ Codex, GPT 6.1 sol at medium, workspace-write. Pass the effort explicitly, becau
 - `--add-dir <repo>/.git` is required. A linked worktree shares the main repo's `.git`, and the sandbox blocks the writer's commit without it.
 - Resume with a verdict, from the worktree as cwd:
 
-      codex exec resume <session-id> -m gpt-6.1-sol \
+      heavy codex exec resume <session-id> -m gpt-6.1-sol \
         -c model_reasoning_effort="medium" -o <last-message-file> "<verdict>"
 
 ## Spec gate
