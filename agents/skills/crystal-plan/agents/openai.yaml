@@ -1,0 +1,6 @@
+interface:
+  display_name: "Crystal Plan"
+  short_description: "Write a plan a cold executor runs without judgment"
+  default_prompt: "Use $crystal-plan to write the implementation plan for this task."
+policy:
+  allow_implicit_invocation: false

@@ -21,16 +21,19 @@
     "api-mapper": "user-invocable-only",
     "apk-api-mapper": "user-invocable-only",
     "research": "user-invocable-only",
-    "architecture-diagram": "user-invocable-only",
-    "codemap": "user-invocable-only",
     "openai-image-gen": "user-invocable-only",
     "wayfinder": "user-invocable-only",
     "create-dependency-upgrade-campaign": "user-invocable-only",
     "ce-optimize": "user-invocable-only",
-    "clonedeps": "off",
-    "bug-hunter": "off",
-    "implement-spec": "off",
-    "quality-campaign": "off"
+    "quality-campaign": "off",
+    "improve": "user-invocable-only",
+    "stop-slop": "user-invocable-only",
+    "gh-stack": "user-invocable-only",
+    "avoid-ai-writing": "user-invocable-only",
+    "grill-for-unknowns": "user-invocable-only",
+    "diagnosing-bugs": "user-invocable-only",
+    "clonedeps": "on",
+    "implement-spec": "on"
   },
   "hooks": {
     "Stop": [
@@ -94,7 +97,11 @@
     "next-steps@claude-community": false,
     "typescript-lsp@claude-plugins-official": true,
     "modern-web-guidance@googlechrome": true,
-    "impeccable@impeccable": true
+    "impeccable@impeccable": true,
+    "eli5@claude-community": true,
+    "avoid-ai-writing@conorbronsdon-skills": true,
+    "grill-for-unknowns@grill-for-unknowns-marketplace": true,
+    "diagram-design@diagram-design": true
   },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
@@ -107,7 +114,8 @@
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-community"
-      }
+      },
+      "autoUpdate": true
     },
     "googlechrome": {
       "source": {
@@ -120,6 +128,27 @@
       "source": {
         "source": "github",
         "repo": "pbakaus/impeccable"
+      },
+      "autoUpdate": true
+    },
+    "conorbronsdon-skills": {
+      "source": {
+        "source": "github",
+        "repo": "conorbronsdon/avoid-ai-writing"
+      },
+      "autoUpdate": true
+    },
+    "grill-for-unknowns-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "nicobailon/grill-for-unknowns"
+      },
+      "autoUpdate": true
+    },
+    "diagram-design": {
+      "source": {
+        "source": "github",
+        "repo": "cathrynlavery/diagram-design"
       },
       "autoUpdate": true
     }

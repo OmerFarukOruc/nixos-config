@@ -1,0 +1,20 @@
+diff --git a/SKILL.md b/SKILL.md
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -4,7 +4,8 @@ description: >
+   Manages stacked PRs and splits multi-part work into reviewable branches with gh-stack.
+   Use for stack creation, viewing, edits, push, submit, sync, rebase, merge, or checkout;
+   when asked to split or isolate work for review; whenever a user mentions a stack,
+-  branch layers, dependent PRs, or gh stack; or when a stack is checked out.
++  branch layers, dependent PRs, or gh stack; when starting a branch from another unmerged
++  branch; or when a stack is checked out.
+ metadata:
+   author: github
+   version: "0.2.0"
+diff --git a/agents/openai.yaml b/agents/openai.yaml
+new file mode 100644
+--- /dev/null
++++ b/agents/openai.yaml
+@@ -0,0 +1,2 @@
++policy:
++  allow_implicit_invocation: false

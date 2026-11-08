@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Rebuild a workflow's full per-agent results from its journal, so a workflow script can return only a compact
+summary and keep the full records out of the parent's context.
+Usage: wf-results <runId>    prints {"results": [{"id": <label>, ...result}], "missing": [<label>...]} as JSON
+The journal is <config dir>/projects/<project>/<session>/subagents/workflows/<runId>/journal.jsonl under any
+~/.claude* config dir or $CLAUDE_CONFIG_DIR. An agent launched more than once keeps its last result; an agent
+whose last result is null, or that never returned, is listed in missing."""
+import glob
+import json
+import os
+import re
+import sys
+
+if len(sys.argv) != 2 or not re.fullmatch(r"wf_[a-z0-9-]{6,}", sys.argv[1]):
+    sys.exit(__doc__)
+run = sys.argv[1]
+roots = glob.glob(os.path.expanduser("~/.claude*"))
+if os.environ.get("CLAUDE_CONFIG_DIR"):
+    roots.append(os.environ["CLAUDE_CONFIG_DIR"])
+found = {os.path.realpath(p) for r in roots for p in glob.glob(f"{r}/projects/*/*/subagents/workflows/{run}/journal.jsonl")}
+if len(found) != 1:
+    sys.exit(f"wf-results: found {len(found)} journals for {run}: {sorted(found)}")
+labels, order, results = {}, [], {}
+with open(found.pop(), encoding="utf-8") as f:
+    for line in f:
+        rec = json.loads(line)
+        if rec.get("type") == "started":
+            labels[rec["agentId"]] = rec["label"]
+            if rec["label"] not in order:
+                order.append(rec["label"])
+        elif rec.get("type") == "result" and rec.get("agentId") in labels:
+            results[labels[rec["agentId"]]] = rec.get("result")
+out = {"results": [], "missing": []}
+for label in order:
+    r = results.get(label)
+    if isinstance(r, dict):
+        out["results"].append({**r, "id": label})
+    else:
+        out["missing"].append(label)
+json.dump(out, sys.stdout, ensure_ascii=False)
+print()

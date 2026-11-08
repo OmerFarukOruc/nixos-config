@@ -1,0 +1,915 @@
+#!/usr/bin/env -S python3 -I
+"""Print the evidence a retro reads from a Claude Code session transcript.
+
+Usage:
+  session-digest [SESSION] [--dir DIR ...] [--all] [--out]
+  session-digest [SESSION] [--dir DIR ...] --show LINE|A-B [--cap CHARS] | --grep REGEX [--agents] | --timeline | --commands
+                 | --since-retro
+  session-digest [--dir DIR ...] --find REGEX [--days N]
+  session-digest SESSION ... --replay HOOK [--lines L1,L2] | --replay HOOK --days N
+
+SESSION is a session id, a subagent's agent id (agent-<id>), an id prefix, or a path to a
+.jsonl transcript. Without it, the current session from CLAUDE_CODE_SESSION_ID is used. Transcripts are searched under each
+--dir, then $CLAUDE_CONFIG_DIR/projects, ~/.claude/projects, and every ~/.claude*/projects.
+
+The digest lists, each with its transcript line number (L<n>): the steering files the session
+received, compactions, user messages, messages from other sessions and background tasks, tool
+errors and hook blocks grouped by their failing line (with failure text in Bash results that
+were not flagged as errors listed as "unflagged"), calls repeated 3 or more times, and the
+subagent transcripts (agent-<id> first) with their names and whether each sent a final message. Its header counts
+tool calls by tool. Each section shows its first 30 items; --all shows every item. --out writes the digest to
+/tmp/agents/retro-<first 8 characters of the session id>/digest.txt, creating that folder, and prints the path.
+
+The other modes:
+  --show LINE    one entry in full, up to --cap characters; --show A-B prints each entry of a range of up to 100 lines.
+  --grep REGEX   the lines whose text, full tool call, tool result, or queued message matches, then the count of
+                 matching entries. Count with it instead of grep -c on a .jsonl, which also counts the api-request
+                 entries that repeat each call. --agents also searches each subagent transcript the digest lists,
+                 retro refuters excepted, and prints the hits under one heading per transcript, then the total
+                 and the subagent transcripts it could not read; an unreadable main transcript exits 3.
+  --find REGEX   the same match over every transcript, one line per transcript with its count and title, then the
+                 total. --days N keeps transcripts changed in the last N days.
+  --timeline     one line per tool call: line, time, tool, and its description.
+  --commands     each Bash command in full with its line.
+  --replay HOOK  runs the PreToolUse hook HOOK (a file name under ~/.claude/hooks, or a path such as a prototype in
+                 a scratch folder) on each Bash command of the sessions given, only those on --lines when given, or
+                 of every transcript changed in the last --days N. It prints how many the hook denied, how many calls
+                 failed or timed out with the first error, the slowest call against the timeout settings.json gives a
+                 hook of that file name, and the path of the JSON Lines file of the denied commands, which it writes
+                 to /tmp/agents/retro-<session8>/ (the current session's folder with --days). The kill-text check
+                 of the bash-guard.py hook, which denies a call that runs a script and names a file holding kill
+                 commands, reads JSON as data, so a script can read that file. It runs a .py hook with python3 without -I and with
+                 ~/.claude/hooks on PYTHONPATH, so the hook's sibling imports work from a copy too.
+  --since-retro  the error and repeated-call sections from the last retro invocation to the end of the transcript,
+                 for this retro's own Skill notes.
+
+For the current session, the digest, --grep, --find, --timeline, --commands, and --replay stop at the last retro
+invocation (a /retro command or a Skill call for retro) and leave out subagents started after it, so a retro does not
+read its own run; a second retro in one session still reads the first one. --show reads any line.
+
+The transcript format is internal to Claude Code and changes between versions, so unknown
+entries are skipped and counted. Common credential shapes are redacted on a best-effort basis.
+Exit codes: 0 printed, 2 transcript, line, hook, or retro invocation not found, nothing before the retro started, or
+an invalid pattern or range, 3 transcript format not recognized.
+Python 3 standard library only.
+"""
+import argparse
+import functools
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+KNOWN_TYPES = {"user", "assistant", "system", "attachment", "summary", "queue-operation", "permission-mode", "mode",
+               "ai-title", "last-prompt", "file-history-snapshot", "file-history-delta", "api-request", "api-request-blob",
+               "api-request-shape", "agent-name", "atis-latch", "cost-state", "pr-link", "custom-title", "tag"}
+ITEMS_PER_SECTION = 30
+REPEAT_MIN = 3
+FIRST_ERROR_CHARS = 1200
+SHOW_RANGE_MAX = 100
+EXPANDED_FIRST_OCCURRENCES = 5
+COMMAND_OUTPUT_KEY_PREFIXES = ("Exit code", "unflagged")
+HOOKS_DIR = Path.home() / ".claude" / "hooks"
+DEFAULT_HOOK_TIMEOUT = 60  # seconds Claude Code gives a command hook without a timeout (https://code.claude.com/docs/en/hooks)
+WORKFLOW_JOURNAL_NAMES = {"journal.jsonl"}
+
+SECRET_PATTERNS = [
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.DOTALL),
+    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|glpat-[A-Za-z0-9_-]{8,}|npm_[A-Za-z0-9]{8,})"),
+    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{12,}|sk_(?:live|test)_[A-Za-z0-9]{10,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}"
+               r"|AIza[0-9A-Za-z_-]{30,}|cfut_[A-Za-z0-9_-]{12,}|ya29\.[A-Za-z0-9_-]{20,})"),
+    re.compile(r"(?i)\b(?:hooks\.slack\.com/services|discord(?:app)?\.com/api/webhooks)/\S+"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
+]
+BEARER_TOKEN_WITH_DIGIT = re.compile(r"(?i)(?P<label>(?:bearer|basic|token)\s+)(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}")
+LABELLED_SECRETS = [
+    re.compile(r"(?i)(?P<label>authorization:\s*(?:bearer|basic)\s+)[A-Za-z0-9._~+/=-]{8,}"),
+    BEARER_TOKEN_WITH_DIGIT,
+    re.compile(r"(?i)(?P<label>(?:set-)?cookie:\s*)[^\r\n]{8,}"),
+    re.compile(r"(?i)(?P<label>(?:x-amz-signature|x-amz-security-token|x-goog-signature|[?&]sig(?:nature)?)=)[^&\s\"']{8,}"),
+    re.compile(r"(?i)(?P<label>\bcurl\b[^\n|]*?\s-u\s+['\"]?[^\s:'\"]+:)[^\s'\"]{4,}"),
+    re.compile(r"(?i)(?P<label>(?<![a-z])tokens?\w*\\?[\"']?\s*[=:]\s*\\?[\"']?)(?!\d+(?:[\s,}\"'\\]|$))[^\s\"'\\,}]{6,}"),
+    re.compile(r"(?i)(?P<label>(?:password|passwd|passphrase|secret|api[_-]?key|access[_-]?key|private[_-]?key|credential|[a-z0-9]+_key)\w*"
+               r"\\?[\"']?\s*[=:]\s*\\?[\"']?)[^\s\"'\\,}]{6,}"),
+    re.compile(r"(?i)(?P<label>--(?:password|passwd|token|secret|api-key)[= ]\s*[\"']?)[^\s\"']{6,}"),
+    re.compile(r"(?P<label>://[^/\s:@]+:)[^@\s/]{3,}(?=@)"),
+]
+MACHINE_PREFIXES = ("<task-notification>", "<local-command-", "<system-reminder>", "Base directory for this skill",
+                    "<cross-session-message", "Caveat:", "Another Claude session sent a message", 'Background agent "')
+NOTICE_PREFIXES = ("<task-notification>", "<cross-session-message", "Another Claude session sent a message", 'Background agent "')
+
+
+def redact(text):
+    text = str(text)
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    for pattern in LABELLED_SECRETS:
+        text = pattern.sub(lambda m: m.group("label") + "[REDACTED]", text)
+    return text
+
+
+def one_line(text, limit=160):
+    text = " ".join(redact(text).split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def search_dirs(extra):
+    dirs = [Path(d) for d in extra]
+    if os.environ.get("CLAUDE_CONFIG_DIR"):
+        dirs.append(Path(os.environ["CLAUDE_CONFIG_DIR"]) / "projects")
+    dirs.append(Path.home() / ".claude" / "projects")
+    dirs += sorted(Path.home().glob(".claude*/projects"))
+    seen, out = set(), []
+    for d in dirs:
+        key = str(d.resolve()) if d.exists() else str(d)
+        if key not in seen:
+            seen.add(key)
+            out.append(d)
+    return out
+
+
+def find_transcript(session, extra_dirs):
+    if session and session.endswith(".jsonl") and Path(session).is_file():
+        return Path(session), []
+    dirs = search_dirs(extra_dirs)
+    if not session:
+        return None, dirs
+    for pattern in (f"*/{session}*.jsonl", f"*/*/subagents/**/{session}*.jsonl"):
+        for d in dirs:
+            hits = sorted(d.glob(pattern)) if d.is_dir() else []
+            if hits:
+                return max(hits, key=lambda p: p.stat().st_size), dirs
+    return None, dirs
+
+
+def all_transcripts(extra_dirs, days):
+    newest = time.time() - days * 86400 if days else 0
+    by_name = {}
+    for d in search_dirs(extra_dirs):
+        for p in d.rglob("*.jsonl") if d.is_dir() else []:
+            if p.name in WORKFLOW_JOURNAL_NAMES or "tool-results" in p.parts:
+                continue
+            try:
+                stat = p.stat()
+            except OSError:
+                continue
+            if stat.st_mtime >= newest and stat.st_size > by_name.get(p.name, (0, None))[0]:
+                by_name[p.name] = (stat.st_size, p)
+    return sorted(p for _, p in by_name.values())
+
+
+def session_id(path):
+    return path.parts[path.parts.index("subagents") - 1] if "subagents" in path.parts else path.stem
+
+
+def transcript_label(path):
+    return f"{path.stem} of {session_id(path)[:8]}" if "subagents" in path.parts else path.stem[:8]
+
+
+def text_of(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(str(block.get("text") or ""))
+                elif block.get("type") == "tool_result":
+                    parts.append(text_of(block.get("content")))
+        return "\n".join(parts)
+    return ""
+
+
+def notice_summary(text):
+    """Shorten a task notification or teammate message to who sent it, its status, and its summary."""
+    def tag(name):
+        found = re.search(rf"<{name}>(.*?)</{name}>", text, re.DOTALL)
+        return found.group(1).strip() if found else ""
+    if "<task-notification>" in text:
+        return f"task {tag('task-id')} {tag('status')}: {tag('summary')}"
+    peer = re.search(r'<cross-session-message[^>]*from-name="([^"]+)"[^>]*>\s*(.*)', text, re.DOTALL)
+    if peer:
+        return f"peer {peer.group(1)}: {peer.group(2)}"
+    teammate = re.search(r'<teammate-message teammate_id="([^"]+)"(?:[^>]*summary="([^"]*)")?', text)
+    if teammate:
+        kind = re.search(r'"type":\s*"(\w+)"', text)
+        return f"teammate {teammate.group(1)}: {teammate.group(2) or (kind.group(1) if kind else '')}"
+    return text
+
+
+def classify_message(entry):
+    """Return ("user", text) for what the person typed, ("other", text) for a message from another
+    session or a background task, or None for tool results, skill bodies, and summaries."""
+    if entry.get("type") == "attachment":
+        att = entry.get("attachment") or {}
+        if att.get("type") != "queued_command":
+            return None
+        prompt = str(att.get("prompt", ""))
+        kind = (att.get("origin") or {}).get("kind", "human")
+        if kind != "human" or prompt.startswith(NOTICE_PREFIXES):
+            summary = notice_summary(prompt)
+            return ("other", summary if summary != prompt else f"[{kind}] {prompt}")
+        return None if prompt.startswith(MACHINE_PREFIXES) else ("user", prompt)
+    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isCompactSummary"):
+        return None
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+        return None
+    text = text_of(content).strip()
+    if not text:
+        return None
+    if text.startswith(NOTICE_PREFIXES):
+        return ("other", notice_summary(text))
+    if text.startswith(MACHINE_PREFIXES):
+        return None
+    command = re.search(r"<command-name>(.*?)</command-name>", text)
+    if command:
+        args = re.search(r"<command-args>(.*?)</command-args>", text, re.DOTALL)
+        return ("user", f"{command.group(1)} {args.group(1) if args else ''}".strip())
+    return ("user", text)
+
+
+def call_text(name, inp):
+    if name == "Bash":
+        return str((inp or {}).get("command", ""))
+    return json.dumps(inp, sort_keys=True, ensure_ascii=False)[:300]
+
+
+def normalize(text):
+    return re.sub(r"\d+", "N", " ".join(str(text).split()))
+
+
+def error_key(text):
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    first = lines[0] if lines else ""
+    # A failed Bash call is "Exit code N" followed by the command's output; its failing message sits at the end.
+    if re.fullmatch(r"Exit code \d+", first) and len(lines) > 1:
+        first = f"{first}: {lines[-1]}"
+    return normalize(one_line(first, 140))
+
+
+EXIT_ZERO_FAILURE_TEXT = re.compile(
+    r"^(?:(?:\(eval\):\d+|[^\s:]+):\s.*(?:no matches found|command not found|No such file or directory|Permission denied)"
+    r"|Traceback \(most recent call last\)|(?:error|fatal):\s).*", re.MULTILINE)
+
+
+def unflagged_failure(text):
+    match = EXIT_ZERO_FAILURE_TEXT.search(text)
+    return f"unflagged: {normalize(one_line(match.group(0), 140))}" if match else None
+
+
+def entry_blocks(entry):
+    """Yield (kind, text) for each text, full tool call, and tool result of an entry, and for a queued message."""
+    att = entry.get("attachment") if entry.get("type") == "attachment" else None
+    if isinstance(att, dict) and att.get("type") == "queued_command":
+        yield "queued message", str(att.get("prompt", ""))
+        return
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, str):
+        yield "text", content
+        return
+    for block in content if isinstance(content, list) else []:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "text":
+            yield "text", str(block.get("text") or "")
+        elif block.get("type") == "tool_use":
+            inp = block.get("input")
+            text = str(inp.get("command", "")) if block.get("name") == "Bash" and isinstance(inp, dict) else json.dumps(inp, ensure_ascii=False)
+            yield f"tool_use {block.get('name')}", text
+        elif block.get("type") == "tool_result":
+            yield "tool_result" + (" (error)" if block.get("is_error") else ""), text_of(block.get("content"))
+
+
+def entries(path, stop=None, start=None):
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for n, raw in enumerate(handle, 1):
+            if stop and n >= stop:
+                return
+            if start and n < start:
+                continue
+            try:
+                entry = json.loads(raw)
+            except ValueError:
+                entry = None
+            yield n, entry
+
+
+def tool_calls(path, stop=None, start=None):
+    for n, entry in entries(path, stop, start):
+        if not isinstance(entry, dict) or entry.get("type") != "assistant" or not isinstance(entry.get("message"), dict):
+            continue
+        content = entry["message"].get("content")
+        for block in content if isinstance(content, list) else []:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                yield n, str(entry.get("timestamp") or "")[:19], str(block.get("name", "?")), block.get("input"), entry.get("cwd")
+
+
+def bash_commands(path, stop=None):
+    for n, _, name, inp, cwd in tool_calls(path, stop):
+        if name == "Bash" and isinstance(inp, dict) and isinstance(inp.get("command"), str):
+            yield n, inp["command"], cwd
+
+
+@functools.cache
+def retro_start(path):
+    start = None, ""
+    for n, entry in entries(path):
+        if not isinstance(entry, dict) or entry.get("type") not in ("user", "assistant"):
+            continue
+        try:
+            content = (entry.get("message") or {}).get("content")
+            ts = str(entry.get("timestamp") or "")[:19]
+            if entry["type"] == "user":
+                text = text_of(content).lstrip()
+                if text.startswith("<command-message>") and "<command-name>/retro</command-name>" in text:
+                    start = n, ts
+            elif isinstance(content, list):
+                for block in content:
+                    if (isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill"
+                            and isinstance(block.get("input"), dict) and block["input"].get("skill") == "retro"):
+                        start = n, ts
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return start
+
+
+def reading_stop(path):
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if "subagents" in path.parts:
+        i = path.parts.index("subagents")
+        if path.parts[i - 1] != session:
+            return 0
+        _, started = retro_start(Path(*path.parts[:i - 1]) / f"{session}.jsonl")
+        return None if started and first_timestamp(path) >= started else 0
+    return (retro_start(path)[0] or 0) if path.stem == session else 0
+
+
+def matches(path, regex, stop):
+    hits, readable, title = [], False, ""
+    for n, entry in entries(path, stop):
+        if isinstance(entry, dict) and entry.get("type") == "ai-title" and not title:
+            title = str(entry.get("aiTitle") or "")
+        if not isinstance(entry, dict) or entry.get("type") not in ("user", "assistant", "attachment"):
+            continue
+        readable = readable or entry["type"] != "attachment"
+        try:
+            for kind, text in entry_blocks(entry):
+                text = redact(text)
+                match = regex.search(text)
+                if match:
+                    start = max(0, match.start() - 80)
+                    hits.append((n, f"L{n} {entry['type']} {kind}: {one_line(text[start:start + 300], 300)}"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return readable, hits, title
+
+
+def grep(path, regex, stop, show_all):
+    readable, hits, _ = matches(path, regex, stop)
+    if not readable:
+        return None
+    lines = capped([h for _, h in hits], lambda h: h, "matches", show_all) or ["no lines match"]
+    return "\n".join([*lines, f"{len({n for n, _ in hits})} matching entries"])
+
+
+def find(regex, extra_dirs, days):
+    rows = []
+    for path in all_transcripts(extra_dirs, days):
+        stop = reading_stop(path)
+        if stop is None:
+            continue
+        _, hits, title = matches(path, regex, stop)
+        count = len({n for n, _ in hits})
+        if count:
+            rows.append((count, transcript_label(path), title))
+    rows.sort(key=lambda r: (-r[0], r[1]))
+    out = [f"{label} {count} {one_line(title, 80)}" for count, label, title in rows]
+    return "\n".join([*out, f"{sum(r[0] for r in rows)} matching entries in {len(rows)} transcripts"])
+
+
+def capped(items, render, label, show_all):
+    if show_all:
+        return [render(item) for item in items]
+    lines = [render(item) for item in items[:ITEMS_PER_SECTION]]
+    if len(items) > ITEMS_PER_SECTION:
+        lines.append(f"... {len(items) - ITEMS_PER_SECTION} more {label}; rerun with --all to list them")
+    return lines
+
+
+def subagent_paths(path):
+    sub_dir = path.with_suffix("") / "subagents"
+    subs = [p for p in sub_dir.rglob("*.jsonl") if p.name.startswith("agent-")] if sub_dir.is_dir() else []
+    return [p for p in subs if reading_stop(p) is not None]
+
+
+def agent_meta(path):
+    meta = path.with_suffix(".meta.json")
+    if meta.is_file():
+        try:
+            data = json.loads(meta.read_text(encoding="utf-8", errors="replace"))
+            return str(data.get("name") or data.get("workflowPhase") or ""), str(data.get("description") or "")
+        except (ValueError, AttributeError):
+            pass
+    return "", ""
+
+
+def is_refuter(description):
+    return "refute retro" in description.lower()
+
+
+def grep_agents(path, regex, stop, show_all):
+    out, unreadable, total, hit_transcripts = [], [], 0, 0
+    subs = sorted((p for p in subagent_paths(path) if not is_refuter(agent_meta(p)[1])), key=lambda p: p.stem)
+    for p, p_stop in [(path, stop), *((p, None) for p in subs)]:
+        readable, hits, _ = matches(p, regex, p_stop)
+        if not readable:
+            if p == path:
+                return None
+            unreadable.append(transcript_label(p))
+            continue
+        count = len({n for n, _ in hits})
+        if count:
+            total, hit_transcripts = total + count, hit_transcripts + 1
+            out += [f"## {transcript_label(p)}, {count} matching entries",
+                    *capped([h for _, h in hits], lambda h: h, "matches", show_all)]
+    searched = f"{total} matching entries in {hit_transcripts} of {len(subs) + 1 - len(unreadable)} transcripts"
+    return "\n".join([*out, searched + (f"; not readable: {', '.join(unreadable)}" if unreadable else "")])
+
+
+def starts_new_prompt(kinds):
+    return "tool_result" not in kinds
+
+
+def subagent_line(path, base):
+    name, desc = agent_meta(path)
+    refuter = is_refuter(desc)
+    final = False
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for raw in handle:
+            try:
+                entry = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(entry, dict) or entry.get("type") not in ("assistant", "user"):
+                continue
+            message = entry.get("message")
+            content = message.get("content") if isinstance(message, dict) else None
+            blocks = content if isinstance(content, list) else [{"type": "text", "text": str(content or "")}]
+            kinds = {b.get("type") for b in blocks if isinstance(b, dict)}
+            if entry["type"] == "assistant":
+                # A workflow agent reports through its StructuredOutput call; a thinking-only entry changes nothing.
+                # Claude Code writes a <synthetic> entry when a usage limit stops the agent, which is no report.
+                if isinstance(message, dict) and message.get("model") == "<synthetic>":
+                    final = False
+                elif any(isinstance(b, dict) and b.get("name") == "StructuredOutput" for b in blocks):
+                    final = True
+                elif "tool_use" in kinds:
+                    final = False
+                elif any(isinstance(b, dict) and b.get("type") == "text" and str(b.get("text") or "").strip() for b in blocks):
+                    final = True
+            elif starts_new_prompt(kinds):
+                final = False
+    label = " ".join(x for x in ("retro refuter," if refuter else "", f"{name}:" if name else "", one_line(desc, 80)) if x)
+    status = "" if final else ", no final message"
+    return (refuter, final), (f"{path.stem} {label + ' ' if label else ''}in {path.parent.relative_to(base)} "
+                              f"{path.stat().st_size // 1024} KB{status}")
+
+
+def first_timestamp(path):
+    for _, entry in entries(path):
+        if isinstance(entry, dict) and entry.get("timestamp"):
+            return str(entry["timestamp"])[:19]
+    return ""
+
+
+def scan(path, stop=None, start=None):
+    counts, unknown, malformed = {}, {}, 0
+    first_ts = last_ts = ""
+    users, others, compactions, steering = [], [], [], OrderedDict()
+    seen_user = {}
+    errors, calls, uses, tools = OrderedDict(), OrderedDict(), {}, {}
+    for n, entry in entries(path, stop, start):
+        if not isinstance(entry, dict):
+            malformed += 1
+            continue
+        kind = entry.get("type", "?")
+        if not isinstance(kind, str):
+            malformed += 1
+            continue
+        counts[kind] = counts.get(kind, 0) + 1
+        if kind not in KNOWN_TYPES:
+            unknown[kind] = unknown.get(kind, 0) + 1
+            continue
+        try:
+            ts = str(entry.get("timestamp") or "")[:19]
+            if ts:
+                first_ts = first_ts or ts
+                last_ts = ts
+            if kind == "system" and entry.get("subtype") == "compact_boundary":
+                meta = entry.get("compactMetadata") or {}
+                compactions.append((n, ts, meta.get("trigger", "?"), meta.get("preTokens", "?")))
+            att = entry.get("attachment") if kind == "attachment" else None
+            if isinstance(att, dict) and att.get("type") == "instructions":
+                for f in att.get("files") or []:
+                    if isinstance(f, dict) and f.get("path"):
+                        steering.setdefault(f["path"], (n, f.get("type", "?")))
+            said = classify_message(entry)
+            if said and said[0] == "user":
+                key = one_line(said[1], 600)
+                if key in seen_user:
+                    seen_user[key][3].append(n)
+                else:
+                    seen_user[key] = (n, ts, key, [])
+                    users.append(seen_user[key])
+            elif said:
+                others.append((n, ts, one_line(said[1], 140)))
+            # api-request-blob entries repeat the calls and results of user and assistant entries.
+            content = (entry.get("message") or {}).get("content") if kind in ("user", "assistant") else None
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use":
+                    tools[block.get("name", "?")] = tools.get(block.get("name", "?"), 0) + 1
+                    text = call_text(block.get("name", "?"), block.get("input"))
+                    uses[block.get("id")] = f"{block.get('name', '?')}: {one_line(text, 100)}"
+                    key = f"{block.get('name', '?')}: {normalize(one_line(text, 200))}"
+                    calls.setdefault(key, []).append((n, text))
+                elif block.get("type") == "tool_result":
+                    text = text_of(block.get("content"))
+                    call = uses.get(block.get("tool_use_id"), "")
+                    if block.get("is_error"):
+                        key = error_key(text)
+                    elif call.startswith("Bash: "):
+                        key = unflagged_failure(text)
+                    else:
+                        key = None
+                    if not key:
+                        continue
+                    if key not in errors:
+                        errors[key] = {"lines": [], "first": text, "call": call}
+                    errors[key]["lines"].append(n)
+        except (AttributeError, TypeError, ValueError):
+            malformed += 1
+
+    if not any(counts.get(k) for k in ("user", "assistant")):
+        return None
+    return {"counts": counts, "unknown": unknown, "malformed": malformed, "first_ts": first_ts, "last_ts": last_ts,
+            "users": users, "others": others, "compactions": compactions, "steering": steering, "errors": errors,
+            "calls": calls, "tools": tools}
+
+
+def header(path, found):
+    def by_count(counts, limit=None):
+        return ", ".join(f"{k} {v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])[:limit])
+    size = path.stat().st_size // 1024
+    out = [f"size {size} KB, {sum(found['counts'].values())} entries, {found['first_ts']} to {found['last_ts']}",
+           f"entry types: {by_count(found['counts'], 12)}",
+           f"tool calls: {by_count(found['tools']) or 'none'}"]
+    if found["unknown"] or found["malformed"]:
+        out.append(f"skipped: {found['malformed']} malformed entries, unknown types {dict(found['unknown']) or 'none'}")
+    return out
+
+
+def digest(path, show_all, stop):
+    found = scan(path, stop)
+    if found is None:
+        return None
+    out = [f"# Session digest: {path}", *header(path, found),
+           *([f"stopped at L{stop}, where this retro started; --show still reads any line"] if stop else [])]
+
+    out.append("\n## Steering files the session received")
+    out += capped(list(found["steering"].items()), lambda s: f"L{s[1][0]} {s[1][1]} {s[0]}", "steering files",
+                  show_all) or ["none recorded"]
+
+    out.append("\n## Compactions")
+    out += capped(found["compactions"], lambda c: f"L{c[0]} {c[1]} {c[2]}, {c[3]} tokens before", "compactions",
+                  show_all) or ["none"]
+
+    out.append("\n## User messages")
+
+    def render_user(u):
+        again = f" (also {', '.join(f'L{n}' for n in u[3][:5])})" if u[3] else ""
+        return f"L{u[0]} {u[1]} {u[2]}{again}"
+    out += capped(found["users"], render_user, "user messages", show_all) or ["none"]
+
+    out.append("\n## Messages from other sessions and tasks")
+    out += capped(found["others"], lambda o: f"L{o[0]} {o[1]} {o[2]}", "messages", show_all) or ["none"]
+
+    out += friction(found, show_all)
+
+    out.append("\n## Subagent transcripts, silent ones first, then largest, retro refuters last")
+    session_dir = path.with_suffix("")
+    subs = subagent_paths(path)
+    listed = sorted(((subagent_line(p, path.parent), p.stat().st_size) for p in subs), key=lambda x: (x[0][0][0], x[0][0][1], -x[1]))
+    out += capped(listed, lambda x: x[0][1], "subagent transcripts", show_all) or ["none"]
+    workflows = sorted((session_dir / "workflows").glob("*.json")) if (session_dir / "workflows").is_dir() else []
+    if workflows:
+        out.append(f"{len(workflows)} workflow definitions in {session_dir / 'workflows'}")
+    results_dir = session_dir / "tool-results"
+    if results_dir.is_dir():
+        out.append(f"large tool outputs spilled to {results_dir}")
+    return "\n".join(out)
+
+
+def since_retro(path, show_all):
+    start, ts = retro_start(path)
+    if start is None:
+        return None
+    found = scan(path, start=start)
+    if found is None:
+        return f"# Since the retro started at L{start} {ts}: {path}\nnothing after it"
+    return "\n".join([f"# Since the retro started at L{start} {ts}: {path}", *header(path, found), *friction(found, show_all)])
+
+
+def friction(found, show_all):
+    out = ["\n## Errors and hook blocks, by failing line"]
+    groups = sorted(found["errors"].items(), key=lambda kv: (-len(kv[1]["lines"]), kv[0].startswith("unflagged")))
+    expanded = 0
+
+    def render_error(item):
+        nonlocal expanded
+        key, group = item
+        refs = ", ".join(f"L{n}" for n in group["lines"][:3])
+        line = f"{len(group['lines'])}x {key} ({refs})" + (f"\n    call: {group['call']}" if group["call"] else "")
+        if expanded < EXPANDED_FIRST_OCCURRENCES and not key.startswith(COMMAND_OUTPUT_KEY_PREFIXES):
+            full = redact(group["first"]).strip()
+            if "\n" in full or len(full) > 140:
+                expanded += 1
+                body = full[:FIRST_ERROR_CHARS] + (" ..." if len(full) > FIRST_ERROR_CHARS else "")
+                line += "\n    first occurrence: " + body.replace("\n", "\n    ")
+        return line
+    out += capped(groups, render_error, "error groups", show_all) or ["none"]
+
+    out.append(f"\n## Repeated calls ({REPEAT_MIN} or more, numbers normalized to N)")
+    repeats = sorted(((k, v) for k, v in found["calls"].items() if len(v) >= REPEAT_MIN), key=lambda kv: -len(kv[1]))
+    out += capped(repeats, lambda r: f"{len(r[1])}x ({len({t for _, t in r[1]})} distinct) {r[0]} "
+                  f"({', '.join(f'L{n}' for n, _ in r[1][:3])})", "repeated calls", show_all) or ["none"]
+    return out
+
+
+def show(path, first, last, cap):
+    shown = []
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for n, raw in enumerate(handle, 1):
+            if n < first:
+                continue
+            if n > last:
+                break
+            shown.append(render_entry(n, raw, cap))
+    return "\n\n".join(shown) if shown else None
+
+
+def render_entry(n, raw, cap):
+    try:
+        entry = json.loads(raw)
+    except ValueError:
+        entry = None
+    if not isinstance(entry, dict):
+        return redact(raw)[:cap]
+    message = entry.get("message")
+    content = message.get("content") if isinstance(message, dict) else message
+    parts = [f"L{n} {entry.get('type')} {str(entry.get('timestamp') or '')[:19]}"]
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                parts.append(f"tool_use {block.get('name')}: {json.dumps(block.get('input'), ensure_ascii=False)}")
+            elif isinstance(block, dict) and block.get("type") == "tool_result":
+                flag = " (error)" if block.get("is_error") else ""
+                parts.append(f"tool_result{flag}: {text_of(block.get('content'))}")
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+    elif isinstance(content, str):
+        parts.append(content)
+    else:
+        parts.append(json.dumps(entry, ensure_ascii=False))
+    text = redact("\n".join(parts))
+    return text[:cap] + (f"\n... cut at {cap} characters; rerun with a larger --cap" if len(text) > cap else "")
+
+
+def timeline(path, stop):
+    out = []
+    for n, ts, name, inp, _ in tool_calls(path, stop):
+        what = inp.get("description") if isinstance(inp, dict) and isinstance(inp.get("description"), str) else ""
+        out.append(f"L{n} {ts} {name}: {one_line(what or call_text(name, inp), 160)}")
+    return "\n".join(out) or "no tool calls"
+
+
+def hook_timeout(name):
+    for base in (os.environ.get("CLAUDE_CONFIG_DIR"), str(Path.home() / ".claude")):
+        try:
+            groups = json.loads((Path(base) / "settings.json").read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+            for hook in (h for g in groups for h in g.get("hooks") or []):
+                if str(hook.get("command", "")).endswith("/" + name):
+                    return hook.get("timeout")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+    return None
+
+
+def run_hook(hook, command, cwd, limit, env):
+    payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Bash", "cwd": cwd or str(Path.home()),
+                          "tool_input": {"command": command}})
+    argv = [sys.executable, str(hook)] if hook.suffix == ".py" else [str(hook)]
+    began = time.monotonic()
+    try:
+        done = subprocess.run(argv, check=False, input=payload, capture_output=True, text=True, timeout=limit, env=env,
+                              cwd=cwd if cwd and os.path.isdir(cwd) else None)
+    except subprocess.TimeoutExpired:
+        # Claude Code lets the tool call through when its hook times out.
+        return "timeout", time.monotonic() - began, ""
+    except OSError as err:
+        return "error", 0.0, str(err)
+    seconds = time.monotonic() - began
+    if done.returncode == 2:
+        return "deny", seconds, ""
+    if done.returncode != 0:
+        return "error", seconds, (done.stderr.strip().splitlines() or [f"exit {done.returncode}"])[-1]
+    try:
+        answer = json.loads(done.stdout or "{}")
+    except ValueError:
+        answer = None
+    specific = answer.get("hookSpecificOutput") if isinstance(answer, dict) else None
+    denied = (isinstance(specific, dict) and specific.get("permissionDecision") == "deny") or (
+        isinstance(answer, dict) and answer.get("decision") == "block")
+    return ("deny" if denied else "allow"), seconds, ""
+
+
+def replay(hook, paths, out_dir, lines):
+    timeout = hook_timeout(hook.name)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(HOOKS_DIR), os.environ.get("PYTHONPATH")]))}
+    calls = [(path, n, command, cwd) for path in paths if (stop := reading_stop(path)) is not None
+             for n, command, cwd in bash_commands(path, stop) if not lines or n in lines]
+    distinct = sorted({(command, cwd) for _, _, command, cwd in calls}, key=str)
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+        verdicts = pool.map(lambda c: run_hook(hook, c[0], c[1], timeout or DEFAULT_HOOK_TIMEOUT, env), distinct)
+        results = dict(zip(distinct, verdicts, strict=True))
+    by_outcome = {k: [(p, n, c) for p, n, c, d in calls if results[(c, d)][0] == k] for k in ("deny", "error", "timeout")}
+    hits = by_outcome["deny"]
+    hits_file = out_dir / f"replay-{hook.stem}.jsonl"
+    hits_file.write_text("".join(json.dumps({"at": f"{transcript_label(p)}:L{n}", "command": redact(c)}) + "\n"
+                                 for p, n, c in hits), encoding="utf-8")
+    slowest = max((s for _, s, _ in results.values()), default=0.0)
+    limit = f"its timeout in settings.json is {timeout} s" if timeout else "settings.json sets no timeout for it"
+    missing = sorted(set(lines or ()) - {n for _, n, _, _ in calls})
+    first_error = next(((p, n, results[(c, d)][2]) for p, n, c, d in calls if results[(c, d)][0] == "error"), None)
+    return "\n".join([
+        (f"{hook.name} denied {len(hits)} of {len(calls)} Bash commands ({len(distinct)} distinct) in "
+         f"{len(paths)} transcripts; {len(by_outcome['error'])} errors, {len(by_outcome['timeout'])} timed out"),
+        *(f"  {transcript_label(p)}:L{n}" for p, n, _ in hits[:10]),
+        *([f"  ... {len(hits) - 10} more"] if len(hits) > 10 else []),
+        *([f"first error at {transcript_label(first_error[0])}:L{first_error[1]}: {one_line(first_error[2], 200)}"]
+          if first_error else []),
+        *([f"not Bash commands: {', '.join(f'L{n}' for n in missing)}"] if missing else []),
+        f"slowest call {slowest:.2f} s; {limit}",
+        f"denied commands: {hits_file}"])
+
+
+def scratch_dir(session):
+    folder = Path("/tmp/agents") / f"retro-{session[:8]}"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def fail(message, code=2):
+    print(f"session-digest: {message}", file=sys.stderr)
+    return code
+
+
+def line_range(text):
+    m = re.fullmatch(r"(\d+)(?:-(\d+))?", text)
+    if not m or (m[2] and not int(m[1]) <= int(m[2]) < int(m[1]) + SHOW_RANGE_MAX):
+        raise argparse.ArgumentTypeError(f"give LINE or A-B with A <= B and at most {SHOW_RANGE_MAX} lines")
+    return int(m[1]), int(m[2] or m[1])
+
+
+def pattern(text):
+    try:
+        return re.compile(text)
+    except re.error as err:
+        raise argparse.ArgumentTypeError(f"not a valid Python regex: {err}") from err
+
+
+def line_list(text):
+    if not re.fullmatch(r"\d+(?:,\d+)*", text):
+        raise argparse.ArgumentTypeError("give transcript line numbers separated by commas, such as 820,1255")
+    return [int(n) for n in text.split(",")]
+
+
+def hook_file(text):
+    hook = Path(text) if "/" in text else HOOKS_DIR / text
+    if not hook.is_file():
+        raise argparse.ArgumentTypeError(f"give a hook file name in {HOOKS_DIR}, such as bash-guard.py, or a path")
+    return hook.resolve()
+
+
+def main():
+    parser = argparse.ArgumentParser(usage=argparse.SUPPRESS, description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("session", nargs="*", help="session id, id prefix, or transcript path; --replay takes several")
+    parser.add_argument("--dir", action="append", default=[], help="extra projects directory to search")
+    parser.add_argument("--all", action="store_true", help="list every item instead of the first 30 per section")
+    parser.add_argument("--out", action="store_true",
+                        help="write the digest to /tmp/agents/retro-<session8>/digest.txt and print the path")
+    parser.add_argument("--cap", type=int, default=8000, help="characters --show prints per entry (default 8000)")
+    parser.add_argument("--days", type=int, help="with --find or --replay, every transcript changed in the last N days")
+    parser.add_argument("--agents", action="store_true", help="with --grep, also search the subagent transcripts")
+    parser.add_argument("--lines", type=line_list, metavar="L1,L2", help="with --replay, only the Bash calls on these lines")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--show", type=line_range, metavar="LINE|A-B",
+                      help=f"print one transcript line, or a range of up to {SHOW_RANGE_MAX}, in full")
+    mode.add_argument("--grep", type=pattern, metavar="REGEX", help="list the matching lines and count the entries")
+    mode.add_argument("--find", type=pattern, metavar="REGEX", help="count matching entries in every transcript")
+    mode.add_argument("--timeline", action="store_true", help="one line per tool call")
+    mode.add_argument("--commands", action="store_true", help="each Bash command in full with its line")
+    mode.add_argument("--replay", type=hook_file, metavar="HOOK", help="run a PreToolUse hook on each Bash command")
+    mode.add_argument("--since-retro", action="store_true", help="errors and repeated calls since the last retro call")
+    args = parser.parse_args()
+    if len(args.session) > 1 and not args.replay:
+        parser.error("only --replay takes several sessions")
+    if args.days is not None and not (args.find or args.replay):
+        parser.error("--days goes with --find or --replay")
+    if args.days is not None and args.days < 1:
+        parser.error("--days takes a number of days, 1 or more")
+    if args.days and args.session:
+        parser.error("give session ids or --days, not both")
+    if args.agents and not args.grep:
+        parser.error("--agents goes with --grep")
+    if args.lines and (not args.replay or args.days):
+        parser.error("--lines goes with --replay on the sessions given")
+    if args.out and any((args.show, args.grep, args.find, args.timeline, args.commands, args.replay, args.since_retro)):
+        parser.error("--out goes with the digest; --replay always writes to /tmp/agents/retro-<session8>/")
+    if args.find:
+        print(find(args.find, args.dir, args.days))
+        return 0
+    if args.days:
+        current = os.environ.get("CLAUDE_CODE_SESSION_ID")
+        if not current:
+            return fail("--replay --days names its scratch folder after CLAUDE_CODE_SESSION_ID, which is not set")
+        print(replay(args.replay, all_transcripts(args.dir, args.days), scratch_dir(current), None))
+        return 0
+    paths = []
+    for session in args.session or [os.environ.get("CLAUDE_CODE_SESSION_ID", "")]:
+        path, dirs = find_transcript(session, args.dir)
+        if path is None:
+            return fail(f"no transcript for session '{session or '(none given)'}' under {', '.join(map(str, dirs))}")
+        paths.append(path)
+    path = paths[0]
+    if args.replay:
+        print(replay(args.replay, paths, scratch_dir(session_id(path)), set(args.lines or ())))
+        return 0
+    if args.show:
+        text = show(path, *args.show, args.cap)
+        if text is None:
+            return fail(f"{path} has no line {args.show[0]}")
+        print(text)
+        return 0
+    if args.since_retro:
+        text = since_retro(path, args.all)
+        if text is None:
+            return fail(f"{path} has no retro invocation")
+        print(text)
+        return 0
+    stop = reading_stop(path) or None
+    if args.timeline:
+        print(timeline(path, stop))
+        return 0
+    if args.commands:
+        print("\n".join(f"L{n} " + redact(c).replace("\n", "\n    ") for n, c, _ in bash_commands(path, stop))
+              or "no Bash commands")
+        return 0
+    if args.grep:
+        found = (grep_agents if args.agents else grep)(path, args.grep, stop, args.all)
+        if found is None:
+            return fail(f"unrecognized transcript format in {path}", 3)
+        print(found)
+        return 0
+    report = digest(path, args.all, stop)
+    if report is None and stop:
+        print(f"session-digest: {path} has no entries before the retro started at L{stop}; "
+              "pass the id of the session to review", file=sys.stderr)
+        return 2
+    if report is None:
+        print(f"session-digest: unrecognized transcript format in {path}; it has no Claude Code user or assistant entries",
+              file=sys.stderr)
+        return 3
+    if args.out:
+        out_dir = scratch_dir(session_id(path))
+        (out_dir / "digest.txt").write_text(report + "\n", encoding="utf-8")
+        print(f"digest of {path.stem} ({report.count(chr(10)) + 1} lines) written to {out_dir / 'digest.txt'}; "
+              f"scratch folder {out_dir}")
+        return 0
+    print(report)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

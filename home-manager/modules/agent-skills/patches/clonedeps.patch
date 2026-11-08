@@ -1,0 +1,64 @@
+--- a/README.md
++++ b/README.md
+@@ -1,7 +1,7 @@
+ # clonedeps
+ 
+-`clonedeps` is a bundled OpenCode workflow skill for cloning a small set of
+-important dependency source repositories into a local ignored workspace so agents
++`clonedeps` is a workflow skill for OpenCode, Claude Code, and Codex. It clones a
++small set of important dependency source repositories into a local ignored workspace so agents
+ can read library internals.
+ 
+ It is orchestrator-owned. The orchestrator delegates source discovery and URL/ref
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,18 +1,24 @@
+ ---
+ name: clonedeps
+-description: Clone important project dependency source code into an ignored local workspace so OpenCode can inspect library internals. Use when the user asks to clone dependencies, inspect dependency/source internals, understand SDK/framework behavior from source, debug library implementation details, or make core dependency repos locally readable. Do not use for ordinary API/docs questions where @explorer is enough.
++description: Clone important project dependency source code into an ignored local workspace so an agent can read library internals. Use when the user asks to clone dependencies, inspect dependency/source internals, understand SDK/framework behavior from source, debug library implementation details, or make core dependency repos locally readable. Do not use for ordinary API/docs questions where the library's docs answer the question.
+ ---
+ 
+ # Clonedeps Skill
+ 
+ You help users make a small set of important dependency source repositories
+-locally readable to OpenCode.
++locally readable to the agent.
+ 
+ This is a workflow skill, not a command wrapper. Do not use a helper script for
+ dependency detection, ref validation, cloning, status, or cleanup. The
+ orchestrator and `@explorer` do the repo-specific thinking; the orchestrator
+ performs the approved filesystem/git operations directly.
+ 
++This skill runs in OpenCode, Claude Code, and Codex. "The orchestrator" is the
++main agent. `@explorer` is a read-only exploration subagent: the `Explore` agent
++in Claude Code, `explorer` in Codex and OpenCode. When the tool has none, or the
++user did not allow subagents, the orchestrator does that reading itself with the
++same prompt.
++
+ ## Workflow
+ 
+ ### Step 1: Check Existing State
+@@ -113,7 +119,10 @@
+ # END oh-my-opencode-slim clonedeps
+ ```
+ 
+-Read cloned sources by their absolute path.
++Read cloned sources by their absolute path. Search tools skip git-ignored
++folders when run from the project root, so search a clone with an explicit path,
++for example `rg <pattern> .slim/clonedeps/repos/<safe-repo-name>`, or pass that
++path as the search tool's `path`.
+ 
+ ### Step 5: Clone Sources Manually
+ 
+@@ -191,7 +200,9 @@
+ ### Step 7: Register Dependency Source in AGENTS.md
+ 
+ After successful cloning, update the repository root `AGENTS.md` so future
+-agents know why the dependency source exists and where to look.
++agents know why the dependency source exists and where to look. When the
++repository has no `AGENTS.md` but has a `CLAUDE.md`, update `CLAUDE.md`; when
++`CLAUDE.md` only imports or links `AGENTS.md`, update `AGENTS.md`.
+ 
+ If `AGENTS.md` already has a `## Cloned Dependency Source` section, update that
+ section. Otherwise append this section:

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.dump)",
+      "Read(*.sql.gz)",
+      "Read(logs/**)",
+      "Read(exports/**)",
+      "Read(dumps/**)",
+      "Read(backups/**)"
+    ]
+  }
+}

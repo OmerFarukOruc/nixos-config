@@ -8,8 +8,8 @@ Add a tool or setting to the layer that owns it, never by hand on the host.
 
 | Layer | Holds | Kept current by |
 |---|---|---|
-| nixos-config (`machines/devbox/`, `home-manager/`) | The system, `omer`'s shell, editors, agent CLIs and user units | the deploy timer, and the update workflow that moves inputs and apps |
-| dotfiles `desktop/` | Claude Code and Codex config, skills | `desktop-sync.sh`, and the hourly `desktop-sync.timer` that commits app config changes |
+| nixos-config (`machines/devbox/`, `home-manager/`, `agents/`) | The system, `omer`'s shell, editors, agent CLIs, their config and skills, and user units | the deploy timer, and the update workflow that moves inputs and apps |
+| dotfiles `desktop/` | The Codex agent files and the configs of grok, amp, OpenCode, OpenChamber and oracle | `desktop-sync.sh`, and the hourly `desktop-sync.timer` that commits app config changes |
 | dotfiles `desktop/shell/mise.toml` | The ruff and shellcheck that dotfiles' own scripts run; mise is not on any shell's PATH | `desktop-sync.sh` installs the pins; Renovate moves them |
 | Infisical `personal-secrets` `/harness/shell` | Omer's API keys; no shell exports them, so a command that needs one runs under `infisical run` with the Infisical Agent's token (Accounts and logins) | Omer, in Infisical |
 

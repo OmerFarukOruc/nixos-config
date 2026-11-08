@@ -1,0 +1,8 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -190,3 +190,5 @@
+ 8. Re-reporting carried same-source prior confirmed records or using them as exemplars that anchor the hunt.
+ 9. Assigning severity to `needs_validation` records.
+ 10. Writing the report before independent verification or letting prose and JSON disagree.
++
++A local harness, `../security-audit-harness/README.md` (not upstream), maps each phase of a full audit to the parent scripts and Workflow files that run it; read it before Phase 1.

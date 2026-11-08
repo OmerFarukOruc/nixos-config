@@ -1,6 +1,6 @@
 # Testing discipline
 
-Every agent reads this before writing, editing, or deleting any test, and before proposing a test plan. It defines the Testing rules in your instructions. Where the `tdd`, `diagnosing-bugs`, `quality-campaign`, or `ub-mode` skill says something different about tests, this file wins. Apply it yourself; do not ask Omer whether a test is worth keeping. Each `##` section except "Example" is one rule that the `code-reviewer` agent checks by name.
+Every agent reads this before writing, editing, or deleting any test, and before proposing a test plan. It defines the Testing rules in your instructions. Where the `diagnosing-bugs`, `quality-campaign`, or `ub-mode` skill says something different about tests, this file wins. Apply it yourself; do not ask Omer whether a test is worth keeping. Each `##` section except "Example" is one rule that the `code-reviewer` agent checks by name.
 
 ## Choose the verification
 

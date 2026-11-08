@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${1:-} == --run && -n ${2:-} && -n ${3:-} ]] || { echo "usage: mkscratch --run DIR <agent-id> [size]" >&2; exit 2; }
+O=$(realpath -e -- "$2"); id=$3; size=${4:-4G}
+[[ -f $O/run.json ]] || { echo "mkscratch: $O/run.json does not exist" >&2; exit 2; }
+[[ $id =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "bad id $id" >&2; exit 2; }
+case $id in con|prn|aux|nul|com[1-9]|lpt[1-9]) echo "device id" >&2; exit 2;; esac
+sudo -n true 2>/dev/null || { echo "mkscratch: REFUSED, $(hostname) has no passwordless sudo for the loop mount" >&2; exit 3; }
+mkfs=(mkfs.ext4)
+if ! command -v mkfs.ext4 > /dev/null; then
+  mkfs=(nix shell nixpkgs#e2fsprogs -c mkfs.ext4)
+  if command -v heavy > /dev/null; then mkfs=(heavy "${mkfs[@]}"); fi
+fi
+a=$O/agents/$id; img=$O/.scratch-images/$id.img
+mkdir -p "$O/.scratch-images"
+mkdir "$a" "$a/scratch" "$a/artifacts"
+truncate -s "$size" "$img"
+"${mkfs[@]}" -q -F -E "root_owner=$(id -u):$(id -g)" -L "sa-$id" "$img" > /dev/null
+sudo -n mount -o loop,nosuid,nodev "$img" "$a/scratch"
+sudo -n rmdir "$a/scratch/lost+found" 2>/dev/null || true
+chmod 700 "$a/artifacts"
+python3 -I - "$a" <<'PY'
+import json, os, sys
+a = sys.argv[1]
+s = os.stat(a + "/scratch"); t = os.stat(a + "/artifacts")
+json.dump({"allowlist": [f"evidence/proof-{i}.txt" for i in range(1, 7)],
+           "per_file_bytes": 262144, "cumulative_bytes": 1048576,
+           "scratch_root": {"dev": s.st_dev, "ino": s.st_ino},
+           "artifacts_root": {"dev": t.st_dev, "ino": t.st_ino}},
+          open(a + "/promotion.json", "x"), indent=1)
+PY
+echo "scratch ready: $a/scratch ($size ext4 loop)"

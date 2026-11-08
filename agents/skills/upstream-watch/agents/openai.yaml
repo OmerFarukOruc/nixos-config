@@ -1,0 +1,5 @@
+interface:
+  display_name: "Upstream Watch"
+  short_description: "Review and port upstream changes into a standalone repo"
+policy:
+  allow_implicit_invocation: false

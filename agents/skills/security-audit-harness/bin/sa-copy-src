@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${1:-} == --run && -n ${2:-} && -n ${3:-} ]] || { echo "usage: sa-copy-src --run DIR <agent-id>" >&2; exit 2; }
+O=$(realpath -e -- "$2"); id=$3; s=$O/agents/$id/scratch
+if ! [[ $id =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || ! mountpoint -q "$s"; then echo "no mounted scratch for $id" >&2; exit 2; fi
+target=$(jq -er .target "$O/run.json"); commit=$(jq -er .commit "$O/run.json")
+mkdir "$s/src"
+git -C "$target" archive "$commit" | tar -x -C "$s/src"
+echo "source copy at $s/src"

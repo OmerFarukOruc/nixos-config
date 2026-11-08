@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v node > /dev/null; then exec node "$@"; fi
+command -v nix > /dev/null || { echo "sa-node: neither node nor nix is on PATH" >&2; exit 127; }
+if command -v heavy > /dev/null; then exec heavy nix shell nixpkgs#nodejs -c node "$@"; fi
+exec nix shell nixpkgs#nodejs -c node "$@"

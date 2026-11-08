@@ -1,0 +1,5 @@
+interface:
+  display_name: "Retro"
+  short_description: "Run a retrospective on a coding session and apply the chosen environment changes."
+policy:
+  allow_implicit_invocation: true

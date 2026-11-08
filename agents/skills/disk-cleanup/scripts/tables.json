@@ -1,0 +1,77 @@
+{
+  "delete": {
+    "~/.cache/uv": "the next `uv` run",
+    "~/.cache/pip": "the next pip install",
+    "~/.cache/pnpm": "the next pnpm install",
+    "~/.cache/go-build": "the next `go build`",
+    "~/.cache/trivy": "the next trivy scan",
+    "~/.cache/debuginfod_client": "the next debuginfod fetch",
+    "~/.cache/nix": "the next flake fetch or evaluation, which needs the network",
+    "~/.cache/comgr": "the next GPU compile",
+    "~/.cache/node-gyp": "the next native Node build",
+    "~/.cache/drkonqi": "the next crash report",
+    "~/.cache/thumbnails": "the next thumbnail",
+    "~/.cache/mesa_shader_cache": "the next shader compile",
+    "~/.local/share/Trash": "never; files you sent to the Trash, without the /tmp folders disk-cleanup moved here, which group:tmp-trash offers after 7 days",
+    "~/.cache/npm": "the next npm cache fill",
+    "~/.gradle/caches": "the next Gradle build",
+    "~/.cargo/registry": "the next `cargo fetch`",
+    "~/.bun/install/cache": "the next bun install",
+    "~/.cache/opencode": "the next OpenCode cache fill",
+    "~/.cache/google-chrome": "the next Chrome run",
+    "~/.cache/mozilla": "the next Firefox run",
+    "~/.cache/BraveSoftware": "the next Brave run",
+    "~/.config/google-chrome/OptGuideOnDeviceModel": "never, once the delete step writes the Chrome switch",
+    "~/.config/Claude/vm_bundles": "the next Cowork session; only Claude Desktop uses it",
+    "~/go/pkg/mod": "the next Go build that needs a module"
+  },
+  "delete_by_command": {
+    "~/.cache/ms-playwright": "`npx playwright install`; Playwright does not fetch browsers by itself",
+    "~/.cache/ms-playwright-go": "`go run github.com/mxschmitt/playwright-go/cmd/playwright@latest install`",
+    "~/.cache/puppeteer": "`npx puppeteer browsers install chrome`",
+    "~/.cache/camoufox": "`camoufox fetch`, such as `uvx camoufox fetch`"
+  },
+  "leave": {
+    "~/.local/share/pi-qwen38": "the live local model",
+    "~/.npm-global": "installed commands, including qmd",
+    "~/.rustup": "the rustup toolchain",
+    "~/.cargo/git": "cargo source checkouts",
+    "~/.gradle/jdks": "installed JDKs",
+    "~/.gradle/wrapper": "the Gradle wrapper",
+    "~/go/pkg/sumdb": "Go checksum database",
+    "~/.config/openchamber/speech-models": "kokoro and parakeet speech models",
+    "~/.cache/spotify": "Spotify cache, kept on purpose",
+    "~/.cache/Codex": "Codex app browser storage",
+    "~/.cache/codex-runtimes": "codex-router puts its tools on PATH",
+    "~/.codex": "Codex sessions and archives",
+    "~/.claude": "Claude CLI sessions",
+    "~/.config/Claude": "Claude Desktop config",
+    "~/.grok": "Grok sessions",
+    "~/.openwiki": "app data; size only, a file inside can hold a secret",
+    "~/.opencode": "the OpenCode install",
+    "~/.local/share/baloo": "the KDE file index; a reindex grows it back",
+    "~/.local/share/mise": "mise tool installs, including Node; `mise prune` removes unused versions"
+  },
+  "backup_delete": {
+    ".cache": "app caches; each app refills its own",
+    ".npm": "the npm cache; the next npm install refills it",
+    ".bun/install/cache": "the Bun install cache; the next bun install refills it",
+    ".gradle/caches": "Gradle caches; the next Gradle build downloads them",
+    ".gradle/wrapper": "Gradle wrappers; the next Gradle build downloads them",
+    ".gradle/jdks": "JDKs Gradle installed; the next Gradle build downloads them",
+    "go/pkg": "Go's module and build caches; the next Go build downloads them",
+    ".rustup": "Rust toolchains; rustup installs them again",
+    ".cargo/registry": "the Cargo registry cache; the next `cargo fetch` refills it",
+    ".local/share/mise": "mise tool installs; `mise install` brings them back",
+    ".vscode-server/bin": "the VS Code server; the next remote connection installs it",
+    ".vscode-server/cli": "the VS Code server CLI; the next remote connection installs it",
+    ".vscode-server/extensions": "VS Code server extensions; the editor installs them again from its list"
+  },
+  "backup_trash": {
+    ".local/share/docker": "rootless Docker images, build cache, and volumes; a pull or build brings the images back, volume data does not come back",
+    ".local/share/containers": "Podman images and volumes; a pull brings the images back, volume data does not come back"
+  },
+  "inode_metadata": {
+    "btrfs": 704
+  }
+}

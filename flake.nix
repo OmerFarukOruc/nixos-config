@@ -96,6 +96,66 @@
       url = "github:OmerFarukOruc/stay-green";
       flake = false;
     };
+    skills-herdr = {
+      url = "github:herdrdev/herdr";
+      flake = false;
+    };
+    skills-ub-mode = {
+      url = "github:unclebob/ub-mode";
+      flake = false;
+    };
+    skills-improve = {
+      url = "github:shadcn/improve";
+      flake = false;
+    };
+    skills-compound-engineering = {
+      url = "github:EveryInc/compound-engineering-plugin";
+      flake = false;
+    };
+    skills-stop-slop = {
+      url = "github:hardikpandya/stop-slop";
+      flake = false;
+    };
+    skills-humanizer = {
+      url = "github:blader/humanizer";
+      flake = false;
+    };
+    skills-oh-my-opencode-slim = {
+      url = "github:alvinunreal/oh-my-opencode-slim";
+      flake = false;
+    };
+    skills-security-audit = {
+      url = "github:cloudflare/security-audit-skill";
+      flake = false;
+    };
+    skills-mattpocock = {
+      url = "github:mattpocock/skills";
+      flake = false;
+    };
+    skills-impeccable = {
+      url = "github:pbakaus/impeccable";
+      flake = false;
+    };
+    skills-avoid-ai-writing = {
+      url = "github:conorbronsdon/avoid-ai-writing";
+      flake = false;
+    };
+    skills-grill-for-unknowns = {
+      url = "github:nicobailon/grill-for-unknowns";
+      flake = false;
+    };
+    skills-diagram-design = {
+      url = "github:cathrynlavery/diagram-design";
+      flake = false;
+    };
+    skills-archify = {
+      url = "github:tt-a1i/archify";
+      flake = false;
+    };
+    skills-gh-stack = {
+      url = "github:github/gh-stack/v0.3.0";
+      flake = false;
+    };
   };
 
   outputs =

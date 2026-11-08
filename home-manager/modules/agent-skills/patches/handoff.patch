@@ -1,0 +1,11 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -13,4 +13,8 @@
+ 
+ Redact any sensitive information, such as API keys, passwords, or personally identifiable information.
+ 
++State every blocker or hold as a condition the next agent can check alone, such as "PRs #834 and #836 merged to master", with what it blocks and when it ends. A session nickname or a promised all-clear is not checkable. Give repository state as the command that reads it (`git log -1 origin/master`), never as a branch tip SHA, which goes stale within hours. Cite a file by path, adding `git show <sha>:<path>` only when one exact revision matters.
++
++When the next agent must read a document before it acts, name the section or a search pattern, such as "`docs/CONTRIBUTING.md`, section Git and review". Name a whole file only when the agent needs all of it.
++
+ If the user passed arguments, treat them as a description of what the next session will focus on and tailor the doc accordingly.

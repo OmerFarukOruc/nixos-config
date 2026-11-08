@@ -573,12 +573,268 @@
         "nixpkgs-spotify": "nixpkgs-spotify",
         "nvf": "nvf",
         "plasma-manager": "plasma-manager",
+        "skills-archify": "skills-archify",
+        "skills-avoid-ai-writing": "skills-avoid-ai-writing",
+        "skills-compound-engineering": "skills-compound-engineering",
+        "skills-diagram-design": "skills-diagram-design",
+        "skills-gh-stack": "skills-gh-stack",
+        "skills-grill-for-unknowns": "skills-grill-for-unknowns",
+        "skills-herdr": "skills-herdr",
+        "skills-humanizer": "skills-humanizer",
+        "skills-impeccable": "skills-impeccable",
+        "skills-improve": "skills-improve",
+        "skills-mattpocock": "skills-mattpocock",
+        "skills-oh-my-opencode-slim": "skills-oh-my-opencode-slim",
+        "skills-security-audit": "skills-security-audit",
+        "skills-stop-slop": "skills-stop-slop",
+        "skills-ub-mode": "skills-ub-mode",
         "sops-nix": "sops-nix",
         "spicetify-nix": "spicetify-nix",
         "stay-green": "stay-green",
         "tinted-vscode": "tinted-vscode",
         "vscode-vibrancy": "vscode-vibrancy",
         "warm-burnout": "warm-burnout"
+      }
+    },
+    "skills-archify": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793417559,
+        "narHash": "sha256-3zKID6YXx0VsaUpP5/sK0l2omvA23hD2VI+txfiVxP4=",
+        "owner": "tt-a1i",
+        "repo": "archify",
+        "rev": "a4065941f12be7967436261d9934784e381d423c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tt-a1i",
+        "repo": "archify",
+        "type": "github"
+      }
+    },
+    "skills-avoid-ai-writing": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793867224,
+        "narHash": "sha256-9/MhRipFZUjlq876igXq+FFr67FLjAIUAVNyUGniOiQ=",
+        "owner": "conorbronsdon",
+        "repo": "avoid-ai-writing",
+        "rev": "30971f1c50c6412a0c414e8c7b15032a32b21939",
+        "type": "github"
+      },
+      "original": {
+        "owner": "conorbronsdon",
+        "repo": "avoid-ai-writing",
+        "type": "github"
+      }
+    },
+    "skills-compound-engineering": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794094131,
+        "narHash": "sha256-b1zum3d1Wx8Ms/Xlit85HbbulApPUgEG+SViIEGXy5w=",
+        "owner": "EveryInc",
+        "repo": "compound-engineering-plugin",
+        "rev": "263498844fc024596db21110198d8222b1c98478",
+        "type": "github"
+      },
+      "original": {
+        "owner": "EveryInc",
+        "repo": "compound-engineering-plugin",
+        "type": "github"
+      }
+    },
+    "skills-diagram-design": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793978423,
+        "narHash": "sha256-QmERJUiJd8S85te6lBytY9OJXmnUZgTNB3gbtrEpRII=",
+        "owner": "cathrynlavery",
+        "repo": "diagram-design",
+        "rev": "e57eda6102a19444538ebd611d39534fad65b663",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cathrynlavery",
+        "repo": "diagram-design",
+        "type": "github"
+      }
+    },
+    "skills-gh-stack": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793057232,
+        "narHash": "sha256-dENuxVuz68Y7P8WW5C7pzVbfJRxGMGIKQ2AnWrTacOs=",
+        "owner": "github",
+        "repo": "gh-stack",
+        "rev": "2a49e6751238633db504655d8a8eba3e433e827d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "github",
+        "ref": "v0.3.0",
+        "repo": "gh-stack",
+        "type": "github"
+      }
+    },
+    "skills-grill-for-unknowns": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784588561,
+        "narHash": "sha256-AkYCu1iddkup7s3rIzsCSsZCOgzPKWVbbachi7UUju0=",
+        "owner": "nicobailon",
+        "repo": "grill-for-unknowns",
+        "rev": "d8d5f4b422b8be1301dd4a515d96589eaddc5f3c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nicobailon",
+        "repo": "grill-for-unknowns",
+        "type": "github"
+      }
+    },
+    "skills-herdr": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793278609,
+        "narHash": "sha256-0B58jR/v1vxbK7cwoq++SnOCsED0sHDkgqVMvsrjezE=",
+        "owner": "herdrdev",
+        "repo": "herdr",
+        "rev": "ee5bfb5041bb3e4a49d591c72308aae3c81ecdde",
+        "type": "github"
+      },
+      "original": {
+        "owner": "herdrdev",
+        "repo": "herdr",
+        "type": "github"
+      }
+    },
+    "skills-humanizer": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793171853,
+        "narHash": "sha256-KaAcA2rxlkae3DID4w3GFQbyXrnararlHVrL32C5jeE=",
+        "owner": "blader",
+        "repo": "humanizer",
+        "rev": "0ef9fe5bc3572734fd3ae6c448fe00a30cd5dcf0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "blader",
+        "repo": "humanizer",
+        "type": "github"
+      }
+    },
+    "skills-impeccable": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794008774,
+        "narHash": "sha256-idfQqFwpBydUYvJSF/+2ao3o8x7pO05wsX+wAeoFSzs=",
+        "owner": "pbakaus",
+        "repo": "impeccable",
+        "rev": "687bc381bc9091bf252c0a05303640561014a425",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pbakaus",
+        "repo": "impeccable",
+        "type": "github"
+      }
+    },
+    "skills-improve": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789212568,
+        "narHash": "sha256-czQV2LzhVddiT6kz0Wf3z+hHqGBgl4Zh/qw6hN3qEQw=",
+        "owner": "shadcn",
+        "repo": "improve",
+        "rev": "cac56e1ebd3c279aa9153616cfeac7b174ab90f9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "shadcn",
+        "repo": "improve",
+        "type": "github"
+      }
+    },
+    "skills-mattpocock": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793456610,
+        "narHash": "sha256-3vhd77xfZjKUYJsIwPFevIZPUAzUgZXr0RYj5NQrBwk=",
+        "owner": "mattpocock",
+        "repo": "skills",
+        "rev": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mattpocock",
+        "repo": "skills",
+        "type": "github"
+      }
+    },
+    "skills-oh-my-opencode-slim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793906691,
+        "narHash": "sha256-X7SLZCI9jJ8owTA4WQEzhfftRnTjTjzmOG2MyOu1QGY=",
+        "owner": "alvinunreal",
+        "repo": "oh-my-opencode-slim",
+        "rev": "9862fdee704d1d923b2691727441ece6736b5443",
+        "type": "github"
+      },
+      "original": {
+        "owner": "alvinunreal",
+        "repo": "oh-my-opencode-slim",
+        "type": "github"
+      }
+    },
+    "skills-security-audit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789414134,
+        "narHash": "sha256-oVVACjotkHvllQGxEP8yWaEt4c3GxT0d909TUM5P3NM=",
+        "owner": "cloudflare",
+        "repo": "security-audit-skill",
+        "rev": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cloudflare",
+        "repo": "security-audit-skill",
+        "type": "github"
+      }
+    },
+    "skills-stop-slop": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773773436,
+        "narHash": "sha256-JMqlCRVEAfwG1TLMDpnamznkBfkmX6e2XyETTTH/TSE=",
+        "owner": "hardikpandya",
+        "repo": "stop-slop",
+        "rev": "8da1f030185bdfe8471220585162991eaeb970e9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hardikpandya",
+        "repo": "stop-slop",
+        "type": "github"
+      }
+    },
+    "skills-ub-mode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793632109,
+        "narHash": "sha256-Az6UoipXKejGXnRHyhYk0NqVbYMqcjI5DEvSbyT0PFo=",
+        "owner": "unclebob",
+        "repo": "ub-mode",
+        "rev": "3da62bf3fcfd2034de41f30d920d2739e566171f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "unclebob",
+        "repo": "ub-mode",
+        "type": "github"
       }
     },
     "sops-nix": {

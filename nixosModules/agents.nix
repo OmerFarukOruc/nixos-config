@@ -16,6 +16,10 @@ in
       sopsFile = ../secrets/agents.yaml;
       owner = user;
     };
+    agents-linear-notes = {
+      sopsFile = ../secrets/agents.yaml;
+      owner = user;
+    };
   };
 
   home-manager.users.${user}.imports = [ ../home-manager/modules/agents.nix ];

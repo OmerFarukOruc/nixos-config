@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+usage() { echo "usage: sa-sandbox --run DIR <id> -- CMD..." >&2; exit 2; }
+[[ ${1:-} == --run && -n ${2:-} ]] || usage
+O=$(realpath -e -- "$2"); shift 2
+H=$(cd "$(dirname "$0")" && pwd)
+id=${1:-}; shift || true
+[[ $id =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "sa-sandbox: unsafe agent id" >&2; exit 2; }
+[[ ${1:-} == -- ]] || usage
+shift
+(( $# )) || usage
+S=$O/agents/$id/scratch
+mountpoint -q "$S" || { echo "sa-sandbox: REFUSED, $S is not a size-capped mount" >&2; exit 3; }
+fstype=$(findmnt -no FSTYPE "$S"); size=$(findmnt -bno SIZE "$S")
+if [[ $fstype != ext4 ]] || (( size > 5*1024*1024*1024 )); then
+  echo "sa-sandbox: REFUSED, scratch mount $fstype/$size not capped" >&2; exit 3
+fi
+
+spec=$(python3 -I "$H/runcfg.py" --run "$O" sandbox-spec "$S")
+shape='(.require|type=="array") and (.ro_binds|type=="array") and (.path|type=="array") and (.env|type=="object")
+  and (.files|type=="object") and ([.require[], .ro_binds[], .path[], .env[], .files[]] | all(type=="string"))
+  and ([.env | to_entries[] | select((.key | test("^(PATH|HOME|TMPDIR)$")) or (.key | test("^[A-Za-z_][A-Za-z0-9_]*$") | not) or (.value | test("\n")))] | length == 0)'
+jq -e "$shape" <<< "$spec" > /dev/null || { echo "sa-sandbox: REFUSED, malformed sandbox block in $O/run.json" >&2; exit 3; }
+mapfile -t require < <(jq -r '.require[]' <<< "$spec")
+for f in "${require[@]}"; do
+  [[ -x $f ]] || { echo "sa-sandbox: REFUSED, toolchain missing ($f)" >&2; exit 3; }
+done
+binds=()
+mapfile -t ro < <(jq -r '.ro_binds[]' <<< "$spec")
+for d in "${ro[@]}"; do
+  [[ -e $d ]] || { echo "sa-sandbox: REFUSED, bind source missing ($d)" >&2; exit 3; }
+  binds+=(--ro-bind "$d" "$d")
+done
+mapfile -t envs < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<< "$spec")
+toolpath=$(jq -r '.path | join(":")' <<< "$spec")
+inside_scratch() { [[ $(realpath -m -- "$1") == "$S"/* ]]; }
+refuse_outside_scratch() { echo "sa-sandbox: REFUSED, $1 leaves scratch" >&2; exit 3; }
+mkdir_inside_scratch() {
+  inside_scratch "$1" || refuse_outside_scratch "$1"
+  mkdir -p "$1"
+}
+write_inside_scratch_no_follow() {
+  local rel=$1 dest=$S/$1
+  mkdir_inside_scratch "$(dirname "$dest")"
+  [[ -L $dest ]] && rm -f -- "$dest"
+  inside_scratch "$dest" || refuse_outside_scratch "$dest"
+  jq -j --arg k "$rel" '.files[$k]' <<< "$spec" > "$dest"
+}
+for d in .home .tmp; do
+  mkdir_inside_scratch "$S/$d"
+done
+mapfile -t files < <(jq -r '.files | keys[]' <<< "$spec")
+for rel in "${files[@]}"; do
+  [[ $rel != /* && "/$rel/" != */../* ]] || { echo "sa-sandbox: REFUSED, unsafe sandbox file $rel" >&2; exit 3; }
+  write_inside_scratch_no_follow "$rel"
+done
+
+# System folders, read-only. NixOS keeps its tools under /run/current-system; other hosts keep them in /usr.
+sys=(--ro-bind /etc /etc)
+[[ -d /nix/store ]] && sys+=(--ro-bind /nix/store /nix/store)
+if [[ -d /run/current-system ]]; then
+  sys+=(--symlink /run/current-system/sw/bin /bin --symlink /run/current-system/sw/bin /usr/bin
+    --ro-bind /run/current-system /run/current-system)
+  syspath=/run/current-system/sw/bin
+  user=${USER:-$(id -un)}
+  [[ -d /etc/profiles/per-user/$user/bin ]] && syspath+=:/etc/profiles/per-user/$user/bin
+  envbin=/run/current-system/sw/bin/env
+else
+  sys+=(--ro-bind /usr /usr)
+  for d in /bin /sbin /lib /lib32 /lib64; do
+    if [[ -L $d ]]; then sys+=(--symlink "$(readlink "$d")" "$d"); elif [[ -d $d ]]; then sys+=(--ro-bind "$d" "$d"); fi
+  done
+  syspath=/usr/local/bin:/usr/bin:/bin
+  envbin=/usr/bin/env
+fi
+
+cwd=$S; [[ -d $S/src ]] && cwd=$S/src
+locks=${XDG_RUNTIME_DIR:-/tmp/sa-sandbox-$(id -u)}
+[[ -n ${XDG_RUNTIME_DIR:-} || -d $locks ]] || mkdir -m 700 "$locks"
+[[ -d $locks && ! -L $locks && -O $locks ]] || { echo "sa-sandbox: REFUSED, lock folder $locks is not owned by this user" >&2; exit 3; }
+exec 9>"$locks/sa-sandbox-slot-a.lock"; exec 8>"$locks/sa-sandbox-slot-b.lock"
+acquire_one_of_two_host_slots() { until flock -n 9 || flock -n 8; do sleep 2; done; }
+acquire_one_of_two_host_slots
+unit=sa-$id-$$
+check=$(mktemp -d "$O/.check.XXXXXX")
+cat > "$check/inner.sh" <<'INNER'
+#!/usr/bin/env bash
+set -euo pipefail
+close_slot_lock_fds() { exec 8>&- 9>&-; }
+close_slot_lock_fds
+cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+want_mem=$((5*1024*1024*1024))
+[[ $(cat "$cg/memory.max") == "$want_mem" ]] || { echo "sa-sandbox: REFUSED, memory.max not applied" >&2; exit 3; }
+[[ $(cat "$cg/memory.swap.max") == 0 ]] || { echo "sa-sandbox: REFUSED, swap not capped" >&2; exit 3; }
+[[ $(cat "$cg/pids.max") == 512 ]] || { echo "sa-sandbox: REFUSED, pids.max not applied" >&2; exit 3; }
+[[ $(cat "$cg/cpu.max") == "400000 100000" ]] || { echo "sa-sandbox: REFUSED, cpu.max not applied" >&2; exit 3; }
+exec "$@"
+INNER
+chmod +x "$check/inner.sh"
+set +e
+systemd-run --user --scope --quiet --collect --unit="$unit" \
+  -p MemoryMax=5G -p MemorySwapMax=0 -p TasksMax=512 -p CPUQuota=400% -p RuntimeMaxSec=1200 \
+  -- "$check/inner.sh" \
+  prlimit --fsize=536870912 --nofile=4096 --core=0 -- \
+  timeout --kill-after=15 1180 \
+  bwrap --unshare-all --die-with-parent --new-session --clearenv \
+    --proc /proc --dev /dev --tmpfs /tmp --tmpfs /run "${sys[@]}" \
+    "${binds[@]}" --bind "$S" "$S" --chdir "$cwd" \
+    -- "$envbin" -i \
+      PATH="${toolpath:+$toolpath:}$syspath" \
+      HOME="$S/.home" TMPDIR="$S/.tmp" LANG=C.UTF-8 TZ=UTC \
+      "${envs[@]}" \
+      "$@" </dev/null
+rc=$?
+set -e
+rm -rf "${check:?}"
+echo "sa-sandbox: exit $rc (limits: mem 5G, swap 0, tasks 512, cpu 400%, wall 1180s, fsize 512MiB, nofile 4096, disk 4GiB, net none)" >&2
+exit $rc

@@ -142,18 +142,20 @@ the Tailscale admin console, so it stays logged in.
 
 ## Claude Code and Codex setup
 
-The Claude Code and Codex setup comes from the dotfiles checkout at
-`~/Desktop/workspace/dotfiles`. Every hour, the user timer
-`desktop-sync.timer` runs that checkout's
-`desktop/bin/desktop-sync.sh`. Query it with `systemctl --user`. The
-script links the rules, skills, hooks and agents. It also syncs Claude Code's
-`settings.json` in both directions. The service sets `DESKTOP_SYNC_COMMIT=1`, so
-the script also commits the config files it recorded and pushes them to `main`,
-only while the checkout is on `main` and equal to `origin/main`.
+The Claude Code and Codex setup comes from this repository's `agents/` folder,
+which Home Manager links into the agents' folders
+([agents/README.md](../agents/README.md)). The dotfiles checkout at
+`~/Desktop/workspace/dotfiles` still holds the Codex agent files and the configs
+of grok, amp, OpenCode, OpenChamber and oracle. Every hour, the user timer
+`desktop-sync.timer` runs that checkout's `desktop/bin/desktop-sync.sh`, which
+links or copies them. Query it with `systemctl --user`. The service sets
+`DESKTOP_SYNC_COMMIT=1`, so the script also commits the config files it recorded
+and pushes them to `main`, only while the checkout is on `main` and equal to
+`origin/main`.
 
-Home Manager keeps the shell and tools, and adds one entry,
-`~/.claude/skills/claude-code-home-manager`, a plugin that gives Claude Code the
-`nixos` MCP server from `home-manager/modules/applications.nix`. The same
+Home Manager also adds `~/.claude/skills/claude-code-home-manager`, a plugin
+that gives Claude Code the `nixos` MCP server from
+`home-manager/modules/applications.nix`. The same
 server list is in `~/.config/mcp/mcp.json`.
 
 The unit does nothing until that checkout exists.

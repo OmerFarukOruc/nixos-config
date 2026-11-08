@@ -1,0 +1,6 @@
+interface:
+  display_name: "Create Dependency Upgrade Campaign"
+  short_description: "Publish a verified dependency upgrade campaign"
+  default_prompt: "Use $create-dependency-upgrade-campaign to research and publish a verified dependency campaign with a parent issue and linked subissues."
+policy:
+  allow_implicit_invocation: false

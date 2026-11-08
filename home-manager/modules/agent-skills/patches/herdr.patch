@@ -1,0 +1,12 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -3,6 +3,9 @@
+ description: "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1."
+ ---
+ 
++> Local note, not upstream: on devbox, start a named Claude agent with `claude-tools agent start`, which opens its own tab, and read `~/.claude/reference/headless-clis/herdr.md` ("Orchestrating agents") first.
++> The `pane split` advice below applies only when the user asks for a split.
++
+ # Herdr
+ 
+ Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding agents running inside panes, and exposes the current session through the `herdr` CLI.

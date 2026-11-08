@@ -1,0 +1,108 @@
+diff --git a/agents/openai.yaml b/agents/openai.yaml
+new file mode 100644
+--- /dev/null
++++ b/agents/openai.yaml
+@@ -0,0 +1,2 @@
++policy:
++  allow_implicit_invocation: false
+diff --git a/references/measurement.md b/references/measurement.md
+--- a/references/measurement.md
++++ b/references/measurement.md
+@@ -81,9 +81,11 @@ The SKILL.md body states this gate. Run `git status --porcelain`, filter the out
+ 
+ Run the measurement harness on the current code. Baseline and final confirmation always use the full configured protocol (`repeat_count` samples when mode is `repeat` or `ladder`; one run when mode is `stable`). Exploratory experiments later may spend less; the baseline must not.
+ 
++In every mode, compare the first baseline sample with a duration the spec, the plan, or the workload's own logs give for the same command, such as recent CI or benchmark times. When the sample falls outside that figure's range, or differs from a single figure by more than `measurement.stability.noise_threshold`, discard it and list what ran beside it (heavy processes in `ps`, `/proc/pressure/cpu` and `/proc/pressure/memory`), because a slowdown that hits every sample alike passes the variance check and skews every later comparison. When competing work shows up, wait until it ends and run the sample again. When none shows up, check that the figure measures the same work (cache state, command boundary); when the gap remains, record it as a measurement limitation for the 1.7 approval presentation and continue.
++
+ **If stability mode is `repeat` or `ladder`:**
+ Do not start this protocol until the counts that mode uses are coherent. Repeat needs a positive `repeat_count`. Ladder needs positive `exploratory_pairs` and `confirmation_repeats` (falling back to `repeat_count`) with confirmation at least the exploratory count. That is the same rule `scripts/decide.mjs` uses. A repeat-mode spec does not need ladder fields.
+-1. Run the harness that many times (`repeat_count` in repeat mode; the coherent confirmation count in ladder mode)
++1. Run the harness that many times (`repeat_count` in repeat mode; the coherent confirmation count in ladder mode), one sample per call, and read each sample's output before the next one starts, so a broken metric or an out-of-range first sample stops the protocol after one run
+ 2. Aggregate results using the configured aggregation method (median, mean, min, max)
+ 3. Calculate variance across runs
+ 4. If variance exceeds the configured comparison threshold, warn the user and suggest increasing `repeat_count`
+diff --git a/references/optimize-spec-schema.yaml b/references/optimize-spec-schema.yaml
+--- a/references/optimize-spec-schema.yaml
++++ b/references/optimize-spec-schema.yaml
+@@ -432,7 +432,7 @@ optional_fields:
+       codex_security:
+         type: enum
+         values:
+-          - full-auto                                # --full-auto (workspace write)
++          - workspace-write                          # --sandbox workspace-write
+           - yolo                                     # --dangerously-bypass-approvals-and-sandbox
+         default: null
+         description: "Codex security posture. If null, user is asked once per session."
+diff --git a/scripts/experiment-worktree.sh b/scripts/experiment-worktree.sh
+--- a/scripts/experiment-worktree.sh
++++ b/scripts/experiment-worktree.sh
+@@ -10,7 +10,6 @@
+ #   experiment-worktree.sh cleanup-all <spec_name>
+ #   experiment-worktree.sh count
+ #
+-# Worktrees are created at: .worktrees/optimize-<spec>-exp-<NNN>/
+ # Branches are named: optimize-exp/<spec>/exp-<NNN>
+ 
+ set -euo pipefail
+@@ -26,7 +25,7 @@ GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+   exit 1
+ }
+ 
+-WORKTREE_DIR="$GIT_ROOT/.worktrees"
++WORKTREE_DIR="$HOME/Desktop/workspace/worktrees/$(basename "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")")"
+ 
+ # Every path this script deletes is built from these two inputs, so they are
+ # checked before any path is composed: a name or shared path that can climb
+@@ -48,7 +47,7 @@ require_relative_inside() {
+ }
+ 
+ # Last-resort removal when git cannot remove a worktree. Only ever a direct
+-# child of .worktrees that this script named.
++# child of the worktrees folder that this script named.
+ remove_experiment_dir() {
+   local target="$1"
+   if [[ "$(dirname "$target")" != "$WORKTREE_DIR" ]] || [[ "$(basename "$target")" != optimize-*-exp-* ]] || [[ -L "$target" ]]; then
+@@ -67,17 +66,6 @@ experiment_branch_name() {
+   echo "optimize-exp/${spec_name}/exp-${padded_index}"
+ }
+ 
+-ensure_worktree_exclude() {
+-  local exclude_file
+-  exclude_file=$(git rev-parse --git-path info/exclude)
+-
+-  mkdir -p "$(dirname "$exclude_file")"
+-
+-  if ! grep -q "^\.worktrees$" "$exclude_file" 2>/dev/null; then
+-    echo ".worktrees" >> "$exclude_file"
+-  fi
+-}
+-
+ is_registered_worktree() {
+   local worktree_path="${1:?Error: worktree_path required}"
+ 
+@@ -147,7 +135,6 @@ create_worktree() {
+     reset_worktree_to_base "$worktree_path" "$branch_name" "$base_branch"
+   else
+     mkdir -p "$WORKTREE_DIR"
+-    ensure_worktree_exclude
+ 
+     # Create worktree from the base branch
+     if ! git worktree add -b "$branch_name" "$worktree_path" "$base_branch" --quiet 2>/dev/null; then
+@@ -271,7 +258,7 @@ cleanup_all() {
+ count_worktrees() {
+   local count=0
+   if [[ -d "$WORKTREE_DIR" ]]; then
+-    for worktree_path in "$WORKTREE_DIR"/*; do
++    for worktree_path in "$WORKTREE_DIR"/optimize-*; do
+       if [[ -d "$worktree_path" ]] && [[ -e "$worktree_path/.git" ]]; then
+         count=$((count + 1))
+       fi
+@@ -316,7 +303,7 @@ Commands:
+   cleanup-all  Remove all experiment worktrees for a spec
+   count        Count total active worktrees (for budget checking)
+ 
+-Worktrees:  .worktrees/optimize-<spec>-exp-<NNN>/
++Worktrees:  ~/Desktop/workspace/worktrees/<repo>/optimize-<spec>-exp-<NNN>/
+ Branches:   optimize-exp/<spec>/exp-<NNN>
+ EOF
+       ;;

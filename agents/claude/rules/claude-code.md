@@ -17,7 +17,7 @@
 
 ## Skills directory
 
-- `~/.claude/skills/<name>` entries are symlinks into `~/Desktop/workspace/dotfiles/desktop/skills/`, made by `desktop/bin/desktop-sync.sh`. Edit the target file, and run the sync script after you add or remove a skill.
+- Own skills in `~/.claude/skills/<name>` link into nixos-config `agents/skills/<name>`, so an edit there works at once; a new or removed folder needs a Home Manager switch. Upstream copies are read-only store paths: change one through its patch in `home-manager/modules/agent-skills/patches/` (nixos-config `agents/README.md`).
 
 ## Login
 

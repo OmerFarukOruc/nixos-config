@@ -24,6 +24,8 @@ let
   scheduledUnit = import ./scheduled-unit.nix { inherit config lib pkgs; };
 in
 {
+  imports = [ ./agent-skills ];
+
   options.oruc.agents.checkout = lib.mkOption {
     type = lib.types.str;
     default = "${config.home.homeDirectory}/Desktop/workspace/nixos-config";

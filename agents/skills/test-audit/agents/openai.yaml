@@ -1,0 +1,5 @@
+interface:
+  display_name: "Test audit"
+  short_description: "Audit a test suite and keep only tests that catch bugs"
+policy:
+  allow_implicit_invocation: false

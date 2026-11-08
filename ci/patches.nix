@@ -10,6 +10,8 @@ let
   };
   fixedUp = {
     proton-ge-bin = rog.proton-ge-bin.steamcompattool;
+    agent-skills =
+      nixosConfigurations.nixos-rog.config.home-manager.users.oruc.oruc.agents.upstreamSkills;
   };
   patchNeedsTools = [ "vscode" ];
   patchOnly =
@@ -44,13 +46,15 @@ let
           ../machines
         ]
       );
-  unlisted = lib.filter (
+  moduleName =
     file:
-    let
-      name = lib.removeSuffix ".nix" file;
-    in
-    !(patched ? ${name} || fixedUp ? ${name} || unchecked ? ${name})
-  ) (map baseNameOf patchingFiles);
+    if baseNameOf file == "default.nix" then
+      baseNameOf (dirOf file)
+    else
+      lib.removeSuffix ".nix" (baseNameOf file);
+  unlisted = lib.filter (name: !(patched ? ${name} || fixedUp ? ${name} || unchecked ? ${name})) (
+    map moduleName patchingFiles
+  );
 in
 {
   patches =
