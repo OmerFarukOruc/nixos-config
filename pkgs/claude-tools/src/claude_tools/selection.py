@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 
 from claude_tools.accounts import accounts
@@ -9,13 +10,14 @@ from claude_tools.store import now
 from claude_tools.usage import by_name, entries, locked_refresh
 
 SESSION_MAX, WEEK_MAX = 90, 95
-EVEN_BURN = 20
-MIN_ELAPSED = 900
+EVEN_BURN = {key: 100 / (length / 3600) for key, length in WINDOWS.items()}
+MIN_ELAPSED = {"five_hour": 900, "seven_day": WINDOWS["five_hour"]}
 REFRESH_BUDGET = 120
 RECENT = 60
-FIRST, TEAM, RESERVE, BLOCKED = range(4)
-GROUPS = ("first", "team", "reserve", "blocked")
+FIRST, LASTS, SHORT, BLOCKED = range(4)
+GROUPS = ("first", "lasts", "short", "blocked")
 CAPS = (("five_hour", SESSION_MAX), ("seven_day", WEEK_MAX))
+LABELS = {"five_hour": "5h", "seven_day": "7d"}
 
 
 def span(seconds: float) -> str:
@@ -35,16 +37,16 @@ def window_now(w: dict | None, at: int) -> tuple[float, int | None]:
     return w["used"], w["resets_at"]
 
 
-def burn(readings: list[dict], at: int) -> float:
+def burn(readings: list[dict], key: str, at: int) -> float:
     total = 0.0
     for e in readings:
-        w, checked = e.get("five_hour"), e.get("checked")
+        w, checked = e.get(key), e.get("checked")
         if not w or not checked or not w.get("resets_at") or w["resets_at"] <= at:
             continue
-        elapsed = WINDOWS["five_hour"] - (w["resets_at"] - checked)
-        if elapsed >= MIN_ELAPSED:
+        elapsed = WINDOWS[key] - (w["resets_at"] - checked)
+        if elapsed >= MIN_ELAPSED[key]:
             total += w["used"] * size(e.get("plan")) / (elapsed / 3600)
-    return max(total, EVEN_BURN)
+    return max(total, EVEN_BURN[key])
 
 
 def readable(e: dict) -> bool:
@@ -60,50 +62,50 @@ def blocked(e: dict, held: bool, at: int) -> str | None:
         return "no reading yet"
     if not readable(e):
         return "usage unreadable"
-    for (key, cap), label in zip(CAPS, ("5h", "7d")):
+    for key, cap in CAPS:
         used = window_now(e.get(key), at)[0]
         if used >= cap:
-            return f"{label} at {used:.0f}%"
+            return f"{LABELS[key]} at {used:.0f}%"
     return None
 
 
-def five_room(e: dict, rate: float, at: int) -> tuple[bool, float, int, str]:
-    five, five_reset = window_now(e.get("five_hour"), at)
-    five_left = (five_reset or at + WINDOWS["five_hour"]) - at
-    room = (SESSION_MAX - five) * size(e.get("plan"))
-    lasts = not five_reset or room / rate * 3600 >= five_left
-    return lasts, room, five_left, f"{SESSION_MAX - five:.0f}% left in 5h"
+def runs_out(e: dict, key: str, cap: int, rate: float, at: int) -> float:
+    used, reset = window_now(e.get(key), at)
+    seconds = (cap - used) * size(e.get("plan")) / rate * 3600
+    return seconds if reset and seconds < reset - at else math.inf
 
 
-def team_place(e: dict, rate: float, at: int) -> tuple[tuple, str]:
-    lasts, room, five_left, short = five_room(e, rate, at)
-    if lasts:
-        started = window_now(e.get("five_hour"), at)[1]
-        return (TEAM, 0, five_left), f"lasts to its 5h reset in {span(five_left)}" if started else "5h window not started"
-    return (TEAM, 1, -room), short
-
-
-def weekly_place(e: dict, rate: float, at: int) -> tuple[tuple, str]:
-    lasts, _, _, short = five_room(e, rate, at)
-    tail = "" if lasts else f" · {short}"
-    week, week_reset = window_now(e.get("seven_day"), at)
-    if week_reset and (WEEK_MAX - week) * size(e.get("plan")) / rate * 3600 >= week_reset - at:
+def place(e: dict, rates: dict[str, float], at: int) -> tuple[tuple, str]:
+    lasts_for = {key: runs_out(e, key, cap, rates[key], at) for key, cap in CAPS}
+    out = min(lasts_for, key=lasts_for.get)
+    five_reset, week_reset = window_now(e.get("five_hour"), at)[1], window_now(e.get("seven_day"), at)[1]
+    lasts = lasts_for[out] >= (five_reset or at + WINDOWS["five_hour"]) - at
+    short = "" if lasts else f"{LABELS[out]} limit in about {span(lasts_for[out])}"
+    if week_reset and lasts_for["seven_day"] == math.inf:
+        week = window_now(e["seven_day"], at)[0]
         return ((FIRST, not lasts, week_reset),
-                f"{WEEK_MAX - week:.0f}% of the week unused, resets in {span(week_reset - at)}{tail}")
-    left = f"week resets in {span(week_reset - at)}" if week_reset else "week not started"
-    return (RESERVE, not lasts, week_reset or at + WINDOWS["seven_day"]), f"reserve · {left}{tail}"
+                f"{WEEK_MAX - week:.0f}% of the week unused, resets in {span(week_reset - at)}"
+                + (f" · {short}" if short else ""))
+    if short:
+        return (SHORT, -lasts_for[out]), short
+    if five_reset:
+        why = f"lasts to its 5h reset in {span(five_reset - at)}"
+    elif e.get("five_hour"):
+        why = "5h window not started"
+    else:
+        why = f"week resets in {span(week_reset - at)}" if week_reset else "week not started"
+    return (LASTS, week_reset or at + WINDOWS["seven_day"]), why
 
 
 def order(readings: dict[str, dict], names: list[str], held: set[str], at: int) -> list[tuple[str, int, str]]:
-    rate = burn(list(readings.values()), at)
+    rates = {key: burn(list(readings.values()), key, at) for key in WINDOWS}
     places = []
     for i, n in enumerate(names):
         e = readings.get(n) or {}
         if why := blocked(e, n in held, at):
             places.append(((BLOCKED, i), n, why))
         else:
-            place = team_place if (e.get("plan") or "").startswith("team") else weekly_place
-            key, why = place(e, rate, at)
+            key, why = place(e, rates, at)
             places.append((key, n, why))
     return [(n, key[0], why) for key, n, why in sorted(places)]
 

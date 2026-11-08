@@ -25,14 +25,12 @@ fail() {
 }
 
 "$tools" usage --json --max-age 600 >"$dir/real-usage.json"
-signed_in() {
-  jq -r '.accounts[] | select(.plan != null and (.state == "ok" or .state == "expiring"))
-    | "\(.plan | startswith("team"))\t\(.name)"' "$dir/real-usage.json"
-}
-A=${CR_E2E_A:-$(signed_in | awk -F '\t' '$1 == "true" { print $2; exit }')}
-R=${CR_E2E_R:-$(signed_in | awk -F '\t' '$1 == "false" { print $2; exit }')}
-C=${CR_E2E_C:-$(signed_in | awk -F '\t' -v a="$A" -v r="$R" '$2 != a && $2 != r { print $2; exit }')}
-[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a team account, a personal account and a third account that are signed in; set CR_E2E_A, CR_E2E_R and CR_E2E_C"
+R=${CR_E2E_R:-$(jq -r 'first(.accounts[] | select(.plan != null and (.state == "ok" or .state == "expiring")) | .name) // empty' \
+  "$dir/real-usage.json")}
+other() { profiles names | awk -v r="$R" -v a="${A:-}" '$0 != r && $0 != a { print; exit }'; }
+A=${CR_E2E_A:-$(other)}
+C=${CR_E2E_C:-$(other)}
+[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a signed-in account and two more accounts; set CR_E2E_R, CR_E2E_A and CR_E2E_C"
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
 done
@@ -45,10 +43,11 @@ jq --arg d "$D" --arg m "$M" 'del(.accounts[$d]) | .accounts[$m] = {email: "e2e@
 jq --arg a "$A" --arg c "$C" --arg r "$R" --arg d "$D" --argjson now "$(date +%s)" '
   def w($u): {used: $u, resets_at: ($now + 3600)};
   .updated = $now | .hosts = []
-  | .accounts |= map(select(.name != $d) | .state = "ok" | .five_hour = w(95) | .seven_day = w(95)
-      | if .name == $a then .five_hour = w(1) | .seven_day = w(1)
+  | .accounts |= map(select(.name != $d) | .state = "ok" | del(.checked) | .five_hour = w(95) | .seven_day = w(95)
+      | if .name == $a then .plan = "team 5x" | .checked = $now | .five_hour = {used: 1, resets_at: ($now + 4 * 3600)}
+          | .seven_day = {used: 93, resets_at: ($now + 3 * 86400)}
         elif .name == $c then .five_hour = w(0) | .seven_day = w(0)
-        elif .name == $r then .five_hour = w(1) | .seven_day = {used: 1, resets_at: ($now + 6 * 86400)} else . end)' \
+        elif .name == $r then .checked = $now | .five_hour = w(1) | .seven_day = {used: 1, resets_at: ($now + 6 * 86400)} else . end)' \
   "$dir/real-usage.json" >"$dir/cache/usage.json"
 mkdir -p "$dir/state"
 jq -n --arg c "$C" --argjson u "$(($(date +%s) + 3600))" '{($c): {until: $u, reason: "e2e seed"}}' >"$dir/state/limits.json"
@@ -76,16 +75,16 @@ screen=$(picker "$run")
 ! grep -q "^.\{6\}$D " <<<"$screen" || fail "the picker lists $D, which accounts.json does not list"
 grep -q "^      $M .*no login here · claude-tools accounts login $M" <<<"$screen" ||
   fail "the picker does not show $M, which accounts.json lists and this host has no folder for, as unpickable"
-grep -q "^ ❯ 1  $A .*★ " <<<"$screen" || fail "the picker does not hold $A first under the cursor"
-grep -A1 -- "── reserve: weekly limit" <<<"$screen" | grep -q "^   2  $R .*reserve · week resets in" ||
-  fail "the picker does not put the weekly-limited $R after the team account $A, under the reserve line"
+grep -q "^ ❯ 1  $R .*★ " <<<"$screen" || fail "the picker does not hold $R first under the cursor"
+grep -A1 -- "── reaches a limit before its 5h reset" <<<"$screen" | grep -q "^   2  $A .*7d limit in about" ||
+  fail "the picker does not put the team account $A, whose week is at 93%, after $R, under the reaches-a-limit line"
 grep -q "^   [0-9]  $C .*held back after a limit" <<<"$screen" || fail "the picker does not show $C as held back"
 t send-keys -t "$run" Down
 sleep 1
-! grep -q "^ ❯ [0-9]  $A " <<<"$(t capture-pane -p -t "$run")" || fail "Down did not move the cursor off $A"
+! grep -q "^ ❯ [0-9]  $R " <<<"$(t capture-pane -p -t "$run")" || fail "Down did not move the cursor off $R"
 t send-keys -t "$run" Up
 sleep 1
-grep -q "^ ❯ [0-9]  $A " <<<"$(t capture-pane -p -t "$run")" || fail "Up did not bring the cursor back to $A"
+grep -q "^ ❯ [0-9]  $R " <<<"$(t capture-pane -p -t "$run")" || fail "Up did not bring the cursor back to $R"
 t send-keys -t "$run" Enter
 
 child() {
@@ -128,11 +127,11 @@ settle() {
 settle
 first=$(child)
 [[ -n "$first" ]] || fail "claude-tools rotate started no claude"
-[[ "$(account_of "$(cut -f2 <<<"$first")")" == "$A" ]] || fail "the session started on $(account_of "$(cut -f2 <<<"$first")"), not $A"
+[[ "$(account_of "$(cut -f2 <<<"$first")")" == "$R" ]] || fail "the session started on $(account_of "$(cut -f2 <<<"$first")"), not $R"
 argv=$(cut -f3 <<<"$first")
 grep -q -- "--model haiku" <<<"$argv" || fail "the session dropped --model haiku: $argv"
 grep -q -- "--dangerously-skip-permissions" <<<"$argv" || fail "the session dropped --dangerously-skip-permissions: $argv"
-echo "start: the picker held $C back and started $A on enter"
+echo "start: the picker held $C back and started $R on enter"
 
 type_line "/exit"
 for _ in $(seq 20); do

@@ -6,7 +6,7 @@ import termios
 
 from claude_tools.display import login_left, window_view
 from claude_tools.limits import WINDOWS
-from claude_tools.selection import BLOCKED, RESERVE, order, span
+from claude_tools.selection import BLOCKED, SHORT, order, span
 from claude_tools.store import now
 from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, visible
 
@@ -107,8 +107,8 @@ class Picker:
         lines = [title + " " * max(1, width - visible(title) - len(checked) - 1) + cards.c(checked, DIM), ""]
         wname = max((len(n) for n in self.names), default=8)
         for k, n in enumerate(self.rows):
-            if self.group[n] == RESERVE and (k == 0 or self.group[self.rows[k - 1]] != RESERVE):
-                lines.append(" " + cards.c("── reserve: weekly limit ", DIM))
+            if self.group[n] == SHORT and (k == 0 or self.group[self.rows[k - 1]] != SHORT):
+                lines.append(" " + cards.c("── reaches a limit before its 5h reset ", DIM))
             lines.append(self.row(n, width, wname))
         if self.choices:
             lines += ["", " " + cards.c("─" * max(10, width - 2), DIM), *self.detail(self.choices[self.i], width)]
