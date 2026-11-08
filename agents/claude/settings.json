@@ -99,8 +99,8 @@
     "modern-web-guidance@googlechrome": true,
     "impeccable@impeccable": true,
     "eli5@claude-community": true,
-    "avoid-ai-writing@conorbronsdon-skills": true,
-    "grill-for-unknowns@grill-for-unknowns-marketplace": true,
+    "avoid-ai-writing@conorbronsdon-skills": false,
+    "grill-for-unknowns@grill-for-unknowns-marketplace": false,
     "diagram-design@diagram-design": true
   },
   "extraKnownMarketplaces": {
@@ -128,20 +128,6 @@
       "source": {
         "source": "github",
         "repo": "pbakaus/impeccable"
-      },
-      "autoUpdate": true
-    },
-    "conorbronsdon-skills": {
-      "source": {
-        "source": "github",
-        "repo": "conorbronsdon/avoid-ai-writing"
-      },
-      "autoUpdate": true
-    },
-    "grill-for-unknowns-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "nicobailon/grill-for-unknowns"
       },
       "autoUpdate": true
     },

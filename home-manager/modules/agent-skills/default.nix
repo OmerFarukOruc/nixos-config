@@ -59,12 +59,10 @@ let
     avoid-ai-writing = {
       src = inputs.skills-avoid-ai-writing;
       path = "skills/avoid-ai-writing";
-      plugin = true;
     };
     grill-for-unknowns = {
       src = inputs.skills-grill-for-unknowns;
       path = "plugins/grill-for-unknowns";
-      plugin = true;
     };
     diagram-design = {
       src = inputs.skills-diagram-design;
