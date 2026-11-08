@@ -11,11 +11,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "impeccable";
-  version = "4.8.0";
+  version = "4.8.1";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/impeccable/-/impeccable-${finalAttrs.version}.tgz";
-    hash = "sha512-e0+wbJppJMiQN8npKmIkBbKetfSlarak7OIGlsRhc8folekz4PgStjuprhYi+imjqBb6OCMJLV9II2hHGmcCyg==";
+    hash = "sha512-Ivj58vndEIbcAA2+GbaHEXpZ4t0uSMHKz9leyH1uslxHntnq/CDpLLH9bUYqp7jrZmkU2ObSNmKw5vbDEKOFKQ==";
   };
 
   nativeBuildInputs = [ makeWrapper ];
