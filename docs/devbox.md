@@ -128,18 +128,21 @@ advertisements are off.
 ## Telemetry
 
 `nixosModules/telemetry.nix` is for every server. `oruc.telemetry.enable` turns
-it on, and the host passes its environment name, the endpoint, and the units
-to ship (`configuration.nix` does this for this box).
+it on, and the host passes its environment name and the endpoint
+(`configuration.nix` does this for this box).
 The host name defaults to `networking.hostName`. The module holds no host value.
 
 It runs one OpenTelemetry collector, the contrib build, as
-`opentelemetry-collector.service`, plus `auditd`. The collector exports over
-gRPC with TLS to the central endpoint (SigNoz) and keeps its queue and the
-journal cursors under `/var/lib/opentelemetry-collector`. Each exporter's
-queue holds at most 256 MiB on disk (`queue_size`, by bytes), so a restart or
-an outage loses nothing that fits in it and in the retry window. While the
-export fails, a full queue drops new records: on this box both queues are full
-and drop data, because the export to SigNoz fails (Certificates, below).
+`opentelemetry-collector.service`, plus `auditd`. The collector exports metrics
+over gRPC to the central endpoint (SigNoz) without TLS (`insecure = true`),
+because the gateway's receiver has none and WireGuard encrypts the traffic
+between the tailnet nodes. Status Lantern's tailnet policy opens the gateway's
+`tcp:4317` to this box through the grant from `tag://personal/infra-agent`
+(Status Lantern `docs/observability.md`, Paths). The collector keeps its queue
+under `/var/lib/opentelemetry-collector`. The exporter's queue holds at most
+256 MiB on disk (`queue_size`, by bytes), so a restart or an outage loses
+nothing that fits in it and in the retry window. While the export fails, a full
+queue drops new records.
 
 - **Metrics** every 60 s: CPU, disk, filesystem, load, memory, network (without
   `veth`, `br-` and `docker` interfaces), paging, processes and system, the
@@ -150,40 +153,22 @@ and drop data, because the export to SigNoz fails (Certificates, below).
 - **Certificates** every hour: `tlscheck.time_left` for each file in
   `certificates`. This box lists its IAM Roles Anywhere certificate,
   `~/.aws/rolesanywhere/leaf.pem` of omer, which the AWS profile
-  `statuslantern` signs with. Status Lantern's SigNoz rule "Certificate
-  expires within 30 days" (`signoz/rules/certificate-expiring.json` in that
-  repository) groups by host and file and posts to Slack, so a certificate
-  under 30 days alerts there once the box's export reaches SigNoz. It does
-  not today: Status Lantern's tailnet policy opens the gateway's `tcp:4317`
-  only to its own hosts, so every export fails with `Unavailable`. systemd
+  `statuslantern` signs with. Status Lantern's SigNoz rule `devbox AWS
+  certificate expiring or missing` (`signoz/rules/devbox-certificate.json` in
+  that repository) posts to Slack when the certificate has under 30 days left
+  or its metric is missing for 2 hours, with the renewal steps of [AWS
+  certificate](#aws-certificate). systemd
   hands the collector a copy of each file (`LoadCredential`, with an empty
   `SetCredential` default), so a missing file only makes that receiver
   report a scrape error. `opentelemetry-collector-certificates.path` reloads
   the copies when a file changes, such as at a renewal, without a restart
   (`RefreshOnReload=credentials`). The VM test checks that the metric of its
   own test certificate reaches the sink.
-- **OTLP** on `127.0.0.1:4318` (HTTP) for host processes. Metrics and traces
-  carry `host.id`, `host.name` and `deployment.environment.name`.
-- **Logs**, retried without a time limit. `service.name=host-audit` holds the
-  sshd journal and the audit records, from the start of the journal on a first
-  start. `service.name=infra-units` holds the lines of `journalUnits` at
-  priority info and above, from the end of the journal on a first start. The
-  name keeps the old one so existing SigNoz queries match. The Debian box
-  listed 16 patterns of infra units. The new box lists `caddy.service`,
-  `acme-*.service`, `xrdp.service` and `xrdp-sesman.service`, and
-  `nixosModules/auto-upgrade.nix` adds `nixos-upgrade.service`, so each service that comes to the box later
-  needs its unit in `journalUnits` before its lines ship.
-  The lines of user units ship under the same `service.name` through
-  `journalUserUnits`, which lists exact names, because a glob matches nothing
-  there. This box lists `docker.service`, `cliproxy.service` and
-  `cliproxy-update.service`; `cliproxy-up.sh` prints no share host name,
-  because that name is a secret. A line carries `_SYSTEMD_USER_UNIT`
-  when the unit wrote it and `USER_UNIT` when the user's systemd wrote it about
-  the unit, such as a start or the failure after a start limit, and both carry
-  `_UID`. The receiver has no `--user-unit` option, and that option would read
-  only the collector's own uid, so the module matches both fields. The
-  collector reads the user journals (`user-<uid>.journal`) through the same
-  `systemd-journal` group as the system journal.
+- **OTLP** on `127.0.0.1:4318` (HTTP) for the metrics of host processes. Every
+  metric carries `host.id`, `host.name` and `deployment.environment.name`.
+- **Logs** do not leave the box. The module has no log pipeline, so the sshd
+  lines, the audit records and every unit's lines stay in the journal, where
+  `journalctl` reads them.
 - The endpoint is a public DNS name that resolves to a tailnet address, so it
   answers only on the tailnet. It is a plain option and no secret.
 
@@ -191,8 +176,8 @@ The module also sets sshd's `LogLevel` to `VERBOSE`, which is what the Debian
 box logs at. `Accepted publickey` carries the key's fingerprint at the default
 level too.
 
-**Audit rules** are in `security.audit.rules`. They keep the keys that SigNoz
-shows today, ported to NixOS paths:
+**Audit rules** are in `security.audit.rules`. They keep the keys of the Debian
+box, ported to NixOS paths:
 
 | Key | Watches |
 | --- | --- |
@@ -219,33 +204,19 @@ goes away.
 
 The audit records reach the journal through auditd's syslog plugin
 (`SYSLOG_IDENTIFIER=audisp-syslog`), and `systemd-journald-audit.socket` is off.
-Records that journald reads from that socket have no `PRIORITY`, and the
-collector's journald receiver always passes `--priority`, so it would never ship
-them.
 
-Changes from the Debian setup. One collector replaces the two there, because on
-NixOS it reads the journal through the `systemd-journal` group and needs no
-chroot. Health checks and self-metrics use `127.0.0.1:13133` and
-`127.0.0.1:8888`. The filters that dropped the start and stop records of
-`sysbox-fuse-watchdog`, `infra-reconcile@infra` and `fleet-bots-pin`, and the
-watchdog's run lines, are gone with those units. systemd sends a
-`SERVICE_START` and a `SERVICE_STOP` record for every unit start, and the
-collector now ships all of them. A unit that starts often, such as the deploy
-timer, adds noise. Add a filter when SigNoz shows it.
+Changes from the Debian setup. One collector replaces the two there. Health
+checks and self-metrics use `127.0.0.1:13133` and `127.0.0.1:8888`.
 
 The boot test covers it in `ci/server-boot/checks/10-telemetry.py`. Its module
 `ci/server-boot/modules/telemetry.nix` points the collector at a second
-collector on loopback (a sink that writes files). The check logs in as omer
-over SSH, restarts `suid-sgid-wrappers` and checks that the `sudo-exec` rule
-stays, runs `sudo` to change a file under `/etc`, reads a secret as
-`nobody`, which the `credstore` rule logs although the read fails, stops the
-collector for a second login, and checks that the sink got each record after
-the restart, the unit journal line, the info line of a user unit of omer and
-the manager's line about it (not its debug line), and the host metrics. It proves that the
-collector loads its config, that auditd loads the rules, and that the audit and
-sshd records travel through the journal into the collector's pipeline and out
-over OTLP. It does not prove TLS, the real endpoint, or
-delivery to SigNoz, which the cutover proves.
+collector on loopback (a sink that writes files). The check restarts
+`suid-sgid-wrappers` and checks that the `sudo-exec` rule stays, that auditd
+loads the rules, that sshd logs at `VERBOSE`, that the sink gets the host
+metrics and the test certificate's `tlscheck.time_left`, that a journal line
+with the audit identifier is not in the sink's log file 15 seconds later, and
+that the collector's journal has no `error` line. It does not prove the real
+endpoint or delivery to SigNoz.
 
 ## AWS certificate
 
@@ -255,8 +226,8 @@ the CN `devbox` from the trust anchor `statuslantern-agent-ca`; `arns.env` in
 the same folder holds the trust anchor and profile ARNs. The daily user unit
 `aws-certificate-check` (`machines/devbox/home.nix`) fails when the certificate
 expires within 30 days or is missing, and each new shell then prints a line
-until a run passes, because the SigNoz alert of [Telemetry](#telemetry) does
-not reach Slack while the box's export fails.
+until a run passes. The SigNoz rule `devbox AWS certificate expiring or
+missing` ([Telemetry](#telemetry)) alerts too.
 
 To renew it, first copy the CA key to the box from nixos-desktop or nixos-rog,
 whose Infisical CLI is signed in; the box's CLI has no login
@@ -336,7 +307,7 @@ everywhere and connects from the tailnet only.
   no behaviour. Responses stream (`flush_interval -1`), and `grace_period 10s`
   (the Debian Caddyfile's value) keeps open event streams from holding a
   restart until systemd's stop timeout. A Caddy failure shows only in the
-  journal, which reaches SigNoz without an alert; a config error exits with
+  journal; a config error exits with
   status 1, which the NixOS module never restarts.
 - The admin API is off, so a change restarts Caddy and does not reload it.
 - Caddy is ordered after the order units (`acme-order-renew-*`). Every
@@ -382,13 +353,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   container publishes without an address listens on every address, so tailnet
   peers reach it, and the firewall blocks the public interface. If
   `docker.service` (a user unit) fails three times in 60 s it stays failed.
-  `journalUserUnits` ships its journal lines at priority info and above to
-  SigNoz, including the line of omer's systemd about the failure
-  ([Telemetry](#telemetry)). The failure line is the signal an alert rule can
-  use. The SigNoz alert rules live in statuslantern-scraper's
-  `deploy/signoz/alerts/`, and none reads these lines yet, so only someone on
-  the host sees the failed state. `Devbox update failed` there reads the same
-  kind of line for `nixos-upgrade.service`.
+  The failure shows in `systemctl --user --failed` and in the journal.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
   `DOCKER_HOST`, the docker CLI and its Compose plugin. `podman.service`, which
@@ -653,8 +618,7 @@ that give a graphical user fonts, a browser and the keyboard layout to apply
   lock the Cursor worker's session, and xrdp checks the password at every
   login and reconnect.
 - **Logs.** xrdp's logs go to the journal, where the NixOS module sends them to
-  `/dev/null`, and `journalUnits` lists `xrdp.service` and
-  `xrdp-sesman.service`.
+  `/dev/null`, so a failed xrdp unit shows in `systemctl --failed`.
 - **Audio.** PipeWire runs on the box, because `programs.labwc` of the agent
   runtime turns on nixpkgs' `services.graphical-desktop`, which turns PipeWire
   on. nixpkgs' `services.xrdp.audio` loads only a PulseAudio module, so

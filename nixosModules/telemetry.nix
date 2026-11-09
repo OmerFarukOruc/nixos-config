@@ -11,56 +11,28 @@ let
   stateDirectory = "/var/lib/opentelemetry-collector";
   credentialsDirectory = "/run/credentials/opentelemetry-collector.service";
   watchCertificates = cfg.certificates != { };
-  journalctl = lib.getExe' pkgs.systemd "journalctl";
 
-  resource =
-    {
-      service ? null,
-      environment ? false,
-    }:
-    {
-      attributes = [
-        {
-          key = "host.id";
-          value = cfg.hostName;
-          action = "upsert";
-        }
-        {
-          key = "host.name";
-          value = cfg.hostName;
-          action = "insert";
-        }
-      ]
-      ++ lib.optional environment {
+  resource = {
+    attributes = [
+      {
+        key = "host.id";
+        value = cfg.hostName;
+        action = "upsert";
+      }
+      {
+        key = "host.name";
+        value = cfg.hostName;
+        action = "insert";
+      }
+      {
         key = "deployment.environment.name";
         value = cfg.environment;
         action = "insert";
       }
-      ++ lib.optional (service != null) {
-        key = "service.name";
-        value = service;
-        action = "upsert";
-      };
-    };
+    ];
+  };
 
-  # Every journald receiver (audit, and units and user units when their lists
-  # are set) keeps its cursor in the file store, so a restart of the collector
-  # resumes without a gap or a repeat. `all` is needed because journalctl
-  # returns a record over 4096 bytes as a null MESSAGE without it.
-  journald =
-    extra:
-    {
-      journalctl_path = journalctl;
-      all = true;
-      storage = "file_storage/state";
-      retry_on_failure = {
-        enabled = true;
-        max_elapsed_time = 0;
-      };
-    }
-    // extra;
-
-  exporter = maxElapsed: {
+  exporter = {
     inherit (cfg) endpoint;
     timeout = "5s";
     tls.insecure = cfg.insecure;
@@ -69,7 +41,7 @@ let
       initial_interval = "5s";
       randomization_factor = 0.5;
       max_interval = "30s";
-      max_elapsed_time = maxElapsed;
+      max_elapsed_time = "90m";
     };
     sending_queue = {
       enabled = true;
@@ -78,26 +50,10 @@ let
       queue_size = 268435456;
     };
   };
-
-  userUnitMatches = lib.concatMap (unit: [
-    { _SYSTEMD_USER_UNIT = unit; }
-    { USER_UNIT = unit; }
-  ]) cfg.journalUserUnits;
-
-  unitReceivers =
-    lib.optional (cfg.journalUnits != [ ]) "journald/units"
-    ++ lib.optional (cfg.journalUserUnits != [ ]) "journald/user_units";
-
-  agentProcessors = [
-    "memory_limiter"
-    "resource/agent"
-    "resourcedetection"
-    "batch"
-  ];
 in
 {
   options.oruc.telemetry = {
-    enable = lib.mkEnableOption "the collector and the audit daemon that report to the central OTLP endpoint";
+    enable = lib.mkEnableOption "the collector that reports metrics to the central OTLP endpoint, and the audit daemon";
 
     hostName = mkOption {
       type = types.str;
@@ -109,7 +65,7 @@ in
     environment = mkOption {
       type = types.str;
       example = "development";
-      description = "Value of deployment.environment.name on metrics and traces.";
+      description = "Value of deployment.environment.name on metrics.";
     };
 
     endpoint = mkOption {
@@ -121,7 +77,7 @@ in
     insecure = mkOption {
       type = types.bool;
       default = false;
-      description = "Export without TLS. Only for an endpoint on loopback.";
+      description = "Export without TLS. Only for an endpoint on loopback or inside a tailnet, where WireGuard encrypts the traffic.";
     };
 
     localOtlpPort = mkOption {
@@ -141,31 +97,6 @@ in
       '';
     };
 
-    journalUnits = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-      example = [ "caddy.service" ];
-      description = ''
-        Units whose journal lines ship at priority info or above, from the end
-        of the journal at the first start. Globs work. sshd and the audit
-        records ship without this list.
-      '';
-    };
-
-    journalUserUnits = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-      example = [ "docker.service" ];
-      description = ''
-        User units, of any user, whose journal lines ship at priority info or
-        above, from the end of the journal at the first start. A name is exact,
-        and a glob matches nothing. The lines are the unit's own and the ones
-        that the user's systemd writes about it, so a start limit that leaves
-        the unit failed ships too. The lines carry `_SYSTEMD_USER_UNIT` or
-        `USER_UNIT` and `_UID`.
-      '';
-    };
-
     certificates = mkOption {
       type = types.attrsOf types.path;
       default = { };
@@ -176,15 +107,9 @@ in
         PEM certificate files, by name, whose time to expiry the collector
         reports every hour as `tlscheck.time_left`. The collector reads a copy
         that systemd takes (`LoadCredential`). A missing file leaves an empty
-        copy, so that receiver reports a scrape error while the other pipelines
+        copy, so that receiver reports a scrape error while the other receivers
         run, and a change to a file reloads the copy without a restart.
       '';
-    };
-
-    unitsServiceName = mkOption {
-      type = types.str;
-      default = "infra-units";
-      description = "Value of service.name on the lines of `journalUnits` and `journalUserUnits`.";
     };
   };
 
@@ -251,24 +176,6 @@ in
               metrics."system.filesystem.utilization".enabled = true;
             };
           };
-          "journald/audit" = journald {
-            start_at = "beginning";
-            priority = "debug";
-            matches = [
-              { _SYSTEMD_UNIT = "sshd.service"; }
-              { SYSLOG_IDENTIFIER = "audisp-syslog"; }
-            ];
-          };
-          "journald/units" = lib.mkIf (cfg.journalUnits != [ ]) (journald {
-            start_at = "end";
-            priority = "info";
-            units = cfg.journalUnits;
-          });
-          "journald/user_units" = lib.mkIf (cfg.journalUserUnits != [ ]) (journald {
-            start_at = "end";
-            priority = "info";
-            matches = userUnitMatches;
-          });
         };
 
         processors = {
@@ -289,9 +196,7 @@ in
               "^scrape_(series_added|duration_seconds|samples_scraped|samples_post_metric_relabeling)$"
             ];
           };
-          "resource/agent" = resource { environment = true; };
-          "resource/audit" = resource { service = "host-audit"; };
-          "resource/units" = resource { service = cfg.unitsServiceName; };
+          "resource/agent" = resource;
           resourcedetection = {
             detectors = [
               "env"
@@ -305,15 +210,10 @@ in
             send_batch_size = 1024;
             timeout = "5s";
           };
-          "batch/logs" = {
-            send_batch_size = 256;
-            timeout = "5s";
-          };
         };
 
         exporters = {
-          "otlp_grpc/central" = exporter "90m";
-          "otlp_grpc/logs" = exporter 0;
+          "otlp_grpc/central" = exporter;
         };
 
         service = {
@@ -346,32 +246,11 @@ in
               processors = [
                 "memory_limiter"
                 "filter/unread_metrics"
-              ]
-              ++ lib.tail agentProcessors;
-              exporters = [ "otlp_grpc/central" ];
-            };
-            traces = {
-              receivers = [ "otlp/applications" ];
-              processors = agentProcessors;
-              exporters = [ "otlp_grpc/central" ];
-            };
-            "logs/audit" = {
-              receivers = [ "journald/audit" ];
-              processors = [
-                "memory_limiter"
-                "resource/audit"
-                "batch/logs"
+                "resource/agent"
+                "resourcedetection"
+                "batch"
               ];
-              exporters = [ "otlp_grpc/logs" ];
-            };
-            "logs/units" = lib.mkIf (unitReceivers != [ ]) {
-              receivers = unitReceivers;
-              processors = [
-                "memory_limiter"
-                "resource/units"
-                "batch/logs"
-              ];
-              exporters = [ "otlp_grpc/logs" ];
+              exporters = [ "otlp_grpc/central" ];
             };
           };
         };

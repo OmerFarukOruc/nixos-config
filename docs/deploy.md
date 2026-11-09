@@ -410,16 +410,16 @@ short, because the reboot takes no deploy lock; the host then boots the boot
 default, the new `main`.
 Limine counts no boot attempts, so a new kernel that does not boot leaves the
 host down until someone opens the provider's console and picks the previous
-entry from Limine's menu. On devbox, the SigNoz rule `Devbox stopped reporting`
-alerts about 22 minutes after the last host metric (statuslantern-scraper
-`deploy/signoz/README.md`), and [recovery.md](recovery.md#devbox) has the console path and when it may be used.
+entry from Limine's menu. On devbox, the SigNoz rule `devbox AWS certificate
+expiring or missing` (Status Lantern `signoz/rules/devbox-certificate.json`)
+alerts about 2 hours after the last certificate metric, which stops with the
+host. [recovery.md](recovery.md#devbox) has the console path and when it may be used.
 
 **Who sees a failure.** devbox has no desktop, so a failed run shows no popup.
 It leaves `nixos-upgrade.service` failed, which `systemctl --failed` lists, and
-the host ships the unit's journal lines at priority info and above to SigNoz
-(`oruc.telemetry.journalUnits`). The SigNoz rule `Devbox update failed` in
-statuslantern-scraper's `deploy/signoz/alerts/` alerts on systemd's
-`nixos-upgrade.service: Failed with result` line.
+starts `nixos-upgrade-failed.service`, which records the revision in
+`/var/lib/nixos-upgrade/failed`. devbox exports only metrics, so the unit's
+lines stay in its journal (`journalctl -u nixos-upgrade`).
 
 **The session check.** SSH can still answer while a switch broke the desktop.
 The deploy user's running services form the session check of step 10 below,

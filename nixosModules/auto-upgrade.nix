@@ -58,8 +58,6 @@ in
       };
     };
 
-    oruc.telemetry.journalUnits = [ "nixos-upgrade.service" ];
-
     systemd.services.nixos-upgrade = {
       unitConfig.ConditionACPower = true;
       onFailure = [ "nixos-upgrade-failed.service" ];

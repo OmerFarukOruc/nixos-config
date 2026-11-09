@@ -43,6 +43,12 @@ tel_status_code = machine.succeed(
     "-d '{}' http://127.0.0.1:4318/v1/metrics"
 )
 assert tel_status_code == "200", f"the local OTLP HTTP port answered {tel_status_code}"
+for tel_signal in ["traces", "logs"]:
+    tel_status_code = machine.succeed(
+        "curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' "
+        f"-d '{{}}' http://127.0.0.1:4318/v1/{tel_signal}"
+    )
+    assert tel_status_code == "404", f"the local OTLP HTTP port answered {tel_status_code} for {tel_signal}"
 
 
 def tel_wait(file, text):
@@ -80,65 +86,6 @@ def tel_batches(file):
     return batches
 
 
-def tel_records(file):
-    records = []
-    for batch in tel_batches(file):
-        for resource_logs in batch.get("resourceLogs", []):
-            resource = {a["key"]: a["value"].get("stringValue") for a in resource_logs["resource"]["attributes"]}
-            for scope_logs in resource_logs["scopeLogs"]:
-                for record in scope_logs["logRecords"]:
-                    body = {f["key"]: f["value"].get("stringValue") for f in record["body"].get("kvlistValue", {}).get("values", [])}
-                    records.append((resource, body))
-    return records
-
-
-machine.succeed(f"install -d -m 0755 -o {BOX_USER} -g {BOX_USER} /home/{BOX_USER}")
-machine.succeed(f"install -d -m 0700 -o {BOX_USER} -g {BOX_USER} /home/{BOX_USER}/.ssh")
-machine.succeed("ssh-keygen -q -t ed25519 -N '' -f /tmp/probe_key")
-machine.succeed(f"install -m 0600 -o {BOX_USER} -g {BOX_USER} /tmp/probe_key.pub /home/{BOX_USER}/.ssh/authorized_keys")
-
-
-def tel_probe(name):
-    machine.succeed(
-        "printf test | ssh -p 2222 -i /tmp/probe_key -o StrictHostKeyChecking=no "
-        f"-o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR {BOX_USER}@127.0.0.1 "
-        f"'/run/wrappers/bin/sudo -S -p sudo: touch /etc/{name}'"
-    )
-    machine.succeed(f"rm -f /etc/{name}")
-
-
-tel_probe("telemetry-probe-1")
-tel_wait("logs.json", "telemetry-probe-1")
-
-tel_credstore = "type=SYSCALL[^}]*comm=.\\{1,2\\}cat.\\{1,2\\}[^}]*key=.\\{1,2\\}credstore"
-
-
-def tel_credstore_read():
-    seen = tel_count("logs.json", tel_credstore)
-    machine.execute("runuser -u nobody -- cat /run/secrets/network-dns-1")
-    retry(lambda _last_try: tel_count("logs.json", tel_credstore) > seen)
-
-
-tel_credstore_read()
-tel_excluded = ["NETFILTER_CFG", "ANOM_PROMISCUOUS", "BPF"]
-tel_before = {t: tel_count("logs.json", f"type={t} msg=audit") for t in tel_excluded}
-machine.succeed("iptables -N tel-probe && iptables -X tel-probe")
-machine.succeed("ip link set lo promisc on && ip link set lo promisc off")
-machine.succeed("systemd-run --wait -p IPAddressDeny=any true")
-tel_credstore_read()
-for tel_type in tel_excluded:
-    assert tel_count("logs.json", f"type={tel_type} msg=audit") == tel_before[tel_type], (
-        f"the sink got {tel_type} records of system processes"
-    )
-
-machine.succeed("systemctl stop opentelemetry-collector.service")
-tel_probe("telemetry-probe-2")
-machine.sleep(3)
-machine.succeed("systemctl start opentelemetry-collector.service")
-tel_wait("logs.json", "telemetry-probe-2")
-
-machine.succeed("systemctl start telemetry-unit-probe.service")
-tel_wait("logs.json", "telemetry-unit-probe-line")
 tel_wait("metrics.json", "system.memory.usage")
 tel_wait("metrics.json", "tlscheck.time_left")
 tel_time_left = [
@@ -154,42 +101,12 @@ assert tel_time_left and all(0 < seconds <= 3650 * 86400 for seconds in tel_time
     f"tlscheck.time_left of the 3650-day test certificate: {tel_time_left}"
 )
 
-tel_uid = machine.succeed(f"id -u {BOX_USER}").strip()
-machine.succeed(f"systemctl start user@{tel_uid}.service")
-machine.succeed(f"systemctl --user -M {BOX_USER}@ start telemetry-user-probe.service")
-machine.wait_until_succeeds(
-    "journalctl -b _SYSTEMD_USER_UNIT=telemetry-user-probe.service PRIORITY=7 -o cat | grep -Fx telemetry-user-probe-debug"
-)
-tel_wait("logs.json", "telemetry-user-probe-info")
-tel_wait("logs.json", "Finished telemetry-user-probe.service")
-tel_user_records = [
-    (resource, body)
-    for resource, body in tel_records("logs.json")
-    if "telemetry-user-probe" in body.get("MESSAGE", "")
-]
-tel_own = [
-    r for r in tel_user_records
-    if r[1]["MESSAGE"] == "telemetry-user-probe-info" and r[1].get("_SYSTEMD_USER_UNIT") == "telemetry-user-probe.service"
-]
-assert len(tel_own) == 1, f"the sink did not get exactly the info line of the user unit: {tel_user_records}"
-assert tel_own[0][1].get("_UID") == tel_uid, f"the user unit line is not from {BOX_USER}: {tel_own[0][1]}"
-assert tel_own[0][0].get("service.name") == "infra-units", "the user unit line lacks service.name infra-units"
-tel_manager = [
-    r for r in tel_user_records
-    if r[1].get("USER_UNIT") == "telemetry-user-probe.service" and r[1]["MESSAGE"].startswith("Finished ")
-]
-assert len(tel_manager) == 1, f"the sink did not get exactly the Finished line of the user manager: {tel_user_records}"
-assert not any(b["MESSAGE"] == "telemetry-user-probe-debug" for _, b in tel_user_records), "the debug line of the user unit shipped"
+machine.succeed("logger -t audisp-syslog telemetry-no-ship-probe")
+machine.sleep(15)
+machine.succeed(f"test ! -s {tel_dir}/logs.json")
 
-assert tel_count("logs.json", f"Accepted publickey for {BOX_USER}") == 2, "the sink did not get exactly the 2 sshd login lines"
-
-for tel_key in ["sudo-exec", "etc-change"]:
-    tel_wait("logs.json", f"type=SYSCALL[^}}]*auid=1003[^}}]*key=.\\{{1,2\\}}{tel_key}")
-
-assert tel_attr("logs.json", "service.name", "host-audit") > 0, "the sink has no host-audit logs"
-for tel_file in ["logs.json", "metrics.json"]:
-    for tel_attribute in ["host.name", "host.id"]:
-        assert tel_attr(tel_file, tel_attribute, BOX_HOST) > 0, f"the sink lacks {tel_attribute} in {tel_file}"
+for tel_attribute in ["host.name", "host.id"]:
+    assert tel_attr("metrics.json", tel_attribute, BOX_HOST) > 0, f"the sink lacks {tel_attribute} in metrics.json"
 assert tel_attr("metrics.json", "deployment.environment.name", "development") > 0, "the sink lacks the environment on metrics"
 
 tel_run = "journalctl _SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value opentelemetry-collector.service) --no-pager -o cat"

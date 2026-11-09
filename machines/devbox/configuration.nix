@@ -86,21 +86,11 @@ in
     enable = true;
     environment = "development";
     endpoint = "signoz.statuslantern.com:4317";
+    insecure = true;
     filesystemMounts = [ "/tmp" ];
     certificates.aws-agent = "${
       config.users.users.${config.oruc.machine.user}.home
     }/.aws/rolesanywhere/leaf.pem";
-    journalUnits = [
-      "caddy.service"
-      "acme-*.service"
-      "xrdp.service"
-      "xrdp-sesman.service"
-    ];
-    journalUserUnits = [
-      "docker.service"
-      "cliproxy.service"
-      "cliproxy-update.service"
-    ];
   };
 
   networking = {
