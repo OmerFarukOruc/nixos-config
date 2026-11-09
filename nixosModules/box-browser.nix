@@ -133,7 +133,10 @@ in
       after = [ "box-display.service" ];
       partOf = [ "box-display.service" ];
       wantedBy = [ "default.target" ];
-      environment.DISPLAY = display;
+      environment = {
+        DISPLAY = display;
+        XAUTHORITY = "%h/.Xauthority";
+      };
       unitConfig = {
         ConditionUser = config.oruc.machine.user;
         StartLimitIntervalSec = 0;

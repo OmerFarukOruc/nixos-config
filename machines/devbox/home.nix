@@ -185,6 +185,7 @@ in
       Service = {
         ExecStart = "${lib.getExe pkgs.zsh} -c 'exec cursor-agent worker --computer-use --share-desktop --name %H --worker-dir %h/Desktop/workspace --idle-release-timeout 0 start'";
         WorkingDirectory = "${home}/Desktop/workspace";
+        Environment = [ "XAUTHORITY=%h/.Xauthority" ];
         Restart = "always";
         RestartSec = 10;
       };

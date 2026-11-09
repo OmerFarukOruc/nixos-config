@@ -522,7 +522,9 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   (`nixosModules/agent-runtime.nix`) start with `-auth ~/.Xauthority`, so
   `sl-factory` cannot open them over the X socket. The `Xtigervnc` wrapper keeps
   one cookie in `~/.local/state/xtigervnc-cookie` and writes it for `:0` to `:9`,
-  because the worker picks the display number itself.
+  because the worker picks the display number itself. `cursor-worker.service`
+  sets `XAUTHORITY=%h/.Xauthority`, so its clients read the same file even when a
+  desktop session puts another `XAUTHORITY` into the user manager's environment.
 - `factory-pane` is a stub that runs `<worktree>/nix/devenv/factory-pane.sh`
   from the statuslantern checkout, so that script changes with the repository.
 - The logins, the clone and the SigNoz key of `sl-factory` are state, not
