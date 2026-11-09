@@ -18,6 +18,7 @@ h() { herdr --session "$run" "$@"; }
 ok=0
 cleanup() {
   h agent prompt "$name" /exit >/dev/null 2>&1 || true
+  h agent prompt "$run-foreign" /exit >/dev/null 2>&1 || true
   sleep 3
   h server stop >/dev/null 2>&1 || true
   sleep 2
@@ -25,6 +26,7 @@ cleanup() {
   if ((ok)); then rm -rf "$dir"; else echo "kept $dir"; fi
 }
 trap cleanup EXIT
+source "$(dirname "$0")/foreign-agent.sh"
 fail() {
   echo "FAIL: $*"
   exit 1
@@ -284,5 +286,23 @@ cls resume "$name" || fail "resume right after /exit exited $?"
 [[ -n "$(claude_in "$pane")" ]] || fail "resume right after /exit started nothing"
 check_agent "resume right after /exit"
 echo "resume right after /exit: back in $pane"
+if foreign_available; then
+  foreign="$run-foreign"
+  start_foreign_agent "$foreign" "$dir"
+  pids=$(foreign_pids)
+  [[ -n "$pids" ]] || fail "no claude process of sl-factory runs"
+  cls scan || fail "scan with an agent of another user exited $?"
+  [[ "$(foreign_pids)" == "$pids" ]] || fail "scan changed the claude processes of sl-factory"
+  grep -q "$foreign" "$state/events.log" 2>/dev/null && fail "scan logged the agent of another user: $(grep "$foreign" "$state/events.log")"
+  jq -e --arg n "$foreign" '(.agents | has($n) | not) and (.ended | has($n) | not)' "$state/agents.json" >/dev/null ||
+    fail "the record holds the agent of another user: $(jq -c . "$state/agents.json")"
+  cls resume "$foreign" || fail "resume of an agent of another user exited $?"
+  [[ "$(foreign_pids)" == "$pids" ]] || fail "resume restarted the agent of another user"
+  out=$(cls switch "$foreign" 2>&1) && fail "switch of an agent of another user exited 0"
+  [[ "$(foreign_pids)" == "$pids" ]] || fail "switch restarted the agent of another user: $out"
+  echo "agent of another user: scan, resume and switch leave it running and unrecorded"
+else
+  echo "agent of another user: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"
+fi
 ok=1
 echo PASS

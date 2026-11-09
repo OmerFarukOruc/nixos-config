@@ -66,7 +66,7 @@ def caller(settings: Settings, ag: Agents) -> dict | None:
 def stop_started(ag: Agents, name: str, pane: str) -> None:
     if "result" in ag.herdr("agent", "get", name, check=False):
         try:
-            ag.exit_claude(name, ag.claude_process(pane)[0])
+            ag.exit_claude(name, ag.claude_pid(pane))
         except Failed as e:
             print(f"claude-tools agent start: could not stop {name} after the failed start: {e}", file=sys.stderr)
 
@@ -123,7 +123,7 @@ def stop(settings: Settings, a: argparse.Namespace) -> None:
                      f"then wait with `{herdr} agent wait {a.name} --until idle --until done` or answer its question. "
                      "Pass --force only to cut it off on purpose.")
     try:
-        ag.exit_claude(a.name, ag.claude_process(agent["pane_id"])[0])
+        ag.exit_claude(a.name, ag.claude_pid(agent["pane_id"]))
     except NoProcess:
         try:
             pid = ag.codex_process(agent["pane_id"])

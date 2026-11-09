@@ -6,6 +6,7 @@ run="agent-e2e-$(basename "$dir" | cut -d. -f2 | tr '[:upper:]' '[:lower:]')"
 real_herdr="$(command -v herdr)"
 export CLAUDE_TOOLS_HERDR_SESSION="$run" CLAUDE_TOOLS_STATE="$dir/state"
 name="$run-a"
+foreign="$run-foreign"
 work="$dir/work"
 watch_pid=""
 mkdir -p "$work"
@@ -23,11 +24,13 @@ stop_watch() {
 cleanup() {
   stop_watch
   "$tools" agent stop --force "$name" >/dev/null 2>&1 || true
+  "$tools" agent stop --force "$foreign" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+source "$(dirname "$0")/foreign-agent.sh"
 fail() {
   echo "FAIL: $*"
   pane=$(h agent get "$name" 2>/dev/null | jq -r '.result.agent.pane_id // empty') || true
@@ -54,6 +57,7 @@ wait_for() {
 tab_labelled() { h tab list | jq -e --arg n "$1" '[.result.tabs[] | select(.label == $n)] | length > 0' >/dev/null; }
 tab_count() { h tab list | jq --arg n "$1" '[.result.tabs[] | select(.label == $n)] | length'; }
 agent_listed() { h agent get "$1" 2>/dev/null | jq -e '.result.agent' >/dev/null; }
+agent_gone() { ! agent_listed "$1"; }
 agent_pane() { h agent get "$name" | jq -r '.result.agent.pane_id'; }
 pane_moved() { [[ "$(agent_pane)" != "$1" ]]; }
 pane_has_no_agent() { [[ "$(h pane get "$1" | jq -r '.result.pane.agent // "none"')" == none ]]; }
@@ -177,5 +181,16 @@ before=$(lines_of "$name finished a turn")
 "$tools" agent start "$name" --account "$account" --cwd "$work" --model sonnet --brief "$dir/brief.md" || fail "the name could not start on the restarted server"
 wait_for 30 watch_matches "watcher follows herdr again" || fail "the watcher did not follow the restarted server"
 wait_for 150 more_lines "$name finished a turn" "$before" || fail "no finished line on the restarted server"
+
+if foreign_available; then
+  step 11 "agent stop ends an agent that runs as another user, though its environment is unreadable"
+  start_foreign_agent "$foreign" "$dir"
+  [[ -n "$(foreign_pids)" ]] || fail "no claude process of sl-factory runs"
+  "$tools" agent stop --force "$foreign" || fail "agent stop of an agent of another user exited $?"
+  wait_for 15 agent_gone "$foreign" || fail "the agent of another user is still listed after agent stop"
+  [[ -z "$(foreign_pids)" ]] || fail "a claude process of sl-factory survived agent stop"
+else
+  echo "step 11: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"
+fi
 
 echo PASS

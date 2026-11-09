@@ -71,21 +71,21 @@ class Agents:
         self.herdr = Herdr(settings)
         self.log = event_log(settings)
 
-    def in_pane(self, comms: tuple[str, ...], pane: str) -> Iterator[tuple[Path, dict[str, str]]]:
+    def in_pane(self, comms: tuple[str, ...], pane: str) -> Iterator[Path]:
         info = self.herdr("pane", "process-info", "--pane", pane)["result"]["process_info"]
         for proc in info.get("foreground_processes") or []:
-            if proc.get("name") not in comms:
-                continue
-            p = Path(f"/proc/{proc['pid']}")
-            try:
-                env = environ(p)
-            except OSError:
-                continue
-            yield p, env
+            if proc.get("name") in comms:
+                yield Path(f"/proc/{proc['pid']}")
+
+    def claude_pid(self, pane: str) -> int:
+        for p in self.in_pane(CLAUDE, pane):
+            return int(p.name)
+        raise NoProcess(f"no claude process in pane {pane}")
 
     def claude_process(self, pane: str) -> tuple[int, list[str], str]:
-        for p, env in self.in_pane(CLAUDE, pane):
+        for p in self.in_pane(CLAUDE, pane):
             try:
+                env = environ(p)
                 argv = (p / "cmdline").read_bytes().decode().split("\0")[:-1]
             except OSError:
                 continue
@@ -93,7 +93,7 @@ class Agents:
         raise NoProcess(f"no claude process in pane {pane}")
 
     def codex_process(self, pane: str) -> int:
-        for p, _ in self.in_pane(CODEX, pane):
+        for p in self.in_pane(CODEX, pane):
             return int(p.name)
         raise NoProcess(f"no claude or codex process in pane {pane}")
 
@@ -139,7 +139,7 @@ class Agents:
         if "result" not in data:
             return False
         try:
-            self.claude_process(data["result"]["agent"]["pane_id"])
+            self.claude_pid(data["result"]["agent"]["pane_id"])
         except Failed:
             self.wait_freed(name)
             return False
