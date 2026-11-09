@@ -11,6 +11,7 @@
 - [Web names](#web-names)
 - [Containers](#containers)
 - [Agent runtime](#agent-runtime)
+- [Factory run user](#factory-run-user)
 - [CLIProxyAPI](#cliproxyapi)
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
@@ -489,6 +490,39 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   run succeeds. A run that `systemctl --user stop` cuts short counts
   as a failure too (the result is `signal`).
 
+## Factory run user
+
+The Status Lantern factory runs its agents as the user `sl-factory`
+(`machines/devbox/configuration.nix`), so an agent that reads alert and audit
+text holds none of omer's credentials. The user has its own group, a home with
+mode 700, no `extraGroups` and no subordinate uid range, because it runs no
+containers. `users.mutableUsers` is off, so the account comes only from this
+repository. The user can still install packages with `nix profile install`,
+because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
+
+- Packages: `devenv`, `git`, `jq`, `openssh`, and Claude Code, Codex and Grok
+  from `inputs.llm-agents`, the same attributes omer's profile takes.
+- Sudo: `omer` may run any command as `sl-factory` without a password. The rule
+  gives no passwordless access as another user, and omer's wheel access still
+  asks for his password. `sl-factory` cannot run `sudo` at all
+  (`security.sudo.execWheelOnly`). `sudo -u sl-factory -i factory-pane
+  <worktree> [account]` starts a devenv shell in a factory worktree.
+- Network: `networking.firewall.extraCommands` adds the chain `sl-factory-out`
+  for packets of `sl-factory`. It allows the resolvers `127.0.0.53` and
+  `127.0.0.54` on port 53 and observability-1's tailnet address
+  `100.127.140.73` on tcp 443, where `signoz.statuslantern.com` serves the
+  SigNoz API. It rejects everything else sent out of `lo` and `tailscale0`,
+  because omer's services on loopback, such as the box browser's DevTools, and
+  the tailnet's SSH answer without a password. A process of `sl-factory` that
+  needs another loopback port fails, so a new need adds an exception there.
+  The fence assumes devbox uses no Tailscale exit node, so internet traffic
+  leaves by `ens3`. It covers TCP and UDP on network sockets only, so a Unix
+  socket of omer, such as an X server's, needs its own access control.
+- `factory-pane` is a stub that runs `<worktree>/nix/devenv/factory-pane.sh`
+  from the statuslantern checkout, so that script changes with the repository.
+- The logins, the clone and the SigNoz key of `sl-factory` are state, not
+  configuration. Statuslantern's `docs/agents/factory.md`, Run user, lists them.
+
 ## CLIProxyAPI
 
 `cliproxy.service`, a user unit of omer in `home.nix`, serves the Claude,
@@ -734,6 +768,9 @@ session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
 --failed` and `systemctl --user -M omer@ --failed` on the box. These show only
 in daily use:
 
+- **The run user's isolation.** The sudo rule's scope, `sl-factory`'s empty
+  subordinate uid range and its reach on loopback and the tailnet show in no
+  check.
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner and

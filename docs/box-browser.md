@@ -56,8 +56,10 @@ browser.
 - Any process of the user, and root, can drive the browser through DevTools,
   which has no password. This is the purpose of the feature.
 - Xvnc has no password, because anyone who reaches `127.0.0.1:5920` on the host is
-  already a local user who can drive the same Chromium through DevTools. The
-  loopback bind is its only protection, so `ci/checks.sh` fails when the display
+  already a local user who can drive the same Chromium through DevTools. On
+  devbox, the other local user `sl-factory` cannot reach loopback because its
+  packets are rejected (`docs/devbox.md`, Factory run user). The loopback bind is
+  its only protection, so `ci/checks.sh` fails when the display
   command loses `-localhost` or `-SecurityTypes None`. Do not publish the port
   with `tailscale serve` or open it in a firewall.
 - The viewer needs `ssh <host>` to work for another host, with the user the

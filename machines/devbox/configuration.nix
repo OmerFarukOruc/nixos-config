@@ -1,6 +1,8 @@
 {
   config,
   inputs,
+  pkgs,
+  llmAgents,
   ...
 }:
 let
@@ -127,6 +129,68 @@ in
   };
   users.users.root.hashedPasswordFile = config.sops.secrets.root-password-hash.path;
 
+  users.groups.sl-factory = { };
+  users.users.sl-factory = {
+    isNormalUser = true;
+    group = "sl-factory";
+    home = "/home/sl-factory";
+    homeMode = "700";
+    autoSubUidGidRange = false;
+    description = "Status Lantern factory run user";
+    packages = [
+      pkgs.devenv
+      pkgs.git
+      pkgs.jq
+      pkgs.openssh
+      llmAgents.claude-code
+      llmAgents.codex
+      llmAgents.grok
+    ];
+  };
+  security.sudo.extraRules = [
+    {
+      users = [ config.oruc.machine.user ];
+      runAs = "sl-factory";
+      commands = [
+        {
+          command = "ALL";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+  # 100.127.140.73 is observability-1's tailnet address, where
+  # signoz.statuslantern.com serves the SigNoz API on 443.
+  networking.firewall.extraCommands = ''
+    ip46tables -D OUTPUT -j sl-factory-out 2>/dev/null || true
+    ip46tables -F sl-factory-out 2>/dev/null || true
+    ip46tables -X sl-factory-out 2>/dev/null || true
+    ip46tables -N sl-factory-out
+    ip46tables -A OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out
+    for resolver in 127.0.0.53 127.0.0.54; do
+      for protocol in udp tcp; do
+        iptables -A sl-factory-out -o lo -d $resolver -p $protocol --dport 53 -j RETURN
+      done
+    done
+    ip46tables -A sl-factory-out -o lo -j REJECT
+    iptables -A sl-factory-out -o tailscale0 -d 100.127.140.73 -p tcp --dport 443 -j RETURN
+    ip46tables -A sl-factory-out -o tailscale0 -j REJECT
+  '';
+  networking.firewall.extraStopCommands = ''
+    ip46tables -D OUTPUT -j sl-factory-out 2>/dev/null || true
+    ip46tables -F sl-factory-out 2>/dev/null || true
+    ip46tables -X sl-factory-out 2>/dev/null || true
+  '';
+  environment.systemPackages = [
+    (pkgs.writeShellApplication {
+      name = "factory-pane";
+      text = ''
+        worktree=''${1:?usage: factory-pane WORKTREE [ACCOUNT]}
+        exec bash "$worktree/nix/devenv/factory-pane.sh" "$@"
+      '';
+    })
+  ];
+
   # The box has 62 GiB of RAM (observed on 2026-10-27); the numbers below are
   # guesses for many agents, not measurements.
   boot.kernel.sysctl."vm.swappiness" = 100;
@@ -145,6 +209,12 @@ in
       mode = "1777";
       user = "root";
       group = "root";
+      age = "7d";
+    };
+    "/tmp/agents".d = {
+      mode = "0755";
+      user = config.oruc.machine.user;
+      group = config.oruc.machine.user;
       age = "7d";
     };
     "/tmp/tmux-*".x = { };

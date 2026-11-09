@@ -21,6 +21,8 @@ let
   '';
 in
 {
+  _module.args.llmAgents = llmAgents;
+
   nixpkgs.overlays = [
     (import ../overlays/khal.nix)
   ];
