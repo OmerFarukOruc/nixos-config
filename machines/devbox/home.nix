@@ -29,7 +29,7 @@ let
       Service = {
         WorkingDirectory = "%h/Desktop/workspace/statuslantern";
         Environment = [
-          "PATH=/run/wrappers/bin:/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin"
+          "PATH=/run/wrappers/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin"
         ];
         ExecStart = "${lib.getExe pkgs.devenv} shell -- ${script}";
       }

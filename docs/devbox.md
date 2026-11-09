@@ -510,10 +510,13 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   a factory worktree. `Defaults>sl-factory !use_pty` makes sudo share the
   caller's terminal for that run user only, so herdr, which watches the
   terminal's foreground process, detects an agent started that way; omer's other
-  sudo calls keep `use_pty`. A shared terminal lets a process of `sl-factory`
-  push keystrokes into omer's shell through `TIOCSTI`, so
-  `boot.kernel.sysctl."dev.tty.legacy_tiocsti"` is 0 explicitly, and the boot
-  check asserts both settings.
+  sudo calls keep `use_pty`. A process of `sl-factory` that keeps the terminal
+  open after its agent exits could read what omer types next in that pane, so
+  `boot.kernel.sysctl."dev.tty.legacy_tiocsti"` is 0 explicitly, which stops it
+  pushing keystrokes into omer's shell, and `factory-run` ends every process of
+  the run user and closes the agent's workspace when a run ends (Statuslantern
+  `docs/agents/factory.md`, Run user). The boot check asserts the sysctl and the
+  sudoers line.
 - Network: `networking.firewall.extraCommands` adds the chain `sl-factory-out`
   for packets of `sl-factory`. It allows the resolvers `127.0.0.53` and
   `127.0.0.54` on port 53 and observability-1's tailnet address
@@ -782,9 +785,10 @@ session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
 --failed` and `systemctl --user -M omer@ --failed` on the box. These show only
 in daily use:
 
-- **The run user's isolation.** The sudo rule's scope, `sl-factory`'s empty
-  subordinate uid range and its reach on loopback and the tailnet show in no
-  check.
+- **The run user's isolation.** The boot check covers the empty subordinate
+  uid range, the sysctl, the sudoers line, the firewall rules and one loopback
+  connection each way. No check covers the terminal sharing, herdr's detection
+  of an agent behind sudo, or the reach of `sl-factory` on the real tailnet.
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner and

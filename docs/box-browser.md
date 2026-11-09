@@ -60,7 +60,8 @@ browser.
   the display through its X socket. `box-browser.service` sets
   `XAUTHORITY=%h/.Xauthority`, because Plasma puts its own `XAUTHORITY`
   (`/run/user/<uid>/xauth_*`) into the user manager's environment and a unit
-  would otherwise read that file, which has no cookie for `:20`. Without `-auth`, Xvnc let any local user connect, abstract socket included.
+  would otherwise read that file, which has no cookie for `:20`. Without
+  `-auth`, Xvnc let any local user connect, abstract socket included.
 - Xvnc has no password, because anyone who reaches `127.0.0.1:5920` on the host is
   already a local user who can drive the same Chromium through DevTools. On
   devbox, the other local user `sl-factory` cannot reach loopback because its
@@ -75,6 +76,7 @@ browser.
 ## Check
 
 `ci/checks.sh` reads nixos-desktop's system through `ci/box-browser.nix`, checks
-the unit names, the display's command line and the browser unit's `XAUTHORITY`, so it also fails when the
-record turns the feature off. The check does not start the units; run
+the unit names, the display's command line, and that the browser unit's
+`DISPLAY` and `XAUTHORITY` are the display and the `-auth` file of that command
+line, so it also fails when the record turns the feature off. The check does not start the units; run
 `box-browser status` on the host after the first deploy.

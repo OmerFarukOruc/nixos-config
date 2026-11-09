@@ -100,9 +100,10 @@ box_browser() {
     echo "The box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
     return 1
   }
-  jq -e '.browserEnvironment | .XAUTHORITY == "%h/.Xauthority" and .DISPLAY == ":20"' \
+  jq -e '(.displayCommand | capture(" (?<display>:[0-9]+) -auth (?<auth>[^ ]+) ")) as $x
+    | .browserEnvironment | .DISPLAY == $x.display and .XAUTHORITY == $x.auth' \
     <<<"$out" >/dev/null || {
-    echo "box-browser.service no longer sets XAUTHORITY=%h/.Xauthority, so under Plasma it reads KDE's xauth file and cannot open the display." >&2
+    echo "box-browser.service does not use the display and the -auth file of box-display, so under Plasma it reads KDE's xauth file and cannot open the display." >&2
     return 1
   }
 }
