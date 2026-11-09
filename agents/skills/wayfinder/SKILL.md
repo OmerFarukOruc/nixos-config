@@ -3,6 +3,7 @@ name: wayfinder
 description: >-
   Use when the effort is too big and foggy for one plan; chart a multi-session
   map of DECISION tickets, not build tickets.
+disable-model-invocation: true
 ---
 # Wayfinder
 

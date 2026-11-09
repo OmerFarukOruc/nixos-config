@@ -20,18 +20,7 @@
   "skillOverrides": {
     "api-mapper": "user-invocable-only",
     "apk-api-mapper": "user-invocable-only",
-    "research": "user-invocable-only",
-    "openai-image-gen": "user-invocable-only",
-    "wayfinder": "user-invocable-only",
-    "create-dependency-upgrade-campaign": "user-invocable-only",
-    "ce-optimize": "user-invocable-only",
     "quality-campaign": "off",
-    "improve": "user-invocable-only",
-    "stop-slop": "user-invocable-only",
-    "gh-stack": "user-invocable-only",
-    "avoid-ai-writing": "user-invocable-only",
-    "grill-for-unknowns": "user-invocable-only",
-    "diagnosing-bugs": "user-invocable-only",
     "clonedeps": "on",
     "implement-spec": "on"
   },

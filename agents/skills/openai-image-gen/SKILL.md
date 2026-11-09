@@ -1,6 +1,7 @@
 ---
 name: openai-image-gen
 description: Generates or edits raster images with OpenAI Images 2.6 (GPT Image 2.6 Sunburst and Flare) through the existing Codex ChatGPT login. Use for ChatGPT subscription image requests, reference-guided pictures, transparent assets, and Codex OAuth image diagnostics.
+disable-model-invocation: true
 ---
 # Images 2.6 through Codex OAuth
 

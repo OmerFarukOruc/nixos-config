@@ -64,6 +64,10 @@ let
       src = inputs.skills-grill-for-unknowns;
       path = "plugins/grill-for-unknowns";
     };
+    untangle-codebase = {
+      src = inputs.skills-caldoai;
+      path = "skills/untangle-codebase";
+    };
     diagram-design = {
       src = inputs.skills-diagram-design;
       path = "skills/diagram-design";
@@ -91,6 +95,14 @@ let
       name = "skill-${name}";
       src = if skill ? path then "${skill.src}/${skill.path}" else skill.src;
       patches = lib.optional (lib.elem name patched) (./patches + "/${name}.patch");
+      postPatch = ''
+        if grep -qx '  allow_implicit_invocation: false' agents/openai.yaml 2>/dev/null \
+          && ! grep -q '^disable-model-invocation:' SKILL.md; then
+          [ "$(head -n 1 SKILL.md)" = --- ]
+          sed -i '1a disable-model-invocation: true' SKILL.md
+          [ "$(sed -n 2p SKILL.md)" = 'disable-model-invocation: true' ]
+        fi
+      '';
     };
   built = lib.mapAttrs build upstream;
   dirsFor = skill: if skill.plugin or false then lib.remove ".claude/skills" skillDirs else skillDirs;

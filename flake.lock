@@ -575,6 +575,7 @@
         "plasma-manager": "plasma-manager",
         "skills-archify": "skills-archify",
         "skills-avoid-ai-writing": "skills-avoid-ai-writing",
+        "skills-caldoai": "skills-caldoai",
         "skills-compound-engineering": "skills-compound-engineering",
         "skills-diagram-design": "skills-diagram-design",
         "skills-gh-stack": "skills-gh-stack",
@@ -625,6 +626,22 @@
       "original": {
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
+        "type": "github"
+      }
+    },
+    "skills-caldoai": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793905642,
+        "narHash": "sha256-FY4dg5Pm/rpg3oWarfCDTneA1qZ6v6GIQhalEsvgjVY=",
+        "owner": "caldoai",
+        "repo": "skills",
+        "rev": "f3cf47774975a7d9fca45730babf4ff7ad765ada",
+        "type": "github"
+      },
+      "original": {
+        "owner": "caldoai",
+        "repo": "skills",
         "type": "github"
       }
     },

@@ -156,6 +156,10 @@
       url = "github:github/gh-stack/v0.3.0";
       flake = false;
     };
+    skills-caldoai = {
+      url = "github:caldoai/skills";
+      flake = false;
+    };
   };
 
   outputs =
