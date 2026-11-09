@@ -47,6 +47,7 @@ machine.succeed(f"grep -Fx {BOX_USER}:100000:65536 /etc/subgid")
 machine.succeed(f"test -e /var/lib/systemd/linger/{BOX_USER}")
 
 machine.fail("grep -E '^sl-factory:' /etc/subuid /etc/subgid")
+machine.succeed("test -e /var/lib/systemd/linger/sl-factory")
 machine.succeed("test $(sysctl -n dev.tty.legacy_tiocsti) = 0")
 machine.succeed(f"sudo -l -U {BOX_USER} | grep -F -e 'Defaults>sl-factory' | grep -F -e '!use_pty'")
 machine.fail(f"sudo -l -U {BOX_USER} | sed -n '/^Matching Defaults/,/^$/p' | grep -F -e use_pty")

@@ -506,17 +506,26 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   gives no passwordless access as another user, and omer's wheel access still
   asks for his password. `sl-factory` cannot run `sudo` at all
   (`security.sudo.execWheelOnly`). `sudo -u sl-factory -i factory-pane
-  <worktree> <account> <command> [args]` runs the command in a devenv shell in
-  a factory worktree. `Defaults>sl-factory !use_pty` makes sudo share the
+  <worktree> <account> <command> [args]` runs the command in a devenv
+  shell in a factory worktree. `Defaults>sl-factory !use_pty` makes sudo share the
   caller's terminal for that run user only, so herdr, which watches the
   terminal's foreground process, detects an agent started that way; omer's other
   sudo calls keep `use_pty`. A process of `sl-factory` that keeps the terminal
   open after its agent exits could read what omer types next in that pane, so
   `boot.kernel.sysctl."dev.tty.legacy_tiocsti"` is 0 explicitly, which stops it
-  pushing keystrokes into omer's shell, and `factory-run` ends every process of
-  the run user and closes the agent's workspace when a run ends (Statuslantern
+  pushing keystrokes into omer's shell, and `factory-run` stops the agent's
+  scope and closes its workspace when a run ends (Statuslantern
   `docs/agents/factory.md`, Run user). The boot check asserts the sysctl and the
   sudoers line.
+- Lingering: `linger = true` keeps the user manager of `sl-factory` running
+  without a login, because Statuslantern's `agent-start` runs each agent in its
+  own user scope, `factory-agent-<agent name>.scope`, and stopping one scope
+  leaves the other agents of the run user, such as the nightly agent, running.
+  A running user manager also lets an agent start or enable user units outside
+  its scope, which keep running across runs and reboots with the rights of
+  `sl-factory` and behind the same network fence. Statuslantern's
+  `docs/agents/factory.md`, Run user, records that residual. The boot check
+  asserts `/var/lib/systemd/linger/sl-factory`.
 - Network: `networking.firewall.extraCommands` adds the chain `sl-factory-out`
   for packets of `sl-factory`. It allows the resolvers `127.0.0.53` and
   `127.0.0.54` on port 53 and observability-1's tailnet address

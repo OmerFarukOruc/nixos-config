@@ -137,6 +137,7 @@ in
     homeMode = "700";
     autoSubUidGidRange = false;
     description = "Status Lantern factory run user";
+    linger = true;
     packages = [
       pkgs.devenv
       pkgs.git
