@@ -28,7 +28,9 @@ let
       // unit;
       Service = {
         WorkingDirectory = "%h/Desktop/workspace/statuslantern";
-        Environment = [ "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin" ];
+        Environment = [
+          "PATH=/run/wrappers/bin:/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin"
+        ];
         ExecStart = "${lib.getExe pkgs.devenv} shell -- ${script}";
       }
       // service;
