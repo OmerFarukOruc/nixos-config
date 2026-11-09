@@ -16,11 +16,29 @@
     sqlite
     tigervnc
     # The Cursor worker looks for Debian's name of the TigerVNC X server and
-    # refuses computer use without it; nixpkgs names it Xvnc.
-    (runCommand "xtigervnc" { } ''
-      mkdir -p $out/bin
-      ln -s ${tigervnc}/bin/Xvnc $out/bin/Xtigervnc
-    '')
+    # refuses computer use without it, and starts it with no -auth, so the
+    # wrapper adds the X cookie; nixpkgs names it Xvnc.
+    (writeShellApplication {
+      name = "Xtigervnc";
+      runtimeInputs = [
+        coreutils
+        util-linux
+        xauth
+      ];
+      text = ''
+        cookie_file="$HOME/.local/state/xtigervnc-cookie"
+        if [[ ! -s $cookie_file ]]; then
+          mkdir -p "$(dirname "$cookie_file")"
+          (umask 077 && mcookie >"$cookie_file")
+        fi
+        cookie=$(<"$cookie_file")
+        touch "$HOME/.Xauthority"
+        for number in {0..9}; do
+          xauth -f "$HOME/.Xauthority" add ":$number" . "$cookie"
+        done
+        exec ${tigervnc}/bin/Xvnc -auth "$HOME/.Xauthority" "$@"
+      '';
+    })
     tree
     unzip
     wlr-randr

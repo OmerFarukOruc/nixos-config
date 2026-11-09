@@ -518,6 +518,11 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   The fence assumes devbox uses no Tailscale exit node, so internet traffic
   leaves by `ens3`. It covers TCP and UDP on network sockets only, so a Unix
   socket of omer, such as an X server's, needs its own access control.
+- X displays: Xvnc of the box browser (`:20`) and the Cursor worker's `Xtigervnc`
+  (`nixosModules/agent-runtime.nix`) start with `-auth ~/.Xauthority`, so
+  `sl-factory` cannot open them over the X socket. The `Xtigervnc` wrapper keeps
+  one cookie in `~/.local/state/xtigervnc-cookie` and writes it for `:0` to `:9`,
+  because the worker picks the display number itself.
 - `factory-pane` is a stub that runs `<worktree>/nix/devenv/factory-pane.sh`
   from the statuslantern checkout, so that script changes with the repository.
 - The logins, the clone and the SigNoz key of `sl-factory` are state, not
