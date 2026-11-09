@@ -260,11 +260,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794242768,
-        "narHash": "sha256-4QGSpbg6Cy1R506dLaR7s/fK5e8Uai036enYSEdO3vY=",
+        "lastModified": 1794252721,
+        "narHash": "sha256-sD1rhEjMghSyWSUG2xEOw+FOVd2wnoWwi/809w8fRkI=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "623253a537129f025d49363434b429714f6bea1a",
+        "rev": "f1db7c474bb49babfe9d8def532939e0c7404327",
         "type": "github"
       },
       "original": {
@@ -648,11 +648,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794195086,
-        "narHash": "sha256-jsWgq0+5HSnC+v7lPtFGCMMMckHTOIC4TKosyMWzN7M=",
+        "lastModified": 1794252246,
+        "narHash": "sha256-vW47zN+Wfx0tCuy3+0ijYqMzyV8ABl4Ffpg0No7oSqU=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "8e5d1c87613f484a5bdfeacedf86a7aaaccfa264",
+        "rev": "dd0ce6e36222e4d998a1c11eebc90b5e7de4d4ce",
         "type": "github"
       },
       "original": {
@@ -745,11 +745,11 @@
     "skills-impeccable": {
       "flake": false,
       "locked": {
-        "lastModified": 1794248655,
-        "narHash": "sha256-O6b6VeYFcrMwrDA6UIWRYWQv1MoP1O9+6fwAQvnKWkY=",
+        "lastModified": 1794255194,
+        "narHash": "sha256-mUTCJaM2Scypx3bvbA1bp27U+TFNEUdHWWtPoXU50UY=",
         "owner": "pbakaus",
         "repo": "impeccable",
-        "rev": "b3ced85312e91797bcb7929f858cecdf6138d3bd",
+        "rev": "cddc34c95161d1d73faaf1a65ca2846378a43a6e",
         "type": "github"
       },
       "original": {
