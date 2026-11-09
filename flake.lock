@@ -631,11 +631,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794181428,
-        "narHash": "sha256-79B8J6dnTikl3YPN7XmgEoayc3nlQah8SrdbEqMY/v8=",
+        "lastModified": 1794195086,
+        "narHash": "sha256-jsWgq0+5HSnC+v7lPtFGCMMMckHTOIC4TKosyMWzN7M=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "18c2be5e3d79024f20bce936b8cb05272621760a",
+        "rev": "8e5d1c87613f484a5bdfeacedf86a7aaaccfa264",
         "type": "github"
       },
       "original": {
@@ -647,11 +647,11 @@
     "skills-diagram-design": {
       "flake": false,
       "locked": {
-        "lastModified": 1794169150,
-        "narHash": "sha256-fB/EI5MSuHg4GvSiiE2noiDpFLTHjjpL2P+iIGheqD8=",
+        "lastModified": 1794194210,
+        "narHash": "sha256-3VwY5pq0H4cVx5rGxb8N/h5YtFZeU9FhNZonAATXCkA=",
         "owner": "cathrynlavery",
         "repo": "diagram-design",
-        "rev": "a928d8a421080b8d197789a16588f2d1ce06dee7",
+        "rev": "6a7f19fcc132b39b126bea90167679b46b14bcc4",
         "type": "github"
       },
       "original": {
@@ -728,11 +728,11 @@
     "skills-impeccable": {
       "flake": false,
       "locked": {
-        "lastModified": 1794190484,
-        "narHash": "sha256-hdWPB1HQ4d9XXGlc3L1eN3iSVjSl4yaNTa+Zlq3N9TQ=",
+        "lastModified": 1794195225,
+        "narHash": "sha256-wsVeE7XOXX/7PVgRkB8LMR4QE9G1BNhg3gbzcLMD8Bc=",
         "owner": "pbakaus",
         "repo": "impeccable",
-        "rev": "ed0a13d12555370a279358251236ebe73cd4fa3a",
+        "rev": "613fbf88e0ef08709eaf238653285f430250c0ea",
         "type": "github"
       },
       "original": {
