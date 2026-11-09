@@ -297,7 +297,10 @@ in
   };
 
   systemd.user.services.statuslantern-audit = {
-    Unit.Description = "Start the daily Status Lantern telemetry audit agent";
+    Unit = {
+      Description = "Start the daily Status Lantern telemetry audit agent";
+      X-SwitchMethod = "keep-old";
+    };
     Service = {
       Type = "oneshot";
       WorkingDirectory = "%h/Desktop/workspace/statuslantern";
@@ -313,6 +316,26 @@ in
     Unit.Description = "Run the Status Lantern telemetry audit every morning";
     Timer = {
       OnCalendar = "*-*-* 06:00 Europe/Istanbul";
+      RandomizedDelaySec = "5m";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
+  systemd.user.services.statuslantern-nightly = factoryService {
+    description = "Run the nightly Status Lantern dependency, docs and inventory pull request";
+    script = "nightly-start";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "10h30min";
+      TimeoutStopSec = "10min";
+    };
+    unit.X-SwitchMethod = "keep-old";
+  };
+  systemd.user.timers.statuslantern-nightly = {
+    Unit.Description = "Run the nightly Status Lantern pull request every day";
+    Timer = {
+      OnCalendar = "*-*-* 14:30:00 UTC";
       RandomizedDelaySec = "5m";
       Persistent = true;
     };
@@ -340,7 +363,10 @@ in
       Type = "oneshot";
       TimeoutStartSec = "6h30min";
     };
-    unit.StartLimitIntervalSec = 0;
+    unit = {
+      StartLimitIntervalSec = 0;
+      X-SwitchMethod = "keep-old";
+    };
   };
   systemd.user.paths.statuslantern-factory-run = {
     Unit.Description = "Start the factory run while its inbox holds an event";
