@@ -1,20 +1,21 @@
 {
   lib,
-  buildGoModule,
+  buildGoLatestModule,
   fetchFromGitHub,
 }:
-buildGoModule (finalAttrs: {
+# go.mod requires Go 1.27.3.
+buildGoLatestModule (finalAttrs: {
   pname = "linctl";
-  version = "0.27.0";
+  version = "0.28.0";
 
   src = fetchFromGitHub {
     owner = "KyaniteHQ";
     repo = "linctl";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-wsWMRpsuzM/lJqAb0CYp5hcyZelHgGKqt7JxJ9U2IY8=";
+    hash = "sha256-k+m/tuj/br6hKXU0w/FMtT5LisBvPGuZqTD3ujD7vn8=";
   };
 
-  vendorHash = "sha256-zG/rx81vwpQdsJA2s90Jmki2QiU2fUMhLLitIaYDYmw=";
+  vendorHash = "sha256-gsk000V/rEPGpkcPV9I0ky2vV4ummnEAFcCS6e4EKWs=";
 
   subPackages = [ "cmd/linctl" ];
 
