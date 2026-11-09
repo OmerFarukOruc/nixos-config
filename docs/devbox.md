@@ -223,11 +223,10 @@ endpoint or delivery to SigNoz.
 The AWS profile `statuslantern` signs with the IAM Roles Anywhere certificate
 `~/.aws/rolesanywhere/leaf.pem` of omer. The role `devbox-agent` trusts only
 the CN `devbox` from the trust anchor `statuslantern-agent-ca`; `arns.env` in
-the same folder holds the trust anchor and profile ARNs. The daily user unit
-`aws-certificate-check` (`machines/devbox/home.nix`) fails when the certificate
-expires within 30 days or is missing, and each new shell then prints a line
-until a run passes. The SigNoz rule `devbox AWS certificate expiring or
-missing` ([Telemetry](#telemetry)) alerts too.
+the same folder holds the trust anchor and profile ARNs. The SigNoz rule
+`devbox AWS certificate expiring or missing` ([Telemetry](#telemetry)) posts to
+Slack 30 days before the certificate expires, or when its metric stops for 2
+hours.
 
 To renew it, first copy the CA key to the box from nixos-desktop or nixos-rog,
 whose Infisical CLI is signed in; the box's CLI has no login
@@ -259,8 +258,11 @@ the new key, and deletes the CA key on every exit:
   mv leaf.pem.new leaf.pem
 )
 aws sts get-caller-identity --profile statuslantern
-systemctl --user start aws-certificate-check
 ```
+
+Then open SigNoz and check that `tlscheck.time_left` for devbox rises within an
+hour, because the collector reads the certificate once an hour and reloads it
+when the file changes.
 
 ## Deploys
 
@@ -390,7 +392,6 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 - `features.boxBrowser` is on in the host record, so `box-browser` and its two
   user units exist ([box-browser.md](box-browser.md)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
-  daily `aws-certificate-check` ([AWS certificate](#aws-certificate)), the
   Claude account tools of `pkgs/claude-tools` with their usage timer, and
   `claude-tools-limit-switch.timer` (next bullet).
 - `claude-tools-limit-switch.timer` runs `claude-tools limit-switch scan` of

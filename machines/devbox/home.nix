@@ -13,18 +13,9 @@ let
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   home = config.home.homeDirectory;
-  scheduledUnit = import ../../home-manager/modules/scheduled-unit.nix { inherit config lib pkgs; };
 in
 {
   imports = [
-    (scheduledUnit {
-      name = "aws-certificate-check";
-      description = "Check that the IAM Roles Anywhere certificate lasts another 30 days";
-      timerDescription = "Daily check of the IAM Roles Anywhere certificate";
-      execStart = "${lib.getExe pkgs.openssl} x509 -checkend 2592000 -noout -in ${home}/.aws/rolesanywhere/leaf.pem";
-      timeout = "1min";
-      hint = "the Roles Anywhere certificate expires within 30 days or is missing; renew it (nixos-config docs/devbox.md#aws-certificate)";
-    })
     ../../home-manager/modules/agent-cli.nix
     ../../home-manager/modules/claude-tools.nix
     ../../home-manager/modules/openrouter-free-guardrail.nix
