@@ -13,6 +13,34 @@ let
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   home = config.home.homeDirectory;
+  factoryService =
+    {
+      description,
+      script,
+      service,
+      unit ? { },
+      install ? { },
+    }:
+    {
+      Unit = {
+        Description = description;
+      }
+      // unit;
+      Service = {
+        WorkingDirectory = "%h/Desktop/workspace/statuslantern";
+        Environment = [ "PATH=/etc/profiles/per-user/omer/bin:/run/current-system/sw/bin" ];
+        ExecStart = "${lib.getExe pkgs.devenv} shell -- ${script}";
+      }
+      // service;
+      Install = install;
+    };
+  factoryResident = {
+    service = {
+      Restart = "always";
+      RestartSec = 5;
+    };
+    install.WantedBy = [ "default.target" ];
+  };
 in
 {
   imports = [
@@ -286,6 +314,38 @@ in
       Persistent = true;
     };
     Install.WantedBy = [ "timers.target" ];
+  };
+
+  systemd.user.services.statuslantern-factory-receive = factoryService (
+    factoryResident
+    // {
+      description = "Receive Lamplighter's agent session webhooks for the Status Lantern factory";
+      script = "factory-receive";
+    }
+  );
+  systemd.user.services.statuslantern-factory-tunnel = factoryService (
+    factoryResident
+    // {
+      description = "Carry factory.statuslantern.com to the factory receiver through a Cloudflare Tunnel";
+      script = "factory-tunnel";
+    }
+  );
+  systemd.user.services.statuslantern-factory-run = factoryService {
+    description = "Run the oldest Status Lantern factory event";
+    script = "factory-run";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "6h30min";
+    };
+    unit.StartLimitIntervalSec = 0;
+  };
+  systemd.user.paths.statuslantern-factory-run = {
+    Unit.Description = "Start the factory run while its inbox holds an event";
+    Path = {
+      DirectoryNotEmpty = "%h/.local/state/statuslantern-factory/inbox";
+      MakeDirectory = true;
+    };
+    Install.WantedBy = [ "paths.target" ];
   };
 
   # /etc/zshenv replaces a unit's PATH, so every zsh, interactive or not, gets
