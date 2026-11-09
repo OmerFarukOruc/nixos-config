@@ -29,6 +29,19 @@ let
     '';
   };
 
+  displayPrepare = pkgs.writeShellApplication {
+    name = "box-display-prepare";
+    runtimeInputs = [
+      pkgs.util-linux
+      pkgs.xauth
+    ];
+    text = ''
+      touch "$HOME/.Xauthority"
+      xauth -f "$HOME/.Xauthority" remove ${display}
+      xauth -f "$HOME/.Xauthority" add ${display} . "$(mcookie)"
+    '';
+  };
+
   boxBrowser = pkgs.writeShellApplication {
     name = "box-browser";
     runtimeInputs = [
@@ -88,16 +101,18 @@ in
     environment.systemPackages = [ boxBrowser ];
 
     systemd.user.services.box-display = {
-      description = "Box browser display: Xvnc ${display}, localhost only, no password";
+      description = "Box browser display: Xvnc ${display}, localhost only, no VNC password, X cookie in ~/.Xauthority";
       wantedBy = [ "default.target" ];
       unitConfig = {
         ConditionUser = config.oruc.machine.user;
         StartLimitIntervalSec = 0;
       };
       serviceConfig = {
+        ExecStartPre = lib.getExe displayPrepare;
         ExecStart = lib.concatStringsSep " " [
           (lib.getExe' pkgs.tigervnc "Xvnc")
           display
+          "-auth %h/.Xauthority"
           "-localhost"
           "-rfbport ${toString vncPort}"
           "-nolisten tcp"

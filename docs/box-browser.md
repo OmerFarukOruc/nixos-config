@@ -55,6 +55,10 @@ browser.
 
 - Any process of the user, and root, can drive the browser through DevTools,
   which has no password. This is the purpose of the feature.
+- Xvnc takes the X cookie in `~/.Xauthority` (`-auth %h/.Xauthority`, a new cookie
+  at each start from `box-display-prepare`), so another local user cannot open
+  the display through its X socket, and a client of the user finds the cookie by
+  default. Without `-auth`, Xvnc let any local user connect, abstract socket included.
 - Xvnc has no password, because anyone who reaches `127.0.0.1:5920` on the host is
   already a local user who can drive the same Chromium through DevTools. On
   devbox, the other local user `sl-factory` cannot reach loopback because its
