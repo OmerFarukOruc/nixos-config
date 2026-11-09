@@ -506,7 +506,14 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   gives no passwordless access as another user, and omer's wheel access still
   asks for his password. `sl-factory` cannot run `sudo` at all
   (`security.sudo.execWheelOnly`). `sudo -u sl-factory -i factory-pane
-  <worktree> [account]` starts a devenv shell in a factory worktree.
+  <worktree> <account> <command> [args]` runs the command in a devenv shell in
+  a factory worktree. `Defaults>sl-factory !use_pty` makes sudo share the
+  caller's terminal for that run user only, so herdr, which watches the
+  terminal's foreground process, detects an agent started that way; omer's other
+  sudo calls keep `use_pty`. A shared terminal lets a process of `sl-factory`
+  push keystrokes into omer's shell through `TIOCSTI`, so
+  `boot.kernel.sysctl."dev.tty.legacy_tiocsti"` is 0 explicitly, and the boot
+  check asserts both settings.
 - Network: `networking.firewall.extraCommands` adds the chain `sl-factory-out`
   for packets of `sl-factory`. It allows the resolvers `127.0.0.53` and
   `127.0.0.54` on port 53 and observability-1's tailnet address

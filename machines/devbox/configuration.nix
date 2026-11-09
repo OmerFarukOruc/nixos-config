@@ -159,6 +159,10 @@ in
       ];
     }
   ];
+  security.sudo.extraConfig = ''
+    Defaults>sl-factory !use_pty
+  '';
+  boot.kernel.sysctl."dev.tty.legacy_tiocsti" = 0;
   # 100.127.140.73 is observability-1's tailnet address, where
   # signoz.statuslantern.com serves the SigNoz API on 443.
   networking.firewall.extraCommands = ''
@@ -185,7 +189,7 @@ in
     (pkgs.writeShellApplication {
       name = "factory-pane";
       text = ''
-        worktree=''${1:?usage: factory-pane WORKTREE [ACCOUNT]}
+        worktree=''${1:?usage: factory-pane WORKTREE ACCOUNT COMMAND [ARGS...]}
         exec bash "$worktree/nix/devenv/factory-pane.sh" "$@"
       '';
     })
