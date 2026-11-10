@@ -1,4 +1,5 @@
-_: {
+{ config, pkgs, ... }:
+{
   nixpkgs.overlays = [ (import ../overlays/rootlesskit.nix) ];
 
   # Rootless Docker picks the host port of a published container from the
@@ -19,6 +20,16 @@ _: {
       enabled = true;
       defaultMaxUsedSpace = "80GB";
     };
+  };
+
+  # dockerd-rootless starts RootlessKit with --copy-up=/etc, which copies the
+  # /etc/static symlink as it is at start, so dockerd keeps reading the /etc of
+  # that generation. Once nix-gc removes it, dockerd has no resolv.conf and no
+  # CA bundle and every pull fails. The root keeps that generation's /etc until
+  # the next start of the daemon.
+  systemd.user.services.docker.serviceConfig = {
+    StateDirectory = "docker-rootless";
+    ExecStartPre = "-${pkgs.coreutils}/bin/timeout 60 ${config.nix.package}/bin/nix-store --realise /etc/static --add-root %S/docker-rootless/etc";
   };
 
   virtualisation.podman.enable = true;

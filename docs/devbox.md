@@ -357,6 +357,17 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   peers reach it, and the firewall blocks the public interface. If
   `docker.service` (a user unit) fails three times in 60 s it stays failed.
   The failure shows in `systemctl --user --failed` and in the journal.
+  RootlessKit gives dockerd a copy of `/etc` from the daemon's start, whose
+  `/etc/static` link points at that generation's `/etc`. When nix-gc removes
+  that `/etc`, dockerd loses its `resolv.conf` and CA bundle, and every pull
+  fails with `lookup ... on [::1]:53`. So the unit's `ExecStartPre` makes the
+  GC root `~/.local/state/docker-rootless/etc` for that generation's `/etc`,
+  which moves at the next start of the daemon. The root holds that `/etc`'s
+  whole closure, 18.3 GiB on 2026-11-11 (`nix path-info -S`), of which only
+  the paths later generations no longer share take extra disk. A failed or
+  hung `nix-store` in that step (60 s limit) leaves the daemon starting
+  without the root. A restart of `docker.service` stops every container,
+  Amp orbs included; Amp starts an orb's container again at its next job.
 - Podman has no daemon; the user unit `podman.socket` answers on
   `$XDG_RUNTIME_DIR/podman/podman.sock`. cliproxy's compose file reaches it with
   `DOCKER_HOST`, the docker CLI and its Compose plugin. `podman.service`, which
