@@ -18,6 +18,7 @@ in
     inputs.disko.nixosModules.disko
     inputs.sops-nix.nixosModules.sops
     ./disk.nix
+    ./factory-agent-files.nix
     ./services.nix
     ../../nixosModules/agent-runtime.nix
     ../../nixosModules/agents.nix
@@ -216,9 +217,9 @@ in
       age = "7d";
     };
     "/tmp/agents".d = {
-      mode = "0755";
-      user = config.oruc.machine.user;
-      group = config.oruc.machine.user;
+      mode = "1777";
+      user = "root";
+      group = "root";
       age = "7d";
     };
     "/tmp/tmux-*".x = { };

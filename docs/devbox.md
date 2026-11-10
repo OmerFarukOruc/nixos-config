@@ -501,7 +501,8 @@ repository. The user can still install packages with `nix profile install`,
 because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
 
 - Packages: `devenv`, `git`, `jq`, `openssh`, and Claude Code, Codex and Grok
-  from `inputs.llm-agents`, the same attributes omer's profile takes.
+  from `inputs.llm-agents`, the same attributes omer's profile takes, and the
+  reviewer's four tools (Reviewer, below).
 - Sudo: `omer` may run any command as `sl-factory` without a password. The rule
   gives no passwordless access as another user, and omer's wheel access still
   asks for his password. `sl-factory` cannot run `sudo` at all
@@ -517,6 +518,22 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   scope and closes its workspace when a run ends (Statuslantern
   `docs/agents/factory.md`, Run user). The boot check asserts the sysctl and the
   sudoers line.
+- Reviewer: `machines/devbox/factory-agent-files.nix` links the `code-reviewer`
+  and `comment-sicko` agents and the `ub-mode` and
+  `thermo-nuclear-code-quality-review` skills into `~/.claude` and into each
+  account folder in its `accounts` list, and `core.md` and
+  `testing-discipline.md` into `~/.claude/shared`, which are the files the
+  reviewer reads. `agents`, `skills` and `shared` are whole links to a
+  read-only store path, so no run plants an agent or a skill that stays, and
+  tmpfiles replaces a real folder put there at the next boot or switch. An
+  edit to these files reaches the user at devbox's next upgrade, unlike omer's
+  live links (`agents/README.md`). The user's profile holds `codex-ask`,
+  `wait-exit`, `sandbox-run` and `dryer`, Codex is logged in, so the second pass
+  with gpt-6.1-sol runs, and `/tmp/agents` is a sticky folder like `/tmp`, so
+  the reviewer can make its scratch folder there. Statuslantern's
+  `factory-run` lands a fix only when the run's account folder holds
+  `agents/code-reviewer.md` (`docs/agents/factory.md`). The boot check asserts
+  the links, the commands and the scratch folder.
 - Lingering: `linger = true` keeps the user manager of `sl-factory` running
   without a login, because Statuslantern's `agent-start` runs each agent in its
   own user scope, `factory-agent-<agent name>.scope`, and stopping one scope

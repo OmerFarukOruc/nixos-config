@@ -48,6 +48,13 @@ machine.succeed(f"test -e /var/lib/systemd/linger/{BOX_USER}")
 
 machine.fail("grep -E '^sl-factory:' /etc/subuid /etc/subgid")
 machine.succeed("test -e /var/lib/systemd/linger/sl-factory")
+for config_dir in ["/home/sl-factory/.claude", *(f"/home/sl-factory/.claude-accounts/{name}" for name in ["own-team", "work1", "work1-team", "work2", "work2-team"])]:
+    machine.succeed(f"test -s {config_dir}/agents/code-reviewer.md && test -s {config_dir}/agents/comment-sicko.md")
+    machine.succeed(f"test -s {config_dir}/skills/ub-mode/SKILL.md && test -s {config_dir}/skills/thermo-nuclear-code-quality-review/SKILL.md")
+machine.succeed("test -s /home/sl-factory/.claude/shared/core.md && test -s /home/sl-factory/.claude/shared/testing-discipline.md")
+for tool in ["codex-ask", "wait-exit", "sandbox-run", "dryer", "codex"]:
+    machine.succeed(f"runuser -l sl-factory -c 'command -v {tool}'")
+machine.succeed("runuser -u sl-factory -- bash -c 'mkdir -p /tmp/agents && mktemp -d -p /tmp/agents probe-review.XXXXXX'")
 machine.succeed("test $(sysctl -n dev.tty.legacy_tiocsti) = 0")
 machine.succeed(f"sudo -l -U {BOX_USER} | grep -F -e 'Defaults>sl-factory' | grep -F -e '!use_pty'")
 machine.fail(f"sudo -l -U {BOX_USER} | sed -n '/^Matching Defaults/,/^$/p' | grep -F -e use_pty")
