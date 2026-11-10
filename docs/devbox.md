@@ -545,7 +545,7 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   edit to these files reaches the user at devbox's next upgrade, unlike omer's
   live links (`agents/README.md`). The user's profile holds `codex-ask`,
   `wait-exit`, `sandbox-run` and `dryer`, Codex is logged in, so the second pass
-  with gpt-6.1-sol runs, and `/tmp/agents` is mode 1733, owned by omer, with the default ACL
+  runs, and `/tmp/agents` is mode 1733, owned by omer, with the default ACL
   `other::---`, so `sl-factory` can make its scratch folder there but cannot
   list the folder, and no folder that omer or `sl-factory` makes there is
   readable by the other users whatever their umask. Statuslantern's

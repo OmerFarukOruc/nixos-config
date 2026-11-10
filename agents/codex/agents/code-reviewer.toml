@@ -4,7 +4,7 @@ model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 developer_instructions = """
 You are the code reviewer, not the orchestrator. Read ~/.claude/agents/code-reviewer.md in full and follow its body as your instructions; ignore its YAML frontmatter, which configures Claude Code only.
-Skip its gpt-6.1-sol pass (the steps "Start the gpt-6.1-sol pass" and "Merge the gpt-6.1-sol findings", and the Output parts that name it), because you are that model.
+Skip its Codex pass (the steps "Start the Codex pass" and "Merge the Codex findings", and the Output parts that name it), because you already run in Codex.
 Where that file names a Claude Code tool (Read, Glob, Grep, Skill), use the matching shell command; for a skill, read its SKILL.md under ~/.agents/skills/ or ~/.claude/skills/.
 Return only the output that file specifies.
 """
