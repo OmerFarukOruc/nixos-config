@@ -17,7 +17,7 @@
 # reason), or --after found a PR closed unmerged, or a lookup of the default branch or the controller workflow failed (in
 # every repository), or in controller mode nothing will merge the PR now (causes below), or without the controller the PR is
 # a draft when the wait starts or later, or was closed, got a new head, or was retargeted while pr-land waited. Rerunning on a merged PR is safe.
-# An open PR first waits for the base branch's required checks, polling for PR_LAND_WAIT seconds of wall-clock time (default 1800; the time of each read counts). The last sleep is cut
+# An open PR first waits for the base branch's required checks (the contexts of branch protection and of the branch's rulesets), polling for PR_LAND_WAIT seconds of wall-clock time (default 1800; the time of each read counts). The last sleep is cut
 # to the time left, so it ends at the limit; one more read follows, and the wait gives up right after it unless that read shows the checks done. Every
 # 60 s and right before the merge it reads the PR again; a PR merged meanwhile goes on to the cleanup. The merge passes
 # --match-head-commit, so GitHub refuses it when the head moved after the read before the merge.
@@ -25,13 +25,19 @@
 # it merges without checks only after three polls in a row list none, and a failed lookup never counts as none.
 # It posts one `@pullfrog review` comment when a required Pullfrog check cannot arrive on its own: `pullfrog-approval`
 # missing after the `pullfrog` run check, or the `pullfrog` run check missing on the head with no run queued for the PR.
+# Without a merge controller, a merge that GitHub refuses with 'head branch is not up to date' or 'Head branch is out of date'
+# (the strict policy of branch protection or of a ruleset) makes pr-land call the update-branch API with expected_head_sha,
+# take the new head only when its first parent is the old head, wait for the required checks on it again, and merge again.
+# Each updated head gets its own PR_LAND_WAIT for the checks. At most 3 updates run; a fourth refusal is a failed merge (exit 1),
+# and a PR that gets another head, or is closed, while it waits ends with exit 3. A body given as --body-file - is read once.
+# In controller mode the controller updates branches, so pr-land never does.
 # When the default branch has .github/workflows/merge-controller.yml, an open PR is not merged here. pr-land adds the
 # `automerge` label and waits for the controller to merge it, for PR_LAND_WAIT seconds of wall-clock time. The default is 13200, which is the
 # backend gate job's timeout (115 min), plus the p90 queue wait of the backend runners at busy hours (95 min, measured on
 # 12-10-2026 before the new runner pool), plus the controller's 10-minute schedule. It reads the PR once per 60 s and the
 # merge-pause issues once per 300 s. After 25 minutes it also checks every 10 minutes that the controller workflow completed
-# a successful run after the label. After the merge it cleans up as above, and fetches refs/pull/<n>/head first. A repository
-# with delete_branch_on_merge loses the head branch at merge, and a head that the controller's branch update made is then on no
+# a successful run after the label. After a merge it cleans up as above, and fetches refs/pull/<n>/head first, in both modes. A repository
+# with delete_branch_on_merge loses the head branch at merge, and a head that a branch update made is then on no
 # other ref; the fetch is harmless in a repository without that setting. When pr-land stops after adding
 # the label, the label stays, so the controller still merges the PR once the cause is gone, and rerunning pr-land resumes the wait.
 # Exit 3 means nothing will merge the PR now. The causes are a changed PR head (the controller updated the branch for an overlap
@@ -57,6 +63,7 @@ controller_workflow=merge-controller.yml
 gate_workflow=gate.yml
 run_bucket='def bucket: if .status != "completed" then "pending" elif (.conclusion | IN("success", "neutral", "skipped")) then "pass" elif .conclusion == "cancelled" then "cancel" else "fail" end;'
 controller_wait=13200
+max_updates=3
 kept=0
 open_known=1
 merged_meanwhile=0
@@ -69,7 +76,9 @@ usage() { sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 setup() {
   BASES=$(mktemp)
   CHECKS_ERR=$(mktemp)
-  trap 'rm -f "$BASES" "$CHECKS_ERR"' EXIT
+  MERGE_ERR=$(mktemp)
+  BODY_FILE=$(mktemp)
+  trap 'rm -f "$BASES" "$CHECKS_ERR" "$MERGE_ERR" "$BODY_FILE"' EXIT
   command -v gh >/dev/null || die "gh is required"
   command -v jq >/dev/null || die "jq is required"
   git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
@@ -252,10 +261,7 @@ await_controller() {
     sleep "$step"; waited=$((waited+step))
     if cur=$(pr_json_rollup "$n") && state=$(jq -r .state <<<"$cur"); then
       case "$state" in
-        MERGED)
-          git fetch --quiet "$remote" "refs/pull/$n/head" >/dev/null 2>&1 \
-            || say "pr-land: could not fetch the head of PR #$n; a local branch behind the merged head may stay" >&2
-          return 0 ;;
+        MERGED) return 0 ;;
         OPEN) ;;
         CLOSED) say "pr-land: PR #$n was closed without a merge" >&2; exit 3 ;;
         *) say "pr-land: PR #$n is $state, not open or merged" >&2; exit 3 ;;
@@ -429,6 +435,9 @@ wait_required() {
   if listed=$(gh api "repos/$GH_REPO/branches/$base/protection/required_status_checks" --jq '.contexts[]' 2>/dev/null) && [[ -n "$listed" ]]; then
     mapfile -t required <<<"$listed"
   fi
+  if listed=$(gh api "repos/$GH_REPO/rules/branches/$base" --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context' 2>/dev/null) && [[ -n "$listed" ]]; then
+    mapfile -t -O "${#required[@]}" required <<<"$listed"
+  fi
   (( ${#required[@]} )) || { wait_own_checks "$n" "$sha" "$base" "$limit"; return 0; }
   while :; do
     local ctx st pending=() failed=() missing=() unread=()
@@ -569,6 +578,62 @@ await_merged() {
   done
 }
 
+update_behind() {
+  local n=$1 old=$2 cur new i
+  if ! gh api -X PUT "repos/$GH_REPO/pulls/$n/update-branch" -f expected_head_sha="$old" >/dev/null 2>"$MERGE_ERR"; then
+    say "pr-land: update-branch of PR #$n failed: $(head -n 1 "$MERGE_ERR")" >&2
+    return 1
+  fi
+  for i in {1..15}; do
+    if cur=$(pr_json "$n"); then
+      [[ "$(jq -r .state <<<"$cur")" == OPEN ]] || { say "pr-land: PR #$n is $(jq -r .state <<<"$cur"), not open or merged" >&2; exit 3; }
+      new=$(jq -r .headRefOid <<<"$cur")
+      if [[ "$new" != "$old" ]]; then
+        [[ "$(gh api "repos/$GH_REPO/commits/$new" --jq '.parents[0].sha' 2>/dev/null)" == "$old" ]] || {
+          say "pr-land: PR #$n has a new head ${new:0:12}, not the update of ${old:0:12}; rerun pr-land $n to wait for its checks" >&2
+          exit 3; }
+        updated_head=$new
+        return 0
+      fi
+    fi
+    sleep 4
+  done
+  say "pr-land: the head of PR #$n did not move after update-branch" >&2
+  return 1
+}
+
+merge_direct() {
+  local n=$1 sha=$2 base=$3 updates=0 rc a prev=
+  local -a flags=()
+  shift 3
+  for a in "$@"; do
+    if [[ "$a" == - && ( "$prev" == --body-file || "$prev" == -F ) ]]; then cat >"$BODY_FILE"; a=$BODY_FILE
+    elif [[ "$a" == --body-file=- ]]; then cat >"$BODY_FILE"; a=--body-file=$BODY_FILE; fi
+    flags+=("$a"); prev=$a
+  done
+  while :; do
+    wait_required "$n" "$sha" "$base"
+    (( ! merged_meanwhile )) || break
+    pr_unchanged "$n" "$sha" "$base" || break
+    rc=0
+    gh pr merge "$n" --squash --match-head-commit "$sha" "${flags[@]}" 2>"$MERGE_ERR" || rc=$?
+    cat "$MERGE_ERR" >&2
+    (( rc )) || break
+    if ! grep -qiE 'head branch is (not up to date|out of date)' "$MERGE_ERR"; then
+      say "pr-land: the merge command for PR #$n failed" >&2
+      break
+    fi
+    if (( updates >= max_updates )); then
+      say "pr-land: PR #$n was still behind $base after $max_updates updates" >&2
+      break
+    fi
+    updates=$((updates+1))
+    say "PR #$n is behind $base; updating its branch ($updates of $max_updates)"
+    update_behind "$n" "$sha" || break
+    sha=$updated_head
+  done
+}
+
 land() {
   local n=$1 json state i sha base
   shift
@@ -578,12 +643,7 @@ land() {
       if uses_controller; then
         await_controller "$n" "$json" "$@"
       else
-        sha=$(jq -r .headRefOid <<<"$json")
-        base=$(jq -r .baseRefName <<<"$json")
-        wait_required "$n" "$sha" "$base"
-        if (( ! merged_meanwhile )) && pr_unchanged "$n" "$sha" "$base"; then
-          gh pr merge "$n" --squash --match-head-commit "$sha" "$@" || say "pr-land: the merge command for PR #$n failed" >&2
-        fi
+        merge_direct "$n" "$(jq -r .headRefOid <<<"$json")" "$(jq -r .baseRefName <<<"$json")" "$@"
       fi ;;
     MERGED) ;;
     *) die "PR #$n is $(jq -r .state <<<"$json"), not open or merged" ;;
@@ -606,6 +666,8 @@ land() {
   if [[ "$(jq -r .isCrossRepository <<<"$json")" == true ]]; then say "fork PR: no branch to clean up"; return 0; fi
   local b
   b=$(jq -r .headRefName <<<"$json"); merged_oid=$(jq -r .headRefOid <<<"$json")
+  git fetch --quiet "$remote" "refs/pull/$n/head" >/dev/null 2>&1 \
+    || say "pr-land: could not fetch the head of PR #$n; a local branch behind the merged head may stay" >&2
   open_heads=$(gh pr list --state open --limit 500 --json headRefName --jq '.[].headRefName') || open_known=0
   land_local "$b"
   land_remote "$b"
