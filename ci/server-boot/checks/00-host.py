@@ -51,13 +51,25 @@ machine.succeed("test -e /var/lib/systemd/linger/sl-factory")
 machine.succeed("test $(sysctl -n dev.tty.legacy_tiocsti) = 0")
 machine.succeed(f"sudo -l -U {BOX_USER} | grep -F -e 'Defaults>sl-factory' | grep -F -e '!use_pty'")
 machine.fail(f"sudo -l -U {BOX_USER} | sed -n '/^Matching Defaults/,/^$/p' | grep -F -e use_pty")
-machine.succeed("iptables -S sl-factory-out | grep -F -e '-o lo -j REJECT'")
 machine.succeed("iptables -S sl-factory-out | grep -F -e '-d 100.127.140.73/32 -o tailscale0 -p tcp -m tcp --dport 443 -j RETURN'")
-machine.succeed("iptables -S sl-factory-out | grep -F -e '-o tailscale0 -j REJECT'")
-machine.succeed("ip6tables -S sl-factory-out | grep -F -e '-o lo -j REJECT'")
-machine.succeed("ip6tables -S sl-factory-out | grep -F -e '-o tailscale0 -j REJECT'")
 machine.succeed("runuser -u omer -- timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222; [[ $line == SSH-2.0-* ]]'")
 machine.fail("runuser -u sl-factory -- timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222'")
+
+
+def fence_intact():
+    uid = machine.succeed("id -u sl-factory").strip()
+    for tool in ("iptables", "ip6tables"):
+        machine.succeed(f"test $({tool} -S OUTPUT | grep -Fxc -e '-A OUTPUT -m owner --uid-owner {uid} -j sl-factory-out') = 1")
+        machine.succeed(f"test $({tool} -S sl-factory-out | grep -Fc -e '-o lo -j REJECT') = 1")
+        machine.succeed(f"test $({tool} -S sl-factory-out | grep -Fc -e '-o tailscale0 -j REJECT') = 1")
+        machine.succeed(f"{tool} -S INPUT | grep -Fx -e '-A INPUT -j nixos-fw'")
+
+
+fence_intact()
+for _ in range(2):
+    machine.succeed("systemctl reload firewall")
+    fence_intact()
+    machine.fail("runuser -u sl-factory -- timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222'")
 
 machine.succeed("test $(sysctl -n net.ipv4.ip_forward) = 1")
 machine.succeed("test $(sysctl -n net.ipv6.conf.all.forwarding) = 1")

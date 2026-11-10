@@ -536,7 +536,13 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   needs another loopback port fails, so a new need adds an exception there.
   The fence assumes devbox uses no Tailscale exit node, so internet traffic
   leaves by `ens3`. It covers TCP and UDP on network sockets only, so a Unix
-  socket of omer, such as an X server's, needs its own access control.
+  socket of omer, such as an X server's, needs its own access control. The
+  commands delete the `OUTPUT` jump with the owner match that adds it, because
+  `iptables -D` deletes only a rule with the same match. A delete without the
+  match leaves the chain referenced, so a reload fails at `-N`, and NixOS then
+  runs the stop script, which removes `-A INPUT -j nixos-fw` and leaves the
+  chain empty. The boot check reloads the firewall twice and checks after each
+  reload the owner jump, the chain's two `REJECT` rules and `-A INPUT -j nixos-fw`.
 - X displays: Xvnc of the box browser (`:20`) and the Cursor worker's `Xtigervnc`
   (`nixosModules/agent-runtime.nix`) start with `-auth ~/.Xauthority`, so
   `sl-factory` cannot open them over the X socket. The `Xtigervnc` wrapper keeps
