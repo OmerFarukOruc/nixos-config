@@ -35,6 +35,7 @@ in
 
   oruc.deploy = {
     sessionIgnore = [
+      "amp-orb-provider.service"
       "amp-runner.service"
       "cliproxy*.service"
       "cursor-worker.service"

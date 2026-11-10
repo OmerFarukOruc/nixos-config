@@ -422,15 +422,35 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   and the box's own list) and runs Omer's agent services as user services of
   omer: OpenChamber (`pkgs/openchamber-web.nix`, 127.0.0.1:3000), the herdr web
   UI (`pkgs/herdr-web-ui.nix`, 127.0.0.1:7317), herdr's default session, the
-  Amp runner and the Cursor worker. An update by hand moves those packages
-  like the others ([updates.md](updates.md#apps)). A deploy leaves a running
-  OpenChamber, herdr session, Amp runner and Cursor worker alone
-  (`X-SwitchMethod = "keep-old"`), so the new version starts at their next
-  restart. Their secrets come from `services.nix`; after a secret changes,
+  Amp runner, the Amp orb provider and the Cursor worker. An update by hand
+  moves those packages like the others ([updates.md](updates.md#apps)). A
+  deploy leaves a running OpenChamber, herdr session, Amp runner, Amp orb
+  provider and Cursor worker alone (`X-SwitchMethod = "keep-old"`), so the new
+  version starts at their next restart. Their secrets, except the orb
+  provider's token below, come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
   `configuration.nix` writes Amp's `/etc/ampcode/managed-settings.json`, which
   Amp reads above its user settings, with `amp.remoteThreadCreation.enabled`,
-  so ampcode.com can open threads on the box. OpenChamber and OpenCode keep
+  so ampcode.com can open threads on the box. `amp-orb-provider.service` runs
+  `amp orb provider` for Omer's personal orb provider `devbox`, the default
+  orb for his new threads (Amp's Settings > Orbs). For each job it runs
+  `machines/devbox/amp-orb-dispatch.sh`, which keeps each orb as a rootless
+  Docker container named after the thread's orb ID (`amp-<thread id>`). The
+  first orb pulls Amp's orb image, 6.18 GB unpacked, which took 64 s on
+  2026-11-11. The image stays as pulled, so `docker pull` it by hand to move
+  orbs to a newer one. A
+  pause stops the container, so the orb's running processes, such as its
+  Terminal and Desktop, end, and its files stay. When Amp asks for a project
+  snapshot, the pause also commits the container as an image under that ID,
+  and later threads of the project start from it. A thread's deletion removes
+  its container but not the project's snapshot images, so remove those with
+  `docker rmi` when `docker images` shows them piling up. Orbs have no CPU or
+  memory limit. `amp orb provider create devbox` stored the provider's token
+  in `~/.local/share/amp/secrets.json`, where the provider reads it; run it
+  again to get a new token. The unit runs the dispatch script through omer's
+  profile, so a job always runs the current version, even while the provider
+  itself keeps its old version after a deploy. The provider and dispatch log is
+  `journalctl --user -u amp-orb-provider`. OpenChamber and OpenCode keep
   their own settings files, which they write themselves; nothing copies them
   elsewhere, so a reinstall starts them from their defaults.
 - `stay-green.timer` starts a run every 4 minutes around the clock. A run keeps
@@ -881,9 +901,10 @@ in daily use:
   agent behind sudo, or the reach of `sl-factory` on the real tailnet.
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
-- **Units that keep their old version.** OpenChamber, herdr, the Amp runner and
-  the Cursor worker set `X-SwitchMethod = "keep-old"` in
-  `machines/devbox/home.nix`, so a deploy does not start their new version.
+- **Units that keep their old version.** OpenChamber, herdr, the Amp runner,
+  the Amp orb provider and the Cursor worker set
+  `X-SwitchMethod = "keep-old"` in `machines/devbox/home.nix`, so a deploy
+  does not start their new version.
 - **Quoted environment values.** stay-green's schedule is quoted in
   `machines/devbox/home.nix`; without the quotes systemd splits the value at a
   space, and no unit fails.

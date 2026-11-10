@@ -77,6 +77,7 @@ in
 
   xdg.mimeApps.defaultApplications = {
     "inode/directory" = [ "org.kde.dolphin.desktop" ];
+    "x-scheme-handler/com.ampcode.amp.linux.auth" = [ "amp-desktop.desktop" ];
   }
   // lib.genAttrs [
     "application/gzip"
@@ -132,6 +133,8 @@ in
       # keep-sorted end
     ]
     ++ [
+      (pkgs.callPackage ../../pkgs/amp-desktop.nix { })
+      agents.amp
       # The .deb's desktop file also opens MCP bundles and skill files.
       (pkgs.symlinkJoin {
         inherit (agents.claude-desktop) name meta;

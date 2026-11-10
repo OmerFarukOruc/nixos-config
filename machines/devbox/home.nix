@@ -12,6 +12,11 @@ let
   herdrWebUi = pkgs.callPackage ../../pkgs/herdr-web-ui.nix { };
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
+  ampOrbDispatch = pkgs.writeShellApplication {
+    name = "amp-orb-dispatch";
+    runtimeInputs = [ pkgs.docker-client ];
+    text = builtins.readFile ./amp-orb-dispatch.sh;
+  };
   home = config.home.homeDirectory;
   failureMarker =
     name: hint:
@@ -70,6 +75,7 @@ in
 
   home.packages = [
     agents.amp
+    ampOrbDispatch
     pkgs.aws-signing-helper
     pkgs.awscli2
     (pkgs.callPackage ../../pkgs/cf.nix { })
@@ -188,6 +194,27 @@ in
       Service = {
         ExecStart = "${lib.getExe pkgs.zsh} -c 'exec amp --no-tui --runner-id %H --discover-dirs=%h/Desktop/workspace --no-serve-cwd --remote-control-terminal --desktop'";
         WorkingDirectory = "${home}/Desktop/workspace";
+        Restart = "always";
+        RestartSec = 10;
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
+    amp-orb-provider = {
+      Unit = {
+        Description = "Amp orb provider that runs Omer's orbs in rootless Docker (outbound connection only)";
+        After = [
+          "docker.service"
+          "network-online.target"
+        ];
+        Wants = [
+          "docker.service"
+          "network-online.target"
+        ];
+        X-SwitchMethod = "keep-old";
+      };
+      Service = {
+        ExecStart = "${lib.getExe agents.amp} orb provider /etc/profiles/per-user/${config.home.username}/bin/amp-orb-dispatch";
+        Environment = [ "DOCKER_HOST=unix://%t/docker.sock" ];
         Restart = "always";
         RestartSec = 10;
       };

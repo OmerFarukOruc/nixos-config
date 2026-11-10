@@ -33,8 +33,8 @@ until a push that fixes the build lands.
 Each host installs `main` within the hour after the push.
 
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
-`update-app.sh` runs `nix hash convert` for the Grok Bot package, npm and
-`prefetch-npm-deps` through Nix for cf and openchamber-web, and
+`update-app.sh` runs `nix hash convert` for the APT packages Grok Bot and
+Amp desktop, npm and `prefetch-npm-deps` through Nix for cf and openchamber-web, and
 `nix flake prefetch` and a build for the apps with a GitHub release source. Run those scripts in a
 checkout on nixos-desktop or nixos-rog, which have Nix, `gh` and `jq`.
 `update-app.sh antigravity-hub`, `update-app.sh openchamber` and
@@ -241,7 +241,7 @@ repository's package record names SpaceXAI as the vendor.
 
 | App | Release source |
 | --- | --- |
-| Grok Bot | an APT index in `passthru.aptIndex` |
+| Grok Bot, Amp desktop | an APT index in `passthru.aptIndex` |
 | Antigravity, OpenChamber | its electron-builder feed (`latest-x64-linux.yml`, `latest-linux.yml`) in `passthru.releaseFeed`; for Antigravity, `update-app.sh` also moves the build ID in its URL |
 | airpods-tui, herdr web UI, KVitals, linctl, Smart Video Wallpaper | the newest GitHub release tagged v and digits, in `passthru.githubRepo`; `update-app.sh` sets the source hash, then builds once with a placeholder to learn the dependencies' hash: `cargoHash` for airpods-tui, `vendorHash` for linctl, and the `outputHash` of the Bun dependencies for the herdr web UI. `passthru.depsBun` holds the bun version that produced the herdr web UI's hash, so `update-app.sh` learns the hash again when nixpkgs' bun differs |
 | Proton-CachyOS, Proton Wineland | the newest GitHub release in `passthru.githubRepo` whose tag is `passthru.releaseTagPrefix` and a dated Proton version (`cachyos-11.0-20261015-slr`, `wineland-11.0-20261103`); other tags of those repositories, such as `wineland-bleeding-edge-*` or `cachyos-wineland-*`, are skipped. `update-app.sh` takes the hash from the `.sha512sum` file beside the `x86_64_v3` tarball. GE-Proton comes from nixpkgs as `proton-ge-bin` |
