@@ -5,11 +5,11 @@
 }:
 let
   pname = "antigravity-hub";
-  version = "2.30.0";
-  buildId = "6386428939206656";
+  version = "2.31.0";
+  buildId = "6379060755038208";
   src = fetchurl {
     url = "https://storage.googleapis.com/antigravity-public/antigravity-hub/${version}-${buildId}/linux-x64/Antigravity.AppImage";
-    hash = "sha512-gIIrBq4hznMqMtVmAIfyPVvc/1kkL3OW2hrwB8eOaS90ml89RwsuHuIxkB+ZLv15uu6ArE3Yo7ZIbKCGPjdang==";
+    hash = "sha512-QjshAZiFwycjjgBWr9y9ubGfmqoORjvJ2qmsCf4pdFT9caCVYa9vUjNeFX5zCHp2AfX56vtScj42fLGzaXTbng==";
   };
   contents = appimageTools.extract { inherit pname version src; };
 in
