@@ -434,10 +434,16 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   at 08:00 Istanbul, `statuslantern-nightly.timer` and
   `statuslantern-factory-run.path`. The triage unit starts at most one run a
   UTC day, so a catch-up after a late boot (`Persistent=true`) starts none when
-  the day's start is taken. It writes the failure marker below to
-  `~/.local/state/statuslantern-factory-triage/failed`, which each new shell
-  prints until a run succeeds. Status Lantern's `docs/agents/factory.md` holds
-  what each unit starts.
+  the day's start is taken. Each of the four services writes the failure
+  marker below to `~/.local/state/<unit>/failed`, which each new shell prints
+  until a run succeeds. SigNoz rules cover only part of these failures:
+  `audit-missed-run` fires when no `audit.run` log arrives, `nightly-failed`
+  when `nightly.run` reports the outcome `failed` or `held`, and
+  `nightly-missed-run` when no `nightly.run` arrives. No rule fires on a triage
+  failure, or on a `factory-run` that fails without posting (an unhandled
+  error, a timeout or a kill), so the marker shows those. A founder's Stop and
+  an error that the run posts to Linear end with exit 0 and clear the marker.
+  Status Lantern's `docs/agents/factory.md` holds what each unit starts.
 - `infisical-agent.service` (`machines/devbox/home.nix`) runs the
   [Infisical Agent](https://infisical.com/docs/integrations/platforms/infisical-agent)
   as omer, with the config that the sops template `infisical-agent.yaml` in
@@ -489,7 +495,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   so `-u` missed the `updated` line of a run on 2026-11-07, and the unit sets
   `SyslogIdentifier=` to its name.
 - The failure marker. Every unit built with
-  `home-manager/modules/scheduled-unit.nix` runs a
+  `home-manager/modules/scheduled-unit.nix`, and the four Status Lantern units
+  above through `failureMarker` in `machines/devbox/home.nix`, run a
   marker command as `ExecStopPost=`, which systemd runs after every run with
   `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
   The marker is `~/.local/state/<unit>/failed`. Any result except `success`

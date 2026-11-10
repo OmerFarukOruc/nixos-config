@@ -15,26 +15,17 @@
   randomizedDelay ? "1h",
 }:
 let
-  marker = pkgs.writeShellApplication {
-    name = "${name}-marker";
-    runtimeInputs = [ pkgs.coreutils ];
-    text = builtins.readFile ./scheduled-unit-marker.sh;
-  };
-  markerFile = "\${XDG_STATE_HOME:-$HOME/.local/state}/${name}/failed";
+  failure = import ./failure-marker.nix { inherit lib pkgs; } name hint;
 in
 {
-  programs.zsh.initContent = ''
-    if [[ -r ${markerFile} ]]; then
-      print -r -- "${name}: $(<${markerFile})"
-    fi
-  '';
+  programs.zsh.initContent = failure.initContent;
 
   systemd.user.services.${name} = {
     Unit.Description = description;
     Service = {
       Type = "oneshot";
       ExecStart = execStart;
-      ExecStopPost = [ "${marker}/bin/${name}-marker ${lib.escapeShellArg hint}" ] ++ stopPost;
+      ExecStopPost = [ failure.execStopPost ] ++ stopPost;
       StateDirectory = name;
       SyslogIdentifier = name;
       Environment = [

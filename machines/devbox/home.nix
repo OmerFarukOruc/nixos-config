@@ -13,12 +13,22 @@ let
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   home = config.home.homeDirectory;
-  triageMarker = pkgs.writeShellApplication {
-    name = "statuslantern-factory-triage-marker";
-    runtimeInputs = [ pkgs.coreutils ];
-    text = builtins.readFile ../../home-manager/modules/scheduled-unit-marker.sh;
-  };
-  triageMarkerFile = "\${XDG_STATE_HOME:-$HOME/.local/state}/statuslantern-factory-triage/failed";
+  failureMarker =
+    name: hint:
+    let
+      failure = import ../../home-manager/modules/failure-marker.nix { inherit lib pkgs; } name hint;
+    in
+    {
+      service = {
+        StateDirectory = name;
+        ExecStopPost = failure.execStopPost;
+      };
+      inherit (failure) initContent;
+    };
+  auditMarker = failureMarker "statuslantern-audit" "journalctl --user -u statuslantern-audit -n 40";
+  nightlyMarker = failureMarker "statuslantern-nightly" "journalctl --user -u statuslantern-nightly -n 40; the night's folder is in ~/.local/state/statuslantern-nightly/runs";
+  factoryRunMarker = failureMarker "statuslantern-factory-run" "journalctl --user -u statuslantern-factory-run -n 40; the run's folder is in ~/.local/state/statuslantern-factory/runs";
+  triageMarker = failureMarker "statuslantern-factory-triage" "journalctl --user -u statuslantern-factory-triage -n 40; the day's start is reserved in ~/.local/state/statuslantern-factory/starts";
   factoryService =
     {
       description,
@@ -316,7 +326,8 @@ in
       ];
       ExecStart = "${lib.getExe pkgs.devenv} shell -- audit-start";
       TimeoutStartSec = "15min";
-    };
+    }
+    // auditMarker.service;
   };
   systemd.user.timers.statuslantern-audit = {
     Unit.Description = "Run the Status Lantern telemetry audit every morning";
@@ -335,7 +346,9 @@ in
       Type = "oneshot";
       TimeoutStartSec = "10h30min";
       TimeoutStopSec = "10min";
-    };
+      StateDirectoryMode = "0700";
+    }
+    // nightlyMarker.service;
     unit.X-SwitchMethod = "keep-old";
   };
   systemd.user.timers.statuslantern-nightly = {
@@ -368,7 +381,8 @@ in
     service = {
       Type = "oneshot";
       TimeoutStartSec = "6h30min";
-    };
+    }
+    // factoryRunMarker.service;
     unit = {
       StartLimitIntervalSec = 0;
       X-SwitchMethod = "keep-old";
@@ -390,15 +404,15 @@ in
     service = {
       Type = "oneshot";
       TimeoutStartSec = "15min";
-      StateDirectory = "statuslantern-factory-triage";
-      ExecStopPost = "${triageMarker}/bin/statuslantern-factory-triage-marker ${lib.escapeShellArg "journalctl --user -u statuslantern-factory-triage -n 40; the day's start is reserved in ~/.local/state/statuslantern-factory/starts"}";
-    };
+    }
+    // triageMarker.service;
   };
-  programs.zsh.initContent = ''
-    if [[ -r ${triageMarkerFile} ]]; then
-      print -r -- "statuslantern-factory-triage: $(<${triageMarkerFile})"
-    fi
-  '';
+  programs.zsh.initContent = lib.concatMapStrings (m: m.initContent) [
+    auditMarker
+    nightlyMarker
+    factoryRunMarker
+    triageMarker
+  ];
   systemd.user.timers.statuslantern-factory-triage = {
     Unit.Description = "Start the factory's triage run every morning, two hours after the audit";
     Timer = {
