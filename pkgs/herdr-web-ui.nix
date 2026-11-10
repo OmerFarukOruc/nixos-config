@@ -9,12 +9,12 @@
   nodejs_26,
 }:
 let
-  version = "0.5.1";
+  version = "0.5.2";
   src = fetchFromGitHub {
     owner = "devswha";
     repo = "ovis";
     tag = "v${version}";
-    hash = "sha256-ed+WLXBEd9Uiw7inug0vCM2EryR13hUll5d6j3zsNYU=";
+    hash = "sha256-RJI/KywvzCa7MALzcDZz+8G51V7N/ze/joUi86z3rTc=";
   };
   deps = stdenvNoCC.mkDerivation {
     pname = "herdr-web-ui-deps";
