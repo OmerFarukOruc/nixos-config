@@ -56,6 +56,16 @@ let
       ]
   );
   link = path: target: "L+ ${path} - - - - ${target}";
+  claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
+  toolsData = "${home}/.config/claude-tools";
+  accountsFile = config.sops.secrets.claude-tools-accounts.path;
+  writeAccounts = pkgs.writeShellScript "sl-factory-claude-tools-accounts" ''
+    set -euo pipefail
+    umask 077
+    mkdir -p ${toolsData}
+    ${pkgs.jq}/bin/jq 'del(.remote_hosts?)' "$CREDENTIALS_DIRECTORY/accounts.json" >${toolsData}/accounts.json.new
+    mv ${toolsData}/accounts.json.new ${toolsData}/accounts.json
+  '';
   configDirs = [ "${home}/.claude" ] ++ map (name: "${home}/.claude-accounts/${name}") accounts;
 in
 {
@@ -67,5 +77,33 @@ in
       (link "${dir}/agents" "${files}/agents")
       (link "${dir}/skills" "${files}/skills")
     ]) configDirs
-    ++ [ (link "${home}/.claude/shared" "${files}/shared") ];
+    ++ [ (link "${home}/.claude/shared" "${files}/shared") ]
+    ++ lib.concatMap (name: [
+      (link "${home}/.claude-${name}" ".claude-accounts/${name}")
+      "f ${home}/.claude-accounts/${name}/.claude-profile 0644 ${user} ${user} -"
+    ]) accounts;
+
+  systemd.services.claude-tools-usage-factory = {
+    description = "Read the usage limits and login state of the Claude Code accounts of ${user}";
+    unitConfig.ConditionPathExists = accountsFile;
+    path = config.users.users.${user}.packages ++ [ pkgs.util-linux ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      LoadCredential = "accounts.json:${accountsFile}";
+      ExecStartPre = "${writeAccounts}";
+      ExecStart = "${claudeTools}/bin/claude-tools usage --quiet";
+      TimeoutStartSec = "15min";
+    };
+  };
+
+  systemd.timers.claude-tools-usage-factory = {
+    description = "Read Claude Code account usage of ${user} every 10 minutes";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*:0/10";
+      RandomizedDelaySec = "30s";
+      OnStartupSec = "1min";
+    };
+  };
 }

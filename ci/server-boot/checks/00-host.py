@@ -48,7 +48,8 @@ machine.succeed(f"test -e /var/lib/systemd/linger/{BOX_USER}")
 
 machine.fail("grep -E '^sl-factory:' /etc/subuid /etc/subgid")
 machine.succeed("test -e /var/lib/systemd/linger/sl-factory")
-for config_dir in ["/home/sl-factory/.claude", *(f"/home/sl-factory/.claude-accounts/{name}" for name in ["own-team", "work1", "work1-team", "work2", "work2-team"])]:
+FACTORY_ACCOUNTS = ["own-team", "work1", "work1-team", "work2", "work2-team"]
+for config_dir in ["/home/sl-factory/.claude", *(f"/home/sl-factory/.claude-accounts/{name}" for name in FACTORY_ACCOUNTS)]:
     machine.succeed(f"test -s {config_dir}/agents/code-reviewer.md && test -s {config_dir}/agents/comment-sicko.md")
     machine.succeed(f"test -s {config_dir}/skills/ub-mode/SKILL.md && test -s {config_dir}/skills/thermo-nuclear-code-quality-review/SKILL.md")
 machine.succeed("test -s /home/sl-factory/.claude/shared/core.md && test -s /home/sl-factory/.claude/shared/testing-discipline.md")
@@ -60,6 +61,14 @@ machine.succeed(f"runuser -u {BOX_USER} -- bash -c 'umask 022 && mkdir /tmp/agen
 machine.succeed("test $(( $(stat -c %a /tmp/agents/box-probe) % 10 )) = 0")
 machine.fail("runuser -u sl-factory -- cat /tmp/agents/box-probe/note")
 machine.succeed(f"runuser -u {BOX_USER} -- ls /tmp/agents | grep -Fx box-probe")
+for name in FACTORY_ACCOUNTS:
+    machine.succeed(f"test -f /home/sl-factory/.claude-{name}/.claude-profile")
+machine.succeed("systemctl list-timers claude-tools-usage-factory.timer | grep -F claude-tools-usage-factory.timer")
+machine.succeed("systemctl start claude-tools-usage-factory.service")
+machine.succeed("test $(stat -c %U:%a /home/sl-factory/.config/claude-tools/accounts.json) = sl-factory:600")
+machine.fail("grep -F remote_hosts /home/sl-factory/.config/claude-tools/accounts.json")
+for name in FACTORY_ACCOUNTS:
+    machine.succeed(f"grep -F '\"{name}\"' /home/sl-factory/.cache/claude-tools/usage.json")
 machine.succeed("test $(sysctl -n dev.tty.legacy_tiocsti) = 0")
 machine.succeed(f"sudo -l -U {BOX_USER} | grep -F -e 'Defaults>sl-factory' | grep -F -e '!use_pty'")
 machine.fail(f"sudo -l -U {BOX_USER} | sed -n '/^Matching Defaults/,/^$/p' | grep -F -e use_pty")

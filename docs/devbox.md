@@ -537,6 +537,25 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   `agents/code-reviewer.md` (`docs/agents/factory.md`). The boot check asserts
   the links, the commands, the scratch folder and that `sl-factory` cannot read
   a folder omer makes there.
+- Usage: `claude-tools` finds an account only as a folder `~/.claude-<name>`
+  that holds a `.claude-profile` file, so `factory-agent-files.nix` links each
+  `~/.claude-accounts/<name>` as `~/.claude-<name>` and makes that file.
+  `claude-tools-usage-factory.timer` runs `claude-tools usage --quiet` as
+  `sl-factory` every 10 minutes. The unit passes the `claude-tools-accounts`
+  secret as a systemd credential (`LoadCredential`), and its `ExecStartPre`,
+  also running as `sl-factory`, writes `~/.config/claude-tools/accounts.json`
+  from it without `remote_hosts`, because `sl-factory` has no ssh key for the
+  other devices. Root writes nothing into that home, so a link planted there
+  cannot redirect a root write. The cache `~/.cache/claude-tools/usage.json` then holds the
+  logins of the accounts the factory's agents use, which `omer`'s own cache
+  does not. The timer shares `.credentials.json` with a running agent, and
+  `claude-tools` only reads it (`pkgs/claude-tools/src/claude_tools/usage.py`,
+  `oauth`): `api_usage` sends the access token to the usage endpoint while it
+  is valid for more than 300 s, and otherwise, or on a 401, `probe` runs
+  `claude -p --max-turns 1` on haiku with the account's `CLAUDE_CONFIG_DIR`, so
+  Claude Code refreshes the token and writes the file itself, as it does for
+  the agent's own turn. Statuslantern's `factory-run` reads it with `sudo -u sl-factory
+  claude-tools usage --order --cached`.
 - Lingering: `linger = true` keeps the user manager of `sl-factory` running
   without a login, because Statuslantern's `agent-start` runs each agent in its
   own user scope, `factory-agent-<agent name>.scope`, and stopping one scope
