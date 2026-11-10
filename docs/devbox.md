@@ -429,6 +429,15 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   failed run usually means the sign-in expired or was revoked; sign in again
   from a workstation with `stay-green login devbox`. Read a run with
   `journalctl --user -u stay-green.service -n 20`.
+- The Status Lantern factory's user units (`machines/devbox/home.nix`):
+  `statuslantern-audit.timer` at 06:00 Istanbul, `statuslantern-factory-triage.timer`
+  at 08:00 Istanbul, `statuslantern-nightly.timer` and
+  `statuslantern-factory-run.path`. The triage unit starts at most one run a
+  UTC day, so a catch-up after a late boot (`Persistent=true`) starts none when
+  the day's start is taken. It writes the failure marker below to
+  `~/.local/state/statuslantern-factory-triage/failed`, which each new shell
+  prints until a run succeeds. Status Lantern's `docs/agents/factory.md` holds
+  what each unit starts.
 - `infisical-agent.service` (`machines/devbox/home.nix`) runs the
   [Infisical Agent](https://infisical.com/docs/integrations/platforms/infisical-agent)
   as omer, with the config that the sops template `infisical-agent.yaml` in

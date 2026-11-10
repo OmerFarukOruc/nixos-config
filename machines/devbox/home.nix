@@ -13,6 +13,12 @@ let
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   home = config.home.homeDirectory;
+  triageMarker = pkgs.writeShellApplication {
+    name = "statuslantern-factory-triage-marker";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = builtins.readFile ../../home-manager/modules/scheduled-unit-marker.sh;
+  };
+  triageMarkerFile = "\${XDG_STATE_HOME:-$HOME/.local/state}/statuslantern-factory-triage/failed";
   factoryService =
     {
       description,
@@ -375,6 +381,31 @@ in
       MakeDirectory = true;
     };
     Install.WantedBy = [ "paths.target" ];
+  };
+
+  systemd.user.services.statuslantern-factory-triage = factoryService {
+    description = "Start a factory run on the oldest open Status Lantern audit issue";
+    script = "triage-start";
+    unit.X-SwitchMethod = "keep-old";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "15min";
+      StateDirectory = "statuslantern-factory-triage";
+      ExecStopPost = "${triageMarker}/bin/statuslantern-factory-triage-marker ${lib.escapeShellArg "journalctl --user -u statuslantern-factory-triage -n 40; the day's start is reserved in ~/.local/state/statuslantern-factory/starts"}";
+    };
+  };
+  programs.zsh.initContent = ''
+    if [[ -r ${triageMarkerFile} ]]; then
+      print -r -- "statuslantern-factory-triage: $(<${triageMarkerFile})"
+    fi
+  '';
+  systemd.user.timers.statuslantern-factory-triage = {
+    Unit.Description = "Start the factory's triage run every morning, two hours after the audit";
+    Timer = {
+      OnCalendar = "*-*-* 08:00 Europe/Istanbul";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 
   # /etc/zshenv replaces a unit's PATH, so every zsh, interactive or not, gets
