@@ -43,7 +43,8 @@
 # check read the default branch from the API, because origin/HEAD goes stale after a rename; setup still uses
 # origin/HEAD for the base-branch list.
 # A token without the Checks permission, such as a fine-grained personal access token, is refused the PR's check rollup and
-# `gh pr checks` (gh 2.103.3, HTTP 403 'Resource not accessible by personal access token'). The controller wait then reads the
+# `gh pr checks` (gh 2.103.3: the check-runs list answers HTTP 403 and the other two a GraphQL error, each 'Resource not accessible
+# by personal access token'). The controller wait then reads the
 # newest gate.yml run of the head from the Actions API, and the wait for the PR's own checks reads the newest run of every
 # workflow on the head. A run still going is pending, success, neutral and skipped are green, every other conclusion is red,
 # and a failed read is retried and never green. Checks that GitHub Apps post outside Actions, such as Pullfrog or Cloudflare
