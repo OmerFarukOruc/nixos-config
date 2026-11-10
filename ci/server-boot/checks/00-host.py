@@ -55,6 +55,11 @@ machine.succeed("test -s /home/sl-factory/.claude/shared/core.md && test -s /hom
 for tool in ["codex-ask", "wait-exit", "sandbox-run", "dryer", "codex"]:
     machine.succeed(f"runuser -l sl-factory -c 'command -v {tool}'")
 machine.succeed("runuser -u sl-factory -- bash -c 'mkdir -p /tmp/agents && mktemp -d -p /tmp/agents probe-review.XXXXXX'")
+machine.fail("runuser -u sl-factory -- ls /tmp/agents")
+machine.succeed(f"runuser -u {BOX_USER} -- bash -c 'umask 022 && mkdir /tmp/agents/box-probe && echo secret > /tmp/agents/box-probe/note'")
+machine.succeed("test $(( $(stat -c %a /tmp/agents/box-probe) % 10 )) = 0")
+machine.fail("runuser -u sl-factory -- cat /tmp/agents/box-probe/note")
+machine.succeed(f"runuser -u {BOX_USER} -- ls /tmp/agents | grep -Fx box-probe")
 machine.succeed("test $(sysctl -n dev.tty.legacy_tiocsti) = 0")
 machine.succeed(f"sudo -l -U {BOX_USER} | grep -F -e 'Defaults>sl-factory' | grep -F -e '!use_pty'")
 machine.fail(f"sudo -l -U {BOX_USER} | sed -n '/^Matching Defaults/,/^$/p' | grep -F -e use_pty")

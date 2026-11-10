@@ -529,11 +529,14 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   edit to these files reaches the user at devbox's next upgrade, unlike omer's
   live links (`agents/README.md`). The user's profile holds `codex-ask`,
   `wait-exit`, `sandbox-run` and `dryer`, Codex is logged in, so the second pass
-  with gpt-6.1-sol runs, and `/tmp/agents` is a sticky folder like `/tmp`, so
-  the reviewer can make its scratch folder there. Statuslantern's
+  with gpt-6.1-sol runs, and `/tmp/agents` is mode 1733, owned by omer, with the default ACL
+  `other::---`, so `sl-factory` can make its scratch folder there but cannot
+  list the folder, and no folder that omer or `sl-factory` makes there is
+  readable by the other users whatever their umask. Statuslantern's
   `factory-run` lands a fix only when the run's account folder holds
   `agents/code-reviewer.md` (`docs/agents/factory.md`). The boot check asserts
-  the links, the commands and the scratch folder.
+  the links, the commands, the scratch folder and that `sl-factory` cannot read
+  a folder omer makes there.
 - Lingering: `linger = true` keeps the user manager of `sl-factory` running
   without a login, because Statuslantern's `agent-start` runs each agent in its
   own user scope, `factory-agent-<agent name>.scope`, and stopping one scope

@@ -217,11 +217,12 @@ in
       age = "7d";
     };
     "/tmp/agents".d = {
-      mode = "1777";
-      user = "root";
-      group = "root";
+      mode = "1733";
+      user = config.oruc.machine.user;
+      group = config.oruc.machine.user;
       age = "7d";
     };
+    "/tmp/agents"."a+".argument = "default:other::---";
     "/tmp/tmux-*".x = { };
     "/tmp/.X11-unix".x = { };
     "/tmp/.ICE-unix".x = { };
