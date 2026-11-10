@@ -42,11 +42,19 @@
 # but Not Found, because a direct merge there would skip the controller's gate check. The controller lookup and the base
 # check read the default branch from the API, because origin/HEAD goes stale after a rename; setup still uses
 # origin/HEAD for the base-branch list.
+# A token without the Checks permission, such as a fine-grained personal access token, is refused the PR's check rollup and
+# `gh pr checks` (gh 2.103.3, HTTP 403 'Resource not accessible by personal access token'). The controller wait then reads the
+# newest gate.yml run of the head from the Actions API, and the wait for the PR's own checks reads the newest run of every
+# workflow on the head. A run still going is pending, success, neutral and skipped are green, every other conclusion is red,
+# and a failed read is retried and never green. Checks that GitHub Apps post outside Actions, such as Pullfrog or Cloudflare
+# builds, stay invisible to such a token.
 set -euo pipefail
 
 remote=origin
 pullfrog_workflow=pullfrog.yml
 controller_workflow=merge-controller.yml
+gate_workflow=gate.yml
+run_bucket='def bucket: if .status != "completed" then "pending" elif (.conclusion | IN("success", "neutral", "skipped")) then "pass" elif .conclusion == "cancelled" then "cancel" else "fail" end;'
 controller_wait=13200
 kept=0
 open_known=1
@@ -152,6 +160,19 @@ land_remote() {
 
 pr_json() { gh pr view "$1" --json "state,headRefName,headRefOid,isCrossRepository,baseRefName,isDraft,labels${2:+,$2}"; }
 
+refused() { grep -q 'Resource not accessible by personal access token' "$1"; }
+
+pr_json_rollup() {
+  pr_json "$1" statusCheckRollup 2>"$CHECKS_ERR" && return 0
+  refused "$CHECKS_ERR" || { cat "$CHECKS_ERR" >&2; return 1; }
+  pr_json "$1"
+}
+
+run_checks() {
+  gh run list --commit "$1" --limit 100 --json workflowName,status,conclusion,startedAt,databaseId --jq \
+    "$run_bucket"' group_by(.workflowName) | map(sort_by([.startedAt, .databaseId]) | last | {name: .workflowName, bucket: bucket})'
+}
+
 has_label() { jq -e --arg l "$2" '[.labels[].name] | index($l) != null' <<<"$1" >/dev/null; }
 
 # Succeeds when the default branch has the merge controller workflow and fails when GitHub answers Not Found for the path.
@@ -182,9 +203,16 @@ uses_controller() {
 # head when it ended without a pass, and nothing while it is missing, running, or green. Only the newest run counts, because a
 # rerun of the same check can list beside the failed one.
 red_gate() {
-  jq -r '[.statusCheckRollup[]? | select(.__typename == "CheckRun" and .name == "gate")] | sort_by(.startedAt) | last
-    | select(. != null and (.conclusion | IN("FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED")))
-    | "\(.conclusion) \(.detailsUrl)"' <<<"$1"
+  local run
+  if jq -e 'has("statusCheckRollup")' <<<"$1" >/dev/null; then
+    jq -r '[.statusCheckRollup[]? | select(.__typename == "CheckRun" and .name == "gate")] | sort_by(.startedAt) | last
+      | select(. != null and (.conclusion | IN("FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED")))
+      | "\(.conclusion) \(.detailsUrl)"' <<<"$1"
+  else
+    run=$(gh run list --workflow "$gate_workflow" --commit "$(jq -r .headRefOid <<<"$1")" --json status,conclusion,startedAt,url,databaseId \
+      --jq 'sort_by([.startedAt, .databaseId]) | last | select(. != null)') || return 1
+    jq -r "$run_bucket"' select(. != null and (bucket | IN("fail", "cancel"))) | "\(.conclusion | ascii_upcase) \(.url)"' <<<"$run"
+  fi
 }
 
 # Prints the URL of one open merge-pause issue, nothing when none is open; fails when the list is unreadable.
@@ -221,7 +249,7 @@ await_controller() {
     left=$((limit - (SECONDS - started)))
     step=$((left < 60 ? left : 60)); (( step > 0 )) || step=0
     sleep "$step"; waited=$((waited+step))
-    if cur=$(pr_json "$n" statusCheckRollup) && state=$(jq -r .state <<<"$cur"); then
+    if cur=$(pr_json_rollup "$n") && state=$(jq -r .state <<<"$cur"); then
       case "$state" in
         MERGED)
           git fetch --quiet "$remote" "refs/pull/$n/head" >/dev/null 2>&1 \
@@ -358,13 +386,16 @@ wait_own_checks() {
   while :; do
     if (( waited % 60 == 0 )) && ! pr_unchanged "$n" "$sha" "$base"; then merged_meanwhile=1; return 0; fi
     state=""
-    if out=$(gh pr checks "$n" --json name,bucket 2>"$err") || [[ "$out" == \[* ]]; then
-      rows=$(jq -r '.[] | "\(.bucket)\t\(.name)"' <<<"$out" 2>/dev/null) || state="the check lookup returned unreadable output"
-    elif grep -q 'no checks reported' "$err"; then
-      rows=""
-    else
-      state="the check lookup failed"
+    if ! out=$(gh pr checks "$n" --json name,bucket 2>"$err") && [[ "$out" != \[* ]]; then
+      if refused "$err"; then
+        out=$(run_checks "$sha" 2>/dev/null) || { out=""; state="the Actions run lookup failed"; }
+      elif grep -q 'no checks reported' "$err"; then
+        out="[]"
+      else
+        state="the check lookup failed"
+      fi
     fi
+    [[ -n "$state" ]] || rows=$(jq -r '.[] | "\(.bucket)\t\(.name)"' <<<"$out" 2>/dev/null) || state="the check lookup returned unreadable output"
     if [[ -z "$state" ]]; then
       failed=$(awk -F'\t' '$1=="fail" || $1=="cancel" {printf "%s (%s) ", $2, $1}' <<<"$rows")
       [[ -z "$failed" ]] || { say "pr-land: check failed on ${sha:0:12}: $failed" >&2; exit 1; }

@@ -7,9 +7,11 @@
 # Exits 0 when all completed as success, neutral or skipped; 1 when one ended otherwise; 2 on bad
 # arguments, a bad regex, or a repo or SHA GitHub refuses (401, 403, 404, 422); 124 at the deadline.
 # GH_WAIT_CHECKS_INTERVAL sets the seconds between polls (default 30).
+# A token without the Checks permission, such as a fine-grained personal access token, is refused the check-runs list and the
+# command exits 2 (gh 2.103.3, 2026-11-10: `gh api repos/<repo>/commits/<sha>/check-runs` answered 403); `gh run list --commit <sha>` reads Actions runs with it.
 set -uo pipefail
 
-help_text() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+help_text() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
 usage() {
 	help_text >&2
 	exit 2
