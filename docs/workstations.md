@@ -142,7 +142,7 @@ session of `codex-ask` use it too.
 `nixos-upgrade.service` runs outside heavy; its `MemoryHigh` slows it above
 12 GiB (`nixosModules/auto-upgrade.nix`) but never stops it.
 
-`heavy` follows the contract of infra's `heavy` on devbox. It exports
+`heavy` exports
 `HEAVY_ACTIVE=1`, and a repository script that finds `heavy` on PATH while
 `HEAVY_ACTIVE` and `CI` are unset runs its suite through it, such as
 gastrodili's `scripts/heavy.ts`. Run any other Nix evaluation of this flake as `heavy nix ...` on the host you work on, never over
