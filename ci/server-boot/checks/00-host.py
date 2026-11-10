@@ -86,11 +86,29 @@ def fence_intact():
         machine.succeed(f"{tool} -S INPUT | grep -Fx -e '-A INPUT -j nixos-fw'")
 
 
+machine.succeed(
+    """cat > /tmp/fence-probe.sh <<'EOF'
+for _ in {1..64}; do
+  while [ ! -e /tmp/fence-probe.stop ]; do
+    if (: < /dev/tcp/127.0.0.1/2222) 2>/dev/null; then echo leak; else echo blocked; fi
+  done &
+done
+wait
+EOF
+chmod 755 /tmp/fence-probe.sh
+systemd-run --quiet --unit=fence-probe --uid=sl-factory --property=StandardOutput=file:/tmp/fence-probe.out bash /tmp/fence-probe.sh"""
+)
+machine.wait_until_succeeds("test $(wc -l < /tmp/fence-probe.out) -ge 64")
 fence_intact()
-for _ in range(2):
+for _ in range(3):
+    before = int(machine.succeed("wc -l < /tmp/fence-probe.out"))
     machine.succeed("systemctl reload firewall")
+    machine.wait_until_succeeds(f"test $(wc -l < /tmp/fence-probe.out) -gt {before}")
     fence_intact()
-    machine.fail("runuser -u sl-factory -- timeout 5 bash -c 'read -r line < /dev/tcp/127.0.0.1/2222'")
+machine.succeed("touch /tmp/fence-probe.stop")
+machine.wait_until_succeeds("! systemctl is-active --quiet fence-probe")
+machine.succeed("test $(grep -c blocked /tmp/fence-probe.out) -gt 0")
+machine.succeed("! grep -q leak /tmp/fence-probe.out")
 
 machine.succeed("test $(sysctl -n net.ipv4.ip_forward) = 1")
 machine.succeed("test $(sysctl -n net.ipv6.conf.all.forwarding) = 1")

@@ -591,13 +591,20 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   needs another loopback port fails, so a new need adds an exception there.
   The fence assumes devbox uses no Tailscale exit node, so internet traffic
   leaves by `ens3`. It covers TCP and UDP on network sockets only, so a Unix
-  socket of omer, such as an X server's, needs its own access control. The
-  commands delete the `OUTPUT` jump with the owner match that adds it, because
-  `iptables -D` deletes only a rule with the same match. A delete without the
-  match leaves the chain referenced, so a reload fails at `-N`, and NixOS then
-  runs the stop script, which removes `-A INPUT -j nixos-fw` and leaves the
-  chain empty. The boot check reloads the firewall twice and checks after each
-  reload the owner jump, the chain's two `REJECT` rules and `-A INPUT -j nixos-fw`.
+  socket of omer, such as an X server's, needs its own access control. A reload
+  never leaves `sl-factory` without the fence. The chain `sl-factory-out` and the
+  owner-matched jump from `OUTPUT` stay in place, and `iptables-restore
+  --noflush` and `ip6tables-restore --noflush` empty and refill the chain in one
+  nf_tables commit, so a restore that fails keeps the old rules. A start adds
+  the chain and the jump only when they are missing.
+  `networking.firewall.extraStopCommands` is empty, so `systemctl stop firewall`
+  keeps the fence as well. The boot check starts 64 loops of `sl-factory` that
+  try port 2222, waits until they have written output, reloads the firewall three
+  times and checks that the output grew across each reload, that no try got
+  through, and after each reload the owner jump, the chain's two `REJECT` rules and
+  `-A INPUT -j nixos-fw`. No test covers the first reload over a fence that an
+  older configuration made on a live host; the `./deploy.sh devbox switch` after
+  a change shows it.
 - X displays: Xvnc of the box browser (`:20`) and the Cursor worker's `Xtigervnc`
   (`nixosModules/agent-runtime.nix`) start with `-auth ~/.Xauthority`, so
   `sl-factory` cannot open them over the X socket. The `Xtigervnc` wrapper keeps
@@ -856,9 +863,11 @@ session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
 in daily use:
 
 - **The run user's isolation.** The boot check covers the empty subordinate
-  uid range, the sysctl, the sudoers line, the firewall rules and one loopback
-  connection each way. No check covers the terminal sharing, herdr's detection
-  of an agent behind sudo, or the reach of `sl-factory` on the real tailnet.
+  uid range, the sysctl, the sudoers line, the firewall rules, one loopback
+  connection each way and a probe that `sl-factory` runs through three firewall
+  reloads. No check covers the first reload over the fence of an older
+  configuration on a live host, the terminal sharing, herdr's detection of an
+  agent behind sudo, or the reach of `sl-factory` on the real tailnet.
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner and

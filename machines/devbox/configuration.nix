@@ -7,11 +7,6 @@
 }:
 let
   secret = name: config.sops.placeholder.${name};
-  slFactoryFenceTeardown = ''
-    ip46tables -D OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out 2>/dev/null || true
-    ip46tables -F sl-factory-out 2>/dev/null || true
-    ip46tables -X sl-factory-out 2>/dev/null || true
-  '';
 in
 {
   imports = [
@@ -173,19 +168,32 @@ in
   # 100.127.140.73 is observability-1's tailnet address, where
   # signoz.statuslantern.com serves the SigNoz API on 443.
   networking.firewall.extraCommands = ''
-    ${slFactoryFenceTeardown}
-    ip46tables -N sl-factory-out
-    ip46tables -A OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out
-    for resolver in 127.0.0.53 127.0.0.54; do
-      for protocol in udp tcp; do
-        iptables -A sl-factory-out -o lo -d $resolver -p $protocol --dport 53 -j RETURN
-      done
-    done
-    ip46tables -A sl-factory-out -o lo -j REJECT
-    iptables -A sl-factory-out -o tailscale0 -d 100.127.140.73 -p tcp --dport 443 -j RETURN
-    ip46tables -A sl-factory-out -o tailscale0 -j REJECT
+    iptables -w -N sl-factory-out 2>/dev/null || true
+    ip6tables -w -N sl-factory-out 2>/dev/null || true
+    iptables-restore -w --noflush <<'RULES'
+    *filter
+    -F sl-factory-out
+    -A sl-factory-out -o lo -d 127.0.0.53 -p udp --dport 53 -j RETURN
+    -A sl-factory-out -o lo -d 127.0.0.53 -p tcp --dport 53 -j RETURN
+    -A sl-factory-out -o lo -d 127.0.0.54 -p udp --dport 53 -j RETURN
+    -A sl-factory-out -o lo -d 127.0.0.54 -p tcp --dport 53 -j RETURN
+    -A sl-factory-out -o lo -j REJECT
+    -A sl-factory-out -o tailscale0 -d 100.127.140.73 -p tcp --dport 443 -j RETURN
+    -A sl-factory-out -o tailscale0 -j REJECT
+    COMMIT
+    RULES
+    ip6tables-restore -w --noflush <<'RULES'
+    *filter
+    -F sl-factory-out
+    -A sl-factory-out -o lo -j REJECT
+    -A sl-factory-out -o tailscale0 -j REJECT
+    COMMIT
+    RULES
+    iptables -w -C OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out 2>/dev/null ||
+      iptables -w -I OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out
+    ip6tables -w -C OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out 2>/dev/null ||
+      ip6tables -w -I OUTPUT -m owner --uid-owner sl-factory -j sl-factory-out
   '';
-  networking.firewall.extraStopCommands = slFactoryFenceTeardown;
   environment.systemPackages = [
     (pkgs.writeShellApplication {
       name = "factory-pane";
