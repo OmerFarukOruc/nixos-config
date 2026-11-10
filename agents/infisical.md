@@ -13,14 +13,17 @@ Infisical EU (`https://eu.infisical.com/api`) holds two projects. Their IDs stay
   with `INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token")` and add
   `--projectId "$INFISICAL_PERSONAL_SECRETS_PROJECT" --domain https://eu.infisical.com`,
   because a machine-identity token ignores `.infisical.json` (`reference/devbox.md`, Accounts and logins).
-- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds every
-  Status Lantern backend and scraper value. Nothing Status Lantern-related lives in `personal-secrets`.
-  The layout and the operator rules are in `statuslantern-backend/docs/runbooks/infisical.md`. Address it with
-  explicit flags from any cwd:
+- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds two kinds
+  of record. The Status Lantern records date from before the move to sops: Status Lantern keeps its secrets
+  in sops in StatusLantern/statuslantern (`docs/secrets.md`), except the logins under prod `/operator`, such
+  as the netcup console passwords and the tailnet account login, which stay only here until that
+  repository's roadmap entry 16a moves them into sops and deletes the other Status Lantern records. Records outside Status Lantern,
+  such as `DEVBOX_OMER_SUDO_PASSWORD` under prod `/infra` (`reference/devbox.md`, Sudo), stay here.
+  Nothing Status Lantern-related lives in `personal-secrets`. Address it with explicit flags from any cwd:
 
 ```bash
 infisical secrets --projectId "$INFISICAL_STATUSLANTERN_PROJECT" --domain https://eu.infisical.com \
-  --env dev --path /statuslantern-scraper/runtime -o json --silent | jq -r '.[]?.secretKey'
+  --env prod --path /operator -o json --silent | jq -r '.[]?.secretKey'
 ```
 
 The layout is folders, not a flat root. Root `/` holds nothing that
@@ -136,9 +139,9 @@ description in the same change. Format, in this order:
 3. What it must match, and the procedure pointer for changes (a runbook section, not a copy of it).
 4. A record with no reader says so and names the reason: "No reader as of <date>. Candidate for removal."
 
-Bad: "Active Case prod value for the Redis password setting." Good: "Redis password the backend
-authenticates with (quarkus.redis.password). Must equal REDIS_PASSWORD in the Coolify Redis service
-environment; rotation order in docs/runbooks/infisical.md, Redis password dual-source handoff."
+Bad: "Sudo password for devbox." Good: "Password of the user omer on devbox, which agents pipe
+into sudo -S. Must equal omer's password on devbox; reference/devbox.md, Sudo, says how agents
+read it."
 
 The CLI has no comment flag; the script below uses the API and compares the description in
 the PATCH response with the requested description. It does not perform a separate readback;

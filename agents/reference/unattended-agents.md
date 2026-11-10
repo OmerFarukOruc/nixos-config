@@ -1,6 +1,6 @@
 # Unattended agents on devbox
 
-Contents: an agent waits after its turn ends; a notice waits until its agent is idle; a restart keeps some loops; `/exit` waits on a dialog; a usage limit; a herdr restart or reboot; an agent exits; a backend merge deploys staging; branches outlive their item; a rule given mid-run; `rm` on a variable path; `rm` inside a `-c` string; `pr-land` removes a worktree; the daily sweep removes a merged worktree; a review's fuzz runs a command.
+Contents: an agent waits after its turn ends; a notice waits until its agent is idle; a restart keeps some loops; `/exit` waits on a dialog; a usage limit; a herdr restart or reboot; an agent exits; a Status Lantern merge deploys staging; branches outlive their item; a rule given mid-run; `rm` on a variable path; `rm` inside a `-c` string; `pr-land` removes a worktree; the daily sweep removes a merged worktree; a review's fuzz runs a command.
 
 This page covers Claude agents left running in herdr's default session while Omer is away. Each entry names a failure point, what handles it now, how to check it, and who sees a failure. A change to any of these paths names its own failure and who sees it, as nixos-config `agents/shared/core.md` (Verification) requires.
 
@@ -65,20 +65,20 @@ herdr's own restore starts a Claude pane as plain `claude --resume <id>`. That c
 - **Check:** `jq '.ended | keys' ~/.local/state/claude-tools/limit-switch/agents.json` lists the agents `resume` can start.
 - **Who sees a failure:** the agent is gone from `herdr agent list`, which the orchestrator's round sees.
 
-## A backend merge deploys staging
+## A Status Lantern merge deploys staging
 
-A merge to `master` in statuslantern-backend deploys staging without a person. After a green master CI run, `scheduled-release.yml` tags the commit and dispatches the Release run, which deploys staging (the repository variable `SCHEDULED_RELEASE_TAGGER_ENABLED` is `true`). Production needs its own dispatch.
+A merge to `main` in StatusLantern/statuslantern deploys staging-1 without a person: each push to `main` runs `.github/workflows/main.yml`, and its `deploy-staging` job runs after the `gate-main` job passes. Production needs a release (the repository's `release` skill).
 
-- **Check:** `backend/scripts/ops/follow_release.sh <master-sha>`, described in the backend's `docs/runbooks/release-pipeline-operations.md` ("Following a merge to staging").
-- **Who sees a failure:** a failed tagger run opens the issue "Scheduled release tagger is failing on master". A failed Release run shows only in GitHub Actions.
+- **Check:** `gh run list --workflow main.yml --commit <merge-sha>` in that repository gives the run's id, and `gh run view <run-id> --json jobs` shows the state of `gate-main`, `deploy-staging` and `release-tag`.
+- **Who sees a failure:** the `notify-failure` job of the same workflow posts a failed or cancelled gate, staging deploy or release tag to the alert relay, the Worker that forwards alerts to Slack (`docs/observability.md` there). When `notify-failure` fails itself, for example because the relay does not answer 202, the failure shows only in GitHub Actions.
 
 ## Branches outlive the item that made them
 
 Agents forget a branch once their item is done, and an agent that deletes one by mistake puts work at risk.
 
 - **Handled by:** the orchestrator, as a standing duty of every round:
-  - Every non-default branch in statuslantern-backend, statuslantern-scraper, and infra has one line in the "Branches" section of the board file: repo, branch, owner agent or "unowned", PR, and fate ("merge via PR #n", "delete: merged in #n", "delete: superseded by <branch>", or "waiting on <item>").
-  - Each round compares that section with `gh api repos/OmerFarukOruc/<repo>/branches --paginate --jq '.[].name'` and with each agent's worktrees, and gives a new branch an owner and a fate the same round. When an owner reports an item done, the same reply asks it to land or delete every branch and worktree the item used.
+  - Every non-default branch in each repository the run works in has one line in the "Branches" section of the board file: repo, branch, owner agent or "unowned", PR, and fate ("merge via PR #n", "delete: merged in #n", "delete: superseded by <branch>", or "waiting on <item>").
+  - Each round compares that section with `gh api repos/<owner>/<repo>/branches --paginate --jq '.[].name'` and with each agent's worktrees, and gives a new branch an owner and a fate the same round. When an owner reports an item done, the same reply asks it to land or delete every branch and worktree the item used.
   - Agents merge through `pr-land <n>`, which adds the `automerge` label where the merge controller exists; only Omer adds that label by hand, and a hook denies an agent's manual add. The merging agent first asks the orchestrator for the merge lock, which allows one merge into a repository's default branch at a time, and releases it when the PR is merged, `pr-land` stops without merging it, or Omer removes the `automerge` label.
   - A branch without a merged PR is deleted only after its owner records the proof on the board, and `git push --delete` comes after that. The proof is that `git cherry -v <successor or default> <branch>` prints no `+` line, or that a squash-merged PR carries the same change. Without that proof the branch stays and goes to Omer as a question.
   - Agents never delete a branch no agent owns, such as another person's or a Cursor or Codex run's; the orchestrator lists it for Omer once, with its age. Renovate branches belong to the Keeper bot, the bot that reviews Renovate pull requests and merges the ones it passes, and stay as they are.

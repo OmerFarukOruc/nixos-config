@@ -46,7 +46,7 @@ Omer's Brave asks him to click Allow once for each new session. The first `brave
 
 ## When an action does nothing
 
-- When `fill` or `click` reports success and the page stays the same, count the matches and act on the visible one, because a page can render a hidden copy of a dialog per table row (Coolify's revoke dialog does). Mark it with `eval` that sets a `data-` attribute on the element with a non-zero `getBoundingClientRect()`, then target that attribute.
+- When `fill` or `click` reports success and the page stays the same, count the matches and act on the visible one, because a page can render a hidden copy of a dialog per table row. Mark it with `eval` that sets a `data-` attribute on the element with a non-zero `getBoundingClientRect()`, then target that attribute.
 - On the box browser, a page that a click changed can stay undrawn until a screenshot is taken: after clicking Linear's "Enter code manually", `eval` found 0 inputs until `box-browser screenshot <file>` ran, then found 1 (agent-browser box browser on nixos-desktop, 2026-11-09). Take a screenshot to a scratch file and delete it before you look for the new element.
 - Clear a field with `press Control+a` and `press Backspace`, then enter text with `fill` or `keyboard type`; `type` garbled the text in Tailscale's fields.
 - Screenshot the element you need, `screenshot <selector> <path>`, because a full page on a HiDPI Brave is 3841x1840 and costs far more to read.

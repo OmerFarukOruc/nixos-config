@@ -23,7 +23,7 @@ Target repository (read-only): ${A.target} at commit ${A.commit} (clean tree).
 Your only writable path: ${A.out}/agents/${a.id}/scratch/
 
 Rules:
-- Read source only (Read, Grep, Glob, git show/log, cat, sed). Do not run builds, tests, gradlew, docker, npm, python scripts from the target, or any target-controlled code. Do not use network access, do not contact any deployed endpoint, provider, registry, Infisical, Coolify, Cloudflare, Stripe, Cognito, SES, or GitHub API.
+- Read source only (Read, Grep, Glob, git show/log, cat, sed). Do not run builds, tests, gradlew, docker, npm, python scripts from the target, or any target-controlled code. Do not use network access, do not contact any deployed endpoint, provider, registry, Infisical, Cloudflare, Stripe, Cognito, SES, or GitHub API.
 - Do not edit the target or any file outside your scratch directory.
 - Before returning, write a copy of your final JSON result to ${A.out}/agents/${a.id}/scratch/result.json with a Bash here-doc (the Write tool refuses this path for subagents; that is expected).
 - Be complete and source-grounded. Every fact needs a repository-relative path:line reference. Mark anything not visible in source as "not source-visible".
