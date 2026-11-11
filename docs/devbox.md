@@ -453,27 +453,39 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   build is not pinned: a Nix rollback does not move it back, and
   `rm ~/.amp/bin/amp` fetches the newest release again, not an older one. The
   Nix `amp` on omer's PATH sets `AMP_SKIP_UPDATE_CHECK` and moves with the
-  llm-agents input.
-  `amp-orb-provider.service` runs
-  `amp orb provider` for Omer's personal orb provider `devbox`, the default
-  orb for his new threads (Amp's Settings > Orbs). For each job it runs
-  `machines/devbox/amp-orb-dispatch.sh`, which keeps each orb as a rootless
-  Docker container named after the thread's orb ID (`amp-<thread id>`). The
-  first orb pulls Amp's orb image, 6.18 GB unpacked, which took 64 s on
-  2026-11-11. The image stays as pulled, so `docker pull` it by hand to move
-  orbs to a newer one. A
-  pause stops the container, so the orb's running processes, such as its
-  Terminal and Desktop, end, and its files stay. When Amp asks for a project
-  snapshot, the pause also commits the container as an image under that ID,
-  and later threads of the project start from it. A thread's deletion removes
-  its container but not the project's snapshot images, so remove those with
-  `docker rmi` when `docker images` shows them piling up. Orbs have no CPU or
-  memory limit. `amp orb provider create devbox` stored the provider's token
-  in `~/.local/share/amp/secrets.json`, where the provider reads it; run it
-  again to get a new token. The unit runs the dispatch script through omer's
+  llm-agents input. The runner serves every Git checkout up to two levels
+  under `~/Desktop/workspace` and every worktree those checkouts list
+  (`--discover-dirs`). It watches the filesystem, so a new clone or worktree
+  shows up in Amp's directory picker at once. Its threads get the Terminal,
+  Desktop and Portal tabs (`--remote-control-terminal`, `--desktop`,
+  `--remote-control-portals`). Only Omer, and the workspace members he shares
+  the runner with, can open a runner portal; it cannot be made public
+  ([Runners](https://ampcode.com/docs/cli/runners)). `amp --help` does not
+  list `--remote-control-portals`, but on 2026-11-11
+  `~/.amp/bin/amp --no-tui --runner-id probe --no-serve-cwd --remote-control-portals`
+  started a runner, and an unknown flag exited with `unknown option`. A
+  changed flag reaches the running runner only after
+  `systemctl --user restart amp-runner`, because a deploy keeps the old unit
+  and Amp's self-update restart keeps the old flags.
+  `amp-orb-provider.service` runs `amp orb provider` for Omer's personal orb
+  provider `devbox`, the default orb for his new threads (Amp's Settings >
+  Orbs). For each job it runs `machines/devbox/amp-orb-dispatch.sh`, which
+  keeps each orb as a rootless Docker container named after the thread's orb
+  ID (`amp-<thread id>`). The first orb pulls Amp's orb image, 6.18 GB
+  unpacked, which took 64 s on 2026-11-11. The image stays as pulled, so
+  `docker pull` it by hand to move orbs to a newer one. A pause stops the
+  container, so the orb's running processes, such as its Terminal and Desktop,
+  end, and its files stay. When Amp asks for a project snapshot, the pause
+  also commits the container as an image under that ID, and later threads of
+  the project start from it. A thread's deletion removes its container but not
+  the project's snapshot images, so remove those with `docker rmi` when
+  `docker images` shows them piling up. Orbs have no CPU or memory limit. `amp
+  orb provider create devbox` stored the provider's token in
+  `~/.local/share/amp/secrets.json`, where the provider reads it; run it again
+  to get a new token. The unit runs the dispatch script through omer's
   profile, so a job always runs the current version, even while the provider
-  itself keeps its old version after a deploy. The provider and dispatch log is
-  `journalctl --user -u amp-orb-provider`. OpenChamber and OpenCode keep
+  itself keeps its old version after a deploy. The provider and dispatch log
+  is `journalctl --user -u amp-orb-provider`. OpenChamber and OpenCode keep
   their own settings files, which they write themselves; nothing copies them
   elsewhere, so a reinstall starts them from their defaults.
 - `stay-green.timer` starts a run every 4 minutes around the clock. A run keeps
