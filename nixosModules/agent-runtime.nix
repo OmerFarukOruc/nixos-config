@@ -5,6 +5,12 @@
     enableScreensaver = false;
   };
   programs.labwc.enable = true;
+  # The Amp runner's desktop sharing downloads waymote-streamd, a prebuilt
+  # binary that loads these through nix-ld.
+  programs.nix-ld.libraries = with pkgs; [
+    libxkbcommon
+    wayland
+  ];
 
   environment.systemPackages = with pkgs; [
     chromium

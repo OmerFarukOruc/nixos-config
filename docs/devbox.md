@@ -395,7 +395,11 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   the tools they call (tigervnc, xdotool, X utilities, ffmpeg, ImageMagick,
   wlr-randr, Chromium; Home Manager gives omer bubblewrap). Those two sessions
   start on demand, and the box has no login manager; xrdp starts a desktop for
-  each RDP login ([Streamed desktop](#streamed-desktop)). The XFCE module
+  each RDP login ([Streamed desktop](#streamed-desktop)). The Amp runner
+  streams its desktop with waymote-streamd, a prebuilt binary it downloads to
+  `~/.amp/bin/waymote`, which runs through nix-ld with the Wayland and
+  xkbcommon libraries the module adds; the runner's journal says "Desktop
+  sharing is unavailable" when one is missing. The XFCE module
   also turns on udisks2, accounts-daemon, gvfs, tumbler, colord, polkit and
   gnome-keyring. Its screensaver is off, because it would lock the Cursor
   worker's session; the Debian box had none installed (`dpkg-query` for
