@@ -3,10 +3,10 @@
   fetchurl,
 }:
 let
-  version = "0.79.4";
+  version = "1.0.1";
   src = fetchurl {
     url = "https://downloads.cursor.com/aptrepo/pool/grok-bot/g/gr/grok-bot_${version}_amd64.deb";
-    hash = "sha256-zw/QAyJJzwjnX23/BFdmtRlQeN2HjR7u1gpoxNMaelo=";
+    hash = "sha256-hghqhKmVg2uMvwncqzOr4LD954LNn6W5ikJ+3nEcwzc=";
   };
 in
 callPackage ./electron-deb {
