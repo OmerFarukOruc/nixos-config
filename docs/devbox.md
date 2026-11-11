@@ -434,8 +434,27 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   provider's token below, come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
   `configuration.nix` writes Amp's `/etc/ampcode/managed-settings.json`, which
-  Amp reads above its user settings, with `amp.remoteThreadCreation.enabled`,
-  so ampcode.com can open threads on the box. `amp-orb-provider.service` runs
+  Amp reads above its user settings. It sets `amp.remoteThreadCreation.enabled`,
+  so ampcode.com can open threads on the box, and `amp.updates.mode` to
+  `auto`, which overrides the `"disabled"` in omer's
+  `~/.config/amp/settings.json`. The Amp runner and the orb provider run
+  Amp's own build of the CLI, `~/.amp/bin/amp`, first on their PATH, instead
+  of the Nix one, because Amp's own build updates itself. The runner installs
+  a new release within about an hour and restarts into it once no thread runs
+  on it, at most once every 12 hours
+  ([Keep a Runner Updated](https://ampcode.com/docs/cli/runners)); on
+  2026-11-11 an older build logged "Updated to ...; restarting to apply (0
+  threads running)" 6 s after its start. The provider logged "Update
+  installed; restarting once no job is running" and restarted the same way.
+  Amp relaunches only when the `amp` first on PATH is the build it installed,
+  so both units put `~/.amp/bin` first. Each unit's `ExecStartPre` runs
+  `machines/devbox/amp-install.sh`, which downloads the newest release when
+  `~/.amp/bin/amp --version` fails and checks it against Amp's SHA-256. That
+  build is not pinned: a Nix rollback does not move it back, and
+  `rm ~/.amp/bin/amp` fetches the newest release again, not an older one. The
+  Nix `amp` on omer's PATH sets `AMP_SKIP_UPDATE_CHECK` and moves with the
+  llm-agents input.
+  `amp-orb-provider.service` runs
   `amp orb provider` for Omer's personal orb provider `devbox`, the default
   orb for his new threads (Amp's Settings > Orbs). For each job it runs
   `machines/devbox/amp-orb-dispatch.sh`, which keeps each orb as a rootless
@@ -909,6 +928,9 @@ in daily use:
   the Amp orb provider and the Cursor worker set
   `X-SwitchMethod = "keep-old"` in `machines/devbox/home.nix`, so a deploy
   does not start their new version.
+- **Amp's own build.** No check covers the first download of
+  `~/.amp/bin/amp` or the self-update restart of the Amp runner and the orb
+  provider; `journalctl --user -u amp-runner -u amp-orb-provider` shows both.
 - **Quoted environment values.** stay-green's schedule is quoted in
   `machines/devbox/home.nix`; without the quotes systemd splits the value at a
   space, and no unit fails.

@@ -106,6 +106,7 @@ in
     config.sops.templates."10-public.network".path;
   environment.etc."ampcode/managed-settings.json".text = builtins.toJSON {
     "amp.remoteThreadCreation.enabled" = true;
+    "amp.updates.mode" = "auto";
   };
 
   users.mutableUsers = false;

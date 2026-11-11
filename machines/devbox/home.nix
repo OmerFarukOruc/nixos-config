@@ -12,6 +12,16 @@ let
   herdrWebUi = pkgs.callPackage ../../pkgs/herdr-web-ui.nix { };
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
+  ampInstall = pkgs.writeShellApplication {
+    name = "amp-install";
+    runtimeInputs = with pkgs; [
+      coreutils
+      curl
+      gzip
+      util-linux
+    ];
+    text = builtins.readFile ./amp-install.sh;
+  };
   ampOrbDispatch = pkgs.writeShellApplication {
     name = "amp-orb-dispatch";
     runtimeInputs = [ pkgs.docker-client ];
@@ -192,7 +202,8 @@ in
         X-SwitchMethod = "keep-old";
       };
       Service = {
-        ExecStart = "${lib.getExe pkgs.zsh} -c 'exec amp --no-tui --runner-id %H --discover-dirs=%h/Desktop/workspace --no-serve-cwd --remote-control-terminal --desktop'";
+        ExecStartPre = lib.getExe ampInstall;
+        ExecStart = "${lib.getExe pkgs.zsh} -c 'PATH=%h/.amp/bin:$$PATH exec amp --no-tui --runner-id %H --discover-dirs=%h/Desktop/workspace --no-serve-cwd --remote-control-terminal --desktop'";
         WorkingDirectory = "${home}/Desktop/workspace";
         Restart = "always";
         RestartSec = 10;
@@ -213,8 +224,12 @@ in
         X-SwitchMethod = "keep-old";
       };
       Service = {
-        ExecStart = "${lib.getExe agents.amp} orb provider /etc/profiles/per-user/${config.home.username}/bin/amp-orb-dispatch";
-        Environment = [ "DOCKER_HOST=unix://%t/docker.sock" ];
+        ExecStartPre = lib.getExe ampInstall;
+        ExecStart = "%h/.amp/bin/amp orb provider /etc/profiles/per-user/${config.home.username}/bin/amp-orb-dispatch";
+        Environment = [
+          "DOCKER_HOST=unix://%t/docker.sock"
+          "PATH=%h/.amp/bin:/run/wrappers/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin"
+        ];
         Restart = "always";
         RestartSec = 10;
       };
