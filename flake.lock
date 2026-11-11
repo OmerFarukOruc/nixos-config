@@ -648,11 +648,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794423164,
-        "narHash": "sha256-mogSnFhXZaaPmBepDwV5YRgCnNZ85Tol0rvhjGb2uLw=",
+        "lastModified": 1794434790,
+        "narHash": "sha256-Lt+x3GQQhmfVH8NLgzkJOLW6Mn1oeUdAwHNS30UuYxQ=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "5103574f3f1fa40d212271ad09fbb6d50ff82a98",
+        "rev": "4adfcf48ba6279edef75695608b3aa5ed4b6ad58",
         "type": "github"
       },
       "original": {
@@ -745,11 +745,11 @@
     "skills-impeccable": {
       "flake": false,
       "locked": {
-        "lastModified": 1794369397,
-        "narHash": "sha256-G2J4pOtcLrjHduTj0wRGtvlLa5IcuR64ad9/sfdLMdg=",
+        "lastModified": 1794425306,
+        "narHash": "sha256-auqflH7kEUZzF0EftJLOZeJe1Lvvy8PeaIgSG/j8y5U=",
         "owner": "pbakaus",
         "repo": "impeccable",
-        "rev": "c1e0e5492fbb524f5df84d635ecfae7dc438ec45",
+        "rev": "b4bff1626c344067788c2679f048a20057c7cc5a",
         "type": "github"
       },
       "original": {
