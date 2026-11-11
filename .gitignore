@@ -4,6 +4,7 @@ result
 .devenv/
 .devenv.flake.nix
 .pre-commit-config.yaml
+.amp/portals/*
 __pycache__/
 agents/claude/hooks/herdr-agent-state.sh
 agents/claude/mods/*/tsconfig.json

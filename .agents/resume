@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+# Activation belongs to the login profile; waking never installs dependencies.
+# shellcheck disable=SC2016
+bash -elc 'test "$DEVENV_ROOT" = "$PWD"; for tool in nix devenv direnv nixfmt shellcheck python3; do command -v "$tool" >/dev/null || exit; done'

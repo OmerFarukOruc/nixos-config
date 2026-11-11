@@ -245,6 +245,14 @@ system state.
 `scripts/check-theme-drift.sh` run inside `nix fmt`, and `scripts/lib/` holds
 helpers that other scripts source. Nobody runs these by hand.
 
+Amp orbs run [`.agents/setup`](.agents/setup) once before snapshotting the
+environment. It installs Nix, takes devenv and direnv from `devenv.lock`'s
+nixpkgs revision, and caches the tools in `devenv.nix`. Login shells inside
+the checkout load the full environment through direnv, including git hooks;
+[`.agents/resume`](.agents/resume) checks it without installing anything.
+Setup needs no host secrets and does not build or deploy the NixOS systems.
+Host access and hardware checks still need the corresponding real machine.
+
 A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and `ci/gate.sh` before the push. [Check before
 you deploy](docs/deploy.md#check-before-you-deploy) lists what they check.

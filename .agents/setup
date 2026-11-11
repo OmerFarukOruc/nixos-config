@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+repo_root=$PWD
+SECONDS=0
+echo 'orb setup: checking Debian prerequisites'
+missing=()
+for package in ca-certificates curl git python3 xz-utils; do
+  if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true) != 'install ok installed' ]]; then
+    missing+=("$package")
+  fi
+done
+if ((${#missing[@]})); then
+  root=()
+  if ((EUID != 0)); then root=(sudo); fi
+  "${root[@]}" apt-get update
+  "${root[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
+fi
+
+echo "orb setup: preparing Nix (${SECONDS}s)"
+if ! command -v nix >/dev/null && [[ ! -x $HOME/.nix-profile/bin/nix ]]; then
+  installer=$(mktemp)
+  trap 'rm -f "$installer"' EXIT
+  curl --fail --location --retry 3 https://nixos.org/nix/install -o "$installer"
+  bash "$installer" --no-daemon --yes --no-modify-profile
+fi
+if [[ -f $HOME/.nix-profile/etc/profile.d/nix.sh ]]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.nix-profile/etc/profile.d/nix.sh"
+fi
+mkdir -p "$HOME/.config/nix"
+if ! grep -Fqx 'extra-experimental-features = nix-command flakes' "$HOME/.config/nix/nix.conf" 2>/dev/null; then
+  printf '\nextra-experimental-features = nix-command flakes\n' >>"$HOME/.config/nix/nix.conf"
+fi
+
+echo "orb setup: building locked devenv and direnv (${SECONDS}s)"
+revision=$(python3 -c 'import json; d=json.load(open("devenv.lock")); print(d["nodes"][d["nodes"]["root"]["inputs"]["nixpkgs"]]["locked"]["rev"])')
+state="$HOME/.local/share/nixos-config-orb"
+mkdir -p "$state"
+nix build --impure --out-link "$state/tools" --expr "
+  let pkgs = (builtins.getFlake \"github:NixOS/nixpkgs/$revision\").legacyPackages.\${builtins.currentSystem};
+  in pkgs.buildEnv { name = \"nixos-config-orb-tools\"; paths = [ pkgs.devenv pkgs.direnv ]; }
+"
+export PATH="$state/tools/bin:$PATH"
+
+echo "orb setup: caching the development environment (${SECONDS}s)"
+direnv allow "$repo_root"
+direnv export bash >/dev/null
+
+echo "orb setup: installing repository-scoped login activation (${SECONDS}s)"
+cat >"$state/activate.bash" <<EOF
+if [[ -z \${NIXOS_CONFIG_ORB_ACTIVATING:-} && ( \$PWD == "$repo_root" || \$PWD == "$repo_root/"* ) ]]; then
+  NIXOS_CONFIG_ORB_ACTIVATING=1
+  if [[ -f \$HOME/.nix-profile/etc/profile.d/nix.sh ]]; then
+    source "\$HOME/.nix-profile/etc/profile.d/nix.sh"
+  fi
+  export PATH="$state/tools/bin:\$PATH"
+  # A parent login shell may export direnv state, but /etc/profile resets PATH.
+  eval "\$(env -u DIRENV_DIR -u DIRENV_DIFF -u DIRENV_FILE -u DIRENV_WATCHES direnv export bash)"
+  unset NIXOS_CONFIG_ORB_ACTIVATING
+fi
+EOF
+marker='# nixos-config orb development environment'
+if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+  # Preserve the login fallback Bash used before .bash_profile existed.
+  if [[ ! -e $HOME/.bash_profile ]]; then
+    if [[ -f $HOME/.bash_login ]]; then
+      printf 'source "%s/.bash_login"\n' "$HOME" >>"$HOME/.bash_profile"
+    elif [[ -f $HOME/.profile ]]; then
+      printf 'source "%s/.profile"\n' "$HOME" >>"$HOME/.bash_profile"
+    fi
+  fi
+  printf '\n%s\nsource "%s/activate.bash"\n' "$marker" "$state" >>"$HOME/.bash_profile"
+fi
+
+# Check a new login shell, without inheriting the setup process's environment.
+# shellcheck disable=SC2016
+env -i HOME="$HOME" USER="$(id -un)" PATH=/usr/bin:/bin /bin/bash -elc \
+  'test "$DEVENV_ROOT" = "$PWD"; for tool in nix devenv direnv nixfmt shellcheck python3; do command -v "$tool" || exit; done'
+echo "orb setup: ready (${SECONDS}s)"
