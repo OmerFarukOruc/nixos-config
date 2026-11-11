@@ -45,6 +45,7 @@ in
     "applications:chatgpt.desktop"
     "applications:com.anthropic.Claude.desktop"
     "applications:grok-bot.desktop"
+    "applications:amp-desktop.desktop"
     "applications:openchamber.desktop"
     "applications:cursor.desktop"
     "applications:slack.desktop"
