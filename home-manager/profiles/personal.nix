@@ -30,6 +30,7 @@ in
     ../modules/warp-launchers.nix
     ../modules/deskflow.nix
     ../modules/agent-cli.nix
+    ../modules/codex-runtime-roots.nix
     ../modules/app-themes.nix
     ../modules/gaming.nix
     ../modules/playwright.nix

@@ -652,6 +652,15 @@ and users are private.
 Omer works at every day, with GPU tools that follow the machine record. Units a
 host can share, such as `agents-pull`, are in `home-manager/modules/`.
 
+On the personal machines, Home Manager roots existing ChatGPT runtimes named
+by Codex's `node_repl` and `cua_repl` settings. Each activation refreshes the
+Nix garbage collector roots and removes ones those settings no longer name,
+so garbage collection keeps the observed runtimes across upgrades. A failed
+settings read or root addition leaves earlier roots in place. Any refresh
+failure writes a warning to the Home Manager activation log, and the next
+activation retries. The two-minute timeout and five-second forced-stop delay
+are unmeasured limits.
+
 ## Failure popups
 
 `nixosModules/monitoring.nix` owns the option `oruc.failurePopupUnits`, a list
