@@ -453,20 +453,30 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   build is not pinned: a Nix rollback does not move it back, and
   `rm ~/.amp/bin/amp` fetches the newest release again, not an older one. The
   Nix `amp` on omer's PATH sets `AMP_SKIP_UPDATE_CHECK` and moves with the
-  llm-agents input. The runner serves every Git checkout up to two levels
-  under `~/Desktop/workspace` and every worktree those checkouts list
-  (`--discover-dirs`). It watches the filesystem, so a new clone or worktree
-  shows up in Amp's directory picker at once. Its threads get the Terminal,
-  Desktop and Portal tabs (`--remote-control-terminal`, `--desktop`,
-  `--remote-control-portals`). Only Omer, and the workspace members he shares
-  the runner with, can open a runner portal; it cannot be made public
+  llm-agents input. The runner serves its working directory
+  `~/Desktop/workspace`, where a thread starts when its request names no
+  directory. `--discover-dirs` adds every Git checkout up to two levels under
+  it, and every worktree of those checkouts that sits beneath it. The runner
+  watches the filesystem, so a new clone or worktree shows up in Amp's
+  directory picker at once. `~/Desktop/workspace` is not a Git checkout, so a
+  thread started there has no Changes tab; pick a repository in the picker, or
+  pass `--runner-dir` with the path of a served checkout to `amp --executor
+  runner:devbox`. Amp's New Directory and New Project create their folder in
+  `~/Desktop/workspace`, and New Worktree puts the worktree beside its
+  repository, in the same parent folder, as `<repo>-<name>`, outside the
+  `worktrees/` layout. Threads get the Terminal, Desktop and Portal tabs
+  (`--remote-control-terminal`, `--desktop`, `--remote-control-portals`). Only
+  Omer, and the workspace members he shares the runner with, can open a runner
+  portal; it cannot be made public
   ([Runners](https://ampcode.com/docs/cli/runners)). `amp --help` does not
-  list `--remote-control-portals`, but on 2026-11-11
-  `~/.amp/bin/amp --no-tui --runner-id probe --no-serve-cwd --remote-control-portals`
-  started a runner, and an unknown flag exited with `unknown option`. A
-  changed flag reaches the running runner only after
-  `systemctl --user restart amp-runner`, because a deploy keeps the old unit
-  and Amp's self-update restart keeps the old flags.
+  list `--remote-control-portals`, but on 2026-11-11 `~/.amp/bin/amp --no-tui
+  --runner-id probe --no-serve-cwd --remote-control-portals` started a runner,
+  and an unknown flag exited with `unknown option`. The probe passes
+  `--no-serve-cwd` so that it serves no directory and never registers with
+  Amp; the unit leaves the flag out so that it serves its working directory. A
+  changed flag reaches the running runner only after `systemctl --user restart
+  amp-runner`, because a deploy keeps the old unit and Amp's self-update
+  restart keeps the old flags.
   `amp-orb-provider.service` runs `amp orb provider` for Omer's personal orb
   provider `devbox`, the default orb for his new threads (Amp's Settings >
   Orbs). For each job it runs `machines/devbox/amp-orb-dispatch.sh`, which

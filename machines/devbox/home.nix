@@ -203,7 +203,7 @@ in
       };
       Service = {
         ExecStartPre = lib.getExe ampInstall;
-        ExecStart = "${lib.getExe pkgs.zsh} -c 'PATH=%h/.amp/bin:$$PATH exec amp --no-tui --runner-id %H --discover-dirs=%h/Desktop/workspace --no-serve-cwd --remote-control-terminal --remote-control-portals --desktop'";
+        ExecStart = "${lib.getExe pkgs.zsh} -c 'PATH=%h/.amp/bin:$$PATH exec amp --no-tui --runner-id %H --discover-dirs=%h/Desktop/workspace --remote-control-terminal --remote-control-portals --desktop'";
         WorkingDirectory = "${home}/Desktop/workspace";
         Restart = "always";
         RestartSec = 10;
