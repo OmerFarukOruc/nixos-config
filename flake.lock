@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1794317113,
-        "narHash": "sha256-0YxNCB01/Shk1S1EumNva5CcT2XCrvpGm24/mTwQRBw=",
+        "lastModified": 1794356791,
+        "narHash": "sha256-EdQEqTpLlWMjq9BZRzSK9GufTl/uHzmjXMHxdmk46WU=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "87add0847ae4744de25a41a9c77a9ef257bea01b",
+        "rev": "4b055ea0af814da4a94050a30479d83fe92e2173",
         "type": "github"
       },
       "original": {
@@ -648,11 +648,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794340148,
-        "narHash": "sha256-7w7N/69OyG9J+dMmGvAWBc7JqUDUugU+PqlNqnMWZF4=",
+        "lastModified": 1794357443,
+        "narHash": "sha256-O0YuyoI2bIqh5H0JWkWQa1DkbEMJg/lMk6+ny3JGkmg=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "fb5548f246c67044a43940adb3f9b84d3f62606a",
+        "rev": "bd55f988365586bb3f408a5fbe0a81f83d6f2304",
         "type": "github"
       },
       "original": {
