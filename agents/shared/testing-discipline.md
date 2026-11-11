@@ -48,6 +48,10 @@ During development, run only the end-to-end tests that the change touches. Run t
 
 A proof that takes more than a few minutes runs last: after the gate passes, an independent review reports, and its fixes are in. A review fix to any file the proof exercises forces the proof to run again, so running it before the review spends one run per review round. A quick end-to-end check of the touched path may still run during development.
 
+## Probes that start a process
+
+A probe that starts an app, server, or TUI ends by stopping every process it left. List the processes whose environment or working directory points into the scratch folder (`/proc/<pid>/environ`, `/proc/<pid>/cwd`) and stop each by its PID, because an app can leave its own server running under the user's systemd, outside `timeout`, on a fixed port the user's own copy needs.
+
 ## Isolated tests need a request
 
 Verify a change by running the real program or system the way its user or caller does, and keep that run as the evidence under "The artifact". Write a new unit test or other isolated test only when Omer asks for one, or when the repository's own instructions (`AGENTS.md`, `CLAUDE.md`, or a testing policy such as `docs/TESTING.md`) require one for that change. A repository that already has tests does not by that fact require new ones, because tests added to match a folder restate the code as written.

@@ -2,7 +2,7 @@
 
 Contents: an agent waits after its turn ends; a notice waits until its agent is idle; a restart keeps some loops; `/exit` waits on a dialog; a usage limit; a herdr restart or reboot; an agent exits; a Status Lantern merge deploys staging; branches outlive their item; a rule given mid-run; `rm` on a variable path; `rm` inside a `-c` string; `pr-land` removes a worktree; the daily sweep removes a merged worktree; a review's fuzz runs a command.
 
-This page covers Claude agents left running in herdr's default session while Omer is away. Each entry names a failure point, what handles it now, how to check it, and who sees a failure. A change to any of these paths names its own failure and who sees it, as nixos-config `agents/shared/core.md` (Verification) requires.
+This page covers Claude agents left running in herdr's default session while Omer is away. Each entry names a failure point, what handles it now, how to check it, and who sees a failure. A change to any of these paths names its own failure and who sees it, as nixos-config `agents/shared/reviews.md` (Reviews and audits) requires.
 
 Terms used below:
 
@@ -113,7 +113,7 @@ Claude Code holds a Bash call whose `bash -c`, `sh -c`, or `zsh -c` string conta
 
 After the merge, `pr-land <n>` removes the linked worktree that has the PR's head branch checked out when the branch tip equals or is contained in the PR head and `git status --porcelain` in it is empty, even when another agent, a Codex run, or Omer made that worktree. An untracked file keeps the worktree, but ignored files go with it. It removes the worktree with `wt remove --reap`, so the pre-remove hook stops a running `devenv up` there, and `--reap` stops the other processes still running in the folder when `lsof` lists them within 5 seconds, which it often does not on nixos-desktop (worktrees skill, Finish). The daily `worktree-sweep.timer` removes older merged worktrees with `wt step prune`, which keeps a dirty one or one younger than a day.
 
-- **Handled by:** nixos-config `agents/shared/core.md` (Git) tells the landing agent to run `git worktree list` in the main checkout first, and `pr-land` itself does not ask. Before `pr-land <n>` it finds the worktree that has the PR's head branch. When such a worktree is not the agent's own, it asks the orchestrator before running the command.
+- **Handled by:** nixos-config `agents/shared/git.md` (Landing a PR) tells the landing agent to run `git worktree list` in the main checkout first, and `pr-land` itself does not ask. Before `pr-land <n>` it finds the worktree that has the PR's head branch. When such a worktree is not the agent's own, it asks the orchestrator before running the command.
 - **Check:** `pr-land` prints `removed worktree <path>` for each worktree it removed, so the landing agent sees the removal only after it happened.
 - **Who sees a failure:** the landing agent in that line, and the worktree's owner when its next command finds the directory gone.
 
