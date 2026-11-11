@@ -1,8 +1,8 @@
 # Infisical
 
-Contents: the two projects (below), then the `##` sections Rules, Commands, and Descriptions.
+Contents: the two projects agents use (below), then the `##` sections Rules, Commands, and Descriptions.
 
-Infisical EU (`https://eu.infisical.com/api`) holds two projects. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
+Omer's organization on Infisical EU (`https://eu.infisical.com/api`) holds four projects, and agents use two of them. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
 
 - `personal-secrets` (id in `$INFISICAL_PERSONAL_SECRETS_PROJECT`, env `secrets`) holds host and
   personal folders; list them with `infisical secrets folders get --env secrets --path /`.
@@ -13,17 +13,18 @@ Infisical EU (`https://eu.infisical.com/api`) holds two projects. Their IDs stay
   with `INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token")` and add
   `--projectId "$INFISICAL_PERSONAL_SECRETS_PROJECT" --domain https://eu.infisical.com`,
   because a machine-identity token ignores `.infisical.json` (`reference/devbox.md`, Accounts and logins).
-- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds two kinds
-  of record. The Status Lantern records date from before the move to sops: Status Lantern keeps its secrets
-  in sops in StatusLantern/statuslantern (`docs/secrets.md`), except the logins under prod `/operator`, such
-  as the netcup console passwords and the tailnet account login, which stay only here until that
-  repository's roadmap entry 16a moves them into sops and deletes the other Status Lantern records. Records outside Status Lantern,
-  such as `DEVBOX_OMER_SUDO_PASSWORD` under prod `/infra` (`reference/devbox.md`, Sudo), stay here.
-  Nothing Status Lantern-related lives in `personal-secrets`. Address it with explicit flags from any cwd:
+- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds only
+  `DEVBOX_OMER_SUDO_PASSWORD` under prod `/infra` (`reference/devbox.md`, Sudo). It holds no Status Lantern
+  record: Status Lantern keeps every secret in sops in StatusLantern/statuslantern and StatusLantern/inbox
+  (statuslantern `docs/secrets.md`), so change a Status Lantern value in sops, never in Infisical. A one-way
+  copy of those values sits in a separate Infisical organization, the `infisical@statuslantern.com` login,
+  whose projects are also named `statuslantern` and `inbox`; `secrets-mirror` writes it (statuslantern
+  `docs/secrets.md`, Mirror), and `$INFISICAL_STATUSLANTERN_PROJECT` is never that copy. Nothing Status
+  Lantern-related lives in `personal-secrets`. Address the `statuslantern` project with explicit flags from any cwd:
 
 ```bash
 infisical secrets --projectId "$INFISICAL_STATUSLANTERN_PROJECT" --domain https://eu.infisical.com \
-  --env prod --path /operator -o json --silent | jq -r '.[]?.secretKey'
+  --env prod --path /infra -o json --silent | jq -r '.[]?.secretKey'
 ```
 
 The layout is folders, not a flat root. Root `/` holds nothing that
@@ -50,7 +51,7 @@ infisical secrets folders get --env secrets --path /harness   # subfolders
   value never transits chat or stdout: capture to a shell variable, pipe,
   or suppress output. Defer to Omer only when the value is not available
   anywhere.
-- Agents create, rotate, or widen a key themselves when a provider API, CLI, or reachable host can do it, and store the value in Infisical without printing it. Omer fills a value in the web UI only when the provider needs his own login.
+- Agents create, rotate, or widen a key themselves when a provider API, CLI, or reachable host can do it, and store the value in Infisical without printing it; a Status Lantern value goes into sops instead (statuslantern `docs/secrets.md`). Omer fills a value in the web UI only when the provider needs his own login.
 
 ## Commands
 
