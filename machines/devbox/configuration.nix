@@ -17,6 +17,7 @@ in
     ./services.nix
     ../../nixosModules/agent-runtime.nix
     ../../nixosModules/agents.nix
+    ../../nixosModules/install-reports.nix
     ../../nixosModules/envfs.nix
     ../../nixosModules/rootless-containers.nix
     ../../nixosModules/tailnet-web.nix

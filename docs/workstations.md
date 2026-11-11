@@ -111,7 +111,35 @@ the system it runs. `nixos-upgrade-failed.service` records that `main` in
 `/var/lib/nixos-upgrade/failed`, so the hourly runs skip it until `main` moves,
 and shows a critical "Update failed" popup through systembus-notify, which
 `nixosModules/monitoring.nix` turns on. The first `error:` line is in
-`journalctl -u nixos-upgrade`. `upgrade` tries that `main` again.
+`journalctl -u nixos-upgrade`. `upgrade` tries that `main` again. A run that a
+signal stopped, such as a shutdown, records nothing.
+
+On a host that imports `nixosModules/install-reports.nix` (nixos-desktop,
+nixos-rog and devbox), which sets `oruc.autoUpgrade.issueReports` and
+decrypts the App's secrets, the same service also runs `install-report failed`
+(`scripts/install-report.sh`). It keeps one open GitHub issue per host, with
+the labels `install-failed` and `host:<host>`, posted by the GitHub App
+`nixos-config-hosts`, so GitHub notifies Omer; it never notifies a person of
+their own activity. The App can write only issues of this repository. A later
+failure comments on the open issue. The issue holds what an agent needs to fix
+the failure without asking: the failed step (build or switch), the failed
+package and its last 40 log lines from `nix log`, or the units that failed
+after the switch, the commits since the last installed revision, the command
+that reproduces it on the agent's own host, and how to prove the fix. The repository is
+public, so the log lines and unit names pass through the private-value filter
+of `secrets/agents.yaml` first; the commit lines are public already. After a recorded install, `install-report installed`
+closes the issue with a comment. The file `/var/lib/nixos-upgrade/reported`
+marks an issue that is open or could not be closed, so a GitHub outage
+leaves it for the next install to close. On devbox a fix that changes the
+kernel installs at the night reboot, so its issue closes at the first hourly
+run after that reboot. Each run mints a token that lasts an hour with
+`gh-token` from the App's key in `secrets/install-reports.yaml`, and stops
+after 2 minutes. When GitHub cannot be reached, the report prints one line to
+the journal and the run's result stays as it was; a failure whose issue could
+not be posted then shows only in the journal and, on a desktop, the popup, because the hourly
+runs skip that `main` until it moves. Text in which gitleaks finds a possible
+secret is left out of the issue. nixos-latitude has no age key in
+`.sops.yaml` yet, so it shows only the popup.
 
 A desktop app keeps running the store path it started from, so an update that
 a switch installs reaches it only after the app restarts.

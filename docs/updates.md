@@ -11,7 +11,7 @@
 The `update` workflow (`.github/workflows/update.yml`) runs `ci/update.sh`
 on GitHub every 2 hours. It runs the two steps of
 [Update by hand](#update-by-hand), apps and then inputs, commits each move,
-runs `ci/gate.sh --evaluate-only` on it, and pushes to `main` the
+runs `ci/gate.sh --no-private-scan` on it (the pre-push gate without the private-value scan, whose values the runner lacks), and pushes to `main` the
 moves that pass. A move that fails a step stays out and turns the run red, and
 GitHub emails the failure. A warning that a move stays out, such as an app
 that does not build or nixpkgs held back, turns the run red too, except the
@@ -25,12 +25,9 @@ system. Besides each host's unit files and the theme checks, it builds the
 repository patches and applies its patches, and builds each package whose
 overlay edits it after the build (GE-Proton's `proton` script), so a move
 after which a patch or edit no longer applies stays out. Any other move that evaluates but fails to build
-reaches the hosts, which keep their system and show "Update failed"
-([Updater](workstations.md#updater)).
-Such a move also stops every later push, because the pre-push hook builds each
-workstation's system ([Check before you deploy](deploy.md#check-before-you-deploy)),
-until a push that fixes the build lands.
-Each host installs `main` within the hour after the push.
+reaches the hosts, which keep their system, show "Update failed" and open a
+GitHub issue ([Failures and notifications](workstations.md#failures-and-notifications)).
+Each host tries the new `main` at its next hourly run.
 
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and
 `update-app.sh` runs `nix hash convert` for the APT packages Grok Bot and
@@ -91,7 +88,8 @@ freshly fetched `origin/main`:
 
 3. Build nixos-rog's system with `scripts/build.sh`. `devenv tasks run ci`
    builds every host's system instead
-   ([Check before you deploy](deploy.md#check-before-you-deploy)).
+   ([Check before you deploy](deploy.md#check-before-you-deploy)); the
+   pre-push hook builds none.
 4. Push to `main` and deploy as [AGENTS.md](../AGENTS.md) describes.
 
 Both modes take the host whose system decides the moves, and need nix, `gh`,

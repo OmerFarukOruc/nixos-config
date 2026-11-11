@@ -60,7 +60,7 @@ move() {
   fi
   echo "::endgroup::"
   echo "::group::Check the $mode"
-  if ! ci/gate.sh --evaluate-only; then
+  if ! ci/gate.sh --no-private-scan; then
     echo "::endgroup::"
     drop "$mode-checks" "$before"
     return 0

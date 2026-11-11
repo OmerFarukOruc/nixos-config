@@ -257,7 +257,7 @@ A change commits straight to `main` once the git hooks of `devenv.nix` pass:
 `nix fmt` before the commit, and `ci/gate.sh` before the push. [Check before
 you deploy](docs/deploy.md#check-before-you-deploy) lists what they check.
 GitHub runs only the `update` workflow, which moves the apps and inputs every 2
-hours and runs the same checks, without the workstation builds, before it pushes
+hours and runs the same checks, without the private-value scan, before it pushes
 ([Update inputs, apps and the kernel](docs/updates.md)), and Dependabot, which
 opens a pull request when an action of that workflow has a new release
 ([Workflow actions](docs/updates.md#workflow-actions)). Run the update by hand

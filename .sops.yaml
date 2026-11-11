@@ -25,7 +25,7 @@ creation_rules:
           - *omer-all-devices
           - *nixos-rog
           - *nixos-desktop
-  - path_regex: secrets/agents\.yaml$
+  - path_regex: secrets/(agents|install-reports)\.yaml$
     key_groups:
       - age:
           - *omer-all-devices

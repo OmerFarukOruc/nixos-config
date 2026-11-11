@@ -12,6 +12,7 @@
     ./claude-tools-usage-read.nix
     ./cpu-limits.nix
     ../../nixosModules/agents.nix
+    ../../nixosModules/install-reports.nix
     ../../nixosModules/envfs.nix
     ./gaming.nix
     ./graphics.nix

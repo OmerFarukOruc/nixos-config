@@ -3,7 +3,7 @@ NIX_OPTS=(--option allow-import-from-derivation false)
 HOST_SYSTEM_EXPR='h: {
   drv = h.config.system.build.toplevel.drvPath;
   out = h.config.system.build.toplevel.outPath;
-  inherit (h.config.oruc.machine) deployLogin kind;
+  inherit (h.config.oruc.machine) deployLogin;
 }'
 
 fetch_inputs() {

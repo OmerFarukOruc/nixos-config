@@ -4,6 +4,7 @@
   imports = [
     inputs.sops-nix.nixosModules.sops
     ../../nixosModules/agents.nix
+    ../../nixosModules/install-reports.nix
     ../../nixosModules/envfs.nix
     ../../nixosModules/nextdns.nix
     ../../nixosModules/ssh-hosts.nix

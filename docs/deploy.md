@@ -20,9 +20,10 @@ lists the aliases. A server is the exception, because its deploys log in as
 root ([Deploy to a server](#deploy-to-a-server)).
 
 Every deploy command in this guide can change boot or running system state.
-Omer's request for a change also approves its deploy. Every host installs
-`main` by itself within the hour, so a change on `main` needs a deploy by hand
-only when it needs proof on a host now;
+Omer's request for a change also approves its deploy. Every host tries to
+install `main` by itself every hour, unless a skip reason of
+[Updater](workstations.md#updater) holds, such as battery power, so a change on
+`main` needs a deploy by hand only when it needs proof on a host now;
 [Deploy a change on main](#deploy-a-change-on-main) says which hosts and how.
 When a host you deploy by hand is unreachable, read its line in
 `tailscale status`. A line without `offline`, or with `offline, last seen`
@@ -53,12 +54,12 @@ A change reaches `main` only through the git hooks of `devenv.nix`, which
 direnv installs when it loads the devenv shell. GitHub runs no check of a
 commit that a person pushes.
 
-| Hook | Runs | Took on nixos-rog |
+| Hook | Runs | Took |
 | --- | --- | --- |
-| pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting, as treefmt reports it |
-| pre-push | `ci/gate.sh` under `heavy` where it exists: the private-value scan and the `agents/` checks on the pushed commits ([agents/README.md](../agents/README.md#checks)), then `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, which a push that changes only `agents/` skips | 211 s with a warm store at load 25, when no workstation system needed a build (2026-11-01) |
+| pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting on nixos-rog, as treefmt reports it (2026-11-01) |
+| pre-push | `ci/gate.sh` under `heavy` where it exists: the private-value scan and the `agents/` checks on the pushed commits ([agents/README.md](../agents/README.md#checks)), then `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, which a push that changes only `agents/` skips | 526 s on devbox, while its own hourly install ran (`devenv test`, 2026-11-11); it built no host's system |
 
-The times come from a test clone on 2026-11-01. The same checks run with one
+Both times come from a test clone. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
 `ci/build-hosts.sh`:
 
@@ -75,27 +76,27 @@ clean tree, `ci/checks.sh` evaluates that commit (`git+file://...?rev=`) and
 stores each host's system for `scripts/affected-hosts.sh`; with uncommitted
 changes it stores nothing.
 
-The pre-push hook runs `ci/checks.sh`, which builds each workstation's system
-from the `drvPath` it evaluated, so a writer script that fails shellcheck or
-flake8 in a workstation's system stops the push. It builds no other host's
-system: devbox's is only evaluated, and the `update` workflow runs
-`ci/gate.sh --evaluate-only`, so its GitHub runner builds no system. A move
-from that workflow that does not build therefore stops every later push until a
-push fixes the build ([Update inputs, apps and the kernel](updates.md)).
-Every host installs `main` by itself every hour
+The pre-push hook evaluates each host's system and builds no host's system,
+so a push never builds or downloads a system for another machine. The `update`
+workflow runs the same checks with `ci/gate.sh --no-private-scan`
+([Update inputs, apps and the kernel](updates.md)). A writer script that fails
+shellcheck or flake8 only in a system build therefore passes the hook; prove a
+changed writer script with `scripts/build.sh` before it lands, as
+[AGENTS.md](../AGENTS.md) says. Each host builds only its own system, when it
+installs `main` by itself every hour
 ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit that does not
 build for a host fails that host's next hourly install. The host keeps its
 system, records that `main` as failed and skips it in the hourly runs until
-`main` moves, and a host with a desktop shows "Update failed"
+`main` moves, a host with a desktop shows "Update failed", and nixos-desktop,
+nixos-rog and devbox open a GitHub issue that an agent can fix from
 ([Failures and notifications](workstations.md#failures-and-notifications)).
 `upgrade` tries that `main` again. `devenv tasks run ci` builds every host's
 system before a push.
 
 The gate exists only where the devenv shell loaded. nixos-desktop,
 nixos-latitude and nixos-rog install devenv
-(`home-manager/profiles/workstation.nix`); devbox does not, so direnv there
-prints `devenv: command not found` and loads no hooks. Land changes from a
-workstation. A clone that never
+(`home-manager/profiles/workstation.nix`), and devbox installs it in its own
+Home Manager layer (`machines/devbox/home.nix`). A clone that never
 ran `direnv allow` has no hooks, and on nixos-rog and nixos-desktop `heavy`
 fails without a user session bus, which fails the push hook. Git opens the SSH
 connection to GitHub before the pre-push hook runs and holds it open, and GitHub
@@ -128,9 +129,9 @@ and copies the changed files back before it checks. `eval.sh` evaluates
 one attribute and does not forbid import from derivation.
 
 To prove that a package or overlay builds before it lands, run
-`scripts/build.sh [ATTRIBUTE...]`, because the checks above build only each
-workstation's system, so devbox's system and a package that no workstation
-uses stay unbuilt. It builds each flake attribute in a copy of this checkout and prints
+`scripts/build.sh [ATTRIBUTE...]`, because the checks above build no host's
+system, so a package, overlay or writer script stays unbuilt until a host
+installs it. It builds each flake attribute in a copy of this checkout and prints
 the output paths. A package that modules load with `pkgs.callPackage
 ../../pkgs/NAME.nix { }` has no flake attribute, so pass its file instead, such
 as `pkgs/claude-tools.nix`; the script builds it with nixos-rog's
@@ -146,8 +147,8 @@ that fails.
 scripts/build.sh '.#nixosConfigurations.nixos-rog.pkgs.deskflow'
 ```
 
-These checks prove that each host's system evaluates and that each
-workstation's system builds. The deploy builds the candidate on the target in
+These checks prove that each host's system evaluates; they build no host's
+system. The deploy builds the candidate on the target in
 step 5, and a failed build leaves the running system as it was and the
 candidate release on the target
 ([When a deploy fails](#when-a-deploy-fails)). The checks do not prove that the
@@ -171,12 +172,9 @@ hardware and services work after activation. To read the last deployed source on
    fails when an overlay in `overlays/` patches a package it does not list, so
    a nixpkgs move after which a patch no longer applies fails without a build
    of the whole system.
-6. `workstation builds`: builds each workstation's system from those
-   `drvPath`s. `--evaluate-only` skips it, as the `update` workflow does; every
-   other check runs under that flag too.
-7. `box browser feature`: evaluates nixos-desktop's box browser
+6. `box browser feature`: evaluates nixos-desktop's box browser
    (`ci/box-browser.nix`), to check its units and the display's command line.
-8. `server record`: evaluates a bare server record (`ci/server.nix`) and
+7. `server record`: evaluates a bare server record (`ci/server.nix`) and
    checks that it gets no workstation piece, keeps its access setup (sshd on
    port 2222 by public key, Tailscale SSH, only Tailscale's UDP port) and the
    Limine fields of its record, and that a streamed desktop adds only its own
@@ -184,12 +182,12 @@ hardware and services work after activation. To read the last deployed source on
    six ways to open a port (TCP or UDP ports and ranges, a trusted interface and a
    per-interface port), what the schema accepts and rejects, and that
    nixos-desktop and nixos-rog keep the fallback copy of their EFI binary.
-9. `VM tests`: the flake still defines the `devbox-boot-bios` and
+8. `VM tests`: the flake still defines the `devbox-boot-bios` and
    `deploy-script` VM checks. It evaluates them and runs neither.
-10. `binary cache copies`: the substituters and keys in the install docs and
-    `.github/workflows/update.yml` match the hosts' `nix.settings`, except the
-    tailnet-only cache `cache.statuslantern.com`, which a GitHub runner and an install
-    medium cannot reach.
+9. `binary cache copies`: the substituters and keys in the install docs and
+   `.github/workflows/update.yml` match the hosts' `nix.settings`, except the
+   tailnet-only cache `cache.statuslantern.com`, which a GitHub runner and an install
+   medium cannot reach.
 
 `ci/unit-cycles.sh` runs the ordering-cycle check of the deploy's step 7
 ([What the deploy does](#what-the-deploy-does)) on each host's units. It builds the unit files without the programs

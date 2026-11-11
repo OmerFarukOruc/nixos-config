@@ -636,7 +636,10 @@ edits them with the SSH key he shares across his devices,
 derived from its SSH host key (`ssh-to-age` on
 `/etc/ssh/ssh_host_ed25519_key.pub`). Two files are shared by several hosts.
 nixos-desktop, nixos-rog and devbox each decrypt `secrets/agents.yaml` for the
-private-value scan of [agents/README.md](../agents/README.md#checks).
+private-value scan of [agents/README.md](../agents/README.md#checks), and
+`secrets/install-reports.yaml`, the ID and key of the GitHub App that opens an
+issue for a failed install
+([Failures and notifications](workstations.md#failures-and-notifications)).
 nixos-desktop and nixos-rog decrypt `secrets/workstations.yaml`, whose
 `ssh-config` key is Omer's SSH client config; `nixosModules/ssh-hosts.nix`
 links `~/.ssh/config` to the decrypted file, because its host names, addresses
@@ -678,8 +681,8 @@ as `fans.nix` does for `case-fans` and `via-devbox.nix` for
 lists, so a new service needs that line by hand.
 
 - `nixos-upgrade` has its own handler, `nixos-upgrade-failed`, which records the
-  failed revision and shows an "Update failed" popup with its own text
-  (`nixosModules/auto-upgrade.nix`).
+  failed revision, shows an "Update failed" popup with its own text and opens a
+  GitHub issue (`nixosModules/auto-upgrade.nix`).
 - `openrgb-boot` is a oneshot that sets the case lights at boot and runs again
   at the next boot.
 - `oruc-theme-root` is a oneshot that reports a failed step in its own journal
