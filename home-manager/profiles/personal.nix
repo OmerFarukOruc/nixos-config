@@ -110,7 +110,6 @@ in
       (pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; })
     ]
     ++ [
-      agents.antigravity-cli
       # Only its own codex:// links: the .deb also claims web links and office files.
       (pkgs.symlinkJoin {
         inherit (agents.chatgpt) name meta;

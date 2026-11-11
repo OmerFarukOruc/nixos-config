@@ -14,6 +14,7 @@
 
   home.packages = [
     agents.agent-browser
+    agents.antigravity-cli
     agents.pi
     (pkgs.callPackage ../../pkgs/linctl.nix { })
     pkgs.mise
