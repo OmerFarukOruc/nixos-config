@@ -76,6 +76,7 @@ The box carries `tag:infra-agent`, and the tailnet policy decides what it reache
 Agents drive browsers with agent-browser; the agent-browser skill says which browser to use and how.
 
 - The box browser holds Omer's logins: Chromium on the VNC display `:20`, DevTools on `127.0.0.1:9344`, profile in `~/.local/share/box-browser/profile`. Agents drive it with `box-browser`, and Omer signs in from his PC with `box-view devbox`. nixos-config `nixosModules/box-browser.nix` runs the display and the browser as user units.
+- The box browser is signed in to GitHub as `statuslantern-tailscale`, not `OmerFarukOruc`, so a GitHub App or setting made there belongs to that account; one that must belong to `OmerFarukOruc` needs his Brave. When GitHub asks that account for sudo mode or a 2FA code, compute the code from the setup key `GITHUB_STATUSLANTERN_TAILSCALE_TOTP_SEED` in Infisical `personal-secrets` `/personal-secrets` with `oathtool --totp -b -` on stdin (`nix build nixpkgs#oath-toolkit`), and enter it through `box-browser eval --stdin` as the agent-browser skill says, so the code never reaches a command line or the output (enrolled 11-11-2026).
 - Omer's lent Brave (`browser-lend on` on his PC, `brave-browser --on <machine>` here) is for copying a passkey-only site's cookies into the box browser.
 - A public page needs no lent browser: `agent-browser --session <name> open <url>` starts a throwaway headless Chrome.
 
