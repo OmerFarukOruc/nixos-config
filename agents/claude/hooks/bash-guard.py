@@ -15,10 +15,11 @@ import time
 
 import git_checks
 import process_checks
+import secret_checks
 import shell_checks
 from bash_call import parse
 
-CHECKS = git_checks.CHECKS + process_checks.CHECKS + shell_checks.CHECKS
+CHECKS = git_checks.CHECKS + process_checks.CHECKS + secret_checks.CHECKS + shell_checks.CHECKS
 DEADLINE_SECONDS = 8.0
 
 
