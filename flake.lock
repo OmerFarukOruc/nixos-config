@@ -616,11 +616,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1793867224,
-        "narHash": "sha256-9/MhRipFZUjlq876igXq+FFr67FLjAIUAVNyUGniOiQ=",
+        "lastModified": 1794499132,
+        "narHash": "sha256-WFLHw+xrQOHvuWZ32RUCtOUC6KjwJy3e90UiTIwjp3M=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "30971f1c50c6412a0c414e8c7b15032a32b21939",
+        "rev": "81e176cb4fb5811e24f42d49dd6bc7ff12a8d84e",
         "type": "github"
       },
       "original": {
@@ -664,11 +664,11 @@
     "skills-diagram-design": {
       "flake": false,
       "locked": {
-        "lastModified": 1794493180,
-        "narHash": "sha256-/KBX3XxeDoOSR+BgG4+0DcRPaqtSuaNv8GpSGrhoYGE=",
+        "lastModified": 1794500967,
+        "narHash": "sha256-Cx5ARG9nN3WkVHfM91P9ObBDsx/0kSrp64WWFqhdwNc=",
         "owner": "cathrynlavery",
         "repo": "diagram-design",
-        "rev": "8ab4b6eab9fc6126521a03eb00d9c20ec192d8ff",
+        "rev": "8f20e51a2b0301018bf58aebae2e15d3583c8b28",
         "type": "github"
       },
       "original": {
