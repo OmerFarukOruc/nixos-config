@@ -664,11 +664,11 @@
     "skills-diagram-design": {
       "flake": false,
       "locked": {
-        "lastModified": 1794508301,
-        "narHash": "sha256-NKbxfKIgh5T9ngjKb8KIpFIka+MKLutr+Z9vfLD1PDo=",
+        "lastModified": 1794513303,
+        "narHash": "sha256-hQyLkxyK7O9hDt1OXahrhJdIv5gSvzrdhrpTWSoj3tk=",
         "owner": "cathrynlavery",
         "repo": "diagram-design",
-        "rev": "58ee12c3913407962a061fc993a2f73f9ea8a3dc",
+        "rev": "6f479d925a24ea0d8c81ca954365be52c55a513e",
         "type": "github"
       },
       "original": {
