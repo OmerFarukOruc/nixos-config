@@ -35,6 +35,7 @@ in
       threadsift-connector-token = threadsiftSecret "connector-token";
       threadsift-secret-key = threadsiftSecret "secret-key";
       threadsift-setup-code = threadsiftSecret "setup-code";
+      threadsift-claude-code-oauth-token = threadsiftSecret "claude-code-oauth-token";
       infisical-client-id = userSecret;
       infisical-client-secret = userSecret;
       infisical-project-id = userSecret;
@@ -104,6 +105,7 @@ in
         TUNNEL_TOKEN=${placeholder.threadsift-connector-token}
         THREADSIFT_SECRET_KEY=${placeholder.threadsift-secret-key}
         SETUP_CODE=${placeholder.threadsift-setup-code}
+        CLAUDE_CODE_OAUTH_TOKEN=${placeholder.threadsift-claude-code-oauth-token}
       '';
     };
     templates."openchamber.env" = {

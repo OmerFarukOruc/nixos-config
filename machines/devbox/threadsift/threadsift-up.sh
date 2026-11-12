@@ -13,16 +13,21 @@ if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -d "${XDG_RUNTIME_DIR:-}" ]; then
   echo "threadsift-up: XDG_RUNTIME_DIR is unset or not a directory" >&2
   exit 78
 fi
-if [ "${1:-}" != stop ] && { [ -z "${THREADSIFT_SECRET_KEY:-}" ] || [ -z "${SETUP_CODE:-}" ] || [ -z "${TUNNEL_TOKEN:-}" ]; }; then
-  echo "threadsift-up: a sops secret is missing; start it through threadsift.service" >&2
-  exit 78
-fi
+SECRETS=(THREADSIFT_SECRET_KEY SETUP_CODE TUNNEL_TOKEN CLAUDE_CODE_OAUTH_TOKEN)
+for secret in "${SECRETS[@]}"; do
+  if [ -z "${!secret:-}" ]; then
+    if [ "${1:-}" != stop ]; then
+      echo "threadsift-up: the sops secret $secret is missing; start it through threadsift.service" >&2
+      exit 78
+    fi
+    printf -v "$secret" stop
+  fi
+  export "${secret?}"
+done
 
 export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
 export COMPOSE_PROJECT_NAME=threadsift COMPOSE_FILE="$SERVICE_DIR/compose.yml"
 export THREADSIFT_DATA_PATH="$STATE/data"
-: "${THREADSIFT_SECRET_KEY:=stop}" "${SETUP_CODE:=stop}" "${TUNNEL_TOKEN:=stop}"
-export THREADSIFT_SECRET_KEY SETUP_CODE TUNNEL_TOKEN
 export THREADSIFT_IMAGE=unset
 
 set -a

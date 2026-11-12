@@ -193,12 +193,13 @@ svc_user(
     "--dump-dom 'data:text/html,<p>playwright-ok</p>' 2>/dev/null | grep -F '<p>playwright-ok</p>'"
 )
 
-for svc_file in ["cliproxy-config.yaml", "cliproxy.env"]:
+for svc_file in ["cliproxy-config.yaml", "cliproxy.env", "threadsift.env"]:
     machine.succeed(f"test \"$(stat -c '%U %a' /run/secrets/rendered/{svc_file})\" = '{BOX_USER} 400'")
 svc_cliproxy = svc_json.loads(svc_user("cat /run/secrets/rendered/cliproxy-config.yaml"))
 assert svc_cliproxy["api-keys"] == ["test-api-key-omer", "test-api-key-friend"], svc_cliproxy["api-keys"]
 assert svc_cliproxy["remote-management"]["secret-key"] == "test-management-key"
 svc_user("grep -Fx CLIPROXY_SHARE_HOST=cliproxy.example.ts.net /run/secrets/rendered/cliproxy.env")
+svc_user("grep -Fx CLAUDE_CODE_OAUTH_TOKEN=test-claude-code-oauth-token /run/secrets/rendered/threadsift.env")
 
 svc_upgrade_timer = machine.succeed("systemctl show -P ActiveState nixos-upgrade.timer").strip()
 assert svc_upgrade_timer == "inactive", f"nixos-upgrade.timer is {svc_upgrade_timer}"

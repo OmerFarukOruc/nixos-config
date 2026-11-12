@@ -84,25 +84,24 @@ keeps 0.0.0.0 until `docker compose down` or `docker network rm` removes it.
 
 ## Install
 
-sops-nix decrypts `secrets/devbox.yaml`,
-`secrets/devbox-acme.yaml`,
-`secrets/devbox-services.yaml`,
-`secrets/devbox-cliproxy.yaml` and `secrets/devbox-threadsift.yaml` while the
-system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
-place, because the network file and both password hashes come from the first
-file, the Cloudflare token for the certificates from the second, the
-OpenChamber and OpenCode server passwords, the herdr web UI's token and the
-Infisical Agent's client id, client secret and project id from the third,
-CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key and its
-share host from the fourth, and Threadsift's tunnel connector token, secret key
-and setup code from the fifth. `machines/devbox/services.nix` declares the
-secrets of the last three files. On the box, `sudo` with that key decrypts and
-edits all five without Omer's key. Neither `sops` nor `ssh-to-age` is on the
-box's PATH, so build them as `scripts/check-secrets.sh` does
+sops-nix decrypts `secrets/devbox.yaml`, `secrets/devbox-acme.yaml`,
+`secrets/devbox-services.yaml`, `secrets/devbox-cliproxy.yaml` and
+`secrets/devbox-threadsift.yaml` while the system activates, with the age key of
+`/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in place, because
+the network file and both password hashes come from the first file, the Cloudflare
+token for the certificates from the second, the OpenChamber and OpenCode server
+passwords, the herdr web UI's token and the Infisical Agent's client id, client
+secret and project id from the third, CLIProxyAPI's keys, its Cloudflare DNS
+token, its Tailscale auth key and its share host from the fourth, and Threadsift's
+tunnel connector token, secret key, setup code and Claude Code token from the
+fifth. `machines/devbox/services.nix` declares the secrets of the last three
+files. On the box, `sudo` with that key decrypts and edits all five without Omer's
+key. Neither `sops` nor `ssh-to-age` is on the box's PATH, so build them as
+`scripts/check-secrets.sh` does
 (`nix build --no-link --print-out-paths nixpkgs#sops nixpkgs#ssh-to-age`), pass
-`SOPS_AGE_KEY_CMD="<ssh-to-age> -private-key -i /etc/ssh/ssh_host_ed25519_key"`
-to `sops`, and give `sops set` the value with `--value-file`, so it never sits
-on a command line.
+`SOPS_AGE_KEY_CMD="<ssh-to-age> -private-key -i /etc/ssh/ssh_host_ed25519_key"` to
+`sops`, and give `sops set` the value with `--value-file`, so it never sits on a
+command line.
 An install that makes new host keys boots with no address, no password and no
 certificates. Install the Debian box's own key before the first boot, for example
 with `nixos-anywhere --copy-host-keys`, and check that
@@ -777,13 +776,18 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   Cloudflare, so no file here creates them. To rebuild the tunnel, make it with
   that name, ingress and record, and put its connector token into
   `secrets/devbox-threadsift.yaml` as `connector-token`. To rotate the token,
-  edit the file the same way and run `systemctl --user restart threadsift.service`.
+  change it there the same way and apply it as the Secrets bullet below says.
 - **Secrets.** The connector token, `THREADSIFT_SECRET_KEY` (the 64-character hex
-  key that seals stored provider secrets) and `SETUP_CODE` (the one-time code the
-  first owner setup asks for) are in `secrets/devbox-threadsift.yaml`. sops-nix
-  renders them into the environment file `threadsift.env`, which the unit reads.
-  `env.public` holds the public values: the image to pull, the public origin and
-  the two loopback ports.
+  key that seals stored provider secrets), `SETUP_CODE` (the one-time code the
+  first owner setup asks for) and `CLAUDE_CODE_OAUTH_TOKEN` are in
+  `secrets/devbox-threadsift.yaml`. sops-nix renders them into the environment
+  file `threadsift.env`, which the unit reads. `env.public` holds the public
+  values: the image to pull, the public origin and the two loopback ports. A
+  changed value reaches the app in three steps: land the sops file on `main`,
+  activate it on the box with `./deploy.sh devbox switch` (or wait for the box's
+  hourly install of `main`), then run
+  `systemctl --user restart threadsift.service`, because a restart before the
+  activation reads the old `threadsift.env`.
 - **Images.** The app image is pulled as `ghcr.io/kyanitehq/threadsift:main`, but
   the container runs the local tag `localhost/threadsift:<12 hex of the image id>`,
   and `~/.local/state/threadsift/good-image` holds the id of the image that last
@@ -796,6 +800,17 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
 - **Data.** `~/.local/state/threadsift/data` is the container's `/data`: the
   SQLite database, the stored files and the CLI logins. The container runs as uid
   1000 with `keep-id`, so the files belong to omer on the host.
+- **Provider.** The Instance's Provider is "Claude Code on this server", signed in
+  with `CLAUDE_CODE_OAUTH_TOKEN`, a `claude setup-token` token of the own-team
+  Claude account. The Infisical record `/threadsift` `CLAUDE_CODE_OAUTH_TOKEN` is
+  its source: a new token goes there first, then into the sops file as
+  `claude-code-oauth-token`, applied as the Secrets bullet says, and then the
+  Provider's Verify in the Instance's Settings shows whether Claude Code accepts
+  it. Claude Code lives in the `/data` volume, so a new image keeps it. To install
+  it, as the Threadsift README's "Use Claude Code on the container" says, run
+  `podman exec threadsift npm install --global @anthropic-ai/claude-code`, then
+  `systemctl --user restart threadsift.service` so the app finds it, then in
+  Settings choose "Claude Code on this server", press Save, and press Verify.
 - **Check.** An image passes when `GET /api/session` answers 200 on
   `127.0.0.1:8088` and the connector's `/ready` answers 200 on `127.0.0.1:8089`
   within 120 s, and both still answer 3 times, 10 s apart, with no container
