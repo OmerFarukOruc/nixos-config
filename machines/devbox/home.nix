@@ -312,6 +312,62 @@ in
     Install.WantedBy = [ "timers.target" ];
   };
 
+  systemd.user.services.threadsift =
+    let
+      up = "${./threadsift}/threadsift-up.sh";
+    in
+    {
+      Unit = {
+        Description = "Threadsift Instance and its Cloudflare tunnel connector";
+        After = [
+          "network-online.target"
+          "podman.socket"
+        ];
+        Wants = [ "network-online.target" ];
+        Requires = [ "podman.socket" ];
+      };
+      Service = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${up} start";
+        ExecReload = "${up} update";
+        ExecStop = "${up} stop";
+        Environment = [
+          "PATH=${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.curl
+              pkgs.findutils
+            ]
+          }:/run/current-system/sw/bin"
+        ];
+        EnvironmentFile = osConfig.sops.templates."threadsift.env".path;
+        Restart = "on-failure";
+        RestartSec = 30;
+        TimeoutStartSec = "15min";
+      };
+      Install.WantedBy = [ "default.target" ];
+    };
+  systemd.user.services.threadsift-update = {
+    Unit = {
+      Description = "Threadsift image update";
+      After = [ "threadsift.service" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user reload threadsift.service";
+    };
+  };
+  systemd.user.timers.threadsift-update = {
+    Unit.Description = "Threadsift image update every 5 minutes";
+    Timer = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "5min";
+      RandomizedDelaySec = "30s";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   systemd.user.services.claude-tools-limit-switch = {
     Unit.Description = "Move herdr Claude agents off accounts that hit a usage limit";
     Service = {

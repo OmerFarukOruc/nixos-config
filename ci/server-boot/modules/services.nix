@@ -75,6 +75,7 @@ in
           "cursor-worker"
           "herdr-web-ui"
           "openchamber"
+          "threadsift"
         ]
         (_: {
           Install.WantedBy = lib.mkForce [ ];
@@ -85,6 +86,7 @@ in
           "claude-tools-limit-switch"
           "cliproxy-update"
           "stay-green"
+          "threadsift-update"
         ]
         (_: {
           Install.WantedBy = lib.mkForce [ ];

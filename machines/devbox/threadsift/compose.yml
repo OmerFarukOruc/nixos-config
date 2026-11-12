@@ -1,0 +1,31 @@
+services:
+  threadsift:
+    image: ${THREADSIFT_IMAGE:?set THREADSIFT_IMAGE}
+    pull_policy: never
+    container_name: threadsift
+    restart: unless-stopped
+    userns_mode: "keep-id:uid=1000,gid=1000"
+    stop_grace_period: 60s
+    environment:
+      TZ: Europe/Istanbul
+      THREADSIFT_PUBLIC_ORIGIN: ${THREADSIFT_PUBLIC_ORIGIN:?set THREADSIFT_PUBLIC_ORIGIN}
+      THREADSIFT_SECRET_KEY: ${THREADSIFT_SECRET_KEY:?set THREADSIFT_SECRET_KEY}
+      SETUP_CODE: ${SETUP_CODE:?set SETUP_CODE}
+    ports:
+      - "127.0.0.1:${THREADSIFT_PORT:?set THREADSIFT_PORT}:8080"
+    volumes:
+      - ${THREADSIFT_DATA_PATH:?set THREADSIFT_DATA_PATH}:/data
+
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
+    pull_policy: missing
+    container_name: threadsift-cloudflared
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run"]
+    environment:
+      TZ: Europe/Istanbul
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN}
+    ports:
+      - "127.0.0.1:${THREADSIFT_TUNNEL_PORT:?set THREADSIFT_TUNNEL_PORT}:20241"
+    depends_on:
+      - threadsift

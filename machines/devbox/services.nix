@@ -2,6 +2,7 @@
 let
   secrets = ../../secrets/devbox-services.yaml;
   cliproxy = ../../secrets/devbox-cliproxy.yaml;
+  threadsift = ../../secrets/devbox-threadsift.yaml;
   inherit (config.sops) placeholder;
   user = config.oruc.machine.user;
   userSecret = {
@@ -10,6 +11,11 @@ let
   };
   cliproxySecret = key: {
     sopsFile = cliproxy;
+    inherit key;
+    owner = user;
+  };
+  threadsiftSecret = key: {
+    sopsFile = threadsift;
     inherit key;
     owner = user;
   };
@@ -26,6 +32,9 @@ in
       cliproxy-cloudflare-dns-token = cliproxySecret "cloudflare-dns-token";
       cliproxy-ts-authkey = cliproxySecret "ts-authkey";
       cliproxy-share-host = cliproxySecret "share-host";
+      threadsift-connector-token = threadsiftSecret "connector-token";
+      threadsift-secret-key = threadsiftSecret "secret-key";
+      threadsift-setup-code = threadsiftSecret "setup-code";
       infisical-client-id = userSecret;
       infisical-client-secret = userSecret;
       infisical-project-id = userSecret;
@@ -87,6 +96,14 @@ in
       content = ''
         CLIPROXY_SHARE_HOST=${placeholder.cliproxy-share-host}
         CLIPROXY_TS_AUTHKEY=${placeholder.cliproxy-ts-authkey}
+      '';
+    };
+    templates."threadsift.env" = {
+      owner = user;
+      content = ''
+        TUNNEL_TOKEN=${placeholder.threadsift-connector-token}
+        THREADSIFT_SECRET_KEY=${placeholder.threadsift-secret-key}
+        SETUP_CODE=${placeholder.threadsift-setup-code}
       '';
     };
     templates."openchamber.env" = {

@@ -273,3 +273,9 @@ of with the merge button: fetch its branch, rebase it on `origin/main` and run
 pull request once `main` holds the new pins. Only the GitHub runner runs the
 actions, so run `gh workflow run update.yml` after the push and check that the
 run passes.
+
+Dependabot also checks the pinned connector image of devbox's Threadsift stack
+(`machines/devbox/threadsift/compose.yml`, [Threadsift](devbox.md#threadsift)).
+Land its pull request the same way, then run `./deploy.sh devbox switch`, or
+leave it to the hourly install, and check `systemctl --user status
+threadsift.service`.

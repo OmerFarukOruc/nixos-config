@@ -13,6 +13,7 @@
 - [Agent runtime](#agent-runtime)
 - [Factory run user](#factory-run-user)
 - [CLIProxyAPI](#cliproxyapi)
+- [Threadsift](#threadsift)
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
@@ -25,8 +26,9 @@ devbox is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
 It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/devbox/` (`configuration.nix`, `disk.nix`,
-`hardware-configuration.nix`, `home.nix`, `services.nix` and the `cliproxy/`
-folder of the CLIProxyAPI containers) and `nixosModules/server-access.nix`.
+`hardware-configuration.nix`, `home.nix`, `services.nix`, the `cliproxy/`
+folder of the CLIProxyAPI containers and the `threadsift/` folder of Omer's
+Threadsift containers) and `nixosModules/server-access.nix`.
 The host imports four more modules for its services: `tailnet-web.nix`,
 `rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
@@ -84,16 +86,18 @@ keeps 0.0.0.0 until `docker compose down` or `docker network rm` removes it.
 
 sops-nix decrypts `secrets/devbox.yaml`,
 `secrets/devbox-acme.yaml`,
-`secrets/devbox-services.yaml` and
-`secrets/devbox-cliproxy.yaml` while the system activates, with the
-age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
+`secrets/devbox-services.yaml`,
+`secrets/devbox-cliproxy.yaml` and `secrets/devbox-threadsift.yaml` while the
+system activates, with the age key of `/etc/ssh/ssh_host_ed25519_key`. The first boot needs that key in
 place, because the network file and both password hashes come from the first
 file, the Cloudflare token for the certificates from the second, the
 OpenChamber and OpenCode server passwords, the herdr web UI's token and the
-Infisical Agent's client id, client secret and project id from the third, and CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key
-and its share host from the fourth. `machines/devbox/services.nix` declares the
-secrets of the last two files. On the box, `sudo` with that key decrypts and
-edits all four without Omer's key. Neither `sops` nor `ssh-to-age` is on the
+Infisical Agent's client id, client secret and project id from the third,
+CLIProxyAPI's keys, its Cloudflare DNS token, its Tailscale auth key and its
+share host from the fourth, and Threadsift's tunnel connector token, secret key
+and setup code from the fifth. `machines/devbox/services.nix` declares the
+secrets of the last three files. On the box, `sudo` with that key decrypts and
+edits all five without Omer's key. Neither `sops` nor `ssh-to-age` is on the
 box's PATH, so build them as `scripts/check-secrets.sh` does
 (`nix build --no-link --print-out-paths nixpkgs#sops nixpkgs#ssh-to-age`), pass
 `SOPS_AGE_KEY_CMD="<ssh-to-age> -private-key -i /etc/ssh/ssh_host_ed25519_key"`
@@ -750,6 +754,94 @@ before its config exists.
   Forward that port from a workstation before the login, for example
   `ssh -N -L 1455:127.0.0.1:1455 omer@devbox`.
 
+## Threadsift
+
+`threadsift.service`, a user unit of omer in `home.nix`, runs Omer's own
+[Threadsift](https://github.com/KyaniteHQ/threadsift) Instance at
+`https://threadsift.risoluto.dev`. It runs `machines/devbox/threadsift/threadsift-up.sh`,
+which starts the compose stack of that folder on rootless Podman, as
+`cliproxy.service` does ([Containers](#containers)).
+
+```
+Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
+  -> threadsift-cloudflared (connector, outbound only; /ready on 127.0.0.1:8089)
+  -> http://threadsift:8080 (container threadsift, also on 127.0.0.1:8088)
+```
+
+- **Tunnel.** The box opens no port. The connector dials out to Cloudflare. The
+  tunnel `threadsift-devbox` of the Cloudflare account `risoluto` is remotely
+  managed, with the public hostname `threadsift.risoluto.dev` and the ingress
+  `http://threadsift:8080`, and a proxied CNAME `threadsift` of the zone
+  `risoluto.dev` points at `<tunnel id>.cfargotunnel.com`. They live in
+  Cloudflare, so no file here creates them. To rebuild the tunnel, make it with
+  that name, ingress and record, and put its connector token into
+  `secrets/devbox-threadsift.yaml` as `connector-token`. To rotate the token,
+  edit the file the same way and run `systemctl --user restart threadsift.service`.
+- **Secrets.** The connector token, `THREADSIFT_SECRET_KEY` (the 64-character hex
+  key that seals stored provider secrets) and `SETUP_CODE` (the one-time code the
+  first owner setup asks for) are in `secrets/devbox-threadsift.yaml`. sops-nix
+  renders them into the environment file `threadsift.env`, which the unit reads.
+  `env.public` holds the public values: the image to pull, the public origin and
+  the two loopback ports.
+- **Images.** The app image is pulled as `ghcr.io/kyanitehq/threadsift:main`, but
+  the container runs the local tag `localhost/threadsift:<12 hex of the image id>`,
+  and `~/.local/state/threadsift/good-image` holds the id of the image that last
+  passed the check below. A start runs that image, so a restart, a reboot or an
+  update cut short never runs an image that was pulled and not checked. The
+  connector image is pinned by tag and digest in `compose.yml`, so it changes
+  only when a commit changes it; Dependabot's `docker-compose` entry in
+  `.github/dependabot.yml` opens a pull request for a new version, which lands
+  like the action pins ([Workflow actions](updates.md#workflow-actions)).
+- **Data.** `~/.local/state/threadsift/data` is the container's `/data`: the
+  SQLite database, the stored files and the CLI logins. The container runs as uid
+  1000 with `keep-id`, so the files belong to omer on the host.
+- **Check.** An image passes when `GET /api/session` answers 200 on
+  `127.0.0.1:8088` and the connector's `/ready` answers 200 on `127.0.0.1:8089`
+  within 120 s, and both still answer 3 times, 10 s apart, with no container
+  restart. The check reads the connector's own readiness, not the public address,
+  because a Cloudflare rule on the zone can answer before the tunnel does.
+- **Update.** `threadsift-update.timer` reloads the unit every 5 minutes, and
+  `threadsift-up.sh update` then does this:
+
+  1. It starts the stack, as a start does, when the app is stopped.
+  2. It pulls the image and, when the image id equals the running one, makes sure
+     the stack runs and answers, and stops there.
+  3. It stops the app and copies `threadsift.db` and every sidecar file of it
+     (`threadsift.db-journal`) to `~/.local/state/threadsift/backups/<UTC time>/`,
+     keeping the newest 7 folders. When the stop or the copy fails, the app starts
+     again on the current image, the image is not marked as rejected and the
+     script exits 1.
+  4. It runs the new image and applies the check. On success it writes the
+     image id to `good-image` and removes the local tags of all older images
+     except the one before.
+  5. On a failed check, or when the container does not start, it runs the previous
+     image again, writes the failed image id to
+     `~/.local/state/threadsift/rejected-image`, and exits 1. The journal names
+     both image ids and digests: `journalctl --user -u threadsift.service`. When
+     the previous image does not answer either, the message names the newest
+     database copy.
+
+  Later runs skip a rejected image and exit 1, so `threadsift-update.service`
+  shows in `systemctl --user --failed` until `:main` moves. To try the same image
+  again, for a failure the environment caused, run
+  `rm ~/.local/state/threadsift/rejected-image`.
+
+  The previous image reads the database that the new one migrated. A failed
+  migration leaves the copy from step 3.
+- **Back to a release.** Stop `threadsift-update.timer` (it stays stopped until
+  the next login or Home Manager activation). Pull the release, write its image id
+  to `good-image` and restart the unit:
+
+  ```
+  podman pull ghcr.io/kyanitehq/threadsift:sha-<sha>
+  podman image inspect --format '{{.Id}}' ghcr.io/kyanitehq/threadsift:sha-<sha> > ~/.local/state/threadsift/good-image
+  systemctl --user restart threadsift.service
+  ```
+
+  To restore a database copy, stop the unit, run
+  `rm ~/.local/state/threadsift/data/threadsift.db*`, copy the files of the
+  chosen `backups/<UTC time>/` folder into `data/` and start the unit.
+
 ## Streamed desktop
 
 `features.streamedDesktop` of the record turns on
@@ -917,9 +1009,10 @@ The test shows that the layout installs, that Limine boots from it under BIOS,
 that the units start, and that the template and the user
 settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets files, that the netcup network works, that
-Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI and
-stay-green start (they need a registry and a Teams sign-in, so the test turns
-them off and checks their secrets only), that Let's Encrypt issues the host's certificates with the real
+Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI,
+Threadsift and stay-green start (they need a registry, a Cloudflare tunnel or a
+Teams sign-in, so the test turns them off and checks the secrets of CLIProxyAPI
+only), that Let's Encrypt issues the host's certificates with the real
 Cloudflare token, or that the BIOS stage installs from the kexec installer. The
 cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no

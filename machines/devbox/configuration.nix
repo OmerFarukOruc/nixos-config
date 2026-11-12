@@ -43,6 +43,7 @@ in
       "docker.service"
       "herdr-*.service"
       "openchamber.service"
+      "threadsift*.service"
     ];
   };
 

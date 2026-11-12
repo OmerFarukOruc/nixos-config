@@ -10,3 +10,9 @@ updates:
       actions:
         patterns:
           - "*"
+  - package-ecosystem: docker-compose
+    directory: /machines/devbox/threadsift
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
