@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1794487092,
-        "narHash": "sha256-yoswsYkpk9XPEr5SzlWePHmE8aj/6tqG5QeM41kcYo0=",
+        "lastModified": 1794493589,
+        "narHash": "sha256-XeiAGbzjdC0D7ekQZbufWyqeY8x8UItxjCP335lh4Eg=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "8eef039ea61f3e60c53289539e5a6d21f846aad3",
+        "rev": "90011236663d4116738fc2d63de6ab64523387b6",
         "type": "github"
       },
       "original": {
@@ -519,11 +519,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794477186,
-        "narHash": "sha256-DrdxLvPwBEJd8N5ycaIG1zhWFCAj+QT/XJRm9wcegtc=",
+        "lastModified": 1794492056,
+        "narHash": "sha256-KTihP+mF+Gr0GdGU6SoN4LDe8d72fD9MNaGUqX1kR/8=",
         "owner": "NotAShelf",
         "repo": "nvf",
-        "rev": "01869cbbf1938bd02858dae14d9a942d35a60454",
+        "rev": "08451b91e6a030f12e736c51c28dfde3371a8428",
         "type": "github"
       },
       "original": {
@@ -664,11 +664,11 @@
     "skills-diagram-design": {
       "flake": false,
       "locked": {
-        "lastModified": 1794262958,
-        "narHash": "sha256-n60Y7SGbCI3QkQ5hCIBeLgT/Cts1aDPTU3xcJxu7+z0=",
+        "lastModified": 1794493180,
+        "narHash": "sha256-/KBX3XxeDoOSR+BgG4+0DcRPaqtSuaNv8GpSGrhoYGE=",
         "owner": "cathrynlavery",
         "repo": "diagram-design",
-        "rev": "f2496acbde9f45ccb55c24d4f75210c8a1355df8",
+        "rev": "8ab4b6eab9fc6126521a03eb00d9c20ec192d8ff",
         "type": "github"
       },
       "original": {
