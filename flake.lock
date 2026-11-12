@@ -793,11 +793,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1794216748,
-        "narHash": "sha256-CXVWw5XZl88QblJqbx11/7AzLXHw8X/o3/M54ViMrok=",
+        "lastModified": 1794468000,
+        "narHash": "sha256-YDmOTPZVZNrQDF2BffT1Qr1WN6BpErkfBD8wqdwX63A=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "10fcee437331c7dbfe1217dafcd8e225973b29b2",
+        "rev": "e547ccd92f3fcdf1ee399fe06f2e7a5c6a7b2c1b",
         "type": "github"
       },
       "original": {
