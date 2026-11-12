@@ -13,7 +13,7 @@
   xdg.dataFile."kwin/scripts/noclaudeattention".source = ./kwin-scripts/noclaudeattention;
   programs.plasma.configFile.kwinrc.Plugins.noclaudeattentionEnabled = true;
 
-  # The GBT M27UP's Custom picture mode stops brightness at 80, so libddcutil's
+  # The GBT M27UP (firmware F03) stops brightness at 80, so libddcutil's
   # read-back after a higher DDC/CI write fails (DDCRC_VERIFY) and powerdevil
   # drops the slider.
   xdg.configFile."ddcutil/ddcutilrc".text = ''
