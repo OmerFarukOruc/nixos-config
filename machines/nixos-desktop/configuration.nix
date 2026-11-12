@@ -20,12 +20,10 @@
 
   boot.loader.limine.style.interface.branding = "NixOS on desktop";
   services.zapret2.firewall.interfaces = [ "enp14s0" ];
-  # Windows Boot Manager is on the Samsung disk's ESP, named by its partition
-  # GUID because Limine's boot() means the ESP it booted from.
   boot.loader.limine.extraEntries = ''
     /Windows
-        protocol: efi
-        path: guid(10036113-64c6-4117-9dd5-ea8b222762ea):/EFI/Microsoft/Boot/bootmgfw.efi
+        protocol: efi_boot_entry
+        entry: Windows Boot Manager
   '';
 
   boot.kernelModules = [ "sp5100_tco" ];

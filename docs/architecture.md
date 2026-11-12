@@ -43,9 +43,9 @@ server record with no sessions, and `ci/checks.sh` fails when one of the pieces
 it lists comes in, when the record's access or boot setup changes, when a
 streamed desktop adds a piece it should not, when nixos-desktop or nixos-rog
 loses the fallback copy of its EFI binary, or when the schema stops rejecting
-one of the three records it rejects: `features.remoteAccess` on a server,
-`biosDevice` with systemd-boot, and `features.streamedDesktop` on a
-workstation ([Check before you deploy](deploy.md#check-before-you-deploy)).
+one of the four records it rejects: `features.remoteAccess` on a server,
+`biosDevice` with systemd-boot, `secureBoot` with systemd-boot, and
+`features.streamedDesktop` on a workstation ([Check before you deploy](deploy.md#check-before-you-deploy)).
 
 A server has a desktop through `features.streamedDesktop`, not through a login
 session: `nixosModules/streamed-desktop.nix` starts XFCE for each RDP login of
@@ -64,6 +64,56 @@ firmware keeps no boot entries to write. Limine then installs its EFI binary at
 the firmware fallback path only. With `biosDevice` in the record, Limine also
 installs its BIOS stage on that disk, so one disk is laid out for either
 firmware; devbox's VM test boots it through BIOS only.
+
+A host that writes EFI boot entries gets Limine's binary in `\EFI\limine` with
+its own firmware entry, and a copy at the firmware fallback path
+(`\EFI\BOOT\BOOTX64.EFI`). The copy boots the same menu after the firmware
+forgets its entries, for example after a BIOS update. The installer writes the
+copy from the Limine package (`additionalFiles`), except on a `secureBoot`
+host. The copy equals the binary in `\EFI\limine` only while
+`boot.loader.limine.enrollConfig` and `boot.loader.limine.secureBoot.enable`
+stay off, because the installer enrolls the hash of `limine.conf` into the
+`\EFI\limine` binary alone.
+
+A record with `secureBoot` is a machine whose firmware enforces UEFI Secure
+Boot; nixos-desktop is the only one. The nixpkgs installer writes Limine
+unsigned, so `bootloader.nix` adds three pieces, all with the key and the
+certificate in `/var/lib/secure-boot`
+([Secure Boot](install-nixos-desktop.md#secure-boot)):
+
+- A pre-switch check (`system.preSwitchChecks`) runs before a `switch` or a
+  `boot`. It signs the new Limine binary in a temporary folder, and while the
+  firmware enforces Secure Boot it also looks for the certificate in the
+  firmware's `db`. When either fails, the install does not start and `/boot`
+  stays as it was.
+- `boot.loader.limine.extraInstallCommands` runs `sign-installed-limine` after
+  the installer. It signs the binary the installer wrote with `sbsign`, checks
+  the result with `sbverify`, and then copies it to the fallback path. It
+  writes each file under a second name and syncs the ESP before and after the
+  rename. The installer writes no raw fallback copy on such a host, so the
+  fallback path keeps the last signed binary until the new one is in place. A
+  failed step fails the install
+  ([Failures and notifications](workstations.md#failures-and-notifications)).
+- `limine-signature.service` runs the same `sign-installed-limine` at each
+  boot and each shutdown. The command changes nothing while both copies
+  verify. It repairs an install that stopped between the installer's raw copy
+  and the signing step, and a switch to a generation whose install does not
+  sign.
+
+nixpkgs' `boot.loader.limine.secureBoot.enable` stays off, and an assertion
+keeps it off on such a host. It turns on `enrollConfig`, which puts the hash
+of `limine.conf` in the binary. Limine then refuses a `limine.conf` that
+differs from that hash, with the firmware's Secure Boot on or off
+(`init_config` in
+[config.c](https://github.com/Limine-Bootloader/Limine/blob/v12.9.4/common/lib/config.c)),
+and the [theme](#theme) helper leaves the boot menu alone while `enrollConfig`
+is on. Without an enrolled hash nothing authenticates `limine.conf`
+([USAGE.md](https://github.com/Limine-Bootloader/Limine/blob/v12.9.4/USAGE.md),
+Secure Boot), so the kernel and initrd hashes in it prove nothing against
+someone who can write the ESP, and Secure Boot covers the step from the
+firmware to Limine and nothing after it.
+[recovery.md](recovery.md#secure-boot) says what to do when the firmware
+refuses Limine.
 
 `machines/inventory.nix` holds one value per machine for the typed
 `oruc.machine` option that `nixosModules/machine.nix` declares. `schema.nix`

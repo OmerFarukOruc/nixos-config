@@ -126,6 +126,11 @@ server_record() {
     echo "A Limine host lost the fallback copy of its EFI binary: $(jq -c .limineHosts <<<"$out")" >&2
     return 1
   }
+  jq -e '.limineHosts | .["nixos-desktop"].secureBoot and all(.[]; .secureBoot == .signingKeyCheck)' \
+    <<<"$out" >/dev/null || {
+    echo "The firmware of nixos-desktop refuses an unsigned Limine, so its record sets secureBoot, and a secureBoot host checks its signing key before an install: $(jq -c .limineHosts <<<"$out")" >&2
+    return 1
+  }
   jq -e '.streamed | .accepted and .workstationAccepted
     and ([.workstation | to_entries[] | select(.value) | .key] | sort)
       == ["browserCertificates", "browserVariable", "desktopPackages", "fontconfig", "mimeApps", "xkbLayout"]

@@ -112,7 +112,9 @@ the system it runs. `nixos-upgrade-failed.service` records that `main` in
 and shows a critical "Update failed" popup through systembus-notify, which
 `nixosModules/monitoring.nix` turns on. The first `error:` line is in
 `journalctl -u nixos-upgrade`. `upgrade` tries that `main` again. A run that a
-signal stopped, such as a shutdown, records nothing.
+signal stopped, such as a shutdown, records nothing. On nixos-desktop a run
+also fails when it cannot sign Limine for Secure Boot;
+[Secure Boot](recovery.md#secure-boot) says what that leaves on `/boot`.
 
 On a host that imports `nixosModules/install-reports.nix` (nixos-desktop,
 nixos-rog and devbox), which sets `oruc.autoUpgrade.issueReports` and

@@ -41,6 +41,10 @@ let
     bootloader = "limine";
     biosDevice = "/dev/vda";
   };
+  systemdBoot = {
+    bootloader = "systemd-boot";
+    biosDevice = null;
+  };
   validates =
     change:
     (builtins.tryEval (
@@ -183,10 +187,28 @@ in
       };
     remoteAccess = !validates { features.remoteAccess = true; };
     biosDeviceWithSystemdBoot = !validates { bootloader = "systemd-boot"; };
+    secureBootWithSystemdBoot =
+      validates { secureBoot = true; }
+      && validates systemdBoot
+      && !validates (systemdBoot // { secureBoot = true; });
   };
 
-  limineHosts = lib.mapAttrs (_: host: {
-    inherit (host.config.boot.loader.limine) efiInstallAsRemovable;
-    fallbackCopy = host.config.boot.loader.limine.additionalFiles ? "efi/boot/BOOTX64.EFI";
-  }) (lib.filterAttrs (_: isEfiLimine) flake.nixosConfigurations);
+  limineHosts = lib.mapAttrs (
+    _: host:
+    let
+      inherit (host.config.boot.loader) limine;
+      inherit (host.config.oruc.machine) secureBoot;
+      inherit (host.config.system) build;
+      rawCopy = limine.additionalFiles ? "efi/boot/BOOTX64.EFI";
+      signedCopy =
+        build ? signInstalledLimine
+        && lib.hasInfix (builtins.unsafeDiscardStringContext (lib.getExe build.signInstalledLimine)) limine.extraInstallCommands;
+    in
+    {
+      inherit (limine) efiInstallAsRemovable;
+      inherit secureBoot;
+      fallbackCopy = if secureBoot then signedCopy && !rawCopy else rawCopy;
+      signingKeyCheck = host.config.system.preSwitchChecks ? limineSigningKey;
+    }
+  ) (lib.filterAttrs (_: isEfiLimine) flake.nixosConfigurations);
 }

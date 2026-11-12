@@ -78,6 +78,7 @@ let
       theme.plasmaLook = "glass";
       kernel.profile = "cachyos-latest-lto-zen4";
       bootloader = "limine";
+      secureBoot = true;
       gpu = "amd";
       hasBattery = false;
       autoLogin = true;

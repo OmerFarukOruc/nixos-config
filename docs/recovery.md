@@ -28,6 +28,8 @@ systemd-boot boots the generation that `switch-to-configuration boot` made the
 default last. Limine always boots the newest generation of the system profile,
 whatever generation runs, so a generation stays only after
 [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+On nixos-desktop, read [Secure Boot](#secure-boot) before a rollback, because
+an older generation's install can write Limine unsigned.
 
 Every host installs `main` every hour on top of a generation you restored
 ([Updater](workstations.md#updater)), and that install makes a new newest
@@ -52,6 +54,8 @@ running install, and the resume.
    long as the menu lists it. On a Limine host the rollback lasts only until
    the next reboot; to keep it, follow
    [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
+   On nixos-desktop, check both copies of Limine before the next restart
+   ([Secure Boot](#secure-boot)).
 3. Resume the timer once `main` holds a fix.
 
 ## A host that does not boot
@@ -101,7 +105,8 @@ steps:
    The host now runs the picked generation. On a Limine host, a reboot boots
    the newest generation again. To keep the picked generation there, follow
    [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host)
-   from step 3.
+   from step 3. On nixos-desktop, check both copies of Limine before the next
+   restart ([Secure Boot](#secure-boot)).
 
 3. Resume the timer once `main` holds a fix.
 
@@ -129,6 +134,9 @@ the newer ones are gone:
    sudo nix-env -p /nix/var/nix/profiles/system --delete-generations <newer...>
    sudo /run/current-system/bin/switch-to-configuration boot
    ```
+
+   On nixos-desktop, check both copies of Limine before the next restart
+   ([Secure Boot](#secure-boot)).
 
 4. Resume the timer once `main` holds a fix.
 
@@ -284,12 +292,20 @@ mode the NVIDIA driver has no device.
 
 nixos-desktop uses Limine on its own ESP on the WD disk; Windows keeps the ESP
 on the Samsung disk. Its Limine menu lists the NixOS generations, each with
-its `recovery` specialisation. Roll back and keep a generation with
+its `recovery` specialisation, and a "Windows" entry. That entry sets the
+firmware's `BootNext` to the firmware entry named "Windows Boot Manager" and
+restarts, so the firmware starts Windows itself and Limine is not part of the
+boot that a game's anti-cheat attests. When Limine prints "Failed to find boot
+entry", the firmware entry lost that name or its place in `BootOrder`; F11 at
+the MSI logo still starts Windows.
+
+Roll back and keep a generation with
 [Roll back a running host](#roll-back-a-running-host),
 [A host that does not boot](#a-host-that-does-not-boot) and
 [Keep a generation on a Limine host](#keep-a-generation-on-a-limine-host).
-When its bootloader needs repair, boot the NixOS
-installer, mount by partition name, then run the `nixos-enter`,
+When its bootloader needs repair, set Secure Boot to Disabled in the firmware
+setup, because the firmware refuses the installer's USB stick while it is on.
+Boot the NixOS installer, mount by partition name, then run the `nixos-enter`,
 `NIXOS_INSTALL_BOOTLOADER=1`, `exit` and `reboot` lines of
 [Repair the bootloader](#repair-the-bootloader):
 
@@ -299,6 +315,82 @@ mkdir -p /mnt/nix /mnt/boot
 mount -o subvol=@nixos-nix /dev/disk/by-partlabel/nixos /mnt/nix
 mount -o umask=077 /dev/disk/by-partlabel/nixos-esp /mnt/boot
 ```
+
+The repair signs Limine with the key on the root subvolume, so Secure Boot
+goes back on once NixOS boots.
+
+### Secure Boot
+
+The firmware enforces Secure Boot with its factory keys and one certificate of
+ours in `db`, named "nixos-desktop Secure Boot"
+([Secure Boot](install-nixos-desktop.md#secure-boot)). Every boot loader
+install signs Limine with that certificate's key
+([Inventory](architecture.md#inventory)). Limine holds no hash of
+`limine.conf`, so with Secure Boot set to Disabled in the firmware setup (Del
+at the MSI logo, Settings > Security > Secure Boot) the firmware starts any
+Limine, signed or not. Set that first whenever the firmware refuses Limine.
+Windows starts from F11 > Windows Boot Manager with Secure Boot on or off.
+
+A refused Limine shows the dialog "Secure Boot Violation", with "Image
+Certificate not found in Authorized database(db)!". After "Ok" the firmware
+starts the next entry of its boot order. Print that order with
+`nix shell nixpkgs#efibootmgr -c efibootmgr`: it is "Limine", then "UEFI OS",
+the fallback copy, then "Windows Boot Manager", so a refused Limine ends in
+Windows only when the fallback copy is refused too.
+`sudo nix shell nixpkgs#efibootmgr -c efibootmgr -o 0001,0004,0000` sets that
+order again, with the numbers the first command prints for the three entries.
+
+Check both copies of Limine:
+
+```sh
+sudo sbverify --cert /var/lib/secure-boot/db.pem /boot/efi/limine/BOOTX64.EFI
+sudo sbverify --cert /var/lib/secure-boot/db.pem /boot/efi/boot/BOOTX64.EFI
+```
+
+`sudo sign-installed-limine` signs `/boot/efi/limine/BOOTX64.EFI` when its
+signature does not verify and copies it to the fallback path.
+`limine-signature.service` runs that command at each boot and each shutdown.
+
+- **An install failed after the installer wrote Limine.** The journal
+  (`journalctl -u nixos-upgrade`) shows "Signing Limine failed" or an earlier
+  installer error, such as a failed `efibootmgr`.
+  `/boot/efi/limine/BOOTX64.EFI` may be unsigned until the next shutdown signs
+  it, and `/boot/efi/boot/BOOTX64.EFI` keeps the last signed copy, which F11 >
+  "UEFI OS" boots. Run `sudo sign-installed-limine`, fix what the journal
+  names, then run `upgrade`.
+- **An install did not start, with "cannot sign Limine".** The key or the
+  certificate in `/var/lib/secure-boot` is missing or unreadable, and `/boot`
+  is unchanged. Put them back, or make a new pair:
+
+  ```sh
+  sudo install -d -m 0700 /var/lib/secure-boot
+  sudo openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
+    -subj '/CN=nixos-desktop Secure Boot/' \
+    -keyout /var/lib/secure-boot/db.key -out /var/lib/secure-boot/db.pem
+  ```
+
+- **An install did not start, with "its db lacks the certificate".** The
+  firmware enforces Secure Boot and does not hold the certificate on disk, as
+  after a new key pair. Append the certificate
+  ([Secure Boot](install-nixos-desktop.md#secure-boot)), then run `upgrade`.
+  With Secure Boot off the install does not look at `db`, so append a new
+  certificate before Secure Boot goes back on.
+- **A switch to a generation that does not sign.** Its install writes both
+  copies unsigned. A generation signs when
+  `/nix/var/nix/profiles/system-<n>-link/sw/bin/sign-installed-limine` exists.
+  While the system that runs is one that signs, `limine-signature.service`
+  signs both copies again when the switch stops it, or at the shutdown before
+  the restart. A running generation that does not sign has no such service:
+  after an install there, run the `sign-installed-limine` of a generation that
+  has it with `sudo`, or set Secure Boot to Disabled.
+- **After a BIOS update or a CMOS clear.** The firmware may drop our
+  certificate, the preset and its boot entries. Boot NixOS with Secure Boot
+  off, then repeat the firmware step of
+  [Secure Boot](install-nixos-desktop.md#secure-boot); the certificate is still
+  at `/boot/nixos-desktop-db.cer`.
+- **A firmware update through fwupd.** `fwupdmgr update` starts the update
+  from an EFI program that nothing signs here, so the firmware refuses it
+  while Secure Boot is on. Set Secure Boot to Disabled for that restart.
 
 ## devbox
 

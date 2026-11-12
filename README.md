@@ -30,7 +30,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Host | Role | Machine | Login sessions | Kernel | Boot |
 | --- | --- | --- | --- | --- | --- |
 | `nixos-rog` | daily laptop | ASUS ROG Zephyrus G16 GA605WI, Ryzen AI 9 HX 370, RTX 4070 | Plasma · niri + Noctalia · niri + DMS | CachyOS LTO `zen4` | Limine, next to Windows |
-| `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, next to Windows |
+| `nixos-desktop` | home desktop | MSI MAG B650 Tomahawk WiFi, Ryzen 7 7800X3D, RX 7900 XTX | Plasma | CachyOS LTO `zen4` | Limine, signed for Secure Boot, next to Windows |
 | `nixos-latitude` | home lab box | Dell Latitude 3550 | niri + Noctalia | CachyOS LTO `x86_64-v3` | systemd-boot |
 | `devbox` | dev server | netcup KVM guest, 2 TiB virtio disk | none | nixpkgs | Limine, BIOS (UEFI unverified) |
 
@@ -41,7 +41,7 @@ This is my own setup, not a framework. Read it and copy the parts you need.
 | Part | Choice |
 | --- | --- |
 | Kernel | CachyOS LTO from [nix-cachyos-kernel](https://github.com/xddxdd/nix-cachyos-kernel) and its cache on the three PCs, the nixpkgs kernel on devbox |
-| Boot loader | Limine on nixos-rog, nixos-desktop and devbox, systemd-boot on nixos-latitude |
+| Boot loader | Limine on nixos-rog, nixos-desktop (signed for Secure Boot) and devbox, systemd-boot on nixos-latitude |
 | Login screen | SDDM with sddm-astronaut's Jake the dog theme |
 | Desktops | KDE Plasma 6, and niri with Noctalia or DankMaterialShell |
 | Plasma looks | Glass and Klassy on nixos-rog and nixos-desktop, switched with `plasma-look` |

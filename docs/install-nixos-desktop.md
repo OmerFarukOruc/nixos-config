@@ -23,7 +23,8 @@ what you keep first. Before you start, have these ready:
   because the repository is public and nixos-rog accepts nothing from the LAN.
 
 1. In the firmware setup (Del at the MSI logo), keep the boot mode UEFI and
-   Secure Boot off. Boot the USB stick; F11 at the MSI logo picks the boot
+   set Secure Boot to Disabled, because the firmware refuses the USB stick
+   while it is on. Boot the USB stick; F11 at the MSI logo picks the boot
    device.
 2. Become root and find the disk by its id, not its `nvme` number:
 
@@ -97,8 +98,17 @@ what you keep first. Before you start, have these ready:
    curl -L https://github.com/OmerFarukOruc/nixos-config/archive/<commit>.tar.gz | tar xz -C /mnt/etc/nixos --strip-components=1
    nixos-generate-config --root /mnt --show-hardware-config > /tmp/generated.nix
    grep -A8 availableKernelModules /tmp/generated.nix
+   install -d -m 0700 /mnt/var/lib/secure-boot
+   nix shell nixpkgs#openssl --command openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 10950 \
+     -subj '/CN=nixos-desktop Secure Boot/' \
+     -keyout /mnt/var/lib/secure-boot/db.key -out /mnt/var/lib/secure-boot/db.pem
    nixos-install --flake /mnt/etc/nixos#nixos-desktop
    ```
+
+   The boot loader install signs Limine with the key in
+   `/mnt/var/lib/secure-boot` and fails without it. The firmware still holds
+   the old system's certificate, so Secure Boot stays off until
+   [Secure Boot](#secure-boot) below appends the new one.
 
    The committed `hardware-configuration.nix` mounts by partition name, so the
    install keeps it. Compare its `boot.initrd.availableKernelModules` with the
@@ -167,3 +177,48 @@ what you keep first. Before you start, have these ready:
     clones nixos-config into `~/Desktop/workspace/nixos-config` through
     `agents-pull` ([agents/README.md](../agents/README.md)), so the agent
     config links resolve.
+
+## Secure Boot
+
+The record of nixos-desktop sets `secureBoot`, so every boot loader install
+signs Limine with the key from step 5
+([Inventory](architecture.md#inventory)). The firmware keeps its factory keys,
+which Windows and its updates expect, and gets our certificate as one more
+entry in `db`. Do this once NixOS boots with Secure Boot off, and again after
+a BIOS update or a CMOS clear that drops the certificate.
+
+1. Put the certificate on the ESP, where the firmware's file browser finds it:
+
+   ```
+   sudo openssl x509 -in /var/lib/secure-boot/db.pem -outform DER -out /boot/nixos-desktop-db.cer
+   ```
+
+2. In the firmware setup (Del at the MSI logo), under Settings > Security >
+   Secure Boot:
+
+   - Set "Secure Boot" to Enabled and "Secure Boot Mode" to Custom.
+   - Set "Secure Boot Preset" to Maximum Security. The default,
+     Hardware/OS Compatibility, runs an image that fails the check.
+   - In Key Management, select the "Authorized Signatures (db)" row and pick
+     "Append Key" from its menu. Answer "No" to the factory default, so the
+     firmware asks for a file. Its list of file systems cuts every name short;
+     the one that holds `nixos-desktop-db.cer` beside the folders `efi` and
+     `limine` is the ESP of the WD disk. Pick that file, pick "Public Key
+     Certificate" as its format, leave the owner GUID empty, and answer "Yes"
+     to the update. The firmware answers "Append Key success", and the row
+     reads 7 keys and "Mixed" instead of 6 and "Factory".
+
+   The same menu holds "Delete Var", which empties `db` after one "Yes", and
+   "Set New Var", which replaces `db`. Use neither. After a "Delete Var",
+   "Set New Var" answered with "Yes" loads the factory `db` again; then append
+   the certificate. Secure Boot Mode Standard also loads the factory keys
+   again, so leave it at Custom. After any of these changes the "Vendor Keys"
+   line reads "Modified".
+3. Save with F10. The Limine menu appears, and on NixOS this prints
+   `Secure Boot: enabled (user)`:
+
+   ```
+   bootctl status 2>/dev/null | grep -m1 'Secure Boot'
+   ```
+
+[recovery.md](recovery.md#secure-boot) covers a firmware that refuses Limine.

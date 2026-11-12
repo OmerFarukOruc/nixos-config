@@ -90,6 +90,12 @@ let
       description = "Disk on which Limine also installs its BIOS stage, for a machine that boots through BIOS or either firmware. The EFI loader is always installed, so the machine needs an EFI system partition. A machine that boots through BIOS also sets boot.loader.efi.canTouchEfiVariables = false in its own files, because its firmware keeps no boot entries. With null Limine installs the EFI loader only.";
     };
 
+    secureBoot = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Whether the firmware of this machine enforces UEFI Secure Boot. Each boot loader install then signs Limine's EFI binary with the key in /var/lib/secure-boot, which is made once on the machine (docs/install-nixos-desktop.md, Secure Boot), and fails without it. nixpkgs' boot.loader.limine.secureBoot stays off, so limine.conf is not enrolled and `theme` can still edit it.";
+    };
+
     launcher = mkOption {
       type = types.enum selectors.launcherNames;
       default = "rofi";
@@ -205,6 +211,9 @@ let
     assert lib.assertMsg (
       machine.biosDevice == null || machine.bootloader == "limine"
     ) "Only the limine boot loader installs a BIOS stage, so ${machine.name} cannot set biosDevice.";
+    assert lib.assertMsg (
+      !machine.secureBoot || machine.bootloader == "limine"
+    ) "Only the limine boot loader signs its EFI binary, so ${machine.name} cannot set secureBoot.";
     assert lib.assertMsg (
       (!machine.features.remoteDesktop) || machine.features.remoteAccess
     ) "The remoteDesktop feature requires remoteAccess.";
