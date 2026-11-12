@@ -617,10 +617,11 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
 - Reviewer: `machines/devbox/factory-agent-files.nix` links the `code-reviewer`
   and `comment-sicko` agents and the `ub-mode` and
   `thermo-nuclear-code-quality-review` skills into `~/.claude` and into each
-  account folder in its `accounts` list, and `core.md` and
-  `testing-discipline.md` into `~/.claude/shared`, which are the files the
-  reviewer reads. `agents`, `skills` and `shared` are whole links to a
-  read-only store path, so no run plants an agent or a skill that stays, and
+  account folder in its `accounts` list, and `core.md`,
+  `testing-discipline.md`, `engineering.md` and `reviews.md` into
+  `~/.claude/shared`, which are the files the reviewer reads. `agents`,
+  `skills` and `shared` are whole links to a read-only store path, so no run
+  plants an agent or a skill that stays, and
   tmpfiles replaces a real folder put there at the next boot or switch. An
   edit to these files reaches the user at devbox's next upgrade, unlike omer's
   live links (`agents/README.md`). The user's profile holds `codex-ask`,

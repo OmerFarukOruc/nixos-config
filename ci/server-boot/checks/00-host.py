@@ -50,9 +50,10 @@ machine.fail("grep -E '^sl-factory:' /etc/subuid /etc/subgid")
 machine.succeed("test -e /var/lib/systemd/linger/sl-factory")
 FACTORY_ACCOUNTS = ["own-team", "work1", "work1-team", "work2", "work2-team"]
 for config_dir in ["/home/sl-factory/.claude", *(f"/home/sl-factory/.claude-accounts/{name}" for name in FACTORY_ACCOUNTS)]:
-    machine.succeed(f"test -s {config_dir}/agents/code-reviewer.md && test -s {config_dir}/agents/comment-sicko.md")
-    machine.succeed(f"test -s {config_dir}/skills/ub-mode/SKILL.md && test -s {config_dir}/skills/thermo-nuclear-code-quality-review/SKILL.md")
-machine.succeed("test -s /home/sl-factory/.claude/shared/core.md && test -s /home/sl-factory/.claude/shared/testing-discipline.md")
+    for reviewer_file in ["agents/code-reviewer.md", "agents/comment-sicko.md", "skills/ub-mode/SKILL.md", "skills/thermo-nuclear-code-quality-review/SKILL.md"]:
+        machine.succeed(f"runuser -u sl-factory -- test -f {config_dir}/{reviewer_file} -a -s {config_dir}/{reviewer_file}")
+for rule_file in ["core.md", "testing-discipline.md", "engineering.md", "reviews.md"]:
+    machine.succeed(f"runuser -u sl-factory -- test -f /home/sl-factory/.claude/shared/{rule_file} -a -s /home/sl-factory/.claude/shared/{rule_file}")
 for tool in ["codex-ask", "wait-exit", "sandbox-run", "dryer", "codex"]:
     machine.succeed(f"runuser -l sl-factory -c 'command -v {tool}'")
 machine.succeed("runuser -u sl-factory -- bash -c 'mkdir -p /tmp/agents && mktemp -d -p /tmp/agents probe-review.XXXXXX'")

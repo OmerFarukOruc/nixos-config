@@ -40,6 +40,14 @@ let
       name = "shared/testing-discipline.md";
       path = ../../agents/shared/testing-discipline.md;
     }
+    {
+      name = "shared/engineering.md";
+      path = ../../agents/shared/engineering.md;
+    }
+    {
+      name = "shared/reviews.md";
+      path = ../../agents/shared/reviews.md;
+    }
   ];
   agentTools = pkgs.callPackage ../../pkgs/agent-tools.nix { };
   reviewerTools = pkgs.linkFarm "sl-factory-reviewer-tools" (
