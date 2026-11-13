@@ -360,7 +360,7 @@ architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when anot
   `energy_performance_available_preferences` lists only `performance` (read
   2026-10-13).
 - scx_lavd runs in its performance mode in every profile
-  (`services.scx` in `nixosModules/lavd-scheduler.nix`). Its balanced and
+  (`services.scx-loader` in `nixosModules/lavd-scheduler.nix`). Its balanced and
   powersave modes use core compaction (packing tasks onto as few cores as the
   load needs), and with `--autopower` the scheduler picked powersave in
   power-saver, where the pointer lagged. On 2026-10-18 in power-saver, a
