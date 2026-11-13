@@ -60,7 +60,6 @@ lines_of() { grep -c -- "$1" "$dir/watch.log" || true; }
 brief_answered() { h agent read "$name" --source recent-unwrapped | grep -q "STATUS: brief 42"; }
 more_lines() { [[ "$(lines_of "$1")" -gt "$2" ]]; }
 start_watch() {
-  : >"$dir/watch.log"
   timeout "$watch_deadline_s" "$tools" agent watch "$name" >"$dir/watch.log" 2>&1 &
   watch_pid=$!
   wait_for 15 watch_matches "watching herdr agents named" || fail "the watcher did not start"
@@ -112,11 +111,11 @@ wait_for 150 more_lines "$name finished a turn" "$before" || fail "no finished l
 
 step 4 "a watcher started after an agent finished a turn prints done for it"
 h agent prompt "$name" "Reply with exactly one line: STATUS: while no new watcher" --wait --timeout 150000 >/dev/null || fail "the turn without a new watcher did not settle"
-timeout 10 "$tools" agent watch "$name" >"$dir/watch-late.log" 2>&1 &
+timeout 15 "$tools" agent watch "$name" >"$dir/watch-late.log" 2>&1 &
 late_pid=$!
 rc=0
 wait "$late_pid" || rc=$?
-[[ "$rc" == 0 || "$rc" == 124 ]] || fail "the late watcher exited $rc"
+[[ "$rc" == 124 ]] || fail "the late watcher exited $rc, wanted 124 from its deadline: $(cat "$dir/watch-late.log")"
 grep -q "$name is done" "$dir/watch-late.log" || fail "the late watcher did not print done for the finished turn: $(cat "$dir/watch-late.log")"
 
 step 5 "a running name is refused and adds no tab"
