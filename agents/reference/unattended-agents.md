@@ -1,6 +1,6 @@
 # Unattended agents on devbox
 
-Contents: an agent waits after its turn ends; a notice waits until its agent is idle; a restart keeps some loops; `/exit` waits on a dialog; a usage limit; a herdr restart or reboot; an agent exits; a Status Lantern merge deploys staging; branches outlive their item; a rule given mid-run; `rm` on a variable path; `rm` inside a `-c` string; `pr-land` removes a worktree; the daily sweep removes a merged worktree; a review's fuzz runs a command.
+Contents: an agent waits after its turn ends; a notice waits until its agent is idle; a restart keeps some loops; `/exit` waits on a dialog; a usage limit; a subagent stops on a usage limit; a herdr restart or reboot; an agent exits; a Status Lantern merge deploys staging; branches outlive their item; a rule given mid-run; `rm` on a variable path; `rm` inside a `-c` string; `pr-land` removes a worktree; the daily sweep removes a merged worktree; a review's fuzz runs a command.
 
 This page covers Claude agents left running in herdr's default session while Omer is away. Each entry names a failure point, what handles it now, how to check it, and who sees a failure. A change to any of these paths names its own failure and who sees it, as nixos-config `agents/shared/reviews.md` (Reviews and audits) requires.
 
@@ -47,7 +47,14 @@ When the session has a scheduled task, `/exit` opens "Background work is running
 - **Handled by:** `claude-tools-limit-switch.timer`, which runs `claude-tools limit-switch scan` (nixos-config `pkgs/claude-tools`) every minute. The scan holds the account back until the reset its limit message names, in `~/.local/state/claude-tools/limits.json`, which `claude-tools rotate` shares. It then reads the usage of every account not held back and moves each named agent whose last output is a limit message to the first account of `claude-tools usage --order` (team accounts first, then the weekly-limited reserve, as nixos-config `pkgs/claude-tools/README.md` describes), then sends it its resume message. When the agent's own limit has reset by then, the agent stays on its account and gets only the resume message.
 - **Check:** `~/.local/state/claude-tools/limit-switch/events.log`, and `events.log.1` for older lines once the log reached 1 MiB, `journalctl --user -u claude-tools-limit-switch.service -n 20`, and `jq . ~/.local/state/claude-tools/limits.json` for the accounts held back.
 - **Who sees a failure:** the log only. When no account has room, the agent stays at the limit, and the scan logs it again every 5 minutes (`COOLDOWN` in the script).
-- **Subagents:** an Agent-tool subagent that runs when the limit hits ends with a `failed` notice that names the limit, and keeps its transcript. After the move, `SendMessage` to its id continues it with its context. A Codex pass it started on the host keeps running, so the message names that pass and tells the agent not to start a second one. Start a new agent only when `SendMessage` fails.
+
+## A subagent stops on a usage limit
+
+An Agent-tool subagent that runs when its parent's account hits the limit ends with a `failed` notice that names the limit and the reset time, and its work so far stays saved (seen on Claude Code 2.1.323). `claude-tools limit-switch scan` reads only a named agent's own last output, never a subagent's, so it does not resume the subagent.
+
+- **Handled by:** the orchestrator, or the parent when it has none. Once the parent's resume message has arrived or the reset time the notice names has passed, it sends `SendMessage` to the `task-id` in the notice. When the subagent had started a Codex pass (`codex-ask`, which runs under `setsid` and normally survives), the message gives the pass's `<tmp>/codex` folder and tells the subagent to read `<tmp>/codex/status` first: wait when it has no `exit` line, use `answer.md` after `exit 0`, and start a second pass only when the status shows the first one died. Start a new subagent only when `SendMessage` returns an error such as `No task found with ID`.
+- **Check:** the `SendMessage` result reads `Resuming agent <id>`, and no second `failed` notice arrives.
+- **Who sees a failure:** the orchestrator only; `events.log` has no line for a subagent. A second `failed` notice means send the message again after the new reset time.
 
 ## The herdr server restarts, crashes, or the box reboots
 
