@@ -142,6 +142,10 @@ it on, and the host passes its environment name and the endpoint
 (`configuration.nix` does this for this box).
 The host name defaults to `networking.hostName`. The module holds no host value.
 
+`overlays/opentelemetry-collector-contrib.nix` compiles the collector with Go
+1.26 until the locked nixpkgs has 0.165.0 or later, because older versions do
+not build or do not start with Go 1.27, the default Go of the locked nixpkgs.
+
 It runs one OpenTelemetry collector, the contrib build, as
 `opentelemetry-collector.service`, plus `auditd`. The collector exports metrics
 over gRPC to the central endpoint (SigNoz) without TLS (`insecure = true`),

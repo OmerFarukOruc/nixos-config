@@ -114,6 +114,8 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    nixpkgs.overlays = [ (import ../overlays/opentelemetry-collector-contrib.nix) ];
+
     services.opentelemetry-collector = {
       enable = true;
       package = pkgs.opentelemetry-collector-contrib;
