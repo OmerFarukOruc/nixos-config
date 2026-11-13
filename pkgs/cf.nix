@@ -6,7 +6,7 @@
 }:
 buildNpmPackage {
   pname = "cf";
-  version = "1.0.0-beta.31";
+  version = "1.0.0-beta.32";
 
   src = lib.fileset.toSource {
     root = ./cf;
@@ -17,7 +17,7 @@ buildNpmPackage {
   };
 
   nodejs = nodejs_26;
-  npmDepsHash = "sha256-d7DBJg4ICP13sqRonXKXlNk2LldL3ztIhbCQ/BUq/x4=";
+  npmDepsHash = "sha256-FMSzFuEPGq6MpK6vs5G5CCHHOZhmUcagLmvIh0gnKLs=";
   dontNpmBuild = true;
 
   nativeBuildInputs = [ makeWrapper ];
