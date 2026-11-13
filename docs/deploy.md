@@ -57,7 +57,7 @@ commit that a person pushes.
 | Hook | Runs | Took |
 | --- | --- | --- |
 | pre-commit | `nix fmt`; a file it rewrites stops the commit until a second `git add` | under 2 s of formatting on nixos-rog, as treefmt reports it (2026-11-01) |
-| pre-push | `ci/gate.sh` under `heavy` where it exists: the private-value scan and the `agents/` checks on the pushed commits ([agents/README.md](../agents/README.md#checks)), then `ci/checks.sh` and `ci/unit-cycles.sh` on the working tree, which a push that changes only `agents/` skips | 526 s on devbox, while its own hourly install ran (`devenv test`, 2026-11-11); it built no host's system |
+| pre-push | `ci/gate.sh` under `heavy` where it exists: the private-value scan and the `agents/` checks on the pushed commits ([agents/README.md](../agents/README.md#checks)), then `ci/checks.sh` on the working tree, which a push that changes only `agents/` skips | 153 s alone on nixos-rog with a 10.4 GiB peak (`ci/checks.sh` under `heavy`, 2026-11-13); it built no host's system. Before the job pool, the same checks took 389 s alone and 11 min 47 s beside the hourly install and another session's gate |
 
 Both times come from a test clone. The same checks run with one
 command, and `devenv tasks run ci` also builds every host's system with
@@ -155,14 +155,20 @@ candidate release on the target
 hardware and services work after activation. To read the last deployed source on the target, run
 `ssh nixos-latitude 'cd "$(readlink -f ~/.local/state/nixos-config-deploy/current)" && <command>'`.
 
-`ci/checks.sh` runs these checks in order:
+`ci/checks.sh` runs the first three checks in order, then one pool of jobs,
+three at a time (`PARALLEL_EACH_JOBS` in `scripts/lib/parallel-each.sh`): one
+job per host (check 4) and one job that runs checks 5 to 9 in order.
 
 1. `lock files`: `flake.lock` matches `flake.nix`.
 2. `formatting`: `nix fmt -- --ci` changes nothing.
 3. `flake outputs`: the flake has only `checks`, `formatter` and
    `nixosConfigurations`.
-4. `host systems`: each host's system derivation type and `drvPath`, each
-   evaluated in a separate process.
+4. The host job: the host's system derivation type and `drvPath`, evaluated in
+   its own process, then the ordering-cycle check of the deploy's step 7
+   ([What the deploy does](#what-the-deploy-does)) on its units.
+   `ci/unit-cycles.nix` builds the unit files without the programs they start,
+   so it downloaded about 1.8 GiB instead of the whole system on a GitHub
+   runner on 2026-10-13, and `systemd-analyze verify` reads them.
 5. `flake checks`: builds the `scheme-catalogue` check, which compares the
    scheme parser with `yq`, the `theme-contrast` check, which runs
    `scripts/lib/theme-contrast.py` on nixos-rog's theme packs, and the
@@ -183,16 +189,15 @@ hardware and services work after activation. To read the last deployed source on
    per-interface port), what the schema accepts and rejects, and that
    nixos-desktop and nixos-rog keep the fallback copy of their EFI binary.
 8. `VM tests`: the flake still defines the `devbox-boot-bios` and
-   `deploy-script` VM checks. It evaluates them and runs neither.
+   `deploy-script` VM checks, by name. It evaluates and runs neither; a
+   `deploy.sh` change runs `deploy-script` ([Test deploy.sh in a VM](#test-deploysh-in-a-vm)),
+   and a nixpkgs move that breaks a VM test's evaluation shows up at that run.
+   Evaluating both on every push took 98 s and a 6.3 GB heap on nixos-rog
+   (2026-11-13).
 9. `binary cache copies`: the substituters and keys in the install docs and
    `.github/workflows/update.yml` match the hosts' `nix.settings`, except the
    tailnet-only cache `cache.statuslantern.com`, which a GitHub runner and an install
    medium cannot reach.
-
-`ci/unit-cycles.sh` runs the ordering-cycle check of the deploy's step 7
-([What the deploy does](#what-the-deploy-does)) on each host's units. It builds the unit files without the programs
-they start, so it downloaded about 1.8 GiB instead of the whole system on a
-GitHub runner on 2026-10-13.
 
 Without a `#`, `scripts/eval.sh` prints one value of nixos-rog's
 configuration; give a flake attribute with `#` for another host. A string
@@ -276,8 +281,8 @@ one `nix eval` per host, under `heavy` where the host has it, because `heavy`
 evaluation per host stays under that cap. Three systems in one evaluation did
 not, and systemd-oomd killed it. The two commits evaluate at the same time,
 each in its own `heavy` scope, so two evaluations run at once. In the pre-push
-check on nixos-rog, devbox took 13 s, nixos-desktop 44 s, nixos-latitude 38 s
-and nixos-rog 57 s (2026-11-01). The host that runs the script keeps each
+check on nixos-rog, with two evaluations at a time, devbox took 18 s,
+nixos-latitude 64 s, nixos-desktop 82 s and nixos-rog 90 s (2026-11-13). The host that runs the script keeps each
 commit's result in `${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts/`,
 and `ci/checks.sh` stores the same result for the commit it checks when the
 tree has no uncommitted change (`scripts/lib/host-systems.sh`). So after a push
@@ -594,7 +599,7 @@ checkout that would drop a file of the running release.
 The check does not cover a deploy over SSH, a dropped connection (exit 76),
 exits 71, 72, 74 and 79, the `deployLogin` lookup, or dix. Nix caches a pass
 until the test, `deploy.sh`, `nixosModules/deploy-host.nix` or the nixpkgs input
-changes, and `ci/checks.sh` only evaluates it.
+changes, and `ci/checks.sh` only checks that the flake still names it.
 
 ## One deploy at a time
 

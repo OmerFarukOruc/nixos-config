@@ -14,7 +14,7 @@ nixos-desktop is Omer's desktop PC and nixos-rog his laptop. Both run NixOS. Hom
 
 ## Heavy commands
 
-- `heavy <command>` runs a heavy command at nice 10 in a user scope capped at 14 GiB, and never waits for another one (nixos-config `docs/nixos-rog.md`, Heavy commands). Both hosts have it. Run a Nix evaluation of a NixOS flake, a full test suite, or a build as `heavy <command>` on the host the agent runs on; gastrodili's `scripts/heavy.ts` and nixos-config's Nix helper scripts already do, and wrapping them in `heavy` again is harmless. Do not send such work to the other host over SSH, because agents on nixos-desktop once filled nixos-rog's memory that way.
+- `heavy <command>` runs a heavy command at nice 10 in a user scope capped at 18 GiB, and never waits for another one (nixos-config `docs/nixos-rog.md`, Heavy commands). Both hosts have it. Run a Nix evaluation of a NixOS flake, a full test suite, or a build as `heavy <command>` on the host the agent runs on; gastrodili's `scripts/heavy.ts` and nixos-config's Nix helper scripts already do, and wrapping them in `heavy` again is harmless. Do not send such work to the other host over SSH, because agents on nixos-desktop once filled nixos-rog's memory that way.
 
 ## Project toolchains
 

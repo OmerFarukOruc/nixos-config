@@ -989,7 +989,7 @@ collector and auditd. A connection from outside the VM to port 2222 must get no
 answer, and must get sshd's banner once the test opens that port. A failed
 build prints the end of the driver's log, and `nix log <derivation>` on that
 host prints all of it. Nix caches a pass until the host or the test changes,
-and `ci/checks.sh` only evaluates the test.
+and `ci/checks.sh` only checks that the flake still names the test.
 
 To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
 run in path order on `machine` (the booted host), and all files share one

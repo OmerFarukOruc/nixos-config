@@ -1,4 +1,4 @@
-# shellcheck shell=bash disable=SC2034 # ci/checks.sh, ci/unit-cycles.sh and scripts/affected-hosts.sh read these
+# shellcheck shell=bash disable=SC2034 # ci/checks.sh and scripts/affected-hosts.sh read these
 NIX_OPTS=(--option allow-import-from-derivation false)
 HOST_SYSTEM_EXPR='h: {
   drv = h.config.system.build.toplevel.drvPath;

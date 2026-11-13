@@ -160,7 +160,7 @@ and each run rewrites that list with the old versions still running.
 
 `heavy <command> [argument...]` (`home-manager/modules/heavy.nix`, on nixos-rog
 and nixos-desktop) runs a heavy command at nice 10, in a systemd user scope
-that the kernel slows above 10 GiB of memory and stops above 14 GiB or 4 GiB of
+that the kernel slows above 14 GiB of memory and stops above 18 GiB or 4 GiB of
 swap. Commands never wait for each other. A `heavy` inside another one runs its
 command directly. One reached over SSH, as in `scripts/run-unit-on-rog.sh` from
 nixos-desktop, gets a scope of its own on nixos-rog.
@@ -188,25 +188,40 @@ On 2026-10-24, measurements under `heavy` used each scope's `memory.peak`.
 With the combined `nix flake check`, `ci/checks.sh` peaked at 10.0 GiB.
 `MemoryHigh` held it there, with 181 `high` events in `memory.events` and about
 0.4 GB of swap in `memory.swap.peak`. With one evaluation per host,
-`ci/checks.sh` peaked at 8.5 GiB. `ci/unit-cycles.sh` peaked at 4.9 GiB with one
-host at a time. `devenv test` peaked at 8.8 GiB.
+`ci/checks.sh` peaked at 8.5 GiB. The ordering-cycle check, then the separate
+script `ci/unit-cycles.sh` and now a step of each host job, peaked at 4.9 GiB
+with one host at a time. `devenv test` peaked at 8.8 GiB.
 
 On 2026-11-01, the same measurement gave 5.31 GiB for `ci/checks.sh` and
-2.58 GiB for `ci/unit-cycles.sh` with one host at a time, and 7.85 GiB and
+2.58 GiB for the ordering-cycle check with one host at a time, and 7.85 GiB and
 3.68 GiB with two at a time, with no `high` or `max` event in either.
 
-`ci/checks.sh` checks each host's derivation type and
-`drvPath` in a separate process, so the evaluator releases its heap when the
-host is done. `nix fmt` checks the formatter; the output gate rejects new
-output kinds or formatter systems until their coverage is added. Both checks
-run two host evaluations at a time (`PARALLEL_EACH_JOBS` in
-`scripts/lib/parallel-each.sh`), so a new host adds one evaluator heap only while
-it runs, and at most two heaps share the scope's `MemoryHigh`. The limits in
-`home-manager/modules/heavy.nix` stay unchanged. `prepare-update.sh inputs`
-evaluates the hosts the same way when inputs moved.
+On 2026-11-13, `ci/checks.sh` alone on nixos-rog took 389 s with two hosts at
+a time and its other checks after them, at a 7.9 GiB peak. With one job per
+host that evaluates the system and then builds its units, one job for the
+other checks, and three jobs at a time, it took 153 s at a 10.4 GiB peak, with
+no `high` or `max` event. The host jobs took 27 s (devbox), 95 s
+(nixos-latitude), 117 s (nixos-desktop) and 120 s (nixos-rog), the other
+checks 50 s. nixos-rog's job bounds the run, so a fourth job would save only
+the wait for a free slot, about 27 s.
 
-The `update` workflow sets `PARALLEL_EACH_JOBS` to 3 in
-`.github/workflows/update.yml`, because its runner has no `heavy` scope. On
+`ci/checks.sh` checks each host's derivation type and
+`drvPath` in a separate process, then builds that host's units in a second
+one, so the evaluator releases its heap when the host is done. `nix fmt`
+checks the formatter; the output gate rejects new output kinds or formatter
+systems until their coverage is added. The host jobs and the job with the
+other checks run three at a time (`PARALLEL_EACH_JOBS`, which `ci/checks.sh`
+sets to 3 over the default of 2 in `scripts/lib/parallel-each.sh`), so a new
+host adds one evaluator heap only while it runs, and at most three heaps share
+the scope's `MemoryHigh`, which `home-manager/modules/heavy.nix` sets to 14 GiB
+for that. `parallel_each` prints a job's output when the job ends, so the
+jobs' lines never interleave. `prepare-update.sh inputs` evaluates the hosts
+two at a time, the library default, when inputs moved.
+
+The `update` workflow pins `PARALLEL_EACH_JOBS` to 3 in
+`.github/workflows/update.yml`, the value `ci/checks.sh` uses, because its
+runner has no `heavy` scope and a change of that value needs the runner measured
+again. On
 2026-11-02 the runner had 4 CPUs and 15 GiB as `free -g` shows it. In probe
 run 41540059527, a `ci/update.sh` run that moved three inputs on a warm store
 took 11.9 min with 3 evaluations at a time and peaked at 11.7 GiB used,
@@ -214,7 +229,7 @@ against 14.2 min and 9.2 GiB with 2; on a cold store it peaked at 12.5 GiB.
 With 4 at a time, a cold run in probe run 41535294049 peaked at 14.3 GiB and
 evaluated the hosts no faster than with 3.
 
-Before the parallel evaluations start, both checks fetch every flake input in
+Before the parallel evaluations start, `ci/checks.sh` fetches every flake input in
 one process (`fetch_inputs` in `scripts/lib/host-systems.sh`), and so do
 `prepare-update.sh inputs` and `scripts/affected-hosts.sh`, the latter for
 each commit without a stored result. On

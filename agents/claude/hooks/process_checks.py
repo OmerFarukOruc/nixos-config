@@ -158,8 +158,8 @@ AMP_REASON = (
     "This call already runs in the background, and its `&` makes the call end at once, so the completion notice "
     "would arrive before the work ends. Drop the `&` and let the command run in the foreground of this background "
     "call.")
-BUILD_SCRIPTS = {"build.sh", "check.sh", "checks.sh", "unit-cycles.sh"}
-BUILD_PROBE = re.compile(r"nix|devenv|build\.sh|checks?\.sh|unit-cycles\.sh")
+BUILD_SCRIPTS = {"build.sh", "check.sh", "checks.sh"}
+BUILD_PROBE = re.compile(r"nix|devenv|build\.sh|checks?\.sh")
 EXIT_KEPT = re.compile(r"pipefail|pipestatus", re.IGNORECASE)
 NIX_OPTION_VALUES = {"--option": 2, "--arg": 2, "--argstr": 2, "--override-input": 2,
                      "--extra-experimental-features": 1, "--experimental-features": 1, "--log-format": 1, "-I": 1,

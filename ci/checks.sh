@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+PARALLEL_EACH_JOBS=${PARALLEL_EACH_JOBS:-3}
 # shellcheck source=/dev/null
 . scripts/lib/parallel-each.sh
 # shellcheck source=/dev/null
@@ -14,15 +15,20 @@ fi
 log=$(mktemp)
 records=$(mktemp -d)
 trap 'rm -rf -- "$log" "$records"' EXIT
+flake=.
 
-check() {
+step() {
   local name=$1
   shift
   echo "== $name"
-  "$@" 2>&1 | tee -a "$log" || {
+  "$@" 2>&1 || {
     echo "The check \"$name\" failed." >&2
-    exit 1
+    return 1
   }
+}
+
+check() {
+  step "$@" 2>&1 | tee -a "$log" || exit 1
 }
 
 lock_files() {
@@ -46,28 +52,84 @@ flake_outputs() {
 }
 
 host_system() {
-  local rc=0
-  echo "$1"
-  nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file "$flake#nixosConfigurations.$1" --apply "
-    h:
-      let toplevel = h.config.system.build.toplevel; in
-      if builtins.isAttrs toplevel && (toplevel.type or null) == \"derivation\"
-      then { \"$1\" = ($HOST_SYSTEM_EXPR) h; }
-      else throw \"The host toplevel must be a derivation.\"
-  " >"$records/$1.json" 2>"$records/$1.err" || rc=$?
-  cat "$records/$1.err" >&2
-  ((rc == 0)) || echo "$1: the evaluation failed." >&2
-  return "$rc"
+  {
+    nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file "$flake#nixosConfigurations.$1" --apply "
+      h:
+        let toplevel = h.config.system.build.toplevel; in
+        if builtins.isAttrs toplevel && (toplevel.type or null) == \"derivation\"
+        then { \"$1\" = ($HOST_SYSTEM_EXPR) h; }
+        else throw \"The host toplevel must be a derivation.\"
+    " >"$records/$1.json"
+  } 2>&1 || {
+    echo "$1: the evaluation failed." >&2
+    return 1
+  }
 }
 
-host_systems() {
-  local flake=. revision names hosts systems
+unit_cycles() {
+  local host=$1 paths units systemd rc=0 analysis
+  paths=$(nix build --no-link --print-out-paths --impure "${NIX_OPTS[@]}" \
+    --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd) ||
+    {
+      echo "$host: the units do not build."
+      return 1
+    }
+  units=$(grep -- '-system-units$' <<<"$paths") || {
+    echo "$host: the build printed no unit folder."
+    return 1
+  }
+  systemd=$(grep -v -- '-system-units$' <<<"$paths") || {
+    echo "$host: the build printed no systemd package."
+    return 1
+  }
+  # systemd-analyze exits 0 also when it finds a cycle, so only its message
+  # counts; any other status means it did not check.
+  # --man=no: a unit's man page lookup fails where man is not on PATH.
+  analysis=$(SYSTEMD_UNIT_PATH=$units "$systemd/bin/systemd-analyze" verify --man=no default.target 2>&1) || rc=$?
+  if ((rc != 0)); then
+    printf '%s\n' "$analysis" "$host: systemd-analyze could not check the units (exit $rc)."
+    return 1
+  elif grep -q 'Found ordering cycle' <<<"$analysis"; then
+    echo "$host: the units hold an ordering cycle, so the next boot would not finish."
+    grep -E 'ordering cycle|Job .* deleted' <<<"$analysis" || true
+    return 1
+  fi
+  echo "$host: no ordering cycle"
+}
+
+host_job() {
+  echo "== $1"
+  host_system "$1" && unit_cycles "$1"
+}
+
+other_job() {
+  step "flake checks" nix build "${NIX_OPTS[@]}" --no-link --no-write-lock-file \
+    .#checks.x86_64-linux.{scheme-catalogue,theme-contrast,patches} &&
+    step "box browser feature" box_browser &&
+    step "server record" server_record &&
+    step "VM tests" vm_tests &&
+    step "binary cache copies" cache_copies
+}
+
+job() {
+  case $1 in
+    host:*) host_job "${1#host:}" ;;
+    other) other_job ;;
+    *)
+      echo "job: unknown job '$1'" >&2
+      return 2
+      ;;
+  esac
+}
+
+pool() {
+  local revision names hosts systems
   revision=$(nix flake metadata "${NIX_OPTS[@]}" --json --no-write-lock-file . | jq -r '.revision // empty') || return 1
   [[ -z $revision ]] || flake="git+file://$PWD?rev=$revision"
   fetch_inputs "$flake" "${NIX_OPTS[@]}" --no-write-lock-file || return 1
   names=$(host_names "$flake" "${NIX_OPTS[@]}") || return 1
   mapfile -t hosts <<<"$names"
-  parallel_each host_system "${hosts[@]}" || return 1
+  parallel_each job "${hosts[@]/#/host:}" other || return 1
   [[ -n $revision ]] || return 0
   systems=$(cd "$records" && jq -c -s add "${hosts[@]/%/.json}") || return 1
   store_host_systems "$revision" "$systems" ||
@@ -170,9 +232,9 @@ cache_copies() {
 vm_tests() {
   local out
   out=$(nix eval "${NIX_OPTS[@]}" --json --no-write-lock-file .#checks.x86_64-linux \
-    --apply 'checks: builtins.mapAttrs (_: test: test.drvPath) checks') || return 1
-  jq -e 'keys | contains(["devbox-boot-bios", "deploy-script"])' <<<"$out" >/dev/null || {
-    echo "The flake checks lack the boot test of devbox or the deploy.sh test: $(jq -c keys <<<"$out")" >&2
+    --apply builtins.attrNames) || return 1
+  jq -e 'contains(["devbox-boot-bios", "deploy-script"])' <<<"$out" >/dev/null || {
+    echo "The flake checks lack the boot test of devbox or the deploy.sh test: $out" >&2
     return 1
   }
 }
@@ -182,17 +244,7 @@ vm_tests() {
 check "lock files" lock_files
 check formatting nix fmt "${NIX_OPTS[@]}" --no-update-lock-file -- --ci
 check "flake outputs" flake_outputs
-check "host systems" host_systems
-check "flake checks" nix build "${NIX_OPTS[@]}" --no-link --no-write-lock-file \
-  .#checks.x86_64-linux.{scheme-catalogue,theme-contrast,patches}
-echo
-check "box browser feature" box_browser
-echo
-check "server record" server_record
-echo
-check "VM tests" vm_tests
-echo
-check "binary cache copies" cache_copies
+check "host systems, unit cycles and the other checks" pool
 echo
 
 warnings=$(grep -o 'evaluation warning: .*' "$log" | sort -u || true)

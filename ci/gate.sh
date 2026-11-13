@@ -4,8 +4,7 @@
 # ci/private-scan.sh on them unless --no-private-scan is given, and ci/agents-checks.sh on the agents/ paths they
 # touch. Unless every path they touch is under agents/, named by no .nix file, and neither inside a skill folder nor a
 # Codex agent file that only one of the two revisions holds (home-manager/modules/agent-skills lists agents/skills and
-# home-manager/modules/agents.nix lists agents/codex/agents at evaluation), it then runs ci/checks.sh, then
-# ci/unit-cycles.sh.
+# home-manager/modules/agents.nix lists agents/codex/agents at evaluation), it then runs ci/checks.sh.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -57,4 +56,3 @@ if ((${#agents[@]})); then
 fi
 
 ci/checks.sh
-ci/unit-cycles.sh
