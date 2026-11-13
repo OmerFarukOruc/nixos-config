@@ -9,20 +9,18 @@ name="$run-a"
 foreign="$run-foreign"
 work="$dir/work"
 watch_pid=""
+watch_deadline_s=3600
 mkdir -p "$work"
 h() { "$real_herdr" --session "$run" "$@"; }
 
-stop_watch() {
-  if [[ -n "$watch_pid" ]] && ps -p "$watch_pid" >/dev/null 2>&1; then
-    kill "$watch_pid"
-    wait "$watch_pid" 2>/dev/null || true
+show_watch() {
+  if [[ -f "$dir/watch.log" ]]; then
     echo "--- agent watch output"
     cat "$dir/watch.log"
   fi
-  watch_pid=""
 }
 cleanup() {
-  stop_watch
+  show_watch
   "$tools" agent stop --force "$name" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$foreign" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
@@ -37,10 +35,6 @@ fail() {
   [[ -n "$pane" ]] && {
     echo "--- pane $pane"
     h pane read "$pane" 2>&1 | tail -n 40
-  }
-  [[ -f "$dir/watch.log" ]] && {
-    echo "--- agent watch output"
-    cat "$dir/watch.log"
   }
   exit 1
 }
@@ -66,8 +60,7 @@ lines_of() { grep -c -- "$1" "$dir/watch.log" || true; }
 brief_answered() { h agent read "$name" --source recent-unwrapped | grep -q "STATUS: brief 42"; }
 more_lines() { [[ "$(lines_of "$1")" -gt "$2" ]]; }
 start_watch() {
-  : >"$dir/watch.log"
-  "$tools" agent watch "$name" >"$dir/watch.log" 2>&1 &
+  timeout "$watch_deadline_s" "$tools" agent watch "$name" >"$dir/watch.log" 2>&1 &
   watch_pid=$!
   wait_for 15 watch_matches "watching herdr agents named" || fail "the watcher did not start"
 }
@@ -116,11 +109,14 @@ before=$(lines_of "$name finished a turn")
 h agent prompt "$name" "Run 'sleep 5' with the Bash tool, then reply with exactly one line: STATUS: after move" >/dev/null
 wait_for 150 more_lines "$name finished a turn" "$before" || fail "no finished line for the turn after the move"
 
-step 4 "a restarted watcher prints done for an agent that finished a turn it missed"
-stop_watch
-h agent prompt "$name" "Reply with exactly one line: STATUS: while no watcher" --wait --timeout 150000 >/dev/null || fail "the turn without a watcher did not settle"
-start_watch
-wait_for 15 watch_matches "$name is done" || fail "the restarted watcher did not print done for the missed turn"
+step 4 "a watcher started after an agent finished a turn prints done for it"
+h agent prompt "$name" "Reply with exactly one line: STATUS: while no new watcher" --wait --timeout 150000 >/dev/null || fail "the turn without a new watcher did not settle"
+timeout 15 "$tools" agent watch "$name" >"$dir/watch-late.log" 2>&1 &
+late_pid=$!
+rc=0
+wait "$late_pid" || rc=$?
+[[ "$rc" == 124 ]] || fail "the late watcher exited $rc, wanted 124 from its deadline: $(cat "$dir/watch-late.log")"
+grep -q "$name is done" "$dir/watch-late.log" || fail "the late watcher did not print done for the finished turn: $(cat "$dir/watch-late.log")"
 
 step 5 "a running name is refused and adds no tab"
 rc=0
