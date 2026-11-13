@@ -8,7 +8,7 @@ lib.mkIf (cfg.kind == "server") {
     extraSetFlags = [
       "--ssh"
       "--advertise-exit-node"
-      "--accept-dns=false"
+      "--accept-dns=true"
     ];
   };
 

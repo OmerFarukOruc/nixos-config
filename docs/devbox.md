@@ -73,6 +73,12 @@ keeps 0.0.0.0 until `docker compose down` or `docker network rm` removes it.
 
 - Tailscale with its own SSH server (`--ssh`), an exit node, and IP forwarding
   (`useRoutingFeatures = "server"`).
+- Tailscale MagicDNS (`--accept-dns=true`): tailscaled gives systemd-resolved the
+  tailnet's names on `tailscale0`. Every other name still goes to the resolvers
+  of the public network file ([Network and secrets](#network-and-secrets)) while
+  the tailnet's DNS settings in the admin console name no global nameserver. A
+  global nameserver with "Override DNS servers" makes `tailscale0` the default
+  route of every lookup.
 - OpenSSH on port 2222, on every address, as the workstations run it with
   `openFirewall = false` (`nixosModules/ssh.nix`). The firewall drops port 2222
   on the public interface and accepts everything on tailscale0, so only the
@@ -1052,7 +1058,14 @@ in daily use:
   connection each way and a probe that `sl-factory` runs through three firewall
   reloads. No check covers the first reload over the fence of an older
   configuration on a live host, the terminal sharing, herdr's detection of an
-  agent behind sudo, or the reach of `sl-factory` on the real tailnet.
+  agent behind sudo, or the reach of `sl-factory` on the real tailnet. The
+  fence lets `sl-factory` ask the local resolver, which forwards tailnet names
+  to Tailscale as root's own process, so `sl-factory` can resolve a peer's name
+  and still cannot connect to it.
+- **MagicDNS.** The boot VM's tailscaled is logged out and pushes no DNS
+  configuration. After a deploy, `tailscale debug prefs | jq .CorpDNS` prints
+  `true`, `resolvectl status tailscale0` lists the tailnet's suffix, and
+  `getent hosts github.com` still answers.
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner,

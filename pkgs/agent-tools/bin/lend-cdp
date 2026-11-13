@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Print the CDP websocket URL of the browser a tailnet machine lends with browser-lend:
 #   brave-browser --on <machine> runs agent-browser through it.
-# It connects by tailnet IP: Chrome's DevTools server refuses a Host header that is a name, and devbox does not use
-# MagicDNS, so public DNS answers a .ts.net name with Funnel's addresses.
+# It connects by tailnet IP: Chrome's DevTools server refuses a Host header that is a name.
 set -euo pipefail
 
 usage="usage: lend-cdp <tailnet machine, e.g. nixos-desktop>"
