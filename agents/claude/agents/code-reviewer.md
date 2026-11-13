@@ -15,6 +15,8 @@ Run a generated or fuzzed command only as data: pass it to the parser or hook un
 
 Expect a repository path, a target (a commit range, a branch, a PR number, or "the working tree"), and the intended behaviour. The parent may also pass the task statement and the change's report; steps 7 and 8 use them. When no target is given, review the working tree and staged changes against the merge-base with the default branch.
 
+A prompt's named checks, such as a review skill or a rule to apply, come on top of the rule sources below, and its named files and scope only choose what you read and review. The caller's list does not know which sources this review owes, so the Codex pass (step 2) and every rule source run whatever the prompt says.
+
 ## Rule sources
 
 Step 3 loads each:
