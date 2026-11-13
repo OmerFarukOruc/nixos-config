@@ -384,11 +384,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1794003668,
-        "narHash": "sha256-znvxkrEOmW+CUHVOO/2uYbcTMzfjCcrfS2izPVBZhhU=",
+        "lastModified": 1794544161,
+        "narHash": "sha256-bwCxJCXCYEKEKYeNel621bXZLfOG/lSg5/05ugC5vp8=",
         "owner": "xddxdd",
         "repo": "nix-cachyos-kernel",
-        "rev": "53532f14476a597abeaa67bca19f2c009a043fb6",
+        "rev": "3084b743b4a3e54840a0ff39ac3c2853ecb87c0c",
         "type": "github"
       },
       "original": {
@@ -480,11 +480,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1793931523,
-        "narHash": "sha256-kyzSFmRVevj9lr2XVskwKnae/pXJEbQ+bHKc+mpjqFE=",
+        "lastModified": 1794493573,
+        "narHash": "sha256-IzdumBb69us47OjGzNjwqMM9mKw2042rqwOA0g9bJBA=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "7dd597af6a9776394693e4d0fed85dd5ea8d56da",
+        "rev": "3fe6b2e95f7304e16d6637199c6ae3b4382cbf89",
         "type": "github"
       },
       "original": {
@@ -648,11 +648,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794456024,
-        "narHash": "sha256-rMhzK+GcJ+a6kh/E9ylnJS5mLg5KXWrfj9CjPt0DK9E=",
+        "lastModified": 1794560084,
+        "narHash": "sha256-E9RLXmVI6bxLJpLdwyLfPvKqAJbZJcHk0EoiiuesZdk=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "d8f8e03237bded06e77bcb3930b43ef841e7eeda",
+        "rev": "41216b7ec84816397f7d3d621bad2373f2fca974",
         "type": "github"
       },
       "original": {
@@ -793,11 +793,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1794468000,
-        "narHash": "sha256-YDmOTPZVZNrQDF2BffT1Qr1WN6BpErkfBD8wqdwX63A=",
+        "lastModified": 1794552502,
+        "narHash": "sha256-6S8ORxhGvIC3+I6zGCaFHZyejnE+EyHz9sXemomJI+c=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "e547ccd92f3fcdf1ee399fe06f2e7a5c6a7b2c1b",
+        "rev": "8d202cbd33ad804f60d68b61ee53238e8a1015ad",
         "type": "github"
       },
       "original": {
