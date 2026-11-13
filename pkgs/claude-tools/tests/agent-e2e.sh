@@ -63,6 +63,7 @@ pane_moved() { [[ "$(agent_pane)" != "$1" ]]; }
 pane_has_no_agent() { [[ "$(h pane get "$1" | jq -r '.result.pane.agent // "none"')" == none ]]; }
 watch_matches() { grep -qE -- "$1" "$dir/watch.log"; }
 lines_of() { grep -c -- "$1" "$dir/watch.log" || true; }
+brief_answered() { h agent read "$name" --source recent-unwrapped | grep -q "STATUS: brief 42"; }
 more_lines() { [[ "$(lines_of "$1")" -gt "$2" ]]; }
 start_watch() {
   : >"$dir/watch.log"
@@ -79,13 +80,14 @@ account=$("$tools" usage --order | head -n 1)
 step 1 "a watcher started before the agent sees it appear and sees its first turn finish"
 start_watch
 cat >"$dir/brief.md" <<EOF
-Reply with one line only: STATUS: brief done
+Reply with one line only: the text "STATUS: brief " followed by the product of 6 and 7.
 EOF
 (cd "$dir" && "$tools" agent start "$name" --account "$account" --cwd work --model sonnet --brief "$dir/brief.md") || fail "agent start exited $?"
 [[ "$(tab_count "$name")" == 1 ]] || fail "wanted one tab named $name"
 pane_cwd=$(h pane get "$(agent_pane)" | jq -r '.result.pane.cwd')
 [[ "$pane_cwd" == "$(readlink -f "$work")" ]] || fail "the relative --cwd started the pane in $pane_cwd, wanted $work"
 wait_for 30 watch_matches "$name appeared" || fail "the watcher did not see $name appear"
+wait_for 120 brief_answered || fail "the agent did not answer its brief"
 h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null || fail "the agent did not settle after its brief"
 sleep 3
 before=$(lines_of "$name finished a turn")

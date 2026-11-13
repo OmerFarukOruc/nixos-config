@@ -17,6 +17,8 @@ CODEX = ("codex", ".codex-wrapped")
 SKIP_PERMISSIONS = "--dangerously-skip-permissions"
 READY_WAIT_S = 180
 FREED_WAIT_S = 30
+PROMPT_WAIT_S = 60
+TRUST_QUESTION = "Yes, I trust this folder"
 EXIT_DIALOG = "❯ 1. Exit and stop tasks"
 
 
@@ -157,6 +159,35 @@ class Agents:
                 return
         raise Failed(f"the shell in pane {pane} ran no typed command in {READY_WAIT_S} s")
 
+    def answer_trust(self, name: str, screen: str) -> bool:
+        if TRUST_QUESTION not in screen:
+            return False
+        self.herdr("agent", "send-keys", name, "down", "enter")
+        return True
+
+    def blocked_at_startup(self, name: str, screen: str) -> Failed:
+        return Failed(f"{name} is blocked at startup by something other than the folder trust question; "
+                      f"its screen ended: {screen[-400:]}")
+
+    def prompt_when_ready(self, name: str, text: str) -> None:
+        deadline = time.time() + PROMPT_WAIT_S
+        while True:
+            try:
+                self.herdr("agent", "prompt", name, text)
+                return
+            except HerdrError as e:
+                if e.code not in ("agent_not_ready", "agent_blocked"):
+                    raise
+                code = e.code
+            screen = self.herdr.screen(name)
+            if time.time() >= deadline:
+                raise Failed(f"{name} stayed blocked at startup for {PROMPT_WAIT_S} s; "
+                             f"its screen ended: {screen[-400:]}")
+            answered = self.answer_trust(name, screen)
+            if code == "agent_blocked" and not answered:
+                raise self.blocked_at_startup(name, screen)
+            time.sleep(1)
+
     def start_claude(self, pane: str, name: str, config_dir: str, args: list[str]) -> None:
         h = self.herdr
         self.wait_shell_ready(pane)
@@ -175,9 +206,8 @@ class Agents:
                     continue
                 if e.code != "agent_not_ready":
                     raise
-            if "Yes, I trust this folder" not in h.screen(name):
-                raise Failed(f"{name} is blocked at startup by something other than the folder trust question")
-            h("agent", "send-keys", name, "down")
-            h("agent", "send-keys", name, "enter")
+            screen = h.screen(name)
+            if not self.answer_trust(name, screen):
+                raise self.blocked_at_startup(name, screen)
             h("agent", "wait", name, "--until", "idle", "--timeout", "60000")
             return

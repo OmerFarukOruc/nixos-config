@@ -18,6 +18,7 @@ Start Claude with `--dangerously-skip-permissions` after `--`, as Omer's `claude
 
 - **`agent_pane_busy`** right after the pane was created. Retry once a second; `start_claude` gives up after 60 s.
 - **`agent_not_ready`**: Claude is blocked during startup. When `herdr agent read NAME --source visible` shows `Yes, I trust this folder`, it is the folder-trust question, which each account asks on its own; send `herdr agent send-keys NAME down`, then `enter`, then `herdr agent wait NAME --until idle`.
+- **`agent_not_ready` or `agent_blocked` on the first `agent prompt`**, after `agent start` reported ready: Claude is still booting, or the folder-trust question is on screen. `prompt_when_ready` of `claude-tools` sends the prompt again every second for 60 s, answers the trust question with one `send-keys NAME down enter`, and fails at once on `agent_blocked` with any other screen.
 - **`agent_name_taken`** right after an agent with that name exited: herdr frees a name a moment after the process ends. Wait until `herdr agent get NAME` fails with `agent_not_found`.
 
 A failed command prints JSON with the reason in `.error.code`.

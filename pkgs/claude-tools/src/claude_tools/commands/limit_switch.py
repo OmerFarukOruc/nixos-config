@@ -131,7 +131,7 @@ class Switcher:
             self.log(f"{name}: start on {to} failed ({e}); starting it on {current} again")
             self.agents.start_claude(pane, name, found.local[current], self.resume_args(argv[1:], session))
             raise
-        self.herdr("agent", "prompt", name, self.resume_message(name, (
+        self.agents.prompt_when_ready(name, self.resume_message(name, (
             f"Your Claude account {current} hit its usage limit, so this session now runs on the {to} account. "
             "Continue where you stopped.")))
         self.log(f"{name}: moved from {current} to {to}, session {session}")
@@ -155,7 +155,7 @@ class Switcher:
                 except Failed as e:
                     self.log(f"{name}: could not close workspace {workspace} after the failed start: {e}")
             raise
-        self.herdr("agent", "prompt", name, self.resume_message(name, (
+        self.agents.prompt_when_ready(name, self.resume_message(name, (
             f"{why}, and this session was resumed with --resume on the same account. "
             "Continue where you stopped.")))
         return pane
