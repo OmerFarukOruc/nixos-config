@@ -13,7 +13,7 @@ A text is done when Omer can find what he needs, understand it, and act on it. C
 - Use numbers, not adjectives: "3 of 12 tests fail".
 - Give each risk or unknown one line.
 - When Omer must choose (scope, intent, priority, spending, an approval), end with numbered options and mark one as your recommendation. Do not choose for him. A technical choice follows `~/.claude/shared/core.md` (Working, "Agents own routine decisions").
-- No preamble, no restating the question, no summary ending. The one-line intent before the first tool call is not a preamble. End when the content ends. The one closing block allowed is the status block that `~/.claude/shared/core.md` (Working) asks for on long-running, background, or delegated work.
+- No preamble, no restating the question, no summary ending. The one-line intent before the first tool call is not a preamble. End when the content ends. The only closing lines allowed are the Needs you and Open lines that `~/.claude/shared/core.md` (Working) asks for on long-running, background, or delegated work.
 - In a long reply, keep findings, proposals, and open decisions apart and say which is which.
 
 ## No invented jargon
