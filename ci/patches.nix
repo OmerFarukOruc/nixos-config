@@ -4,7 +4,7 @@ let
   inherit (rog) lib;
   patched = {
     xrdp = nixosConfigurations.devbox.pkgs.xrdp;
-    inherit (rog.kdePackages) ksystemstats plasma-desktop;
+    inherit (rog.kdePackages) ksystemstats;
     inherit (rog) power-profiles-daemon scx-loader sunshine;
     vscode = nixosConfigurations.nixos-rog.config.home-manager.users.oruc.programs.vscode.package;
   };

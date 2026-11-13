@@ -122,7 +122,6 @@ in
       services.orca.enable = false;
       nixpkgs.overlays = [
         (import ../overlays/ksystemstats.nix)
-        (import ../overlays/plasma-desktop.nix)
       ];
       environment.plasma6.excludePackages = with pkgs.kdePackages; [
         elisa

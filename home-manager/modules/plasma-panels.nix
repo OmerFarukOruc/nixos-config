@@ -215,8 +215,6 @@ let
         width = 1;
         color = schemeColor "highlightColor" "Window" 1;
       };
-      # A drag over a bar with this spacing freezes plasmashell without
-      # overlays/plasma-desktop.nix.
       spacing = 0;
       margin = {
         enabled = true;

@@ -605,14 +605,15 @@ setup](#claude-code-and-codex-setup)).
   the running session. On the night of 2026-10-12 to 2026-10-13, after a live
   change of the dock's height and style, the blur covered only part of the dock,
   and toggling edit mode did not refresh it. Judge a panel change after a new login.
-- The floating top bar of the glass look has a widget spacing of 0, and Panel
-  Colorizer gives that spacing to the panel's layout outside edit mode. Plasma's
-  panel then loops forever when something is dragged between two widgets. On
-  2026-10-28 plasmashell's main thread used a whole core and answered no D-Bus
-  call for 25 s, so Spectacle could not take a screenshot; `systemctl --user
-  restart plasma-plasmashell` ended it. `overlays/plasma-desktop.nix` patches
-  the loop. Drop the overlay only when the bar's spacing is above 0, or once
-  Plasma's `containments/panel/LayoutManager.js` steps at least one pixel.
+- The floating top bar of the glass look has a widget spacing of 0. Before Plasma
+  6.8.3, the panel looped forever when something was dragged between two widgets
+  of a bar with that spacing. On 2026-10-28 plasmashell's main thread used a whole
+  core and answered no D-Bus call for 25 s, so Spectacle could not take a
+  screenshot; `systemctl --user restart plasma-plasmashell` ended it. Plasma
+  6.8.3 steps at least one pixel in `containments/panel/LayoutManager.js`, so
+  spacing 0 is safe for a drag (https://bugs.kde.org/show_bug.cgi?id=528228). A
+  script that adds a widget at a coordinate of 2^53 or more still loops there,
+  and nothing in this repository does that.
 - The title bar widget (`titleBar` in `home-manager/modules/plasma-panels.nix`)
   shows the active window's app icon and name. The widget's default leaves 10 px
   after the name. The top bar ends the title with a spacer, so it leaves none. In
