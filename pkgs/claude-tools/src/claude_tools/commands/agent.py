@@ -51,9 +51,13 @@ def wait_for_mode(ag: Agents, name: str, mode: str) -> None:
     if not footer:
         return
     deadline = time.time() + MODE_WAIT_S
-    while footer not in ag.herdr.screen(name):
+    while True:
+        screen = ag.herdr.screen(name)
+        if footer in screen:
+            return
         if time.time() >= deadline:
             raise Failed(f"{name} started, but its footer never showed {footer!r}")
+        ag.answer_trust(name, screen)
         time.sleep(1)
 
 
@@ -87,7 +91,7 @@ def start(settings: Settings, a: argparse.Namespace) -> None:
         if a.permission_mode:
             wait_for_mode(ag, a.name, a.permission_mode)
         if a.brief:
-            ag.herdr("agent", "prompt", a.name, f"Your brief is in {a.brief.resolve()}. Read it and carry it out.")
+            ag.prompt_when_ready(a.name, f"Your brief is in {a.brief.resolve()}. Read it and carry it out.")
     except BaseException:
         stop_started(ag, a.name, pane)
         ag.herdr("tab", "close", tab, check=False)
