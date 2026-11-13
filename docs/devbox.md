@@ -520,17 +520,18 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   `journalctl --user -u stay-green.service -n 20`.
 - The Status Lantern factory's user units (`machines/devbox/home.nix`):
   `statuslantern-audit.timer` at 06:00 Istanbul, `statuslantern-factory-triage.timer`
-  at 08:00 Istanbul, `statuslantern-nightly.timer` and
-  `statuslantern-factory-run.path`. The triage unit starts at most one run a
+  at 08:00 Istanbul, `statuslantern-factory-fixed.timer` every hour,
+  `statuslantern-nightly.timer` and `statuslantern-factory-run.path`. The triage unit starts at most one run a
   UTC day, so a catch-up after a late boot (`Persistent=true`) starts none when
-  the day's start is taken. Each of the four services writes the failure
+  the day's start is taken. Each of the five services writes the failure
   marker below to `~/.local/state/<unit>/failed`, which each new shell prints
   until a run succeeds. SigNoz rules cover only part of these failures:
   `audit-missed-run` fires when no `audit.run` log arrives, `nightly-failed`
   when `nightly.run` reports the outcome `failed` or `held`, and
   `nightly-missed-run` when no `nightly.run` arrives. No rule fires on a triage
   failure, or on a `factory-run` that fails without posting (an unhandled
-  error, a timeout or a kill), so the marker shows those. A founder's Stop and
+  error, a timeout or a kill), or on a `factory-fixed` run that exits 1, so the
+  marker shows those. A founder's Stop and
   an error that the run posts to Linear end with exit 0 and clear the marker.
   Status Lantern's `docs/agents/factory.md` holds what each unit starts.
 - `infisical-agent.service` (`machines/devbox/home.nix`) runs the

@@ -44,6 +44,7 @@ let
   nightlyMarker = failureMarker "statuslantern-nightly" "journalctl --user -u statuslantern-nightly -n 40; the night's folder is in ~/.local/state/statuslantern-nightly/runs";
   factoryRunMarker = failureMarker "statuslantern-factory-run" "journalctl --user -u statuslantern-factory-run -n 40; the run's folder is in ~/.local/state/statuslantern-factory/runs";
   triageMarker = failureMarker "statuslantern-factory-triage" "journalctl --user -u statuslantern-factory-triage -n 40; the day's start is reserved in ~/.local/state/statuslantern-factory/starts";
+  fixedMarker = failureMarker "statuslantern-factory-fixed" "journalctl --user -u statuslantern-factory-fixed -n 40";
   factoryService =
     {
       description,
@@ -510,7 +511,26 @@ in
     nightlyMarker
     factoryRunMarker
     triageMarker
+    fixedMarker
   ];
+  systemd.user.services.statuslantern-factory-fixed = factoryService {
+    description = "Mark each merged Status Lantern factory pull request fixed and reply in its alert thread";
+    script = "factory-fixed";
+    unit.X-SwitchMethod = "keep-old";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "15min";
+    }
+    // fixedMarker.service;
+  };
+  systemd.user.timers.statuslantern-factory-fixed = {
+    Unit.Description = "Run the factory's fixed-mark reconcile every hour";
+    Timer = {
+      OnCalendar = "hourly";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
   systemd.user.timers.statuslantern-factory-triage = {
     Unit.Description = "Start the factory's triage run every morning, two hours after the audit";
     Timer = {
