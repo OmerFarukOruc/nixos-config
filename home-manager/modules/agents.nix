@@ -64,6 +64,20 @@ in
         };
       programs.claude-code = {
         mutableSettings = true;
+        lspServers.typescript = {
+          command = lib.getExe pkgs.typescript-language-server;
+          args = [ "--stdio" ];
+          extensionToLanguage = {
+            ".ts" = "typescript";
+            ".tsx" = "typescriptreact";
+            ".mts" = "typescript";
+            ".cts" = "typescript";
+            ".js" = "javascript";
+            ".jsx" = "javascriptreact";
+            ".mjs" = "javascript";
+            ".cjs" = "javascript";
+          };
+        };
         settings = lib.mkMerge [
           (lib.importJSON ../../agents/claude/settings.json)
           {

@@ -84,7 +84,7 @@
     "claude-security@claude-plugins-official": false,
     "cc-plugin-you-should-know@builtin": true,
     "next-steps@claude-community": false,
-    "typescript-lsp@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": false,
     "modern-web-guidance@googlechrome": true,
     "impeccable@impeccable": true,
     "eli5@claude-community": true,
