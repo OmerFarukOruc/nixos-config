@@ -4,6 +4,7 @@
 - [DNS](#dns)
 - [Apps through devbox](#apps-through-devbox)
 - [Claude Code and Codex setup](#claude-code-and-codex-setup)
+- [Inbox browser tests](#inbox-browser-tests)
 - [Power and heat](#power-and-heat)
 - [Microphone](#microphone)
 - [Check the running laptop](#check-the-running-laptop)
@@ -201,6 +202,39 @@ hook layer. Codex runs a system hook without the trust prompt that a hook in
 `guard-main-edit.py` (`agents/claude/hooks/`), which refuses an edit in a repository's main checkout, as
 it does for Claude Code. A user without that file in `~/.claude/hooks` edits
 freely.
+
+## Inbox browser tests
+
+`inbox-browser-tests.timer` (`machines/nixos-rog/inbox-browser-tests.nix`)
+starts its service every hour. The service runs only on AC power, and it ends
+at once with the result of today's run when it already ran the tests today, so
+the tests run once a day, in the first hour the laptop is on AC power and
+reaches GitHub. A run that could not fetch, that another run's lock refused
+(exit 2) or that the 3 hour limit stopped does not count, and the next hour
+tries again. An hour on battery
+is skipped without a journal line under the unit's name; `systemctl --user
+status inbox-browser-tests` shows the skipped condition.
+
+A run fetches `origin/main` in `~/Desktop/workspace/inbox` and runs that
+commit's `scripts/nightly-browser-tests.sh`, which runs the inbox's browser
+tests in a detached worktree and removes the worktree afterwards. When the
+tests fail, the script opens the issue "Browser tests fail on main" in
+StatusLantern/inbox, or comments on it while it is open, and a passed run
+closes it; the script posts as the signed-in `gh` account. A commit that
+already passed is not run again. When the fetch fails, such as before the
+first login after a boot, the service runs the script it kept from the last
+run, which reports the failed fetch in the issue when `gh` works, and the next
+hour tries again.
+
+Any failed run also prints an `inbox-browser-tests:` line at each shell start
+until a run succeeds. A run that waits for a gate slot and the tests for more
+than 3 hours is stopped and leaves only that line, without an issue.
+
+- **Start a run now:** `systemctl --user start --no-block inbox-browser-tests`.
+  To run the tests a second time on one day, delete
+  `~/.local/state/inbox-browser-tests/attempted` first.
+- **Check:** `journalctl --user -u inbox-browser-tests -n 20`, and
+  `~/.local/state/inbox-browser-tests/origin%2Fmain/run.log` for the tests' output.
 
 ## Power and heat
 

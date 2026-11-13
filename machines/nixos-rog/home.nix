@@ -14,6 +14,7 @@
     ./easyeffects.nix
     ./hdr.nix
     ./hushmic.nix
+    ./inbox-browser-tests.nix
     ./mpv.nix
     ./oled-care.nix
   ];
