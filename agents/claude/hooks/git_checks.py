@@ -27,6 +27,7 @@ PLACEHOLDER = re.compile(
     r"\d+x{3,}\b|\bX{3,}\b|\bTBD\b|<\s*(?:fill|placeholder|todo|insert)[^>]*>",
     re.IGNORECASE,
 )
+MKTEMP_TEMPLATE = re.compile(r"X{3,}")
 POSTING = re.compile(r"\bgh\s+(?:(?:issue|pr)\s+(?:comment|create|edit|review|close)|api\b)")
 BODY_FILE_FLAGS = {"--body-file", "-F"}
 # Bytes of a post body file that the check reads (guess); GitHub takes at most 65536 characters in a body.
@@ -402,10 +403,21 @@ def _body_files(command):
     return files
 
 
+def _without_mktemp_templates(call):
+    text, kept, last = call.command, [], 0
+    for command in sorted((c for c in call.commands if c.program == "mktemp"), key=lambda c: c.span):
+        start, end = command.span
+        if start < last:
+            continue
+        kept += [text[last:start], MKTEMP_TEMPLATE.sub("", text[start:end])]
+        last = end
+    return "".join(kept) + text[last:]
+
+
 def _placeholder_reason(call):
     if not POSTING.search(call.command):
         return None
-    texts = [call.command]
+    texts = [_without_mktemp_templates(call)]
     for path in _body_files(call.command):
         # `gh api -F body=@file` names the file after `=@`.
         texts.append(call.read(path.split("=", 1)[-1].lstrip("@"), PLACEHOLDER_CAP))

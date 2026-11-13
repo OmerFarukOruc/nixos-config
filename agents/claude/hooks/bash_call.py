@@ -300,6 +300,10 @@ class Command:
         self._span, self.piped, self.runner = span, piped, self
         self._git_directory, self._connector = None, None
 
+    @property
+    def span(self):
+        return self._span
+
     @functools.cached_property
     def words(self):
         return plain_words(self._tokens)
