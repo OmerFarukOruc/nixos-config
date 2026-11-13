@@ -13,11 +13,11 @@ read a label that comes from a file inside a value (`-F 'labels[]=@file'`), from
 `xargs`; it does read an `--input` file.
 
 Every check fails open: a command that does not parse, a directory git cannot read, or a file that cannot be read lets
-the call through.
+the call through. The placeholder check also searches the raw command text, so a command that does not parse still gets
+that search.
 """
 import os
 import re
-import shlex
 import shutil
 
 from checkouts import git as git_output
@@ -28,11 +28,13 @@ PLACEHOLDER = re.compile(
     re.IGNORECASE,
 )
 MKTEMP_TEMPLATE = re.compile(r"X{3,}")
-POSTING = re.compile(r"\bgh\s+(?:(?:issue|pr)\s+(?:comment|create|edit|review|close)|api\b)")
-BODY_FILE_FLAGS = {"--body-file", "-F"}
+GH_VALUE_OPTIONS = {"-R", "--repo", "--hostname"}
+GH_LONG = "|".join(re.escape(option) for option in sorted(GH_VALUE_OPTIONS) if option.startswith("--"))
+GH_SHORT = "".join(re.escape(option[1:]) for option in sorted(GH_VALUE_OPTIONS) if not option.startswith("--"))
+GH_OPTION = rf"(?:\s+(?:(?:{GH_LONG})(?:\s+|=)|-[{GH_SHORT}]\s*)\S+)*"
+POSTING = re.compile(rf"\bgh{GH_OPTION}\s+(?:(?:issue|pr){GH_OPTION}\s+(?:comment|create|edit|review|close)|api\b)")
 # Bytes of a post body file that the check reads (guess); GitHub takes at most 65536 characters in a body.
 PLACEHOLDER_CAP = 1 << 20
-GH_VALUE_OPTIONS = {"-R", "--repo", "--hostname"}
 FORCE_FLAGS = {"-f", "--force"}
 LEASE_FLAGS = {"--force-with-lease", "--force-if-includes"}
 DEFAULT_BRANCHES = {"main", "master"}
@@ -43,6 +45,8 @@ LABEL = "automerge"
 # value for `gh api` and a flag for `gh pr create`.
 CREATE_VALUES = "aBbFHlmprRTt"
 EDIT_VALUES = "BbFmRt"
+COMMENT_VALUES = "bF"
+POST_VALUES = {"create": CREATE_VALUES, "edit": EDIT_VALUES, "comment": COMMENT_VALUES, "review": COMMENT_VALUES}
 API_VALUES = "FfHpqXt"
 # The git subcommands whose `--no-verify` skips a hook, and the `git commit` short options that take a value, so `-mn`
 # is a message and not `-n`.
@@ -388,18 +392,21 @@ def _worktree_reason(call):
     return None
 
 
-def _body_files(command):
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        return []
+def _body_files(call):
     files = []
-    for i, tok in enumerate(tokens[:-1]):
-        if tok in BODY_FILE_FLAGS and tokens[i + 1] not in ("-", ""):
-            files.append(tokens[i + 1])
-    for tok in tokens:
-        if tok.startswith("--body-file="):
-            files.append(tok.split("=", 1)[1])
+    for command in call.commands:
+        if command.program != "gh":
+            continue
+        group, verb, rest = _gh_words(command.args_full)
+        rest = [text for word in rest for text in (call.expand(word) if "$" in word else [word])]
+        if group in ("pr", "issue") and verb in POST_VALUES:
+            names = _option_values(rest, "body-file", "F", POST_VALUES[verb])
+        elif group == "api":
+            fields = _option_values(rest, "field", "F", API_VALUES)
+            names = _option_values(rest, "input", None, API_VALUES) + [f.partition("=@")[2] for f in fields if "=@" in f]
+        else:
+            continue
+        files += [path for name in names if name != "-" for path in call.existing_files(name)]
     return files
 
 
@@ -418,9 +425,7 @@ def _placeholder_reason(call):
     if not POSTING.search(call.command):
         return None
     texts = [_without_mktemp_templates(call)]
-    for path in _body_files(call.command):
-        # `gh api -F body=@file` names the file after `=@`.
-        texts.append(call.read(path.split("=", 1)[-1].lstrip("@"), PLACEHOLDER_CAP))
+    texts += [call.read(path, PLACEHOLDER_CAP) for path in _body_files(call)]
     for text in texts:
         match = PLACEHOLDER.search(text)
         if match:
