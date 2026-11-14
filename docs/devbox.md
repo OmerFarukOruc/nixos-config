@@ -236,7 +236,7 @@ endpoint or delivery to SigNoz.
 ## AWS certificate
 
 The AWS profile `statuslantern` signs with the IAM Roles Anywhere certificate
-`~/.aws/rolesanywhere/leaf.pem` of omer. The role `devbox-agent` trusts only
+`~/.aws/rolesanywhere/leaf.pem` of omer. The role `statuslantern-agent-devbox` trusts only
 the CN `devbox` from the trust anchor `statuslantern-agent-ca`; `arns.env` in
 the same folder holds the trust anchor and profile ARNs. The SigNoz rule
 `devbox AWS certificate expiring or missing` ([Telemetry](#telemetry)) posts to
