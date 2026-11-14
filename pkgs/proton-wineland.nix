@@ -3,10 +3,10 @@
   fetchurl,
 }:
 let
-  version = "11.0-20261106";
+  version = "11.0-20261114";
   src = fetchurl {
     url = "https://github.com/nanomatters/proton-salkim/releases/download/wineland-${version}/proton-wineland-${version}-x86_64_v3.tar.xz";
-    hash = "sha512-jYxfHj2rUxCrBwSeiIIpFED/Qg4FpTGIPt2uWJSNXCduELltEH5CMBIIwf10S3vBZliREcFb5ZJvH3xa6RZvsw==";
+    hash = "sha512-K4b0p9b6cvdsai3Vv9ReUGV3Wpj9oWl+2l4Trfl0UFdy1eTam7flhkGY7qtbL8HwLXzv+E0rJK+noJ3pWrM6JQ==";
   };
 in
 callPackage ./proton-tarball {
