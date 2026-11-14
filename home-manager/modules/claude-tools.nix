@@ -12,10 +12,13 @@ in
 {
   xdg.configFile = {
     "claude-tools/accounts.json".source = config.lib.file.mkOutOfStoreSymlink accounts;
-    "claude-tools/account-prefs.json".text = builtins.toJSON { leftArrowOpensAgents = false; };
+    "claude-tools/account-prefs.json".text = builtins.toJSON {
+      leftArrowOpensAgents = false;
+      hasCompletedOnboarding = true;
+    };
   };
 
-  home.activation.claudeToolsPrefs =
+  home.activation.claudeToolsAccounts =
     lib.hm.dag.entryAfter [ "linkGeneration" "claudeCodeSettings" ]
       ''
         run env PATH="${

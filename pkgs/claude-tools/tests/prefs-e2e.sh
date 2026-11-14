@@ -114,6 +114,33 @@ expect "and leaves no lock directory behind" "$(locks_c)" "0"
 
 rmdir "$p1_c.lock" 2>/dev/null || true
 
+home_r="$s/homeR"
+main_r="$home_r/.claude"
+mkdir -p "$main_r"/{agents,hooks,rules,shared,reference,skills,plugins,themes} "$home_r/.claude-q1" "$home_r/.claude-q2"
+touch "$main_r/CLAUDE.md" "$main_r/infisical.md" "$home_r/.claude-q1/.claude-profile" "$home_r/.claude-q2/.claude-profile"
+echo '{"tui":"fullscreen","a":{"x":1},"n":null}' >"$main_r/settings.json"
+echo '{"a":{"x":2,"y":3},"keep":{},"n":{"m":1}}' >"$home_r/.claude-q1/settings.json"
+echo '{"a":1}{"b":2}' >"$home_r/.claude-q2/settings.json"
+relink_r() { HOME="$home_r" CLAUDE_TOOLS_DATA="$s/data" "$ct" accounts relink >"$s/out" 2>&1; }
+rc=0
+relink_r || rc=$?
+expect "relink fails while one profile's settings.json holds two JSON documents" "$rc" "1"
+expect "and gives the shared settings the values only the plain copy holds, keeping its own" \
+  "$(jq -c '[.tui, .a, .keep, .n]' "$main_r/settings.json")" '["fullscreen",{"x":1,"y":3},{},null]'
+expect "and links that copy's settings.json again" "$(readlink "$home_r/.claude-q1/settings.json")" "$main_r/settings.json"
+expect "and keeps the copy, whose a.x and n differ, as settings.json.unmerged" \
+  "$(jq -c '[.a.x, .n]' "$home_r/.claude-q1/settings.json.unmerged")" '[2,{"m":1}]'
+expect "and leaves the two-document copy in place" "$(cat "$home_r/.claude-q2/settings.json")" '{"a":1}{"b":2}'
+expect "and still links that profile's other shared entries" "$(readlink "$home_r/.claude-q2/skills")" "$main_r/skills"
+rm "$home_r/.claude-q2/settings.json"
+r_before=$(stat -c '%i %Y' "$main_r/settings.json")
+sleep 1
+rc=0
+relink_r || rc=$?
+expect "a second relink succeeds" "$rc" "0"
+expect "and leaves the shared settings untouched" "$(stat -c '%i %Y' "$main_r/settings.json")" "$r_before"
+expect "and links the repaired profile" "$(readlink "$home_r/.claude-q2/settings.json")" "$main_r/settings.json"
+
 rounds="${E2E_LOCK_ROUNDS:-20}"
 lock_sh() { HOME="$s/homeC" bash -c 'source "$1"; shift; '"$1" _ "$lock" "${@:2}"; }
 

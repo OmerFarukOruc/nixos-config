@@ -119,7 +119,8 @@ link_shared() {
   for name in "${session_dirs[@]}"; do mkdir -p "$main/$name" || bad=1; done
   for name in "${shared[@]}"; do
     if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
-      ln -sfn "$main/$name" "$dir/$name"
+      ln -sfn "$main/$name" "$dir/$name" || bad=1
+      [[ -e "$dir/$name" ]] || { echo "  $dir/$name points at $main/$name, which does not exist" >&2; bad=1; }
     else
       echo "  not replacing real file $dir/$name" >&2
       bad=1
@@ -143,37 +144,62 @@ fold_dir() {
   echo "  $2: moved into $dst$( ((kept)) && echo "; $kept files ~/.claude already has went to $src.unmerged")"
 }
 
+# shellcheck disable=SC2016
+settings_merge='
+  if ($c | length) != 1 or ($m | length) != 1 or ($c[0] | type) != "object" or ($m[0] | type) != "object"
+  then error("each settings file must hold one JSON object") else . end
+  | def at($v; $p): reduce $p[] as $k ([$v];
+      if length == 1 and (.[0] | type) == "object" and (.[0] | has($k)) then [.[0][$k]] else [] end);
+  ($c[0] * $m[0]) as $merged
+  | [$c[0] | paths(type != "object" or . == {}) | select(all(.[]; type == "string"))] as $leaves
+  | {merged: $merged,
+     added: [$leaves[] | select(at($m[0]; .) == [] and at($merged; .) == at($c[0]; .)) | join(".")],
+     conflicts: [$leaves[] | select(at($merged; .) != at($c[0]; .))] | length}'
+
 fold_settings() {
-  local src="$1/settings.json" dst="$main/settings.json" report added conflicts keep link
+  local src="$1/settings.json" dst report added conflicts keep="" link stamp new=""
   [[ -f "$src" && ! -L "$src" ]] || return 0
-  # shellcheck disable=SC2016
-  if ! report="$(jq -n --slurpfile c "$src" --slurpfile m "$dst" '
-      def at($v; $p): try ($v | getpath($p)) catch null;
-      ($c[0] * $m[0]) as $merged
-      | [$c[0] | paths(type != "object") | select(all(.[]; type == "string"))] as $leaves
-      | {added: [$leaves[] | select(at($m[0]; .) == null) | map(tostring) | join(".")],
-         conflicts: [$leaves[] | select(at($merged; .) != at($c[0]; .))] | length}')"; then
-    echo "  settings.json: not folded, $src or $dst does not parse" >&2
-    return 1
-  fi
-  added="$(jq -r '.added | join(", ")' <<<"$report")"
-  conflicts="$(jq -r .conflicts <<<"$report")"
-  if [[ -n "$added" ]]; then
-    # shellcheck disable=SC2016
-    jq_rewrite "$dst" --slurpfile c "$src" '$c[0] * .' || { echo "  settings.json: could not write $dst" >&2; return 1; }
-  fi
-  if (( conflicts )); then
-    keep="$src.unmerged"
-    [[ ! -e "$keep" ]] || keep="$(mktemp "$src.unmerged.XXXXXX")"
-    cp -p -- "$src" "$keep" || return 1
-  fi
-  link="$(mktemp -u "$src.link.XXXXXX")"
-  if ! { ln -s "$dst" "$link" && mv -T -- "$link" "$src"; }; then
-    rm -f -- "$link"
-    return 1
-  fi
-  echo "  settings.json: linked again${added:+; $dst took $added}$( ((conflicts)) &&
-    echo "; $conflicts values that $dst sets differently stay in $keep")"
+  dst="$(readlink -f -- "$main/settings.json")"
+  for _ in 1 2 3; do
+    stamp="$(stat -c '%i %y' -- "$src" "$dst" 2>/dev/null)" || true
+    if ! report="$(jq -n --slurpfile c "$src" --slurpfile m "$dst" "$settings_merge")"; then
+      echo "  settings.json: not folded, $src or $dst is not one JSON object" >&2
+      return 1
+    fi
+    { read -r added; read -r conflicts; } < <(jq -r '(.added | join(", ")), .conflicts' <<<"$report")
+    if [[ -n "$added" ]]; then
+      new="$(mktemp "$dst.XXXXXX")" || return 1
+      if ! { jq .merged <<<"$report" >"$new" && chmod --reference="$dst" "$new"; }; then
+        rm -f -- "$new"
+        return 1
+      fi
+    fi
+    if [[ "$(stat -c '%i %y' -- "$src" "$dst" 2>/dev/null)" != "$stamp" ]]; then
+      [[ -z "$new" ]] || rm -f -- "$new"
+      new=""
+      continue
+    fi
+    if [[ -n "$new" ]] && ! mv -- "$new" "$dst"; then
+      rm -f -- "$new"
+      echo "  settings.json: could not write $dst" >&2
+      return 1
+    fi
+    if (( conflicts )); then
+      keep="$src.unmerged"
+      [[ ! -e "$keep" ]] || keep="$(mktemp "$src.unmerged.XXXXXX")"
+      cp -p -- "$src" "$keep" || return 1
+    fi
+    link="$(mktemp -u "$src.link.XXXXXX")"
+    if ! { ln -s "$main/settings.json" "$link" && mv -T -- "$link" "$src"; }; then
+      rm -f -- "$link"
+      return 1
+    fi
+    echo "  settings.json: linked again${added:+; $dst took $added}$( ((conflicts)) &&
+      echo "; $conflicts values that $dst sets differently stay in $keep")"
+    return 0
+  done
+  echo "  settings.json: not folded, $src or $dst changed during each of 3 tries" >&2
+  return 1
 }
 
 prefs="$data/account-prefs.json"
@@ -235,7 +261,7 @@ sync_config() {
   claude_config_lock "$f" || { trap - EXIT; return 1; }
   # shellcheck disable=SC2016
   if jq_rewrite "$f" --slurpfile m "$HOME/.claude.json" --slurpfile prefs "$prefs" \
-    '.mcpServers = ($m[0].mcpServers // {}) | .hasCompletedOnboarding = true
+    '.mcpServers = ($m[0].mcpServers // {})
      | if $m[0].lastOnboardingVersion then .lastOnboardingVersion = $m[0].lastOnboardingVersion else . end
      | reduce ($m[0].projects // {} | to_entries[] | select(.value.hasTrustDialogAccepted == true) | .key) as $p
          (.; .projects[$p].hasTrustDialogAccepted = true)
@@ -354,7 +380,12 @@ cmd_update() {
   return "$bad"
 }
 
-relink() { fold_settings "$1" && link_shared "$1"; }
+relink() {
+  local rc=0
+  fold_settings "$1" || rc=1
+  link_shared "$1" || rc=1
+  return "$rc"
+}
 
 cmd_relink() {
   local d bad=0
