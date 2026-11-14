@@ -42,7 +42,7 @@ _claude_tools_words() {
   if [ "${1:-}" != accounts ]; then
     "@bin@/claude-tools" --complete-words "$@"
   elif [ $# -eq 1 ]; then
-    echo list add rename update prefs delete login login-window login-all names dir dirs --watch --json --cached
+    echo list add rename update relink prefs delete login login-window login-all names dir dirs --watch --json --cached
   else
     "@bin@/claude-tools" accounts names
   fi

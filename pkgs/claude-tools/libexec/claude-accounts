@@ -24,6 +24,8 @@ usage: claude-tools accounts [command]
   rename OLD NEW    rename an account; while a session runs with it, or for ~/.claude, only its name changes
   update            repair links (moving a profile's own copy of a shared folder into ~/.claude) and sync config
                     (MCP servers, onboarding, trusted folders, preferences) into every profile
+  relink            repair links only, also while a session runs; a profile's own settings.json gives
+                    ~/.claude/settings.json the keys it lacks (each Home Manager switch runs it)
   prefs             apply account-prefs.json to every account, also while a session runs
   delete NAME       log out and remove the account's folder (asks first; --yes skips the question)
   login NAME [--on HOST]
@@ -139,6 +141,39 @@ fold_dir() {
   done < <(cd "$src" && find . -type f -print0)
   find "$src" -depth -type d -empty -delete
   echo "  $2: moved into $dst$( ((kept)) && echo "; $kept files ~/.claude already has went to $src.unmerged")"
+}
+
+fold_settings() {
+  local src="$1/settings.json" dst="$main/settings.json" report added conflicts keep link
+  [[ -f "$src" && ! -L "$src" ]] || return 0
+  # shellcheck disable=SC2016
+  if ! report="$(jq -n --slurpfile c "$src" --slurpfile m "$dst" '
+      def at($v; $p): try ($v | getpath($p)) catch null;
+      ($c[0] * $m[0]) as $merged
+      | [$c[0] | paths(type != "object") | select(all(.[]; type == "string"))] as $leaves
+      | {added: [$leaves[] | select(at($m[0]; .) == null) | map(tostring) | join(".")],
+         conflicts: [$leaves[] | select(at($merged; .) != at($c[0]; .))] | length}')"; then
+    echo "  settings.json: not folded, $src or $dst does not parse" >&2
+    return 1
+  fi
+  added="$(jq -r '.added | join(", ")' <<<"$report")"
+  conflicts="$(jq -r .conflicts <<<"$report")"
+  if [[ -n "$added" ]]; then
+    # shellcheck disable=SC2016
+    jq_rewrite "$dst" --slurpfile c "$src" '$c[0] * .' || { echo "  settings.json: could not write $dst" >&2; return 1; }
+  fi
+  if (( conflicts )); then
+    keep="$src.unmerged"
+    [[ ! -e "$keep" ]] || keep="$(mktemp "$src.unmerged.XXXXXX")"
+    cp -p -- "$src" "$keep" || return 1
+  fi
+  link="$(mktemp -u "$src.link.XXXXXX")"
+  if ! { ln -s "$dst" "$link" && mv -T -- "$link" "$src"; }; then
+    rm -f -- "$link"
+    return 1
+  fi
+  echo "  settings.json: linked again${added:+; $dst took $added}$( ((conflicts)) &&
+    echo "; $conflicts values that $dst sets differently stay in $keep")"
 }
 
 prefs="$data/account-prefs.json"
@@ -313,8 +348,19 @@ cmd_update() {
     if ! in_use "$d"; then
       for f in "${shared[@]}"; do fold_dir "$d" "$f"; done
     fi
-    link_shared "$d" || bad=1
+    relink "$d" || bad=1
     sync_config "$d" || bad=1
+  done < <(profile_folders)
+  return "$bad"
+}
+
+relink() { fold_settings "$1" && link_shared "$1"; }
+
+cmd_relink() {
+  local d bad=0
+  while read -r d; do
+    echo "$d"
+    relink "$d" || bad=1
   done < <(profile_folders)
   return "$bad"
 }
@@ -499,6 +545,7 @@ case "${1:-}" in
   add) cmd_add "${2:-}" ;;
   rename | mv) cmd_rename "${2:-}" "${3:-}" ;;
   update) cmd_update ;;
+  relink) cmd_relink ;;
   prefs) cmd_prefs ;;
   delete | rm) cmd_delete "${2:-}" "${3:-}" ;;
   login) cmd_login "${@:2}" ;;

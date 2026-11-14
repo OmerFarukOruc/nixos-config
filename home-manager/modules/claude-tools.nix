@@ -15,12 +15,16 @@ in
     "claude-tools/account-prefs.json".text = builtins.toJSON { leftArrowOpensAgents = false; };
   };
 
-  home.activation.claudeToolsPrefs = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    run env PATH="${
-      lib.makeBinPath [ pkgs.util-linux ]
-    }:$PATH" ${claudeTools}/bin/claude-tools accounts prefs ||
-      warnEcho "claude-tools accounts prefs failed; the lines above name the account file or lock that stopped it"
-  '';
+  home.activation.claudeToolsPrefs =
+    lib.hm.dag.entryAfter [ "linkGeneration" "claudeCodeSettings" ]
+      ''
+        run env PATH="${
+          lib.makeBinPath [ pkgs.util-linux ]
+        }:$PATH" ${claudeTools}/bin/claude-tools accounts prefs ||
+          warnEcho "claude-tools accounts prefs failed; the lines above name the account file or lock that stopped it"
+        run ${claudeTools}/bin/claude-tools accounts relink ||
+          warnEcho "claude-tools accounts relink failed; the lines above name the profile file it could not link"
+      '';
 
   home.packages = [
     claudeTools
