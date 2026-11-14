@@ -90,7 +90,7 @@ in
 
   oruc.telemetry = {
     enable = true;
-    environment = "development";
+    environment = "dev";
     endpoint = "signoz.statuslantern.com:4317";
     insecure = true;
     filesystemMounts = [ "/tmp" ];

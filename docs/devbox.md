@@ -139,7 +139,8 @@ advertisements are off.
 
 `nixosModules/telemetry.nix` is for every server. `oruc.telemetry.enable` turns
 it on, and the host passes its environment name and the endpoint
-(`configuration.nix` does this for this box).
+(`configuration.nix` does this for this box, with the environment `dev`, one of the
+four names in Status Lantern's `docs/naming.md`, Environments).
 The host name defaults to `networking.hostName`. The module holds no host value.
 
 `overlays/opentelemetry-collector-contrib.nix` compiles the collector with Go

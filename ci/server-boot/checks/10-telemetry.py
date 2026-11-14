@@ -107,7 +107,7 @@ machine.succeed(f"test ! -s {tel_dir}/logs.json")
 
 for tel_attribute in ["host.name", "host.id"]:
     assert tel_attr("metrics.json", tel_attribute, BOX_HOST) > 0, f"the sink lacks {tel_attribute} in metrics.json"
-assert tel_attr("metrics.json", "deployment.environment.name", "development") > 0, "the sink lacks the environment on metrics"
+assert tel_attr("metrics.json", "deployment.environment.name", "dev") > 0, "the sink lacks the environment on metrics"
 
 tel_run = "journalctl _SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value opentelemetry-collector.service) --no-pager -o cat"
 machine.succeed(f"{tel_run} | grep -F 'Everything is ready'")

@@ -64,7 +64,7 @@ in
 
     environment = mkOption {
       type = types.str;
-      example = "development";
+      example = "dev";
       description = "Value of deployment.environment.name on metrics.";
     };
 
