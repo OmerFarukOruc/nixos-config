@@ -10,7 +10,7 @@
 # WAIT_EXIT_INTERVAL sets the seconds between checks (default 30).
 set -euo pipefail
 usage="usage: wait-exit [--pid <pid>] <log> <seconds>, with WAIT_EXIT_INTERVAL a positive whole number"
-if [[ ${1-} == -h || ${1-} == --help ]]; then
+if [[ $# -eq 1 && ( $1 == -h || $1 == --help ) ]]; then
 	echo "$usage"
 	exit 0
 fi
@@ -26,7 +26,7 @@ if [[ $# -ne 2 || ! $2 =~ ^[0-9]+$ || ! $pid =~ ^([1-9][0-9]*)?$ || ! ${WAIT_EXI
 fi
 log=$1
 seconds=$((10#$2))
-interval=$((10#${WAIT_EXIT_INTERVAL:-30}))
+interval=${WAIT_EXIT_INTERVAL:-30}
 deadline=$((SECONDS + seconds))
 echo "wait-exit: waiting up to ${seconds}s for $log to end with its exit line"
 
