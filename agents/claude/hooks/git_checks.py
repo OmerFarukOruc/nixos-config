@@ -79,10 +79,12 @@ WORKTREE_REASON = (
     "as an absolute one when an earlier `cd` in the same call changes the directory."
 )
 ADD_VALUE_OPTIONS = {"-b", "-B", "--reason"}
+HEAD_MOVING_VERBS = {"commit", "rebase", "merge", "cherry-pick", "am", "revert"}
 COMMIT_THEN_PUSH_REASON = (
-    "This pushes even when the `git commit` before it fails, and then publishes whatever HEAD already held, "
-    "such as Omer's unpushed commits. Join the commit and the push with `&&`, or push in a later call after "
-    "the commit exits 0 and `git log origin/<branch>..HEAD` lists only your commits."
+    "This pushes even when the `git commit`, `rebase`, `merge`, `cherry-pick`, `am` or `revert` before it fails, "
+    "and then publishes whatever HEAD already held: Omer's unpushed commits, or the half-finished state of a "
+    "stopped rebase, which closes a PR whose head then equals main. Join the two with `&&`, or push in a later "
+    "call after the first exits 0 and `git status` shows no rebase in progress."
 )
 
 
@@ -276,7 +278,7 @@ def _pushes_after_unchecked_commit(call):
         verb = command.git.args[:1] if command.git else None
         if verb == ["push"] and chained is False:
             return True
-        if verb == ["commit"]:
+        if verb and verb[0] in HEAD_MOVING_VERBS:
             chained = command.connector_after == "&&"
         elif chained is not None:
             # A pipe right after the commit hides its exit status; a later one sits inside the `&&` chain.
