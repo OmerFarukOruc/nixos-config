@@ -50,7 +50,9 @@
 # origin/HEAD for the base-branch list.
 # A token without the Checks permission, such as a fine-grained personal access token, is refused the PR's check rollup and
 # `gh pr checks` (gh 2.103.3: the check-runs list answers HTTP 403 and the other two a GraphQL error, each 'Resource not accessible
-# by personal access token'). The controller wait then reads the
+# by personal access token'). On that HTTP 403 a required Actions job is read from the newest Actions run of each workflow on the
+# head, with a check run's pending, success and failure meaning; a check an App posts stays unreadable and the wait ends at
+# PR_LAND_WAIT. The controller wait then reads the
 # newest gate.yml run of the head from the Actions API, and the wait for the PR's own checks reads the newest run of every
 # workflow on the head. A run still going is pending, success, neutral and skipped are green, every other conclusion is red,
 # and a failed read is retried and never green. Checks that GitHub Apps post outside Actions, such as Pullfrog or Cloudflare
@@ -76,9 +78,10 @@ usage() { sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 setup() {
   BASES=$(mktemp)
   CHECKS_ERR=$(mktemp)
+  JOBS_TABLE=$(mktemp)
   MERGE_ERR=$(mktemp)
   BODY_FILE=$(mktemp)
-  trap 'rm -f "$BASES" "$CHECKS_ERR" "$MERGE_ERR" "$BODY_FILE"' EXIT
+  trap 'rm -f "$BASES" "$CHECKS_ERR" "$JOBS_TABLE" "$MERGE_ERR" "$BODY_FILE"' EXIT
   command -v gh >/dev/null || die "gh is required"
   command -v jq >/dev/null || die "jq is required"
   git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
@@ -179,8 +182,8 @@ pr_json_rollup() {
 }
 
 run_checks() {
-  gh run list --commit "$1" --limit 100 --json workflowName,status,conclusion,startedAt,databaseId --jq \
-    "$run_bucket"' group_by(.workflowName) | map(sort_by([.startedAt, .databaseId]) | last | {name: .workflowName, bucket: bucket})'
+  gh run list --commit "$1" --limit 100 --json workflowName,workflowDatabaseId,status,conclusion,startedAt,databaseId --jq \
+    "$run_bucket"' group_by(.workflowDatabaseId) | map(sort_by([.startedAt, .databaseId]) | last | {name: .workflowName, bucket: bucket})'
 }
 
 has_label() { jq -e --arg l "$2" '[.labels[].name] | index($l) != null' <<<"$1" >/dev/null; }
@@ -317,15 +320,41 @@ await_controller() {
   done
 }
 
+# A job's check run carries the job's name, so the newest job of that name stands in for a check run that a token without
+# the Checks permission cannot list. The table of jobs is read once per poll: the newest run of each workflow on the head,
+# newest first, with each job's name, status and conclusion, after a first line that names the commit. check_state runs
+# in a command substitution, so the file, not a variable, carries the table from one context to the next.
+actions_jobs_table() {
+  local sha=$1 ids id rows=""
+  ids=$(gh api "repos/$GH_REPO/actions/runs" -X GET -f head_sha="$sha" -f per_page=100 --paginate --slurp \
+    | jq -r '[.[].workflow_runs[]] | group_by(.workflow_id) | map(sort_by([(.run_started_at // .created_at), .id]) | last)
+      | sort_by([(.run_started_at // .created_at), .id]) | reverse | .[].id') || return 1
+  for id in $ids; do
+    rows+=$'\n'$(gh api "repos/$GH_REPO/actions/runs/$id/jobs" -X GET -f filter=latest -f per_page=100 --paginate --slurp \
+      | jq -r '.[].jobs[] | [.name, .status, (.conclusion // "none")] | @tsv') || return 1
+  done
+  printf '%s%s\n' "$sha" "$rows" >"$JOBS_TABLE"
+}
+
+# Prints "<status> <conclusion>" of the newest job named $2 in the table of commit $1, nothing when there is none.
+actions_job_state() {
+  local sha=$1 ctx=$2
+  [[ "$(head -n 1 "$JOBS_TABLE")" == "$sha" ]] || actions_jobs_table "$sha" || return 1
+  awk -F'\t' -v ctx="$ctx" 'NR > 1 && $1 == ctx { print $2, $3; exit }' "$JOBS_TABLE"
+}
+
 # Prints "<status> <conclusion>" of the newest check run named $2 on commit $1, or the state of a commit
 # status with that context ("pending", or "completed <state>"), or nothing when neither exists, or "lookup-error"
 # when a request failed and nothing was found, so that a failed lookup is never read as a missing check.
 # gh prints the error body on stdout when a request fails, so its output counts only on success.
 check_state() {
-  local sha=$1 ctx=$2 out failed=0
+  local sha=$1 ctx=$2 out failed=0 err=$CHECKS_ERR
   if out=$(gh api "repos/$GH_REPO/commits/$sha/check-runs" -X GET -f check_name="$ctx" -f filter=latest \
-        --jq '.check_runs[0] | select(. != null) | "\(.status) \(.conclusion // "none")"' 2>/dev/null); then
+        --jq '.check_runs[0] | select(. != null) | "\(.status) \(.conclusion // "none")"' 2>"$err"); then
     [[ -z "$out" ]] || { printf '%s\n' "$out"; return 0; }
+  elif refused "$err"; then
+    if out=$(actions_job_state "$sha" "$ctx") && [[ -n "$out" ]]; then printf '%s\n' "$out"; return 0; fi
+    failed=1
   else
     failed=1
   fi
@@ -441,6 +470,7 @@ wait_required() {
   (( ${#required[@]} )) || { wait_own_checks "$n" "$sha" "$base" "$limit"; return 0; }
   while :; do
     local ctx st pending=() failed=() missing=() unread=()
+    : >"$JOBS_TABLE"
     if (( waited % 60 == 0 )) && ! pr_unchanged "$n" "$sha" "$base"; then merged_meanwhile=1; return 0; fi
     for ctx in "${required[@]}"; do
       st=$(check_state "$sha" "$ctx")
