@@ -12,9 +12,11 @@ Inputs:
 
 - The draft. It is a _file draft_ when the whole draft is one file path, or the caller says the file holds the draft. A draft that only mentions a file, such as "fix the bug described in /tmp/bug.md", is a text draft.
 - Optionally, a target model, such as "for Sonnet 5.5".
-- Optionally, a destination file path.
+- Optionally, a destination: a file path, or chat.
 
 ## Steps
+
+Every question these steps ask the caller goes through the question tool. When this session has no question tool, or nobody can answer one, such as a `claude -p` run or a session started with `AskUserQuestion` disallowed, the reply holds only one fenced block tagged `question` instead: the question on its first line, then up to 4 answer options, one per line starting with `- `. Write no prompt in that reply, because the `enhance` mod shows the block as a question dialog and sends the answer back to this session as `Answer: <text>`.
 
 1. **Find the guide.** The target is the model the caller named. When none is named, use the Claude model this session runs, or ask when this session runs no Claude model. Download the general guide as Markdown to a scratch file: `https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices.md`. Its "Model-specific guidance" table maps each model to its own page, and some models share one page, so take the target's page from that row and add `.md` to its URL. The `.md` form answers 404 for a missing page, while the HTML form answers 200 with an error page. When the table has no row for the target, use the page of the newest model in the same family, or the top row when the family has none, and say which in the reply. When a download fails, stop and report the failure, because a prompt written from memory follows an older guide. Done when the model name and its guide URL come from that table.
 2. **Read the guide.** Download the model page as Markdown and read it in full. The general guide and the model page are the only guide sources, so read no other copy. The general guide is long, so list its headings and read each section whose topic the draft touches, such as agentic systems, tool use, or frontend design. Where the two disagree, the model page wins, because the general guide says a technique that names a model was measured on that model. Done when you have listed each guide section that bears on this draft.
@@ -30,7 +32,7 @@ Inputs:
    - _Open_: the draft is exploratory on purpose, such as "what would you improve here?". Keep it open and add only context.
    - _Standard_: any other draft. Write it in step 5.
 
-   When the draft's intent is unclear at a point that changes the prompt, ask the caller one question and wait for the answer. Done when you have named the case, which the reply repeats.
+   When the draft's intent is unclear at a point that changes the prompt, ask the caller one question and wait for the answer. Done when you have named the case, which the reply repeats, or when you have asked that question.
 5. **Write the prompt.** Restate the caller's intent, never change it. Apply each section from step 2, and by default:
    - Put the context and the reason first, then the task, because the general guide reports that a reason lets the model generalise the rule.
    - State what the session may do, taken from the draft's verbs: inspect and report, plan, or change files within a named scope. Carry scope words such as "information only" or "audit only" as limits, with the reason the draft gives, and offer a wider scope in the reply instead of adding it. For "independent discovery", leave the caller's own hypotheses and earlier conclusions out of the prompt, because they would steer the session. When the draft holds a task for now and a task for later, scope the prompt to the first one and name the point where the session reports and waits for the caller before the later one.
@@ -52,6 +54,7 @@ Inputs:
    Then reread the prompt as a reader who saw nothing else. Keep each sentence that carries the caller's intent, a constraint, a fact from the caller, a reason, a check, or a path the session would otherwise spend turns finding. Strike the rest, because the receiving model already knows it. Done when each draft fact and constraint appears in the prompt or is listed for the reply as left out or replaced with its reason, and each sentence left passes that test.
 6. **Deliver.** Take the first destination that applies:
    - This session is in plan mode. The plan file holds only the prompt. Approving the plan with the option that clears the context sends the file to a fresh session as its first message, while any other approval option starts the work in this session. So the reply, given before you submit the plan, tells the caller to pick the clear-context option or to copy the prompt from the plan file.
+   - The caller named chat as the destination. Take the last case, even for a file draft, because the caller reads the prompt from the reply and expects no file to change.
    - The caller named a destination file. Write the prompt there. When the file exists, copy it first to `<name>.orig` beside it, unless git tracks it with no uncommitted change, because git then holds the old version.
    - A file draft. Write the prompt into that file, with the same backup rule.
    - Otherwise, the chat reply holds the prompt in one fenced code block tagged `paste` with a short title after the tag, such as ```` ```paste Fix the tweak menu ````. Make the outer fence longer than any fence inside the prompt.

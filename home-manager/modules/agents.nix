@@ -83,7 +83,7 @@ in
           {
             env = {
               CLAUDE_ENV_FILE = "${config.home.homeDirectory}/.claude/hooks/bash-env.sh";
-              CLAUDE_CODE_PLUGIN_DIRS = "${cfg.checkout}/agents/claude/mods/paste-card";
+              CLAUDE_CODE_PLUGIN_DIRS = "${cfg.checkout}/agents/claude/mods";
             };
           }
         ];
