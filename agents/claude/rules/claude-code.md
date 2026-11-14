@@ -14,6 +14,7 @@
 - When a `Write` or another tool call fails because the response hit the output-token limit, write the file as a skeleton, then append one section per `Edit`.
 - Before reporting a background job as still running, confirm it is alive: `ps -p <pid>` for a Bash job, `ListAgents` for an agent, the run's `journal.jsonl` for a Workflow. Silence is not liveness.
 - At most 6 agents run at once in a workflow and 6 subagents through the Agent tool, because `settings.json` sets `CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS` and `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`. The two caps count separately, so keep the total running at once at 6 or fewer. Keep both caps at 6, because an audit workflow that ran 9 agents at once on nixos-desktop used 17 GB RAM and 25.9 GB swap, and the kernel's OOM kill made systemd stop two Claude sessions. Give a workflow more items instead; the extra items queue. The Agent tool refuses a launch past its cap instead of queueing it, so wait for a running subagent to finish before you start the seventh.
+- `wait-until <clock time>` for a time more than about 2 minutes away runs in a background Bash call, because a foreground call ends at its 600000 ms limit.
 - When a subagent returns a file path as its deliverable, run `test -s <path>` before you accept the result. A missing or empty file means the deliverable is missing, so ask the subagent for it with `SendMessage` before you rely on its summary, because a summary can name a file its agent never wrote.
 
 ## Skills directory

@@ -79,6 +79,7 @@ in
             "pkgs/agent-tools/bin/ropen"
             "pkgs/agent-tools/bin/sandbox-run"
             "pkgs/agent-tools/bin/wait-exit"
+            "pkgs/agent-tools/bin/wait-until"
           ];
           priority = 2;
         };

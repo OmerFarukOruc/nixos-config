@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Waits until a clock time, then exits 0. The clock time is a full date and time such as YYYY-MM-DDTHH:MM:SSZ, or any
+# other text with a digit that `date -u -d` reads; a bare time of day is UTC and, once passed today, ends the wait at once.
+# Prints what it waits for, then a progress line with the time left at each step, so a background shell's details panel
+# shows the state. The wait ends at the target, not up to one step after it. WAIT_UNTIL_STEP sets the seconds between
+# progress lines (default 300; at most nine digits). Exits 2 on bad arguments.
+set -euo pipefail
+usage="usage: wait-until <clock time for date -u -d>, with WAIT_UNTIL_STEP a positive whole number of at most nine digits"
+if [[ $# -eq 1 && ( $1 == -h || $1 == --help ) ]]; then
+	echo "$usage"
+	exit 0
+fi
+
+if [[ $# -ne 1 || $1 != *[0-9]* || ! ${WAIT_UNTIL_STEP:-300} =~ ^0*[1-9][0-9]{0,8}$ ]] || ! target=$(date -u -d "$1" +%s 2>/dev/null); then
+	echo "$usage" >&2
+	exit 2
+fi
+step=$((10#${WAIT_UNTIL_STEP:-300} * 1000000))
+target_iso=$(date -u -d "@$target" +%FT%TZ)
+target=$((target * 1000000))
+
+left=$((target - ${EPOCHREALTIME/[.,]/}))
+if ((left <= 0)); then
+	echo "wait-until: $target_iso has already passed"
+	exit 0
+fi
+echo "wait-until: waiting until $target_iso, a progress line every $((step / 1000000))s"
+
+while ((left > 0)); do
+	echo "wait-until: $((left / 60000000)) min $((left / 1000000 % 60)) s left"
+	nap=$((left < step ? left : step))
+	printf -v nap '%d.%06d' $((nap / 1000000)) $((nap % 1000000))
+	sleep "$nap"
+	left=$((target - ${EPOCHREALTIME/[.,]/}))
+done
+echo "wait-until: reached $target_iso"
