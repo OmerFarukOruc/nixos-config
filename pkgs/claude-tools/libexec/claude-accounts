@@ -120,12 +120,12 @@ link_shared() {
   for name in "${shared[@]}"; do
     if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
       ln -sfn "$main/$name" "$dir/$name" || bad=1
-      [[ -e "$dir/$name" ]] || { echo "  $dir/$name points at $main/$name, which does not exist" >&2; bad=1; }
     else
       echo "  not replacing real file $dir/$name" >&2
       bad=1
     fi
   done
+  [[ -e "$dir/settings.json" ]] || { echo "  $dir/settings.json points at $main/settings.json, which does not exist" >&2; bad=1; }
   return "$bad"
 }
 
@@ -163,7 +163,7 @@ fold_settings() {
   for _ in 1 2 3; do
     stamp="$(stat -c '%i %y' -- "$src" "$dst" 2>/dev/null)" || true
     if ! report="$(jq -n --slurpfile c "$src" --slurpfile m "$dst" "$settings_merge")"; then
-      echo "  settings.json: not folded, $src or $dst is not one JSON object" >&2
+      echo "  settings.json: not folded, $src or $dst is missing or not one JSON object" >&2
       return 1
     fi
     { read -r added; read -r conflicts; } < <(jq -r '(.added | join(", ")), .conflicts' <<<"$report")
