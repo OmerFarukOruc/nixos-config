@@ -1,6 +1,6 @@
 # agents
 
-This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and the others. `home-manager/modules/agents.nix`, which `nixosModules/agents.nix` imports on nixos-desktop, nixos-rog and devbox, keeps a main checkout of this repository current on each of them and links each home to this folder in that checkout, so an edit works at once.
+This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and the others. `home-manager/modules/agents.nix`, which `nixosModules/agents.nix` imports on nixos-desktop, nixos-rog and devbox, keeps a main checkout of this repository current on each of them and links each home to this folder in that checkout, so an edit to a linked file works at once; `claude/settings.json` reaches `~/.claude/settings.json` only at the next switch.
 
 ## Layout
 

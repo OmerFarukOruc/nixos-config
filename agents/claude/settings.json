@@ -129,6 +129,7 @@
     }
   },
   "viewMode": "focus",
+  "tui": "fullscreen",
   "feedbackDrafts": "off",
   "effortLevel": "high",
   "modelSettings": {
