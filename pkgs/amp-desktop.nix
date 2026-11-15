@@ -7,10 +7,10 @@
   libXtst,
 }:
 let
-  version = "0.1.29908343";
+  version = "0.1.29912761";
   src = fetchurl {
     url = "https://static.ampcode.com/linux/${version}/amp-desktop-${version}-amd64.deb";
-    hash = "sha256-Z3EOt6cupJA/dzqKxJEg9KGRBoknmJlALjNVFzoHwYY=";
+    hash = "sha256-SaGytFdXfB/79rxKUuqyPQh0wgQIpQUe1BMXTAN0kNI=";
   };
 in
 callPackage ./electron-deb {
