@@ -25,7 +25,8 @@ export type Place = 'beside-session' | 'new-workspace'
 
 const COPY_MODEL = 'claude-sonnet-5-5'
 const DENIED_TOOLS = 'Edit,Write,NotebookEdit,AskUserQuestion'
-const NO_HOOKS = '{"disableAllHooks":true}'
+const COPY_PERMISSION_MODE = 'bypassPermissions'
+const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfPrompting":true}}'
 const SCRATCH_ROOT = '/tmp/agents'
 const AGENT_START_TIMEOUT_MS = 120_000
 const PROMPT_TIMEOUT_MS = 570_000
@@ -44,7 +45,18 @@ type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
 class CopyCancelled extends Error {}
 
 function copyFlags(plan: CopyPlan, isFirstTurn: boolean): string[] {
-  const shared = ['--model', COPY_MODEL, '--disallowedTools', DENIED_TOOLS, '--settings', NO_HOOKS, '--add-dir', SCRATCH_ROOT]
+  const shared = [
+    '--model',
+    COPY_MODEL,
+    '--permission-mode',
+    COPY_PERMISSION_MODE,
+    '--disallowedTools',
+    DENIED_TOOLS,
+    '--settings',
+    COPY_SETTINGS,
+    '--add-dir',
+    SCRATCH_ROOT,
+  ]
   if (!isFirstTurn) {
     return ['--resume', plan.sessionId, ...shared]
   }
@@ -320,7 +332,7 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
       return { kind: 'failed', reason: `herdr could not prompt the copy: ${prompted.code}`, notes: await screenOf($, name) }
     }
     if (textAt(prompted.result, ['agent', 'agent_status']) === 'blocked') {
-      return { kind: 'failed', reason: 'the copy stopped at a question or approval; Reply shows its screen', notes: await screenOf($, name) }
+      return { kind: 'failed', reason: 'the copy stopped at a question or approval; Details shows its screen', notes: await screenOf($, name) }
     }
 
     return replyAfter($, plan.sessionId, rowsBefore)
