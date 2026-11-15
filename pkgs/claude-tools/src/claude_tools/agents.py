@@ -112,10 +112,13 @@ class Agents:
         h("agent", "prompt", name, "/exit", check=False)
         deadline = time.time() + 10
         while not gone(pid, 1) and time.time() < deadline:
-            if EXIT_DIALOG in h.screen(name):
+            screen = h.screen(name)
+            if EXIT_DIALOG in screen:
                 h("agent", "send-keys", name, "enter", check=False)
                 self.log(f"answered the background-work dialog of {name} with Exit and stop tasks")
                 break
+            if "/exit" in screen:
+                h("agent", "send-keys", name, "enter", check=False)
         if not gone(pid, 30):
             h("agent", "send-keys", name, "ctrl+c", check=False)
             time.sleep(0.5)
