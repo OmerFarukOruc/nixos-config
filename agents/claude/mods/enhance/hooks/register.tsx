@@ -11,7 +11,6 @@ const IDLE: Run = { kind: 'idle' }
 const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 
 const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-4' })
-const hasDraft = atom({ plugin: 'enhance', key: 'hasDraft' } as const, false)
 
 type ActiveRun = { id: string; cancel: Cancel; copy: Copy | null; boxAtStart: string; isBoxTouched: boolean; done: Promise<void> }
 
@@ -92,6 +91,10 @@ async function recordSeat($: EngineInterface, me: ActiveRun, copyId: string, sea
   await update($, run, cur => (cur.kind === 'running' && cur.runId === me.id ? seated : cur))
 }
 
+function restoreOf(boxText: string, fallback: string): string {
+  return boxText.trim() === '' ? fallback : boxText
+}
+
 async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome: Outcome): Promise<void> {
   if (outcome.kind === 'cancelled') {
     return
@@ -109,7 +112,7 @@ async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome:
   if (!(await isCurrent($, me))) {
     return
   }
-  const restore = box.text.trim() === '' ? draft : box.text
+  const restore = restoreOf(box.text, draft)
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
   const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
   if (await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled })) {
@@ -200,13 +203,6 @@ async function cleanUpLeftover($: EngineInterface): Promise<void> {
   await setRun($, IDLE)
 }
 
-async function noteDraft($: EngineInterface, text: string): Promise<void> {
-  const isTyped = text.trim() !== ''
-  if (isTyped !== (await read($, hasDraft))) {
-    await update($, hasDraft, () => isTyped)
-  }
-}
-
 async function transition<From extends Run>(
   $: EngineInterface,
   pick: (cur: Run) => From | null,
@@ -229,7 +225,7 @@ async function moveBox($: EngineInterface, isFilled: boolean, textOf: (ready: Re
   const from = await transition(
     $,
     cur => (cur.kind === 'ready' && cur.isFilled !== isFilled ? cur : null),
-    ready => ({ ...ready, isFilled, restore: isFilled ? box.text : ready.restore }),
+    ready => ({ ...ready, isFilled, restore: isFilled ? restoreOf(box.text, ready.restore) : ready.restore }),
   )
   if (from === null || (await $.prompt.fill({ text: textOf(from) })).isFilled) {
     return
@@ -302,26 +298,6 @@ async function clear($: EngineInterface): Promise<void> {
 
 type Ui = Pick<Elements[RenderSurface], 'Box' | 'Button' | 'Markdown' | 'Text'>
 type Site = 'band' | 'pane'
-
-function draftRow({ Box, Button, Text }: Ui, $: EngineInterface) {
-  return (
-    <Box columnGap={1}>
-      <Button
-        key="enhance"
-        label="Enhance"
-        onPress={async () => {
-          const box = await $.prompt.read()
-          if (box.text.trim() !== '') {
-            enhance($, box.text, box.text)
-          }
-        }}
-      />
-      <Text dimColor wrap="truncate-end">
-        rewrites this draft as a clearer prompt
-      </Text>
-    </Box>
-  )
-}
 
 function runningRow({ Box, Button, Text }: Ui, $: EngineInterface) {
   return (
@@ -454,7 +430,7 @@ export const register: Register = on => {
   on('command.run', { command: 'enhance' }, async ($, e) => {
     const draft = e.args.trim()
     if (draft === '') {
-      $.ui.toast('Type the draft after /enhance, or press Enhance above a typed draft')
+      $.ui.toast('Type the draft after /enhance')
       return {}
     }
 
@@ -465,17 +441,15 @@ export const register: Register = on => {
 
   on('prompt.edit', async ($, e, next) => {
     markTouched()
-    const box = await next(e)
-    await noteDraft($, box.text)
 
-    return box
+    return next(e)
   })
 
   on('prompt.change', async ($, e, next) => {
-    if (e.origin.kind === 'history' || e.origin.kind === 'undo' || e.origin.kind === 'app' || e.origin.kind === 'engine') {
+    const isOtherPlugin = e.origin.kind === 'plugin' && e.origin.name !== 'enhance'
+    if (isOtherPlugin || e.origin.kind === 'history' || e.origin.kind === 'undo' || e.origin.kind === 'app' || e.origin.kind === 'engine') {
       markTouched()
     }
-    await noteDraft($, e.text)
 
     return next(e)
   })
@@ -530,6 +504,6 @@ export const register: Register = on => {
       return failedRow(ui, $, current)
     }
 
-    return (await read($, hasDraft)) ? draftRow(ui, $) : next(e)
+    return next(e)
   })
 }

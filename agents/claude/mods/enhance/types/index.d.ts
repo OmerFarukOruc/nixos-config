@@ -8,6 +8,6 @@ export type Run =
 
 declare module 'claude-code' {
   interface PluginState {
-    enhance: { run: Shaped<Run>; hasDraft: boolean }
+    enhance: { run: Shaped<Run> }
   }
 }

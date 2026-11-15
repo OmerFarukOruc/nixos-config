@@ -47,17 +47,16 @@ Private values stay out of these files ([Checks](#checks)). The Infisical projec
 - `paste-card` draws ```` ```paste ```` blocks in a reply as cards, each with a Copy button.
 - `enhance` runs `/enhance-prompt` on Sonnet 5.5 in a copy of the session, in a herdr pane beside the session when it runs inside herdr, in a herdr workspace of its own when a herdr server runs, and through `claude -p` otherwise, and puts the prompt in the prompt box. Nobody can answer a dialog inside the copy, so a permission dialog ends the run as failed. The copy therefore runs in bypass permissions mode with `permissions.denyInsteadOfPrompting`, which refuses a call that an `ask` rule would still prompt for. An interactive copy in auto mode stops at Claude Code 2.1.325's "Allow this read outside the working directories?" dialog before a read such as a skill file the draft names, and the dialog returns until someone picks one of its two lasting answers. `Edit`, `Write`, `NotebookEdit` and `AskUserQuestion` stay denied, while Bash and the other tools run without a permission check. Bypass mode starts without its warning dialog only on an account whose settings set `skipDangerousModePermissionPrompt`; without it the run fails with "the copy is blocked at startup". A herdr copy types `/enhance-prompt for <model>, destination chat: <draft>` into its own Claude session, so that line joins the prompt history, and the up arrow brings back the draft. Outside herdr, the copy's workspace, labelled `enhance`, opens on the running herdr server and closes when the run ends.
 
-`enhance` draws one row above the prompt box, and its buttons change with the state of the run:
+`/enhance <draft>` starts a run. While the run lasts and after it ends, `enhance` draws one row above the prompt box, and its buttons change with the state of the run:
 
 | State | Row |
 | --- | --- |
-| A draft is typed | Enhance, with a one-line hint |
 | The copy runs | "Enhancing the draft…", Cancel |
 | The prompt is in the box | Copy prompt, Restore draft, Notes, Dismiss |
 | The prompt is ready and the box was edited during the run | Use prompt, Copy prompt, Notes, Dismiss |
 | The run failed | the reason, Retry, Details, Dismiss |
 
-- The prompt fills the box only when nobody touched the box during the run. Use prompt puts it there otherwise, and Restore draft puts back what the box held before the prompt went in. The two swap until the next prompt is sent, which clears the row and closes the pane.
+- The prompt fills the box only when nobody touched the box during the run. Use prompt puts it there otherwise, and Restore draft puts back the text typed after `/enhance`, or the box's own text when the box held some. The two swap until the next prompt is sent, which clears the row and closes the pane.
 - Copy prompt puts the enhanced prompt on the clipboard and shows a toast with the result.
 - Notes opens the `enhance-notes` pane, which draws the copy's notes as Markdown, with the label of a top-level bullet in bold when the bullet opens with up to 40 characters and a colon, then the enhanced prompt in a frame. The pane also opens by itself when a prompt is ready and the terminal is at least 144 columns wide, and it repeats the row's buttons, because Claude Code 2.1.325 leaves the row out while the box is taller than its share of a fullscreen terminal. To see it, fill the box with a prompt of more lines than half the terminal's rows.
 - Retry runs the same draft again, and Details opens the pane with the whole reason, the copy's reply when it sent one, and Retry and Dismiss.
