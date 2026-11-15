@@ -29,6 +29,9 @@ const NO_HOOKS = '{"disableAllHooks":true}'
 const SCRATCH_ROOT = '/tmp/agents'
 const AGENT_START_TIMEOUT_MS = 120_000
 const PROMPT_TIMEOUT_MS = 570_000
+const SHELL_READY_TIMEOUT_MS = 180_000
+const SHELL_READY_PROBE_MS = 3000
+const PROBE_ID_RANGE = 1_000_000_000
 const START_TRIES = 30
 const PROMPT_TRIES = 60
 const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
@@ -193,14 +196,38 @@ function shellQuote(text: string): string {
   return `'${text.replaceAll("'", `'\\''`)}'`
 }
 
+async function typeInPane($: EngineInterface, pane: string, command: string, purpose: string): Promise<void> {
+  const typed = await herdr($, ['pane', 'run', pane, command])
+  if (!typed.ok) {
+    throw new Error(`herdr could not ${purpose} in pane ${pane}: ${typed.code}`)
+  }
+}
+
+async function waitShellReady($: EngineInterface, pane: string, cancel: Cancel): Promise<void> {
+  const seed = Math.floor(Math.random() * PROBE_ID_RANGE)
+  const answer = `shell-ready-${seed + 1}`
+  const probe = `echo shell-ready-$((${seed}+1))`
+  const deadline = (await $.clock.now()) + SHELL_READY_TIMEOUT_MS
+  while ((await $.clock.now()) < deadline) {
+    checkCancel(cancel)
+    await typeInPane($, pane, probe, 'check that the shell is ready')
+    const seen = await herdr($, ['pane', 'wait-output', pane, '--match', answer, '--timeout', String(SHELL_READY_PROBE_MS)])
+    if (seen.ok) {
+      return
+    }
+    if (seen.code !== 'timeout') {
+      throw new Error(`herdr could not read pane ${pane}: ${seen.code}`)
+    }
+  }
+  throw new Error(`the shell in pane ${pane} ran no typed command in ${SHELL_READY_TIMEOUT_MS / 1000} s`)
+}
+
 async function startAgent($: EngineInterface, name: string, pane: string, plan: CopyPlan): Promise<void> {
   checkCancel(plan.cancel)
+  await waitShellReady($, pane, plan.cancel)
   const account = await configDir($)
   const env = `export CLAUDE_TOOLS_PLAIN=1; ${account === null ? 'unset CLAUDE_CONFIG_DIR' : `export CLAUDE_CONFIG_DIR=${shellQuote(account)}`}`
-  const typed = await herdr($, ['pane', 'run', pane, env])
-  if (!typed.ok) {
-    throw new Error(`herdr could not set the copy's account in pane ${pane}: ${typed.code}`)
-  }
+  await typeInPane($, pane, env, "set the copy's account")
 
   for (let attempt = 1; ; attempt += 1) {
     checkCancel(plan.cancel)
@@ -213,6 +240,9 @@ async function startAgent($: EngineInterface, name: string, pane: string, plan: 
       return
     }
     checkCancel(plan.cancel)
+    if (started.code === 'agent_not_ready') {
+      throw new Error(`the copy is blocked at startup; its screen ended: ${(await screenOf($, name)).slice(-400)}`)
+    }
     if (started.code !== 'agent_pane_busy' || attempt === START_TRIES) {
       throw new Error(`herdr could not start the copy: ${started.code}`)
     }
