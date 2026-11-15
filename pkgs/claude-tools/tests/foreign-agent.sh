@@ -3,7 +3,7 @@ foreign_available() {
   sudo -n -u sl-factory true 2>/dev/null && [[ -n "$(foreign_account)" ]]
 }
 foreign_account() {
-  sudo -n -u sl-factory sh -c 'for d in "$HOME"/.claude-accounts/*/; do [ -f "$d.claude.json" ] && basename "$d" && break; done' 2>/dev/null
+  sudo -n -u sl-factory sh -c 'for d in "$HOME"/.claude-accounts/*/; do [ -f "$d.claude.json" ] && [ -s "$d.credentials.json" ] && basename "$d" && break; done' 2>/dev/null
 }
 foreign_pids() {
   pgrep -u sl-factory -x 'claude|\.claude-wrapped' || true
