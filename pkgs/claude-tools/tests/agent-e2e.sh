@@ -73,7 +73,7 @@ PROMPT_COMMAND='sleep 5'
 EOF2
 cat >"$dir/shell" <<EOF2
 #!/bin/sh
-[ -e "$dir/slow-prompt" ] && exec bash --rcfile "$dir/slow-prompt.rc" -i
+[ -e "$dir/slow-prompt" ] && exec bash --rcfile "$dir/slow-prompt.rc" -i "\$@"
 exec "$caller_shell" "\$@"
 EOF2
 chmod +x "$dir/shell"

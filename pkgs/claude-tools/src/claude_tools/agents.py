@@ -21,7 +21,8 @@ PROBE_LONGEST_WAIT_MS = 30000
 FREED_WAIT_S = 30
 PROMPT_WAIT_S = 60
 SUBMIT_WAIT_MS = 5000
-SUBMIT_MATCH_CHARS = 60
+SUBMIT_UNTIL = ("--until", "working", "--until", "blocked")
+COMPOSER_RULE = "─"
 TRUST_QUESTION = "Yes, I trust this folder"
 EXIT_DIALOG = "❯ 1. Exit and stop tasks"
 
@@ -180,31 +181,39 @@ class Agents:
         return Failed(f"{name} is blocked at startup by something other than the folder trust question; "
                       f"its screen ended: {screen[-400:]}")
 
-    def submit_typed(self, name: str, text: str, deadline: float) -> None:
-        typed = text[:SUBMIT_MATCH_CHARS]
-        while True:
+    def composer_text(self, name: str) -> str:
+        screen = self.herdr.screen(name)
+        rules = [i for i, line in enumerate(screen.splitlines()) if line.startswith(COMPOSER_RULE)]
+        if len(rules) < 2:
+            raise Failed(f"could not find the input box of {name} on its screen: {screen[-400:]}")
+        return "".join(screen.splitlines()[rules[-2] + 1:rules[-1]])
+
+    def press_enter_until_taken(self, name: str, text: str) -> None:
+        wanted = "".join(text.split())
+        deadline = time.time() + PROMPT_WAIT_S
+        while time.time() < deadline:
+            status = self.herdr("agent", "get", name)["result"]["agent"]["agent_status"]
+            if status not in ("idle", "done") or wanted not in "".join(self.composer_text(name).split()):
+                return
+            self.herdr("agent", "send-keys", name, "enter")
+            self.log(f"pressed Enter again for {name}, whose input box kept the prompt")
             try:
-                self.herdr("agent", "wait", name, "--until", "working", "--until", "blocked", "--timeout", str(SUBMIT_WAIT_MS))
+                self.herdr("agent", "wait", name, *SUBMIT_UNTIL, "--timeout", str(SUBMIT_WAIT_MS))
                 return
             except HerdrError as e:
                 if e.code != "timeout":
                     raise
-            screen = self.herdr.screen(name)
-            if typed not in screen:
-                return
-            if time.time() >= deadline:
-                raise Failed(f"{name} kept the prompt in its input box for {PROMPT_WAIT_S} s; "
-                             f"its screen ended: {screen[-400:]}")
-            self.herdr("agent", "send-keys", name, "enter")
+        raise Failed(f"{name} kept the prompt in its input box for {PROMPT_WAIT_S} s")
 
     def prompt_when_ready(self, name: str, text: str) -> None:
         deadline = time.time() + PROMPT_WAIT_S
         while True:
             try:
-                self.herdr("agent", "prompt", name, text)
-                self.submit_typed(name, text, deadline)
+                self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL, "--timeout", str(SUBMIT_WAIT_MS))
                 return
             except HerdrError as e:
+                if e.code == "timeout":
+                    break
                 if e.code not in ("agent_not_ready", "agent_blocked"):
                     raise
                 code = e.code
@@ -216,6 +225,7 @@ class Agents:
             if code == "agent_blocked" and not answered:
                 raise self.blocked_at_startup(name, screen)
             time.sleep(1)
+        self.press_enter_until_taken(name, text)
 
     def start_claude(self, pane: str, name: str, config_dir: str, args: list[str]) -> None:
         h = self.herdr
