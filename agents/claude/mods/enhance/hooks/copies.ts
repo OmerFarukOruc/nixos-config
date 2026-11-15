@@ -30,7 +30,8 @@ const SCRATCH_ROOT = '/tmp/agents'
 const AGENT_START_TIMEOUT_MS = 120_000
 const PROMPT_TIMEOUT_MS = 570_000
 const SHELL_READY_TIMEOUT_MS = 180_000
-const SHELL_READY_PROBE_MS = 3000
+const PROBE_FIRST_WAIT_MS = 3000
+const PROBE_LONGEST_WAIT_MS = 30_000
 const PROBE_ID_RANGE = 1_000_000_000
 const START_TRIES = 30
 const PROMPT_TRIES = 60
@@ -208,16 +209,18 @@ async function waitShellReady($: EngineInterface, pane: string, cancel: Cancel):
   const answer = `shell-ready-${seed + 1}`
   const probe = `echo shell-ready-$((${seed}+1))`
   const deadline = (await $.clock.now()) + SHELL_READY_TIMEOUT_MS
-  while ((await $.clock.now()) < deadline) {
+  let waitMs = PROBE_FIRST_WAIT_MS
+  for (let leftMs = SHELL_READY_TIMEOUT_MS; leftMs > 0; leftMs = deadline - (await $.clock.now())) {
     checkCancel(cancel)
     await typeInPane($, pane, probe, 'check that the shell is ready')
-    const seen = await herdr($, ['pane', 'wait-output', pane, '--match', answer, '--timeout', String(SHELL_READY_PROBE_MS)])
+    const seen = await herdr($, ['pane', 'wait-output', pane, '--match', answer, '--timeout', String(Math.min(waitMs, leftMs))])
     if (seen.ok) {
       return
     }
     if (seen.code !== 'timeout') {
       throw new Error(`herdr could not read pane ${pane}: ${seen.code}`)
     }
+    waitMs = Math.min(waitMs * 2, PROBE_LONGEST_WAIT_MS)
   }
   throw new Error(`the shell in pane ${pane} ran no typed command in ${SHELL_READY_TIMEOUT_MS / 1000} s`)
 }
