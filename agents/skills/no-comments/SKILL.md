@@ -1,8 +1,9 @@
 ---
 name: no-comments
-description: "Deletes comments from a set of files, a folder, or a repository and fixes the code they excused. Use when asked to remove, audit, or sweep comments; the code-reviewer agent checks the comments each change adds."
+description: "Delete the comments in files, a folder, or the whole repository, and fix the code they excused."
+disable-model-invocation: true
 ---
-<!-- Adapted from cursor/plugins pstack/skills/no-comments/SKILL.md at ce649c03ac3b75b6ae80cbd15b7e2c536caedb5a. Copyright (c) 2026 Lauren Tan. MIT License: https://github.com/cursor/plugins/blob/ce649c03ac3b75b6ae80cbd15b7e2c536caedb5a/pstack/LICENSE -->
+<!-- Adapted from cursor/plugins pstack/skills/no-comments/SKILL.md at bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7. Copyright (c) 2026 Lauren Tan. MIT License: https://github.com/cursor/plugins/blob/bf0c7cd80abdbf7fe47b634978a7d1b4071f71a7/pstack/LICENSE -->
 # No comments
 
 Start the comment-sicko agent on the scope, audit its report, and act on the accepted verdicts. Its fresh read beats yours, so defer to it except where step 2 rejects a verdict.
