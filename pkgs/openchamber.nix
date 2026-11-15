@@ -5,10 +5,10 @@
 }:
 let
   pname = "openchamber";
-  version = "2.7.1";
+  version = "2.7.2";
   src = fetchurl {
     url = "https://github.com/openchamber/openchamber/releases/download/v${version}/OpenChamber-${version}-linux-x86_64.AppImage";
-    hash = "sha512-7MZk/5G7i17UaI8yt4pz0U/99MD0+IGhIAj35ZKssGQOQ7G4JH3yvqanw2KuDZB+BKK2yvP8OXcJGQTkCfaNPw==";
+    hash = "sha512-LjJgz2j9lLXKXLKfyeHraAvbb94DVlUkAwZGsty7L6+7x/6O7pyj2QlpxBi8isEECYvXceQ7jZmoZdZs6LYkNw==";
   };
   contents = appimageTools.extract { inherit pname version src; };
 in
