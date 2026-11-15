@@ -148,15 +148,20 @@ class Agents:
         return True
 
     def wait_shell_ready(self, pane: str) -> None:
+        seed = int.from_bytes(os.urandom(4), "big")
+        answer = f"shell-ready-{seed + 1}"
+        probe = f"echo shell-ready-$(({seed}+1))"
         deadline = time.time() + READY_WAIT_S
         while time.time() < deadline:
             if next(self.in_pane(CLAUDE, pane), None):
                 raise Failed(f"a claude already runs in pane {pane}")
-            n = int.from_bytes(os.urandom(4), "big")
-            self.herdr("pane", "run", pane, f"echo shell-ready-$(({n}+1))")
-            if "result" in self.herdr("pane", "wait-output", pane, "--match", f"shell-ready-{n + 1}",
-                                      "--timeout", "3000", check=False):
+            self.herdr("pane", "run", pane, probe)
+            seen = self.herdr("pane", "wait-output", pane, "--match", answer, "--timeout", "3000", check=False)
+            if "result" in seen:
                 return
+            code = (seen.get("error") or {}).get("code")
+            if code != "timeout":
+                raise Failed(f"herdr could not read pane {pane}: {code}")
         raise Failed(f"the shell in pane {pane} ran no typed command in {READY_WAIT_S} s")
 
     def answer_trust(self, name: str, screen: str) -> bool:
