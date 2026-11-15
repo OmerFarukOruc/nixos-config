@@ -15,7 +15,7 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `bash-env.sh`, `stop-sound.sh` and its sounds |
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | the status line |
 | `claude/agents/` | `~/.claude/agents` | the `code-reviewer` and `comment-sicko` agents |
-| `claude/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`, which names `claude/mods/` | Claude Code mods, each loaded at session start: `paste-card` draws ```` ```paste ```` blocks as cards, and `enhance` runs `/enhance-prompt` on Sonnet 5.5 in a copy of the session, in a herdr pane beside the session when it runs inside herdr, in a herdr workspace of its own when a herdr server runs, and through `claude -p` otherwise, and puts the prompt in the prompt box. A herdr copy types `/enhance-prompt for <model>, destination chat: <draft>` into its own Claude session, so that line joins the prompt history, and the up arrow brings back the draft. Outside herdr, the copy's workspace, labelled `enhance`, opens on the running herdr server and closes when the run ends |
+| `claude/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`, which names `claude/mods/` | Claude Code mods, each loaded at session start ([Mods](#mods)) |
 | `claude/settings.json` | `~/.claude/settings.json` | Claude Code's settings |
 | `codex/codex.md` | `~/.codex/AGENTS.md` | the Codex-only rules |
 | `codex/agents/` | `~/.codex/agents/<file>` | the Codex agent roles `default`, `worker`, `explorer` and `code_reviewer`, which reads `claude/agents/code-reviewer.md` |
@@ -41,6 +41,27 @@ Each entry sets `force`, because Home Manager backs up only a target that is not
 The commands these files name, such as `pr-land`, `wait-exit` and `sandbox-run`, come from `pkgs/agent-tools`, which the same module installs ([its README](../pkgs/agent-tools/README.md)).
 
 Private values stay out of these files ([Checks](#checks)). The Infisical project IDs reach every zsh, interactive or not, through `.zshenv` as `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids`.
+
+## Mods
+
+- `paste-card` draws ```` ```paste ```` blocks in a reply as cards, each with a Copy button.
+- `enhance` runs `/enhance-prompt` on Sonnet 5.5 in a copy of the session, in a herdr pane beside the session when it runs inside herdr, in a herdr workspace of its own when a herdr server runs, and through `claude -p` otherwise, and puts the prompt in the prompt box. A herdr copy types `/enhance-prompt for <model>, destination chat: <draft>` into its own Claude session, so that line joins the prompt history, and the up arrow brings back the draft. Outside herdr, the copy's workspace, labelled `enhance`, opens on the running herdr server and closes when the run ends.
+
+`enhance` draws one row above the prompt box, and its buttons change with the state of the run:
+
+| State | Row |
+| --- | --- |
+| A draft is typed | Enhance, with a one-line hint |
+| The copy runs | "Enhancing the draft…", Cancel |
+| The prompt is in the box | Copy prompt, Restore draft, Notes, Dismiss |
+| The prompt is ready and the box was edited during the run | Use prompt, Copy prompt, Notes, Dismiss |
+| The run failed | the reason, Retry, Details, Dismiss |
+
+- The prompt fills the box only when nobody touched the box during the run. Use prompt puts it there otherwise, and Restore draft puts back what the box held before the prompt went in. The two swap until the next prompt is sent, which clears the row and closes the pane.
+- Copy prompt puts the enhanced prompt on the clipboard and shows a toast with the result.
+- Notes opens the `enhance-notes` pane, which draws the copy's notes as Markdown, with the label of a top-level bullet in bold when the bullet opens with up to 40 characters and a colon, then the enhanced prompt in a frame. The pane also opens by itself when a prompt is ready and the terminal is at least 144 columns wide, and it repeats the row's buttons, because Claude Code 2.1.325 leaves the row out while the box is taller than its share of a fullscreen terminal. To see it, fill the box with a prompt of more lines than half the terminal's rows.
+- Retry runs the same draft again, and Details opens the pane with the whole reason, the copy's reply when it sent one, and Retry and Dismiss.
+- `ctrl+x tab` moves the keyboard to the row or the pane, Tab walks the buttons, and Enter presses one.
 
 ## Edit loop
 

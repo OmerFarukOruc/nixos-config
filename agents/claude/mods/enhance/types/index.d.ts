@@ -4,7 +4,7 @@ export type Run =
   | { kind: 'idle' }
   | { kind: 'running'; runId: string; copyId: string; seat: Seat | null }
   | { kind: 'ready'; restore: string; prompt: string; notes: string; isFilled: boolean }
-  | { kind: 'failed'; reason: string; notes: string }
+  | { kind: 'failed'; reason: string; notes: string; draft: string }
 
 declare module 'claude-code' {
   interface PluginState {

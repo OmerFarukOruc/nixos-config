@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Run, Seat } from '../types'
 import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning } from './copies'
@@ -8,8 +8,9 @@ import { parseReply } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
 const IDLE: Run = { kind: 'idle' }
+const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 
-const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-3' })
+const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-4' })
 const hasDraft = atom({ plugin: 'enhance', key: 'hasDraft' } as const, false)
 
 type ActiveRun = { id: string; cancel: Cancel; copy: Copy | null; boxAtStart: string; isBoxTouched: boolean; done: Promise<void> }
@@ -23,6 +24,10 @@ type Outcome =
 const SESSION_END_WAIT_MS = 1200
 
 let active: ActiveRun | null = null
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 function setRun($: EngineInterface, value: Run): Promise<Run> {
   return update($, run, () => value)
@@ -96,7 +101,7 @@ async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome:
     return
   }
   if (outcome.kind === 'failed') {
-    await commit($, me, outcome)
+    await commit($, me, { ...outcome, draft })
     return
   }
 
@@ -107,14 +112,16 @@ async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome:
   const restore = box.text.trim() === '' ? draft : box.text
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
   const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
-  await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled })
+  if (await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled })) {
+    await openNotes($)
+  }
 }
 
 async function closeCopy($: EngineInterface, copy: Copy): Promise<void> {
   try {
     await copy.close()
   } catch (error) {
-    $.ui.toast(error instanceof Error ? error.message : String(error))
+    $.ui.toast(reasonOf(error))
   }
 }
 
@@ -131,7 +138,7 @@ async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft:
     })
     await settle($, me, draft, await converse($, me.copy, draft))
   } catch (error) {
-    await commit($, me, { kind: 'failed', reason: error instanceof Error ? error.message : String(error), notes: '' })
+    await commit($, me, { kind: 'failed', reason: reasonOf(error), notes: '', draft })
   } finally {
     if (active === me) {
       active = null
@@ -188,7 +195,7 @@ async function cleanUpLeftover($: EngineInterface): Promise<void> {
     }
     await forgetCopy($, state.copyId)
   } catch (error) {
-    $.ui.toast(error instanceof Error ? error.message : String(error))
+    $.ui.toast(reasonOf(error))
   }
   await setRun($, IDLE)
 }
@@ -200,13 +207,235 @@ async function noteDraft($: EngineInterface, text: string): Promise<void> {
   }
 }
 
-async function useText($: EngineInterface, text: string, next: Run) {
-  const filled = await $.prompt.fill({ text })
-  if (filled.isFilled) {
-    await setRun($, next)
-  } else {
-    $.ui.toast('The prompt box is not available right now')
+async function transition<From extends Run>(
+  $: EngineInterface,
+  pick: (cur: Run) => From | null,
+  to: (from: From) => Run,
+): Promise<From | null> {
+  const taken: { from: From | null } = { from: null }
+  await update($, run, cur => {
+    taken.from = pick(cur)
+    return taken.from === null ? cur : to(taken.from)
+  })
+
+  return taken.from
+}
+
+type Ready = Extract<Run, { kind: 'ready' }>
+type Failed = Extract<Run, { kind: 'failed' }>
+
+async function moveBox($: EngineInterface, isFilled: boolean, textOf: (ready: Ready) => string): Promise<void> {
+  const box = await $.prompt.read()
+  const from = await transition(
+    $,
+    cur => (cur.kind === 'ready' && cur.isFilled !== isFilled ? cur : null),
+    ready => ({ ...ready, isFilled, restore: isFilled ? box.text : ready.restore }),
+  )
+  if (from === null || (await $.prompt.fill({ text: textOf(from) })).isFilled) {
+    return
   }
+  $.ui.toast('The prompt box is not available right now')
+  await transition(
+    $,
+    cur => (cur.kind === 'ready' ? cur : null),
+    () => from,
+  )
+}
+
+function usePrompt($: EngineInterface): Promise<void> {
+  return moveBox($, true, ready => ready.prompt)
+}
+
+function restoreDraft($: EngineInterface): Promise<void> {
+  return moveBox($, false, ready => ready.restore)
+}
+
+async function copyPrompt($: EngineInterface, prompt: string, surface: RenderSurface): Promise<void> {
+  try {
+    const result = await $.ui.copy({ text: prompt, surface })
+    $.ui.toast(result.isCopied ? 'Copied the enhanced prompt' : `Could not copy the enhanced prompt: ${result.reason}`)
+  } catch (error) {
+    $.ui.toast(`Could not copy the enhanced prompt: ${reasonOf(error)}`)
+  }
+}
+
+async function retry($: EngineInterface): Promise<void> {
+  const box = await $.prompt.read()
+  const current = await read($, run)
+  if (current.kind === 'failed') {
+    enhance($, current.draft, box.text)
+  }
+}
+
+async function cancel($: EngineInterface): Promise<void> {
+  await cancelActive()
+  await transition(
+    $,
+    cur => (cur.kind === 'running' ? cur : null),
+    () => IDLE,
+  )
+}
+
+async function openNotes($: EngineInterface): Promise<void> {
+  try {
+    await $.ui.open({ id: NOTES_PANE, title: 'Enhance notes' })
+  } catch (error) {
+    $.ui.toast(reasonOf(error))
+  }
+}
+
+async function clear($: EngineInterface): Promise<void> {
+  const from = await transition(
+    $,
+    cur => (cur.kind === 'ready' || cur.kind === 'failed' ? cur : null),
+    () => IDLE,
+  )
+  if (from === null) {
+    return
+  }
+  try {
+    await $.ui.close({ id: NOTES_PANE })
+  } catch (error) {
+    $.ui.toast(reasonOf(error))
+  }
+}
+
+type Ui = Pick<Elements[RenderSurface], 'Box' | 'Button' | 'Markdown' | 'Text'>
+type Site = 'band' | 'pane'
+
+function draftRow({ Box, Button, Text }: Ui, $: EngineInterface) {
+  return (
+    <Box columnGap={1}>
+      <Button
+        key="enhance"
+        label="Enhance"
+        onPress={async () => {
+          const box = await $.prompt.read()
+          if (box.text.trim() !== '') {
+            enhance($, box.text, box.text)
+          }
+        }}
+      />
+      <Text dimColor wrap="truncate-end">
+        rewrites this draft as a clearer prompt
+      </Text>
+    </Box>
+  )
+}
+
+function runningRow({ Box, Button, Text }: Ui, $: EngineInterface) {
+  return (
+    <Box columnGap={1}>
+      <Text>Enhancing the draft…</Text>
+      <Button key="cancel" label="Cancel" onPress={() => cancel($)} />
+    </Box>
+  )
+}
+
+function dismissButton({ Button }: Ui, $: EngineInterface, site: Site) {
+  return <Button key={`${site}-dismiss`} label="Dismiss" role="dismiss" onPress={() => clear($)} />
+}
+
+function retryButton({ Button }: Ui, $: EngineInterface, site: Site) {
+  return <Button key={`${site}-retry`} label="Retry" variant="primary" onPress={() => retry($)} />
+}
+
+function readyActions({ Button, Text }: Ui, $: EngineInterface, ready: Ready, site: Site) {
+  return [
+    <Text color="success">✓</Text>,
+    <Text>{ready.isFilled ? 'Enhanced prompt is in the box' : 'Enhanced prompt is ready'}</Text>,
+    !ready.isFilled && <Button key={`${site}-use`} label="Use prompt" variant="primary" onPress={() => usePrompt($)} />,
+    <Button
+      key={`${site}-copy`}
+      label="Copy prompt"
+      variant={ready.isFilled ? 'primary' : 'secondary'}
+      onPress={press => copyPrompt($, ready.prompt, press.surface)}
+    />,
+    ready.isFilled && <Button key={`${site}-restore`} label="Restore draft" onPress={() => restoreDraft($)} />,
+  ]
+}
+
+function readyRow(ui: Ui, $: EngineInterface, ready: Ready) {
+  const { Box, Button } = ui
+
+  return (
+    <Box flexWrap="wrap" columnGap={1}>
+      {readyActions(ui, $, ready, 'band')}
+      <Button key="notes" label="Notes" onPress={() => openNotes($)} />
+      {dismissButton(ui, $, 'band')}
+    </Box>
+  )
+}
+
+function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
+  const { Box, Button, Text } = ui
+
+  return (
+    <Box columnGap={1}>
+      <Box flexShrink={1}>
+        <Text color="error" wrap="truncate-end">
+          ✗ Enhance failed: {failed.reason.replace(/\s+/g, ' ')}
+        </Text>
+      </Box>
+      <Box flexShrink={0} columnGap={1}>
+        {retryButton(ui, $, 'band')}
+        <Button key="details" label="Details" onPress={() => openNotes($)} />
+        {dismissButton(ui, $, 'band')}
+      </Box>
+    </Box>
+  )
+}
+
+function withBoldLabels(notes: string): string {
+  return notes.replace(BULLET_LABEL, '$1**$2:**')
+}
+
+function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
+  const { Box, Markdown, Text } = ui
+
+  return (
+    <Box flexDirection="column" rowGap={1}>
+      <Box flexWrap="wrap" columnGap={1}>
+        {readyActions(ui, $, ready, 'pane')}
+        {dismissButton(ui, $, 'pane')}
+      </Box>
+      <Box flexDirection="column">
+        <Text weight="bold">Notes</Text>
+        {ready.notes === '' ? <Text dimColor>The copy sent no notes with this prompt.</Text> : <Markdown text={withBoldLabels(ready.notes)} />}
+      </Box>
+      <Box flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1}>
+        <Text weight="bold" color="suggestion">
+          Enhanced prompt
+        </Text>
+        <Text wrap="wrap">{ready.prompt}</Text>
+      </Box>
+    </Box>
+  )
+}
+
+function failedPane(ui: Ui, $: EngineInterface, failed: Failed) {
+  const { Box, Text } = ui
+
+  return (
+    <Box flexDirection="column" rowGap={1}>
+      <Box flexDirection="column">
+        <Text weight="bold" color="error">
+          Enhance failed
+        </Text>
+        <Text wrap="wrap">{failed.reason}</Text>
+      </Box>
+      <Box columnGap={1}>
+        {retryButton(ui, $, 'pane')}
+        {dismissButton(ui, $, 'pane')}
+      </Box>
+      {failed.notes !== '' && (
+        <Box flexDirection="column">
+          <Text weight="bold">Reply from the copy</Text>
+          <Text wrap="wrap">{failed.notes}</Text>
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 export const register: Register = on => {
@@ -261,24 +490,26 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    const current = await read($, run)
-    if (current.kind === 'ready' || current.kind === 'failed') {
-      await setRun($, IDLE)
-    }
+    await clear($)
     markTouched()
 
     return next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: NOTES_PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const ui = $.ui.resolve(e)
     const current = await read($, run)
-    const notes = current.kind === 'ready' || current.kind === 'failed' ? current.notes : ''
+    if (current.kind === 'ready') {
+      return readyPane(ui, $, current)
+    }
+    if (current.kind === 'failed') {
+      return failedPane(ui, $, current)
+    }
 
     return (
-      <Box flexDirection="column">
-        <Text wrap="wrap">{notes === '' ? 'Notes show here after an enhancement.' : notes}</Text>
-      </Box>
+      <ui.Text dimColor wrap="wrap">
+        {current.kind === 'running' ? 'Enhancing the draft. The notes show here when it ends.' : 'Notes show here after an enhancement.'}
+      </ui.Text>
     )
   })
 
@@ -287,71 +518,18 @@ export const register: Register = on => {
       return next(e)
     }
 
+    const ui = $.ui.resolve(e)
     const current = await read($, run)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    const openNotes = () => void $.ui.open({ id: NOTES_PANE, title: 'Enhance notes' })
-
     if (current.kind === 'running') {
-      return (
-        <Box>
-          <Text dimColor>Enhancing the draft… </Text>
-          <Button
-            key="cancel"
-            label="Cancel"
-            onPress={async () => {
-              await cancelActive()
-              await setRun($, IDLE)
-            }}
-          />
-        </Box>
-      )
+      return runningRow(ui, $)
     }
-
     if (current.kind === 'ready') {
-      return (
-        <Box>
-          <Text dimColor>{current.isFilled ? 'Enhanced prompt is in the box ' : 'Enhanced prompt is ready '}</Text>
-          {current.isFilled ? (
-            <Button key="undo" label="Undo" onPress={() => useText($, current.restore, IDLE)} />
-          ) : (
-            <Button key="use" label="Use" onPress={() => useText($, current.prompt, { ...current, isFilled: true })} />
-          )}
-          <Text> </Text>
-          <Button key="notes" label="Notes" onPress={openNotes} />
-        </Box>
-      )
+      return readyRow(ui, $, current)
     }
-
     if (current.kind === 'failed') {
-      return (
-        <Box>
-          <Text color="red" wrap="truncate-end">
-            Enhance failed: {current.reason}{' '}
-          </Text>
-          <Button key="dismiss" label="Dismiss" onPress={() => setRun($, IDLE)} />
-          {current.notes !== '' && <Text> </Text>}
-          {current.notes !== '' && <Button key="notes" label="Reply" onPress={openNotes} />}
-        </Box>
-      )
+      return failedRow(ui, $, current)
     }
 
-    if (!(await read($, hasDraft))) {
-      return next(e)
-    }
-
-    return (
-      <Box>
-        <Button
-          key="enhance"
-          label="Enhance"
-          onPress={async () => {
-            const box = await $.prompt.read()
-            if (box.text.trim() !== '') {
-              enhance($, box.text, box.text)
-            }
-          }}
-        />
-      </Box>
-    )
+    return (await read($, hasDraft)) ? draftRow(ui, $) : next(e)
   })
 }
