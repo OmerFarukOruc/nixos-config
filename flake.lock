@@ -405,11 +405,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794132860,
-        "narHash": "sha256-iGNtQnUZsi+v6/4NbtYr+dsmASa6GkzXtUcTpE8F3mE=",
+        "lastModified": 1794739050,
+        "narHash": "sha256-PCGNIyAydZcdUXCxEXTjrS1+wWS+k9E+ENqBkUK2Mpg=",
         "owner": "nix-community",
         "repo": "nix-index-database",
-        "rev": "af9249ca33bc2efaae5d071e4c67ddef19dcb681",
+        "rev": "9bd074026d6db75b59aae8cd6071b5f2fe27a36c",
         "type": "github"
       },
       "original": {
@@ -600,11 +600,11 @@
     "skills-archify": {
       "flake": false,
       "locked": {
-        "lastModified": 1794582221,
-        "narHash": "sha256-IQKnnyrB0cBTLgoZc11ysxPkZf0LP27SapuxAvpg8zc=",
+        "lastModified": 1794734770,
+        "narHash": "sha256-BFDm8AbQyvBkEtth5tTpVMZxmdcPjXw7JwnL7v5PZ2Q=",
         "owner": "tt-a1i",
         "repo": "archify",
-        "rev": "e37848822238e3a61b12739185cdadd49843a620",
+        "rev": "a7ed6fd6657da90414831d1d42cf95987188750c",
         "type": "github"
       },
       "original": {
@@ -616,11 +616,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1794508212,
-        "narHash": "sha256-C5AzuSFd6p11srzOlQpYCBX0GC8N51l+kGZjBA8cZ/U=",
+        "lastModified": 1794733489,
+        "narHash": "sha256-NB2wQrW8FqNYc0A7O31DOw629rr1pGR5ZyzQpyScj6g=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "a04645a5d915d83ad1741a92d989dfc4bc6f1867",
+        "rev": "cc1d34319b4cc599bf503b80d35d7442bcde8047",
         "type": "github"
       },
       "original": {
