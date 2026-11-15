@@ -7,6 +7,7 @@ real_herdr="$(command -v herdr)"
 export CLAUDE_TOOLS_HERDR_SESSION="$run" CLAUDE_TOOLS_STATE="$dir/state"
 name="$run-a"
 foreign="$run-foreign"
+slow="$run-slow"
 work="$dir/work"
 watch_pid=""
 watch_deadline_s=3600
@@ -23,6 +24,7 @@ cleanup() {
   show_watch
   "$tools" agent stop --force "$name" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$foreign" >/dev/null 2>&1 || true
+  "$tools" agent stop --force "$slow" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
@@ -64,6 +66,18 @@ start_watch() {
   watch_pid=$!
   wait_for 15 watch_matches "watching herdr agents named" || fail "the watcher did not start"
 }
+
+caller_shell=${SHELL:?}
+cat >"$dir/slow-prompt.rc" <<'EOF2'
+PROMPT_COMMAND='sleep 5'
+EOF2
+cat >"$dir/shell" <<EOF2
+#!/bin/sh
+[ -e "$dir/slow-prompt" ] && exec bash --rcfile "$dir/slow-prompt.rc" -i
+exec "$caller_shell" "\$@"
+EOF2
+chmod +x "$dir/shell"
+export SHELL="$dir/shell"
 
 "$tools" limit-switch restore || fail "restore could not start the $run server"
 h workspace create --cwd "$dir" --label "$run" --no-focus >/dev/null
@@ -180,15 +194,21 @@ before=$(lines_of "$name finished a turn")
 wait_for 30 watch_matches "watcher follows herdr again" || fail "the watcher did not follow the restarted server"
 wait_for 150 more_lines "$name finished a turn" "$before" || fail "no finished line on the restarted server"
 
+step 11 "agent start waits for a shell whose every prompt takes 5 s"
+touch "$dir/slow-prompt"
+"$tools" agent start "$slow" --account "$account" --cwd "$work" --model sonnet || fail "agent start in a slow shell exited $?"
+rm "$dir/slow-prompt"
+"$tools" agent stop --force "$slow" || fail "agent stop of the agent in a slow shell exited $?"
+
 if foreign_available; then
-  step 11 "agent stop ends an agent that runs as another user, though its environment is unreadable"
+  step 12 "agent stop ends an agent that runs as another user, though its environment is unreadable"
   start_foreign_agent "$foreign" "$dir"
   [[ -n "$(foreign_pids)" ]] || fail "no claude process of sl-factory runs"
   "$tools" agent stop --force "$foreign" || fail "agent stop of an agent of another user exited $?"
   wait_for 15 agent_gone "$foreign" || fail "the agent of another user is still listed after agent stop"
   [[ -z "$(foreign_pids)" ]] || fail "a claude process of sl-factory survived agent stop"
 else
-  echo "step 11: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"
+  echo "step 12: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"
 fi
 
 echo PASS

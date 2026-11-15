@@ -16,8 +16,12 @@ CLAUDE = ("claude", ".claude-wrapped")
 CODEX = ("codex", ".codex-wrapped")
 SKIP_PERMISSIONS = "--dangerously-skip-permissions"
 READY_WAIT_S = 180
+PROBE_FIRST_WAIT_MS = 3000
+PROBE_LONGEST_WAIT_MS = 30000
 FREED_WAIT_S = 30
 PROMPT_WAIT_S = 60
+SUBMIT_WAIT_MS = 5000
+SUBMIT_MATCH_CHARS = 60
 TRUST_QUESTION = "Yes, I trust this folder"
 EXIT_DIALOG = "❯ 1. Exit and stop tasks"
 
@@ -152,16 +156,18 @@ class Agents:
         answer = f"shell-ready-{seed + 1}"
         probe = f"echo shell-ready-$(({seed}+1))"
         deadline = time.time() + READY_WAIT_S
-        while time.time() < deadline:
+        wait_ms = PROBE_FIRST_WAIT_MS
+        while (left_ms := int((deadline - time.time()) * 1000)) > 0:
             if next(self.in_pane(CLAUDE, pane), None):
                 raise Failed(f"a claude already runs in pane {pane}")
             self.herdr("pane", "run", pane, probe)
-            seen = self.herdr("pane", "wait-output", pane, "--match", answer, "--timeout", "3000", check=False)
-            if "result" in seen:
+            try:
+                self.herdr("pane", "wait-output", pane, "--match", answer, "--timeout", str(min(wait_ms, left_ms)))
                 return
-            code = (seen.get("error") or {}).get("code")
-            if code != "timeout":
-                raise Failed(f"herdr could not read pane {pane}: {code}")
+            except HerdrError as e:
+                if e.code != "timeout":
+                    raise
+            wait_ms = min(wait_ms * 2, PROBE_LONGEST_WAIT_MS)
         raise Failed(f"the shell in pane {pane} ran no typed command in {READY_WAIT_S} s")
 
     def answer_trust(self, name: str, screen: str) -> bool:
@@ -174,11 +180,29 @@ class Agents:
         return Failed(f"{name} is blocked at startup by something other than the folder trust question; "
                       f"its screen ended: {screen[-400:]}")
 
+    def submit_typed(self, name: str, text: str, deadline: float) -> None:
+        typed = text[:SUBMIT_MATCH_CHARS]
+        while True:
+            try:
+                self.herdr("agent", "wait", name, "--until", "working", "--until", "blocked", "--timeout", str(SUBMIT_WAIT_MS))
+                return
+            except HerdrError as e:
+                if e.code != "timeout":
+                    raise
+            screen = self.herdr.screen(name)
+            if typed not in screen:
+                return
+            if time.time() >= deadline:
+                raise Failed(f"{name} kept the prompt in its input box for {PROMPT_WAIT_S} s; "
+                             f"its screen ended: {screen[-400:]}")
+            self.herdr("agent", "send-keys", name, "enter")
+
     def prompt_when_ready(self, name: str, text: str) -> None:
         deadline = time.time() + PROMPT_WAIT_S
         while True:
             try:
                 self.herdr("agent", "prompt", name, text)
+                self.submit_typed(name, text, deadline)
                 return
             except HerdrError as e:
                 if e.code not in ("agent_not_ready", "agent_blocked"):
