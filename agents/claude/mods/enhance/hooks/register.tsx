@@ -131,11 +131,15 @@ async function closeCopy($: EngineInterface, copy: Copy): Promise<void> {
 async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft: string): Promise<void> {
   try {
     await setRun($, { kind: 'running', runId: me.id, copyId, seat: null })
+    const cwd = await $.session.cwd()
+    if (!(await $.fs.exists(cwd))) {
+      throw new Error(`this session's folder ${cwd} was deleted; restart Claude Code in an existing folder`)
+    }
     const parentId = (await $.session.turns()) > 0 ? await $.session.id() : null
     me.copy = await openCopy($, {
       sessionId: copyId,
       parentId,
-      cwd: await $.session.cwd(),
+      cwd,
       cancel: me.cancel,
       onSeat: seat => recordSeat($, me, copyId, seat),
     })

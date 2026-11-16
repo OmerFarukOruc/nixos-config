@@ -1,4 +1,4 @@
-import type { EngineInterface } from 'claude-code'
+import type { EngineInterface, ProcessRunInit, ProcessRunResult } from 'claude-code'
 
 import type { Seat } from '../types'
 import { isCommandTurn, isSessionId, lastAssistantText, parseHeadless, slashCommandOf, textAt, valueAt } from './reply'
@@ -29,6 +29,7 @@ const DENIED_TOOLS = 'Edit,Write,NotebookEdit,AskUserQuestion'
 const COPY_PERMISSION_MODE = 'bypassPermissions'
 const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfPrompting":true}}'
 const SCRATCH_ROOT = '/tmp/agents'
+const TOOL_CWD = '/'
 const AGENT_START_TIMEOUT_MS = 120_000
 const PROMPT_TIMEOUT_MS = 570_000
 const SHELL_READY_TIMEOUT_MS = 180_000
@@ -46,6 +47,10 @@ const TRANSCRIPT_RETRY_MS = 1000
 type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
 
 class CopyCancelled extends Error {}
+
+function runTool($: EngineInterface, argv: readonly string[], init: Omit<ProcessRunInit, 'cwd'> = {}): Promise<ProcessRunResult> {
+  return $.process.run(argv, { ...init, cwd: TOOL_CWD })
+}
 
 function copyFlags(plan: CopyPlan, isFirstTurn: boolean): string[] {
   const shared = [
@@ -78,7 +83,7 @@ async function projectsDir($: EngineInterface): Promise<string> {
 }
 
 async function findInProjects($: EngineInterface, sessionId: string, action: readonly string[]): Promise<string> {
-  const found = await $.process.run([
+  const found = await runTool($, [
     'find',
     '-H',
     await projectsDir($),
@@ -105,7 +110,7 @@ function draftDirOf(sessionId: string): string {
 
 async function forgetDraft($: EngineInterface, sessionId: string): Promise<void> {
   const dir = draftDirOf(sessionId)
-  const removed = await $.process.run(['rm', '-rf', '--', dir])
+  const removed = await runTool($, ['rm', '-rf', '--', dir])
   if (removed.exitCode !== 0) {
     throw new Error(`could not remove the draft folder ${dir}: ${removed.stderr.trim().slice(0, 200)}`)
   }
@@ -180,7 +185,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
 }
 
 async function herdr($: EngineInterface, args: readonly string[], timeoutMs = 60_000): Promise<Herdr> {
-  const ran = await $.process.run(['herdr', ...args], { timeoutMs })
+  const ran = await runTool($, ['herdr', ...args], { timeoutMs })
   const output = ran.exitCode === 0 ? ran.stdout : ran.stderr
   if (ran.exitCode === 0 && output.trim() === '') {
     return { ok: true, result: null }
@@ -198,7 +203,7 @@ async function herdr($: EngineInterface, args: readonly string[], timeoutMs = 60
 
 export async function isHerdrRunning($: EngineInterface): Promise<boolean> {
   try {
-    const status = await $.process.run(['herdr', 'status', 'server'])
+    const status = await runTool($, ['herdr', 'status', 'server'])
     return status.exitCode === 0 && /^status: running$/m.test(status.stdout)
   } catch {
     return false
@@ -303,7 +308,7 @@ async function promptAgent($: EngineInterface, name: string, text: string, cance
 }
 
 async function screenOf($: EngineInterface, name: string): Promise<string> {
-  const read = await $.process.run(['herdr', 'agent', 'read', name, '--source', 'visible', '--lines', '40'])
+  const read = await runTool($, ['herdr', 'agent', 'read', name, '--source', 'visible', '--lines', '40'])
 
   return read.exitCode === 0 ? read.stdout.trim() : ''
 }
@@ -319,13 +324,13 @@ async function transcriptRows($: EngineInterface, path: string | null): Promise<
   if (path === null) {
     return 0
   }
-  const counted = await $.process.run(['wc', '-l', path])
+  const counted = await runTool($, ['wc', '-l', path])
 
   return Number.parseInt(counted.stdout.trim(), 10) || 0
 }
 
 async function commandRows($: EngineInterface, path: string, call: SlashCommand): Promise<string | null> {
-  const rows = await $.process.run(['grep', '-F', '--', `<command-name>${call.name}</command-name>`, path])
+  const rows = await runTool($, ['grep', '-F', '--', `<command-name>${call.name}</command-name>`, path])
 
   return rows.isStdoutTruncated ? null : rows.stdout
 }
@@ -337,7 +342,7 @@ async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: num
   }
 
   for (let attempt = 1; ; attempt += 1) {
-    const tail = await $.process.run(['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
+    const tail = await runTool($, ['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
     if (tail.isStdoutTruncated) {
       return { kind: 'failed', reason: 'the copy transcript tail is over 4 MiB', notes: '' }
     }
