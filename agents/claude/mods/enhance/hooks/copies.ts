@@ -1,7 +1,8 @@
 import type { EngineInterface } from 'claude-code'
 
 import type { Seat } from '../types'
-import { isSessionId, lastAssistantText, parseHeadless, textAt, valueAt } from './reply'
+import { isCommandTurn, isSessionId, lastAssistantText, parseHeadless, slashCommandOf, textAt, valueAt } from './reply'
+import type { SlashCommand } from './reply'
 
 export type Turn = { kind: 'reply'; text: string } | { kind: 'failed'; reason: string; notes: string } | { kind: 'cancelled' }
 
@@ -39,6 +40,8 @@ const PROMPT_TRIES = 60
 const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
 const GONE = new Set(['pane_not_found', 'workspace_not_found'])
 const TRANSCRIPT_ROWS = '400'
+const TRANSCRIPT_TRIES = 4
+const TRANSCRIPT_RETRY_MS = 1000
 
 type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
 
@@ -96,9 +99,32 @@ async function findInProjects($: EngineInterface, sessionId: string, action: rea
   return found.stdout
 }
 
+function draftDirOf(sessionId: string): string {
+  return `${SCRATCH_ROOT}/enhance-copy-${sessionId}`
+}
+
+async function forgetDraft($: EngineInterface, sessionId: string): Promise<void> {
+  const dir = draftDirOf(sessionId)
+  const removed = await $.process.run(['rm', '-rf', '--', dir])
+  if (removed.exitCode !== 0) {
+    throw new Error(`could not remove the draft folder ${dir}: ${removed.stderr.trim().slice(0, 200)}`)
+  }
+}
+
+export async function withDraftFile<T>($: EngineInterface, sessionId: string, draft: string, use: (path: string) => Promise<T>): Promise<T> {
+  const path = `${draftDirOf(sessionId)}/draft.md`
+  try {
+    await $.fs.write(path, draft)
+    return await use(path)
+  } finally {
+    await forgetDraft($, sessionId)
+  }
+}
+
 export async function forgetCopy($: EngineInterface, sessionId: string): Promise<void> {
   if (isSessionId(sessionId)) {
     await findInProjects($, sessionId, ['-exec', 'rm', '-rf', '{}', '+'])
+    await forgetDraft($, sessionId)
   }
 }
 
@@ -298,19 +324,38 @@ async function transcriptRows($: EngineInterface, path: string | null): Promise<
   return Number.parseInt(counted.stdout.trim(), 10) || 0
 }
 
-async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: number): Promise<Turn> {
+async function commandRows($: EngineInterface, path: string, call: SlashCommand): Promise<string | null> {
+  const rows = await $.process.run(['grep', '-F', '--', `<command-name>${call.name}</command-name>`, path])
+
+  return rows.isStdoutTruncated ? null : rows.stdout
+}
+
+async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: number, call: SlashCommand | null): Promise<Turn> {
   const path = await transcriptPath($, sessionId)
   if (path === null) {
     return { kind: 'failed', reason: 'the copy left no transcript', notes: '' }
   }
 
-  const tail = await $.process.run(['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
-  if (tail.isStdoutTruncated) {
-    return { kind: 'failed', reason: 'the copy transcript tail is over 4 MiB', notes: '' }
+  for (let attempt = 1; ; attempt += 1) {
+    const tail = await $.process.run(['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
+    if (tail.isStdoutTruncated) {
+      return { kind: 'failed', reason: 'the copy transcript tail is over 4 MiB', notes: '' }
+    }
+    const text = lastAssistantText(tail.stdout)
+    const commands = call === null ? null : await commandRows($, path, call)
+    if (commands === null && call !== null) {
+      return { kind: 'failed', reason: 'the copy transcript rows that name the command are over 4 MiB', notes: text ?? '' }
+    }
+    const isLoaded = call === null || isCommandTurn(commands ?? '', call)
+    if (text !== null && isLoaded) {
+      return { kind: 'reply', text }
+    }
+    if (attempt === TRANSCRIPT_TRIES) {
+      const reason = isLoaded ? 'the copy wrote no reply to this turn' : `the copy did not load ${call?.name}`
+      return { kind: 'failed', reason, notes: text ?? '' }
+    }
+    await $.clock.sleep(TRANSCRIPT_RETRY_MS)
   }
-  const text = lastAssistantText(tail.stdout)
-
-  return text === null ? { kind: 'failed', reason: 'the copy wrote no reply to this turn', notes: '' } : { kind: 'reply', text }
 }
 
 export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Copy {
@@ -335,7 +380,7 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
       return { kind: 'failed', reason: 'the copy stopped at a question or approval; Details shows its screen', notes: await screenOf($, name) }
     }
 
-    return replyAfter($, plan.sessionId, rowsBefore)
+    return replyAfter($, plan.sessionId, rowsBefore, slashCommandOf(text))
   }
 
   return {

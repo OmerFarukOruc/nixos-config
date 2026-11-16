@@ -3,6 +3,8 @@ export type Reply =
   | { kind: 'question'; question: string; options: string[] }
   | { kind: 'unusable'; reason: string }
 
+export type SlashCommand = { name: string; args: string }
+
 export type HeadlessResult = { kind: 'answered'; text: string } | { kind: 'failed'; reason: string }
 
 type Block = { tag: string; body: string; start: number; end: number | null }
@@ -10,6 +12,7 @@ type Block = { tag: string; body: string; start: number; end: number | null }
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(\S*)/
 const OPTION = /^- (.+)$/
+const SLASH_COMMAND = /^(\/[\w:-]+)(?:\s+([\s\S]*))?$/
 
 export function isSessionId(text: string): boolean {
   return SESSION_ID.test(text)
@@ -64,6 +67,23 @@ export function lastAssistantText(jsonl: string): string | null {
   })
 
   return texts.at(-1) ?? null
+}
+
+export function slashCommandOf(prompt: string): SlashCommand | null {
+  const found = SLASH_COMMAND.exec(prompt)
+
+  return found === null ? null : { name: found[1] ?? '', args: (found[2] ?? '').trim() }
+}
+
+export function isCommandTurn(jsonl: string, call: SlashCommand): boolean {
+  const tags = [`<command-name>${call.name}</command-name>`, `<command-args>${call.args}</command-args>`]
+
+  return jsonl.split('\n').some(line => {
+    const row = parseLine(line)
+    const content = textAt(row, ['type']) === 'user' ? textAt(row, ['message', 'content']) : null
+
+    return content !== null && tags.every(tag => content.includes(tag))
+  })
 }
 
 function closeOf(lines: readonly string[], start: number, fence: string): number | null {

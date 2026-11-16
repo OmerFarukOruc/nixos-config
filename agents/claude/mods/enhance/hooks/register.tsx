@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Run, Seat } from '../types'
-import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning } from './copies'
+import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning, withDraftFile } from './copies'
 import type { Cancel, Copy, CopyPlan } from './copies'
 import { parseReply } from './reply'
 
@@ -62,10 +62,10 @@ async function ask($: EngineInterface, question: string, options: readonly strin
   }
 }
 
-async function converse($: EngineInterface, copy: Copy, draft: string): Promise<Outcome> {
-  let text = `/enhance-prompt for ${await $.session.model()}, destination chat: ${draft}`
+async function converse($: EngineInterface, copy: Copy, copyId: string, draft: string): Promise<Outcome> {
+  const model = await $.session.model()
+  let turn = await withDraftFile($, copyId, draft, path => copy.send(`/enhance-prompt for ${model}, destination chat, the file ${path} holds the draft`))
   for (;;) {
-    const turn = await copy.send(text)
     if (turn.kind !== 'reply') {
       return turn
     }
@@ -82,7 +82,7 @@ async function converse($: EngineInterface, copy: Copy, draft: string): Promise<
     if (answer === null) {
       return { kind: 'dismissed' }
     }
-    text = `Answer: ${answer}`
+    turn = await copy.send(`Answer: ${answer}`)
   }
 }
 
@@ -139,7 +139,7 @@ async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft:
       cancel: me.cancel,
       onSeat: seat => recordSeat($, me, copyId, seat),
     })
-    await settle($, me, draft, await converse($, me.copy, draft))
+    await settle($, me, draft, await converse($, me.copy, copyId, draft))
   } catch (error) {
     await commit($, me, { kind: 'failed', reason: reasonOf(error), notes: '', draft })
   } finally {
