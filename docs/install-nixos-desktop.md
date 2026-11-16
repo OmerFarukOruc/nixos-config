@@ -182,9 +182,14 @@ what you keep first. Before you start, have these ready:
 
 The record of nixos-desktop sets `secureBoot`, so every boot loader install
 signs Limine with the key from step 5
-([Inventory](architecture.md#inventory)). The firmware keeps its factory keys,
-which Windows and its updates expect, and gets our certificate as one more
-entry in `db`. Do this once NixOS boots with Secure Boot off, and again after
+([Inventory](architecture.md#inventory)). The firmware keeps its factory keys
+and gets our certificate as one more entry in `db`, so it never enters Setup
+Mode and keeps its `dbx` revocations; MSI's PK matters for a later change of
+the KEK or of the PK itself, and for any `db` or `dbx` update MSI signs with it
+([Why not sbctl](secure-boot-playbook.md#why-not-sbctl-or-the-nixpkgs-limine-option)).
+Secure Boot covers the step from the firmware to Limine and nothing after it:
+`limine.conf`, the kernel, the initrd and the root file system are not
+authenticated. Do this once NixOS boots with Secure Boot off, and again after
 a BIOS update or a CMOS clear that drops the certificate.
 
 1. Put the certificate on the ESP, where the firmware's file browser finds it:
