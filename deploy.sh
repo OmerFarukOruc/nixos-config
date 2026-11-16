@@ -476,6 +476,16 @@ if command -v dix >/dev/null; then
   fi
 fi
 
+signer=sw/bin/sign-installed-limine
+secure_boot=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+if [[ $action != test && ! -e $new/$signer && -e /sys/firmware/efi ]] &&
+  [[ -e /run/current-system/$signer || -e /nix/var/nix/profiles/system/$signer ]] &&
+  { ! enforced=$(od -An -tx1 "$secure_boot" 2>/dev/null | tr -d ' \n') || [[ ${enforced:8} != 00 ]]; }; then
+  printf '%s\n' "The firmware of $host enforces Secure Boot, and the new system does not sign Limine, so the firmware would refuse the boot loader it installs." \
+    'Nothing on the target changed. Set Secure Boot to Disabled in the firmware setup first, then deploy again.' >&2
+  exit 81
+fi
+
 # A unit ordered after a service that itself starts after the target that
 # wants the unit forms an ordering cycle; the next boot then waits on it and
 # never reaches that target. The candidate's systemd-analyze reads only the
@@ -677,14 +687,14 @@ REMOTE
 
 install_entries() {
   local new=$1 profile=/nix/var/nix/profiles/system
-  local previous_link previous_profile new_link restored=true
+  local previous_link previous_profile new_link restored=true verify=$new/etc/nixos-config-deploy/verify-boot-loaders
   PATH=$new/sw/bin
   previous_link=$(readlink "$profile")
   previous_profile=$(readlink -f "$profile")
   new_link=$previous_link
   if nix-env --profile "$profile" --set "$new"; then
     new_link=$(readlink "$profile")
-    "$new/bin/switch-to-configuration" boot && return 0
+    "$new/bin/switch-to-configuration" boot && { [[ ! -e $verify ]] || "$verify"; } && return 0
   fi
   printf '%s\n' 'Installing the boot entries failed. Restoring the previous boot default.'
   # Links are named system-<generation>-link.

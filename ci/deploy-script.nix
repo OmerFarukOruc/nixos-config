@@ -4,6 +4,9 @@ let
   pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
   user = "deployer";
   host = "deploy-target";
+  signingKey = "/var/lib/secure-boot/db.key";
+  signingCertificate = "/var/lib/secure-boot/db.pem";
+  loader = "/boot/EFI/BOOT/BOOTX64.EFI";
   sleeper = {
     wantedBy = [ "default.target" ];
     serviceConfig = {
@@ -42,11 +45,22 @@ in
             enable = true;
             efiSupport = true;
             efiInstallAsRemovable = true;
+            extraInstallCommands = ''
+              signing=$(mktemp --directory ${loader}.XXXXXX)
+              ${pkgs.sbsigntool}/bin/sbsign --key ${signingKey} --cert ${signingCertificate} --output "$signing/signed" ${loader} &&
+                ${pkgs.sbsigntool}/bin/sbverify --cert ${signingCertificate} "$signing/signed" &&
+                mv "$signing/signed" ${loader}
+              signed=$?
+              rm --recursive "$signing"
+              [ "$signed" = 0 ] || exit "$signed"
+            '';
           };
         };
         environment.systemPackages = [
           pkgs.git
+          pkgs.openssl
           pkgs.rsync
+          pkgs.sbsigntool
         ];
         services.openssh.enable = true;
         services.tailscale.enable = true;
@@ -57,7 +71,13 @@ in
           extraGroups = [ "wheel" ];
           linger = true;
         };
-        oruc.deploy.sessionIgnore = [ "ignored-*.service" ];
+        oruc.deploy = {
+          sessionIgnore = [ "ignored-*.service" ];
+          signedBootLoaders = {
+            certificate = signingCertificate;
+            files = [ loader ];
+          };
+        };
         systemd.user.services = {
           session-test = sleeper;
           ignored-test = sleeper;
@@ -74,6 +94,7 @@ in
             '';
           };
           bootfail.boot.loader.limine.extraInstallCommands = "exit 1";
+          unsigned.boot.loader.limine.extraInstallCommands = lib.mkForce "";
           cycle.systemd.services = {
             cycle-a = {
               wantedBy = [ "multi-user.target" ];
@@ -93,6 +114,9 @@ in
       deploy_sh = "${../deploy.sh}"
       USER = "${user}"
       HOST = "${host}"
+      signing_key = "${signingKey}"
+      signing_certificate = "${signingCertificate}"
+      loader = "${loader}"
       ${builtins.readFile ./deploy-script/test.py}
     '';
   };

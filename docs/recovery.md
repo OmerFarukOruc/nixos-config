@@ -329,6 +329,9 @@ install signs Limine with that certificate's key
 `limine.conf`, so with Secure Boot set to Disabled in the firmware setup (Del
 at the MSI logo, Settings > Security > Secure Boot) the firmware starts any
 Limine, signed or not. Set that first whenever the firmware refuses Limine.
+The setting lifts the signature check and repairs no file, so a Limine that
+is missing or damaged on the ESP still needs
+[Repair the bootloader](#repair-the-bootloader).
 Windows starts from F11 > Windows Boot Manager with Secure Boot on or off.
 
 A refused Limine shows the dialog "Secure Boot Violation", with "Image
@@ -350,14 +353,22 @@ sudo sbverify --cert /var/lib/secure-boot/db.pem /boot/efi/boot/BOOTX64.EFI
 `sudo sign-installed-limine` signs `/boot/efi/limine/BOOTX64.EFI` when its
 signature does not verify and copies it to the fallback path.
 `limine-signature.service` runs that command at each boot and each shutdown.
+A run that is killed, as by a power cut, leaves its folder
+`/boot/efi/limine/signing.<random>`; the next run a day later or more removes
+it. The fallback copy is the last signed duplicate of the same Limine and reads
+the same `limine.conf` and kernels, so it boots after an install that left the
+first copy unsigned, and it does not help against a Limine release that does
+not boot.
 
 - **An install failed after the installer wrote Limine.** The journal
   (`journalctl -u nixos-upgrade`) shows "Signing Limine failed" or an earlier
-  installer error, such as a failed `efibootmgr`.
+  installer error, such as a failed `efibootmgr`. The "Signing Limine failed"
+  line names each file the run replaced before it failed.
   `/boot/efi/limine/BOOTX64.EFI` may be unsigned until the next shutdown signs
-  it, and `/boot/efi/boot/BOOTX64.EFI` keeps the last signed copy, which F11 >
-  "UEFI OS" boots. Run `sudo sign-installed-limine`, fix what the journal
-  names, then run `upgrade`.
+  it. `/boot/efi/boot/BOOTX64.EFI` is then the copy from the install before,
+  which F11 > "UEFI OS" boots when the check above passes for it. Run
+  `sudo sign-installed-limine`, fix what the journal names, then run
+  `upgrade`.
 - **An install did not start, with "cannot sign Limine".** The key or the
   certificate in `/var/lib/secure-boot` is missing or unreadable, and `/boot`
   is unchanged. Put them back, or make a new pair:
@@ -369,20 +380,52 @@ signature does not verify and copies it to the fallback path.
     -keyout /var/lib/secure-boot/db.key -out /var/lib/secure-boot/db.pem
   ```
 
-- **An install did not start, with "its db lacks the certificate".** The
-  firmware enforces Secure Boot and does not hold the certificate on disk, as
-  after a new key pair. Append the certificate
+- **"its db lacks the certificate".** The firmware enforces Secure Boot and
+  does not hold the certificate on disk, as after a new key pair. An install
+  then does not start, and `sign-installed-limine` and
+  `limine-signature.service` fail before they change a file, so a copy that
+  the old key signed stays. Append the certificate
   ([Secure Boot](install-nixos-desktop.md#secure-boot)), then run `upgrade`.
-  With Secure Boot off the install does not look at `db`, so append a new
-  certificate before Secure Boot goes back on.
+  With Secure Boot off nothing looks at `db`, so append a new certificate
+  before Secure Boot goes back on.
+- **"its SecureBoot variable ... cannot be read".** The system booted through
+  UEFI and `/sys/firmware/efi/efivars` does not show the variable, so the same
+  three refuse to sign. `mount | grep efivarfs` shows whether the variables
+  are mounted; `sudo mount -t efivarfs efivarfs /sys/firmware/efi/efivars`
+  mounts them.
 - **A switch to a generation that does not sign.** Its install writes both
   copies unsigned. A generation signs when
   `/nix/var/nix/profiles/system-<n>-link/sw/bin/sign-installed-limine` exists.
-  While the system that runs is one that signs, `limine-signature.service`
-  signs both copies again when the switch stops it, or at the shutdown before
-  the restart. A running generation that does not sign has no such service:
-  after an install there, run the `sign-installed-limine` of a generation that
-  has it with `sudo`, or set Secure Boot to Disabled.
+  What happens next depends on the route, while the system that runs is one
+  that signs:
+
+  | Route | After the install |
+  | --- | --- |
+  | `switch-to-configuration switch`, as `upgrade` and `nixos-rebuild switch` run it | signed again |
+  | `switch-to-configuration boot` | unsigned until the shutdown |
+  | `./deploy.sh nixos-desktop switch` or `boot` | refused, exit 81 |
+
+  - `switch` installs the boot loader first and stops the units after, so the
+    stop of `limine-signature.service` signs both copies again.
+  - `boot` stops no unit, so both copies stay unsigned until the shutdown
+    before the restart, where the same service signs them. A power cut before
+    that leaves them unsigned.
+  - `deploy.sh` activates first, which stops the service, and installs the
+    boot loader after, so nothing would sign again. It therefore refuses such
+    a system while the firmware enforces Secure Boot
+    ([What the deploy does](deploy.md#what-the-deploy-does)).
+
+  The service signs only when it started without an error, the key is in
+  place and the ESP is writable, so check both copies after any of these. A
+  running generation that does not sign has no such service: after an install
+  there, run the `sign-installed-limine` of a generation that has it with
+  `sudo`, or set Secure Boot to Disabled.
+- **A deploy ends with "carries no signature".** After `deploy.sh` installed
+  the boot entries, one of the two copies did not verify. The deploy then
+  installs the boot entries of the previous generation again, which signs
+  both copies when that generation signs, and exits 73. Its output says
+  whether that install worked. Check both copies before a restart, then read
+  `journalctl -u deploy-boot.service`.
 - **After a BIOS update or a CMOS clear.** The firmware may drop our
   certificate, the preset and its boot entries. Boot NixOS with Secure Boot
   off, then repeat the firmware step of

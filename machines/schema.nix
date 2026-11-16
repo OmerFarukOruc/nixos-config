@@ -93,7 +93,7 @@ let
     secureBoot = mkOption {
       type = types.bool;
       default = false;
-      description = "Whether the firmware of this machine enforces UEFI Secure Boot. Each boot loader install then signs Limine's EFI binary with the key in /var/lib/secure-boot, which is made once on the machine (docs/install-nixos-desktop.md, Secure Boot), and fails without it. nixpkgs' boot.loader.limine.secureBoot stays off, so limine.conf is not enrolled and `theme` can still edit it.";
+      description = "Whether the firmware of this machine enforces UEFI Secure Boot. Each boot loader install then signs Limine's EFI binary with the key in /var/lib/secure-boot, which is made once on the machine (docs/install-nixos-desktop.md, Secure Boot), and fails without it. nixpkgs' boot.loader.limine.secureBoot and enrollConfig stay off, so limine.conf is not enrolled and `theme` can still edit it. Secure Boot then covers the step from the firmware to Limine only: limine.conf, the kernel, the initrd and the root file system are not authenticated.";
     };
 
     launcher = mkOption {

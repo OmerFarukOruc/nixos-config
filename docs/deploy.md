@@ -164,7 +164,7 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
 3. `flake outputs`: the flake has only `checks`, `formatter` and
    `nixosConfigurations`.
 4. The host job: the host's system derivation type and `drvPath`, evaluated in
-   its own process, then the ordering-cycle check of the deploy's step 7
+   its own process, then the ordering-cycle check of the deploy's step 8
    ([What the deploy does](#what-the-deploy-does)) on its units.
    `ci/unit-cycles.nix` builds the unit files without the programs they start,
    so it downloaded about 1.8 GiB instead of the whole system on a GitHub
@@ -425,7 +425,7 @@ starts `nixos-upgrade-failed.service`, which records the revision in
 lines stay in its journal (`journalctl -u nixos-upgrade`).
 
 **The session check.** SSH can still answer while a switch broke the desktop.
-The deploy user's running services form the session check of step 10 below,
+The deploy user's running services form the session check of step 11 below,
 such as the compositor, the shell and the keyring. The running system lists the
 services to leave out in `/etc/nixos-config-deploy/session-ignore`, one shell
 glob per line. They are long-running agents that a switch may restart and that
@@ -454,20 +454,28 @@ The deploy runs these steps in order:
    system stays as it was, and the candidate release stays for inspection.
 6. It prints dix's comparison of the running and the new system. A failed
    comparison does not stop the deploy.
-7. It checks that the candidate's units hold no ordering cycle, which would
+7. For `switch` and `boot`, on a host whose firmware enforces Secure Boot and
+   whose running or boot-default system signs Limine, it refuses a candidate
+   that does not sign it (exit 81). For `switch`, the deploy activates before
+   it installs the boot loader, so the service that signs Limine again would
+   already be gone. For `boot`, both copies would stay unsigned until that
+   service runs at the shutdown ([Secure Boot](recovery.md#secure-boot)). A
+   host with firmware variables whose `SecureBoot` variable cannot be read
+   counts as enforcing.
+8. It checks that the candidate's units hold no ordering cycle, which would
    stop the next boot before it reaches its targets (exit 80).
-8. For `switch` and `boot`, before it changes the boot default, it checks that
+9. For `switch` and `boot`, before it changes the boot default, it checks that
    `/boot` is mounted (exit 79 otherwise).
-9. For `switch` and `boot`, it checks the free space on the ESP. The ESP needs
-   room for all kernels and initrds of the new generation and its
-   specialisations together, plus 1 GiB. Each boot entry copies its kernel and
-   initrd to the ESP before the installer removes old ones, so a nearly full ESP
-   would fail halfway through. The deploy counts every distinct kernel and
-   initrd of the candidate and its specialisations, even those already on the
-   ESP. Every host has a 4 GiB ESP, and the 1 GiB left free covers a few more
-   generations. Without that room, it exits 74 and does not touch the ESP, and
-   nothing on the target has changed.
-10. For `switch` and `test`, when the deploy user is logged in, it records that
+10. For `switch` and `boot`, it checks the free space on the ESP. The ESP needs
+    room for all kernels and initrds of the new generation and its
+    specialisations together, plus 1 GiB. Each boot entry copies its kernel and
+    initrd to the ESP before the installer removes old ones, so a nearly full ESP
+    would fail halfway through. The deploy counts every distinct kernel and
+    initrd of the candidate and its specialisations, even those already on the
+    ESP. Every host has a 4 GiB ESP, and the 1 GiB left free covers a few more
+    generations. Without that room, it exits 74 and does not touch the ESP, and
+    nothing on the target has changed.
+11. For `switch` and `test`, when the deploy user is logged in, it records that
     user's running services, because SSH can still answer while the switch broke
     the desktop. The session is the compositor, the shell and the keyring. The
     list leaves out these services, which come and go on their own:
@@ -481,18 +489,22 @@ The deploy runs these steps in order:
 
     When the deploy cannot list the services, it stops before it arms the
     rollback timer.
-11. It arms the rollback timer for 420 seconds (exit 71 when it cannot).
-12. It activates the candidate with `switch-to-configuration test` in a system
+12. It arms the rollback timer for 420 seconds (exit 71 when it cannot).
+13. It activates the candidate with `switch-to-configuration test` in a system
     service, so an SSH drop cannot interrupt the activation.
-13. It opens fresh SSH logins and checks that `sshd` and `tailscaled` are
+14. It opens fresh SSH logins and checks that `sshd` and `tailscaled` are
     active.
-14. Twenty seconds after the SSH check, it checks the recorded user services.
+15. Twenty seconds after the SSH check, it checks the recorded user services.
     The next list says what happens when this check fails.
-15. It stops the rollback timer.
-16. For `switch` and `boot`, it makes the checked build the system profile and
+16. It stops the rollback timer.
+17. For `switch` and `boot`, it makes the checked build the system profile and
     boot default in a system service, `deploy-boot`, so an SSH drop cannot
     interrupt the install. It does not build or activate the build again.
-17. After the whole deploy succeeds, it updates `current` and copies the
+    When the candidate names boot loaders that must be signed
+    (`oruc.deploy.signedBootLoaders`, which a `secureBoot` host sets to its
+    two copies of Limine), the same service then checks each with
+    `sbverify`.
+18. After the whole deploy succeeds, it updates `current` and copies the
     target's `flake.lock` into this repository. Then it prints
     `Deployment completed from release <release>.`
 
@@ -513,7 +525,7 @@ busctl --user call org.kde.Solid.PowerManagement /org/kde/Solid/PowerManagement/
 
 When a step after the build fails, the deploy acts as follows:
 
-- **A user service fails the step 14 check.** One of them failed or waits to
+- **A user service fails the step 15 check.** One of them failed or waits to
   restart, or the deploy cannot query them. The deploy restores the previous
   system at once and exits 75. This check catches a switch that breaks the
   desktop shell or compositor while SSH still answers. It does not catch a
@@ -536,8 +548,12 @@ When a step after the build fails, the deploy acts as follows:
 - **The target stops answering.** The rollback timer restores the previous
   system after 420 seconds. It needs no command from the machine that runs the
   deploy.
-- **Installing the boot entries fails.** The deploy sets the system profile and
-  boot entries back to the previous generation and exits 73.
+- **Installing the boot entries fails**, or a boot loader that the candidate
+  names as signed does not verify after the install. The deploy tries to set
+  the system profile and boot entries back to the previous generation and
+  exits 73. Its output says whether that worked: "The boot default is
+  `<system>` again", or which step failed. On a `secureBoot` host, check both
+  copies of Limine before a reboot ([Secure Boot](recovery.md#secure-boot)).
 - **The boot entry install returns no result**, for example because the SSH
   connection dropped. The deploy reconnects and polls for the exit status that
   the install unit records in `/run/deploy-boot.status`, until 300 seconds
@@ -568,7 +584,7 @@ such as 1.
 | 70 | A rollback timer from an earlier deploy is still pending. | System unchanged; the candidate release stays. |
 | 71 | The deploy could not arm the rollback timer. | Nothing activated. |
 | 72 | The rollback ran before the deploy stopped the rollback timer, so the target is not on the candidate. | Previous system restored by the rollback timer. |
-| 73 | Installing the boot entries failed. | System profile and boot entries set back to the previous generation. After `switch`, the candidate still runs and no rollback timer is armed. |
+| 73 | Installing the boot entries failed, or a boot loader that the candidate names as signed did not verify after the install. | System profile and boot entries set back to the previous generation, unless the output names a restore step that failed. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
 | 76 | The boot entry install reported no result, after a dropped connection or a unit that ended without one. | Unknown: the system profile and boot default point at the candidate or the previous system. After `switch`, the candidate runs and no rollback timer is armed. |
@@ -576,6 +592,7 @@ such as 1.
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
 | 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
+| 81 | The firmware enforces Secure Boot, the running or boot-default system signs Limine, and the candidate does not. | Unchanged. |
 
 ## Test deploy.sh in a VM
 
@@ -593,11 +610,20 @@ directly, and the VM's specialisations are the candidates; each phase of `ci/dep
 whose system is one of them and checks the exit code, the running system and
 the boot default. The phases cover a good switch, the lock, a pending rollback
 timer, an ordering cycle, the rollback after a failed activation or a broken
-user service, `oruc.deploy.sessionIgnore`, a failed boot entry install, and a
-checkout that would drop a file of the running release.
+user service, `oruc.deploy.sessionIgnore`, a failed boot entry install, an
+install that leaves a boot loader unsigned, and a checkout that would drop a
+file of the running release. Every install in the VM signs Limine with a key
+that the test makes, and the `unsigned` candidate drops that step.
 
 The check does not cover a deploy over SSH, a dropped connection (exit 76),
-exits 71, 72, 74 and 79, the `deployLogin` lookup, or dix. Nix caches a pass
+exits 71, 72, 74, 79 and 81, the `deployLogin` lookup, or dix. Exit 81 needs
+a firmware that enforces Secure Boot, which the VM lacks. Prove it on
+nixos-desktop from a worktree with a commit that is never pushed: set
+`secureBoot = false` in its record and add two services that are each ordered
+`after` the other. `./deploy.sh nixos-desktop boot` and `switch` then exit 81,
+and `test` exits 80. A guard that does not fire stops at the ordering-cycle
+check (exit 80), so no run changes the host. No run covers a `SecureBoot`
+variable that cannot be read. Nix caches a pass
 until the test, `deploy.sh`, `nixosModules/deploy-host.nix` or the nixpkgs input
 changes, and `ci/checks.sh` only checks that the flake still names it.
 

@@ -59,6 +59,15 @@ def assert_on_good(phase):
     machine.fail("systemctl is-active --quiet deploy-rollback.timer")
 
 
+def loader_is_signed():
+    return machine.execute(f"sbverify --cert {signing_certificate} {loader}")[0] == 0
+
+
+machine.succeed(
+    f"install -d -m 0700 {signing_key.rsplit('/', 1)[0]}"
+    f" && openssl req -new -x509 -newkey rsa:2048 -nodes -sha256 -days 2 -subj '/CN=deploy-script/'"
+    f" -keyout {signing_key} -out {signing_certificate}"
+)
 machine.copy_from_host(deploy_sh, "/tmp/deploy.sh")
 as_user(
     f"mkdir {checkout} && cd {checkout} && git init -q -b main"
@@ -78,7 +87,8 @@ assert status == 0, "the deploy of the good system failed"
 assert "Deployment completed" in out
 assert_on_good("good")
 machine.succeed(f"grep -qx 'system={systems['good']}' \"$(readlink -f {state}/current).source\"")
-machine.succeed("test -e /boot/EFI/BOOT/BOOTX64.EFI && test -s /boot/limine/limine.conf")
+machine.succeed("test -s /boot/limine/limine.conf")
+assert loader_is_signed(), "the install of the good system left Limine unsigned"
 
 print("phase: another deploy holds the lock")
 held = f"flock {state}/deploy.lock sh -c 'cd {checkout} && ./deploy.sh {HOST} test'"
@@ -132,6 +142,19 @@ publish("good")
 status, out = deploy("switch")
 assert status == 0, "the deploy back to the good system failed"
 assert_on_good("back to good")
+
+print("phase: a system whose install leaves a declared boot loader unsigned")
+publish("unsigned")
+status, out = deploy("switch")
+assert status == 73, f"an unsigned boot loader gave exit {status}, not 73"
+assert f"{loader} carries no signature" in out
+assert f"The boot default is {systems['good']} again." in out
+assert boot_default() == systems["good"], "the good system is not the boot default again"
+assert loader_is_signed(), "the restore left Limine unsigned"
+publish("good")
+status, out = deploy("switch")
+assert status == 0, "the deploy back to the good system failed"
+assert_on_good("back to good after unsigned")
 
 print("phase: a checkout that lacks a file of the running release")
 status, out = deploy("switch", other)

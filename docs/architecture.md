@@ -77,32 +77,57 @@ stay off, because the installer enrolls the hash of `limine.conf` into the
 
 A record with `secureBoot` is a machine whose firmware enforces UEFI Secure
 Boot; nixos-desktop is the only one. The nixpkgs installer writes Limine
-unsigned, so `bootloader.nix` adds three pieces, all with the key and the
+unsigned, so `bootloader.nix` adds four pieces, all with the key and the
 certificate in `/var/lib/secure-boot`
 ([Secure Boot](install-nixos-desktop.md#secure-boot)):
 
 - A pre-switch check (`system.preSwitchChecks`) runs before a `switch` or a
-  `boot`. It signs the new Limine binary in a temporary folder, and while the
-  firmware enforces Secure Boot it also looks for the certificate in the
-  firmware's `db`. When either fails, the install does not start and `/boot`
-  stays as it was.
+  `boot`. It signs the new Limine binary in a temporary folder outside
+  `/boot`, then runs the trust check below. When either fails, the install
+  does not start and `/boot` stays as it was.
+- The trust check (`limine-certificate-trusted`) runs in the pre-switch check
+  and as the first step of `sign-installed-limine`, before that command
+  writes to the ESP. While the firmware enforces Secure Boot, it fails unless
+  an X.509 entry of the firmware's `db` equals the certificate on disk, so
+  nothing puts a Limine on the ESP that is signed for a certificate `db`
+  lacks. It does not read `dbx`. On a system that booted through UEFI it also
+  fails when it cannot read the `SecureBoot` variable. It passes with Secure Boot off, and without
+  `/sys/firmware/efi`, as in an installer that booted through BIOS.
 - `boot.loader.limine.extraInstallCommands` runs `sign-installed-limine` after
-  the installer. It signs the binary the installer wrote with `sbsign`, checks
-  the result with `sbverify`, and then copies it to the fallback path. It
-  writes each file under a second name and syncs the ESP before and after the
-  rename. The installer writes no raw fallback copy on such a host, so the
-  fallback path keeps the last signed binary until the new one is in place. A
-  failed step fails the install
+  the installer. It signs the binary the installer wrote with `sbsign` into a
+  new temporary folder beside it on the ESP and checks that file with
+  `sbverify`; when the installed binary already verifies, it copies that
+  binary there and checks the copy. Every file it then puts in place is a copy
+  of that one checked file, checked again, synced, and renamed over the
+  target: first `\EFI\limine\BOOTX64.EFI` when it was signed anew, then the
+  fallback path when it differs. A file left by an earlier run therefore never
+  passes as this run's output, and an installed binary that changes during the
+  run is never copied to the fallback path. The installer writes no raw
+  fallback copy on such a host, so the fallback path keeps the last signed
+  binary until the new one is in place. A failed step fails the install
   ([Failures and notifications](workstations.md#failures-and-notifications)).
 - `limine-signature.service` runs the same `sign-installed-limine` at each
   boot and each shutdown. The command changes nothing while both copies
   verify. It repairs an install that stopped between the installer's raw copy
-  and the signing step, and a switch to a generation whose install does not
-  sign.
+  and the signing step. [Secure Boot](recovery.md#secure-boot) lists when it
+  repairs a switch to a generation whose install does not sign.
 
-nixpkgs' `boot.loader.limine.secureBoot.enable` stays off, and an assertion
-keeps it off on such a host. It turns on `enrollConfig`, which puts the hash
-of `limine.conf` in the binary. Limine then refuses a `limine.conf` that
+`bootloader.nix` also names the two copies in `oruc.deploy.signedBootLoaders`
+(`nixosModules/deploy-host.nix`), so `deploy.sh` checks both with `sbverify`
+after it installs the boot entries, and it refuses a system without
+`sign-installed-limine` while the firmware enforces Secure Boot
+([What the deploy does](deploy.md#what-the-deploy-does)).
+
+The fallback copy is the last signed duplicate of the same Limine, and it
+reads the same `limine.conf` and kernels. It boots after an install that left
+`\EFI\limine\BOOTX64.EFI` unsigned and after the firmware lost its entries. It
+does not help against a Limine release that does not boot, because the next
+signing run copies that release to the fallback path too.
+
+nixpkgs' `boot.loader.limine.secureBoot.enable` and
+`boot.loader.limine.enrollConfig` stay off, and assertions keep them off on
+such a host. The first turns on the second, which puts the hash of
+`limine.conf` in the binary. Limine then refuses a `limine.conf` that
 differs from that hash, with the firmware's Secure Boot on or off
 (`init_config` in
 [config.c](https://github.com/Limine-Bootloader/Limine/blob/v12.9.4/common/lib/config.c)),
@@ -111,7 +136,10 @@ is on. Without an enrolled hash nothing authenticates `limine.conf`
 ([USAGE.md](https://github.com/Limine-Bootloader/Limine/blob/v12.9.4/USAGE.md),
 Secure Boot), so the kernel and initrd hashes in it prove nothing against
 someone who can write the ESP, and Secure Boot covers the step from the
-firmware to Limine and nothing after it.
+firmware to Limine and nothing after it. A third assertion rejects a host
+that is not x86-64, because the signed paths are named `BOOTX64.EFI`.
+[Why not sbctl](secure-boot-playbook.md#why-not-sbctl-or-the-nixpkgs-limine-option)
+compares this with nixpkgs' own option.
 [recovery.md](recovery.md#secure-boot) says what to do when the firmware
 refuses Limine.
 
