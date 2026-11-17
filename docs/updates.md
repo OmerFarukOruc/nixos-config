@@ -205,7 +205,13 @@ and locks them. It moves one of these sets:
 `home-manager/modules/spicetify.nix` builds Spotify from `nixpkgs-spotify` and
 patches it with `spicetify-nix`. Both inputs pin a commit, so `move-inputs.sh`
 never moves them. A Spotify release that the spicetify-cli release cannot patch still
-builds, then opens a blank window. To move them:
+builds, then opens a blank window.
+
+Spotify runs as a native Wayland client (`wayland = true`). Through XWayland, a
+looping video in Spotify kept KWin's main thread at 30-50% of a core on nixos-rog,
+and natively at 17-20%. With that option, spicetify-nix replaces the wrapper of
+nixpkgs' `spotify` (its `fixupPhase`) with its own, so a move of `nixpkgs-spotify`
+brings no wrapper change. To move them:
 
 1. Set both commits in `flake.nix`, then run
    `nix flake update nixpkgs-spotify spicetify-nix`.
@@ -216,6 +222,10 @@ builds, then opens a blank window. To move them:
 3. Push to `main`, then run `./deploy.sh <host> switch` for each host that
    `scripts/affected-hosts.sh <old>..<sha>` prints. Launch Spotify on nixos-rog. If
    the window is blank, revert the commit and deploy those hosts again.
+4. Check that Spotify still runs on Wayland:
+   `grep -c -- --ozone-platform=wayland "$(readlink -f "$(command -v spotify)")"`
+   prints 1, and `scripts/kwin-windows-on-rog.sh` lists its window with
+   `"resourceClass":"spotify"`.
 
 ## Apps
 

@@ -67,6 +67,7 @@ in
     enable = false;
     spotifyPackage = pinned.spotify;
     spicetifyPackage = pinned.spicetify-cli;
+    wayland = true;
     # Marketplace refuses to install themes while this theme is set, because
     # the local theme is not named marketplace.
     theme = spicePkgs.themes.sleek // {
