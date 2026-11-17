@@ -260,11 +260,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794944675,
-        "narHash": "sha256-VPQtZmEzjoQMmh5ATbEDMPK3H4J3vVWbcruQkZyixBI=",
+        "lastModified": 1794953782,
+        "narHash": "sha256-sTnTYa/VMHpUWVYb+GNY2xvlUkLpXzTJ8WCT3AAQ+hI=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "6e4bcf6931d797a3e7718e4dec84992d67a00bf1",
+        "rev": "4246683484a7b4ced0a0d880974b67137f092289",
         "type": "github"
       },
       "original": {
@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1794948061,
-        "narHash": "sha256-IBEm6EubS0ODfNEWgAK+dUQw+HLUnNWQLGbzknUhPeE=",
+        "lastModified": 1794950983,
+        "narHash": "sha256-rqNaV6RKsSAmNUb9RzxzY1bUildOqbz0YAM+sEWk9iw=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "70dbbe064ea21ba3b2d6285e8783951dbce1cfb2",
+        "rev": "cd5d0317c352f872585251a83db8b9387b41c04d",
         "type": "github"
       },
       "original": {
@@ -616,11 +616,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1794934513,
-        "narHash": "sha256-JpOYY6Ve3bqROL05QgC4hMfDml1Y6Zu1dqnAQpU1Ysc=",
+        "lastModified": 1794948891,
+        "narHash": "sha256-UF+GOJyq3ObLSTFlcgih6CtonYVV61B92WbXqRnSAqI=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "4bbceffef0eda721c8f70a674472de3a0d1aaca0",
+        "rev": "47758aafdd9a9283bbbcd6cabbdf59fcc23d9581",
         "type": "github"
       },
       "original": {
@@ -793,11 +793,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1794829774,
-        "narHash": "sha256-sRkFvZdJ/8SpQQAV2Ax9xyiufzkzLPjWJzFCW7zTGnk=",
+        "lastModified": 1794953027,
+        "narHash": "sha256-glNd6lyezrE0No/4qbu8QprKVfQYwGjbRNNhw/jh0fM=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "34d9f3050abe346c1454b155d3b8e249d3090d58",
+        "rev": "919fe8a3f19c38ba6f56247c57d5b795f206d05b",
         "type": "github"
       },
       "original": {
