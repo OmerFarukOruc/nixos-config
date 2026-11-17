@@ -632,11 +632,11 @@
     "skills-caldoai": {
       "flake": false,
       "locked": {
-        "lastModified": 1794882206,
-        "narHash": "sha256-apmDl2lw2iI2sIdBPVATI8d/UN5ec4hq8EMC9rt+RA8=",
+        "lastModified": 1794891264,
+        "narHash": "sha256-b0V4zEayahE99iDsrx+B3g3LOlhodKrFshbRIVPANfw=",
         "owner": "caldoai",
         "repo": "skills",
-        "rev": "3f5e328b990fed2a1c1421fd993f87d570fb0adf",
+        "rev": "2e157218049708bf337717847bc1b2a971203e3f",
         "type": "github"
       },
       "original": {
