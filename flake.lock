@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1794808658,
-        "narHash": "sha256-RbvK/ghvMuWWx/riUqtCZCxjZFji2n3onTo2Kg60T3s=",
+        "lastModified": 1794882407,
+        "narHash": "sha256-zfzR7CySAT2uXAwVE9JTS5rLWlY5harDeeE+nYKWgTs=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "733d5b0fa81d5aad7c623dca8d8170ce411fba1d",
+        "rev": "63097de80420a27b13b3d5116ce1134a705b7dd3",
         "type": "github"
       },
       "original": {
@@ -616,11 +616,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1794733489,
-        "narHash": "sha256-NB2wQrW8FqNYc0A7O31DOw629rr1pGR5ZyzQpyScj6g=",
+        "lastModified": 1794882589,
+        "narHash": "sha256-Zr1EOvXW4FpuUDey9+jOJQUld6ZRpl3dgtJcidn+RHU=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "cc1d34319b4cc599bf503b80d35d7442bcde8047",
+        "rev": "aecf2680a56b9b19835a3e362af4ebdd2e8e92f1",
         "type": "github"
       },
       "original": {
@@ -632,11 +632,11 @@
     "skills-caldoai": {
       "flake": false,
       "locked": {
-        "lastModified": 1793905642,
-        "narHash": "sha256-FY4dg5Pm/rpg3oWarfCDTneA1qZ6v6GIQhalEsvgjVY=",
+        "lastModified": 1794882206,
+        "narHash": "sha256-apmDl2lw2iI2sIdBPVATI8d/UN5ec4hq8EMC9rt+RA8=",
         "owner": "caldoai",
         "repo": "skills",
-        "rev": "f3cf47774975a7d9fca45730babf4ff7ad765ada",
+        "rev": "3f5e328b990fed2a1c1421fd993f87d570fb0adf",
         "type": "github"
       },
       "original": {
@@ -648,11 +648,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1794866035,
-        "narHash": "sha256-XY7bBQ2Utcbhib0q/H6UQ32+GsuAWufCNXqJnVxvqmQ=",
+        "lastModified": 1794877862,
+        "narHash": "sha256-Ef42pvcbYVFvbxX4RYpgZkZWTJHGW/AH17AUnfgGCOk=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "0f7ae5ed909322dbca9c133ca6db1104b6be69f5",
+        "rev": "a3d6a8ee41a404b74391ee278423b52890b8920d",
         "type": "github"
       },
       "original": {
