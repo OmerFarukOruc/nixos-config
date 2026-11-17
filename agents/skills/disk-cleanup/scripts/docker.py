@@ -26,7 +26,7 @@ def si_bytes(text: str) -> int:
 
 # Docker keeps its data in its root directory (`docker info`), whose files belong to root, or to
 # subordinate uids for rootless Docker, so FIEMAP cannot estimate it.
-BOUND_NOTE = ("A Docker row shows Docker's own size, an upper bound: two Docker build cache "
+BOUND_NOTE = ("A Docker or Podman row shows the engine's own size, an upper bound: two Docker build cache "
               "prunes dropped `df` by 0.58 and 0.67 of it.")
 ANONYMOUS = "com.docker.volume.anonymous"
 # Where the Docker CLI looks with no DOCKER_HOST or context, then where rootless Docker listens:
@@ -50,38 +50,38 @@ def docker_host() -> str | None:
     return f"unix://{ROOTLESS_SOCKET}" if os.path.exists(ROOTLESS_SOCKET) else None
 
 
-class Docker(NamedTuple):
+class Engine(NamedTuple):
     host: str | None
     root: str | None
     source: Callable[[], list[Row]]
 
 
-def docker() -> Docker:
+def docker() -> Engine:
     """Pin every later docker command to one local endpoint, and read the daemon's root directory."""
     def unmeasured(reason: str) -> Callable[[], list[Row]]:
         return lambda: [Row("Docker", "look", reason)]
     if not shutil.which("docker"):
-        return Docker(None, None, list)
+        return Engine(None, None, list)
     try:
         host = docker_host()
     except CommandError as e:
-        return Docker(None, None, unmeasured(str(e)))
+        return Engine(None, None, unmeasured(str(e)))
     if host is None:
-        return Docker(None, None, unmeasured(f"no daemon answers at `{ROOTFUL_SOCKET}` or `{ROOTLESS_SOCKET}`; "
+        return Engine(None, None, unmeasured(f"no daemon answers at `{ROOTFUL_SOCKET}` or `{ROOTLESS_SOCKET}`; "
                                              "not measured"))
     if not host.startswith("unix://"):
-        return Docker(host, None, unmeasured(f"`{host}` is not a local socket; not measured"))
+        return Engine(host, None, unmeasured(f"`{host}` is not a local socket; not measured"))
     os.environ["DOCKER_HOST"] = host
     os.environ.pop("DOCKER_CONTEXT", None)
     try:
         root = run(["docker", "info", "--format", "{{.DockerRootDir}}"]).strip()
     except CommandError as e:
-        return Docker(host, None, unmeasured(str(e)))
-    return Docker(host, root, docker_rows)
+        return Engine(host, None, unmeasured(str(e)))
+    return Engine(host, root, docker_rows)
 
 
-def docker_root_rows(sizes: dict[str, int], root: str) -> list[Row]:
-    """Take the Docker root's bytes out of every scanned size; one leave row holds them when they reach the floor.
+def engine_root_rows(sizes: dict[str, int], root: str, engine: str = "Docker") -> list[Row]:
+    """Take the engine root's bytes out of every scanned size; one leave row holds them when they reach the floor.
 
     `du -x` counted them only when the root is on the filesystem of the scan root that holds it.
     """
@@ -96,7 +96,7 @@ def docker_root_rows(sizes: dict[str, int], root: str) -> list[Row]:
                 del sizes[path]
             elif inside(root, path):
                 sizes[path] -= b
-    return [Row(root, "leave", "Docker's data; the Docker rows measure it", alloc=b)] if b >= FLOOR else []
+    return [Row(root, "leave", f"{engine}'s data; the {engine} rows measure it", alloc=b)] if b >= FLOOR else []
 
 
 def docker_rows() -> list[Row]:
@@ -191,6 +191,32 @@ def build_evidence(ref: str, image: dict, named: str | None) -> str:
                       named or "no running agent named it in 24 h", "`docker rmi` by hand"])
 
 
+def volume_group_rows(engine: str, old: dict[str, int], young: dict[str, int]) -> list[Row]:
+    """The delete group of old orphaned anonymous volumes and the look group of young ones."""
+    rows = []
+    if old:
+        rows.append(Row(f"group:{engine}-volumes", "delete",
+                        "anonymous volumes no container uses, created 24+ h ago; nothing attaches them again",
+                        how=f"{engine}-volume", members=old, alloc=sum(old.values()), frees=sum(old.values()),
+                        bound=True))
+    if young:
+        rows.append(Row(f"group:{engine}-volumes-recent", "look",
+                        "anonymous volumes no container uses, created within 24 h; work may still use them",
+                        how=f"{engine}-volume", members=young, alloc=sum(young.values())))
+    return rows
+
+
+def container_group_rows(engine: str, old: dict[str, int]) -> list[Row]:
+    """The delete group of containers that exited 24+ h ago."""
+    if not old:
+        return []
+    return [Row(f"group:{engine}-containers", "delete",
+                "containers that exited 24+ h ago; the command that made each makes a new one, "
+                "but files written inside the container do not come back",
+                how=f"{engine}-container", members=old, alloc=sum(old.values()), frees=sum(old.values()),
+                bound=True)]
+
+
 def volume_rows() -> list[Row]:
     """Old orphaned anonymous volumes on delete, young ones on look, named volumes on leave.
 
@@ -212,16 +238,7 @@ def volume_rows() -> list[Row]:
             projects.add(labels.get("com.docker.compose.project") or name)
         elif name in dangling:
             (young if time.time() - created(v) < RECENT else old)[name] = sizes.get(name, 0)
-    rows = []
-    if old:
-        rows.append(Row("group:docker-volumes", "delete",
-                        "anonymous volumes no container uses, created 24+ h ago; nothing attaches them again",
-                        how="docker-volume", members=old, alloc=sum(old.values()), frees=sum(old.values()),
-                        bound=True))
-    if young:
-        rows.append(Row("group:docker-volumes-recent", "look",
-                        "anonymous volumes no container uses, created within 24 h; work may still use them",
-                        how="docker-volume", members=young, alloc=sum(young.values())))
+    rows = volume_group_rows("docker", old, young)
     if projects:
         shown = ", ".join(f"`{p}`" for p in sorted(projects)[:3])
         more = f", and {len(projects) - 3} more" if len(projects) > 3 else ""
@@ -281,12 +298,7 @@ def stopped_container_rows() -> list[Row]:
     if not exited:
         return []
     old = {n: exited[n] for n, done in finished(list(exited)).items() if n in exited and time.time() - done >= RECENT}
-    if not old:
-        return []
-    return [Row("group:docker-containers", "delete",
-                "containers that exited 24+ h ago; the command that made each makes a new one, "
-                "but files written inside the container do not come back",
-                how="docker-container", members=old, alloc=sum(old.values()), frees=sum(old.values()), bound=True)]
+    return container_group_rows("docker", old)
 
 
 def finished(names: list[str]) -> dict[str, float]:

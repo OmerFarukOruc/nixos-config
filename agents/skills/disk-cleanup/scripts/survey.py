@@ -46,7 +46,7 @@ from classify import (
     leave_paths,
     not_yours,
     note_sqlite,
-    scanned_docker_root,
+    scanned_engine_root,
     split_trash,
     trash_rows,
 )
@@ -59,33 +59,37 @@ from config import (
     OUT_DIR,
     TMP_DIRS,
 )
-from docker import docker, docker_root_rows
+from docker import Engine, docker, engine_root_rows
 from holders import HOME, inside, users
 from host_rows import boot_rows, brave_rows, nix_rows, side_rows
 from learn import record, section, updates
 from measure import area_walk, name_walk, scan
+from podman import podman
 from report import full_table, pool_line, proposal
 
 
 def main() -> int:
-    dock = docker()
-    root = scanned_docker_root(dock.root)
+    dock, pod = docker(), podman()
+    if pod.root and pod.root == dock.root:
+        pod = Engine(None, None, list)
+    root, pod_root = scanned_engine_root(dock.root), scanned_engine_root(pod.root)
     prune = ({os.path.expanduser(k) for k in (*DELETE, *DELETE_BY_COMMAND, *LEAVE)}
-             | {a for a in AREAS if inside(a, HOME)} | ({root} if root else set()))
-    with ThreadPoolExecutor(max_workers=7) as pool:
+             | {a for a in AREAS if inside(a, HOME)} | {r for r in (root, pod_root) if r})
+    with ThreadPoolExecutor(max_workers=8) as pool:
         side = [pool.submit(side_rows, label, f) for label, f in (
-            ("Docker", dock.source), ("Nix store", nix_rows),
+            ("Docker", dock.source), ("Podman", pod.source), ("Nix store", nix_rows),
             ("Boot", boot_rows), ("Brave", brave_rows))]
-        header = pool.submit(pool_line, dock.root)
+        header = pool.submit(pool_line, dock.root, pod.root)
         names = pool.submit(name_walk, prune)
         areas = pool.submit(area_walk)
         sizes, unreadable = scan()
-        root_rows = docker_root_rows(sizes, root) if root else []
+        root_rows = (engine_root_rows(sizes, root) if root else []) + (
+            engine_root_rows(sizes, pod_root, "Podman") if pod_root else [])
         found, stale_files = names.result()
         rows = build_rows(sizes, stale_files) | {r.path: r for r in root_rows}
         note_sqlite(sizes, rows)
         split_trash(rows, sizes)
-        leaves = leave_paths(rows.values(), root)
+        leaves = leave_paths(rows.values(), root, pod_root)
         stale, empties = areas.result()
         groups = junk_rows(rows, stale, list(empties), found, leaves) + trash_rows()
         cands = [r for r in rows.values() if r.kind == "delete"]
@@ -116,6 +120,7 @@ def main() -> int:
         f.write("\n".join(full_table(ordered)) + "\n")
     with open(os.path.join(OUT_DIR, "survey.json"), "w") as f:
         json.dump({"generated": generated, "docker_host": dock.host, "docker_root": dock.root,
+                   "podman_root": pod.root,
                    "rows": [dataclasses.asdict(r) for r in ordered]}, f)
     absent = [k for k in (*DELETE, *DELETE_BY_COMMAND, *LEAVE) if not os.path.lexists(os.path.expanduser(k))]
     record("survey", {"time": generated, "absent": absent,

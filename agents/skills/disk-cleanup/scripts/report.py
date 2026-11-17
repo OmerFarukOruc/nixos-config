@@ -9,10 +9,10 @@ from holders import HOME, tilde
 from rows import Row, run, size
 
 
-def pool_line(docker_root: str | None) -> str:
-    """One sentence per filesystem that holds ~, /tmp, /var/tmp, /nix, or the Docker root."""
+def pool_line(*engine_roots: str | None) -> str:
+    """One sentence per filesystem that holds ~, /tmp, /var/tmp, /nix, or a Docker or Podman root."""
     groups: dict[str, list[str]] = {}
-    for p in (HOME, "/tmp", "/var/tmp", "/nix", docker_root):
+    for p in (HOME, "/tmp", "/var/tmp", "/nix", *engine_roots):
         if p and os.path.exists(p):
             groups.setdefault(filesystem(p).dev_id, []).append(p)
     lines = []
@@ -73,7 +73,7 @@ def proposal(lists: dict[str, list[Row]], pool: str, locked: list[str], unreadab
     biggest = lists["look"][0] if lists["look"] else None
     count = len(lists["delete"])
     opening = f"Deleting the {count} delete row{'' if count == 1 else 's'} frees about {size(total)}"
-    opening += f", plus up to {size(bound)} from Docker" if bound else ""
+    opening += f", plus up to {size(bound)} from Docker or Podman" if bound else ""
     opening += f", and {size(later)} more 7 days later from `/tmp` folders that go to the Trash first." if later else "."
     if biggest and biggest.alloc > total + bound:
         opening += f" The largest look row, {biggest.label()}, holds {size(biggest.alloc)}."

@@ -45,6 +45,18 @@ read again from the tool here:
   anonymous label; 5, it was created 24+ h ago.
 - A stopped container (`docker-container`): 2, it is still exited; 5, it
   exited 24+ h ago.
+- Podman rows (`podman-image`, `podman-build`, `podman-volume`,
+  `podman-container`) take the same checks through `podman`, with these
+  differences. `podman ps --external` also counts Buildah's working
+  containers. A pulled image's registry is asked anonymously (HEAD with a
+  Bearer token if the registry challenges), so a private image answers 401
+  or 403 and stays; a `localhost/` digest fails 6. Every Podman image also
+  passes 5: it was stored 24+ h ago (the mtime of its `<driver>-images`
+  folder, because `Created` is the build time) and no running agent named
+  the id or any tag. A local build or untagged image (`podman-build`) has
+  checks 2 and 5 only, and `podman rmi --no-prune` leaves its parent images
+  to their own rows. A container passes 2 when it is `exited` or `stopped`. A volume is anonymous when `podman volume inspect`
+  says `Anonymous`.
 - The build cache (`docker-builder`) runs last, after the image rows, since
   records shared with a removed image only become reclaimable then. Its
   prune keeps records used within 24 h.
@@ -56,7 +68,7 @@ gets `chmod -R u+rwX` and one more `rm`, since Go and Gradle leave read-only
 directories.
 
 Then sync and read `df` on each filesystem the row's paths are on (the
-Docker root's for a Docker row), remove the row's paths as its `how` says
+engine root's for a Docker or Podman row), remove the row's paths as its `how` says
 (COMMANDS or MOVERS), sync and read `df` there again. A stale /tmp folder
 (`tmp-trash`) goes to the Trash by a rename; when /tmp is another mount, by a
 reflink copy, or by a full copy when the Trash has room for it. `trash-purge`
@@ -74,6 +86,7 @@ import datetime
 import errno
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -84,13 +97,15 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import cache
 
 from activity import session_mentions, unfinished
-from classify import bin_links, leave_paths, protected, recent, scanned_docker_root
+from classify import bin_links, leave_paths, protected, recent, scanned_engine_root
 from config import OUT_DIR, RECENT, TRASH_DIR
 from docker import ANONYMOUS, created, dangling_volumes
 from filesystems import filesystem, fs_mounts, used
 from holders import HOME, Hit, inside, tilde, users
 from learn import atomic_write, missed, record, trashed, write_trashed
 from measure import walk_tree
+from podman import STOPPED, stored
+from podman import dangling_volumes as podman_dangling_volumes
 from report import bounded
 from rows import Row, run, size
 
@@ -103,6 +118,10 @@ COMMANDS = {
     "docker-volume": ["docker", "volume", "rm", "--"],
     "docker-container": ["docker", "rm", "--"],
     "docker-builder": ["docker", "builder", "prune", "-f", "--filter", f"until={RECENT // 3600}h"],
+    "podman-image": ["podman", "rmi", "--no-prune", "--"],
+    "podman-build": ["podman", "rmi", "--no-prune", "--"],
+    "podman-volume": ["podman", "volume", "rm", "--"],
+    "podman-container": ["podman", "rm", "--"],
 }
 
 
@@ -211,7 +230,9 @@ NO_READING = ("trash", "tmp-trash")
 
 OBJECTS = {"docker-image": ("docker", "image"), "docker-untagged": ("docker", "image"),
            "docker-volume": ("docker", "volume"), "docker-container": ("docker", "container"),
-           "docker-builder": None}
+           "docker-builder": None,
+           "podman-image": ("podman", "image"), "podman-build": ("podman", "image"),
+           "podman-volume": ("podman", "volume"), "podman-container": ("podman", "container")}
 MANIFESTS = ("application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, "
              "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
 
@@ -251,7 +272,7 @@ def use_check(held: list[Hit]) -> str | None:
 def path_check(path: str, row: Row, held: list[Hit], leaves: set[str], links: list[str]) -> str | None:
     """The first check path fails, or None: 2 to 5, or an object's own checks."""
     if row.how in OBJECTS:
-        return check(path) if (check := OBJECT_CHECKS.get(row.how)) else None
+        return check(row.how.partition("-")[0], path) if (check := OBJECT_CHECKS.get(row.how)) else None
     if why := use_check(held):
         return f"2: {why}"
     if why := protected(path, leaves):
@@ -272,12 +293,23 @@ def inspect(tool: str, kind: str, name: str) -> dict | None:
 
 
 inspected = cache(inspect)
-dangling = cache(dangling_volumes)
+ENGINE_ROOTS: dict[str, str | None] = {}
 
 
 @cache
-def container_images() -> dict[str, str]:
-    """Image ID, then the name of one container that uses it, running or stopped."""
+def dangling(tool: str) -> set[str]:
+    return podman_dangling_volumes() if tool == "podman" else dangling_volumes()
+
+
+@cache
+def container_images(tool: str) -> dict[str, str]:
+    """Image ID, then the name of one container that uses it, running or stopped.
+
+    Podman's `--external` adds the working containers Buildah and `podman build` leave.
+    """
+    if tool == "podman":
+        out = run(["podman", "ps", "-a", "--external", "--no-trunc", "--format", "{{.ImageID}} {{.Names}}"])
+        return dict(line.split(" ", 1) for line in out.splitlines() if line.strip())
     ids = run(["docker", "ps", "-aq", "--no-trunc"]).split()
     if not ids:
         return {}
@@ -285,49 +317,90 @@ def container_images() -> dict[str, str]:
                 .splitlines())
 
 
-def image_check(ref: str) -> str | None:
-    image = inspected("docker", "image", ref)
-    if name := container_images().get(image["Id"]):
+def stored_check(tool: str, ref: str, image: dict) -> str | None:
+    """Check 5 for a Podman image: stored 24+ h ago, and no running agent named any of its names."""
+    if (at := stored(ENGINE_ROOTS[tool], image["Id"])) is None:
+        return "5: no storage time"
+    if reason := recent(at, RECENT, "stored"):
+        return f"5: {reason}"
+    names = [ref, *(image.get("RepoTags") or [])]
+    mentions = session_mentions(names)
+    return f"5: {mentions[n]}" if (n := next((n for n in names if n in mentions), None)) else None
+
+
+def image_check(tool: str, ref: str) -> str | None:
+    image = inspected(tool, "image", ref)
+    if name := container_images(tool).get(image["Id"]):
         return f"2: container `{name.lstrip('/')}` uses it"
+    if tool == "podman" and (why := stored_check(tool, ref, image)):
+        return why
     if not image.get("RepoDigests"):
         return "6: no registry digest"
     for ref_digest in image["RepoDigests"]:
-        if why := registry_check(ref_digest):
+        if why := registry_check(tool, ref_digest):
             return f"6: `{ref_digest[:60]}` {why}"
     return None
 
 
-@cache
-def hub_token(repo: str) -> str:
-    with urllib.request.urlopen("https://auth.docker.io/token?service=registry.docker.io"
-                                f"&scope=repository:{repo}:pull", timeout=15) as r:
-        return json.load(r)["token"]
+def challenge_fields(challenge: str) -> dict[str, str]:
+    """The key="value" pairs of a `WWW-Authenticate: Bearer` challenge."""
+    return dict(re.findall(r'(\w+)="([^"]*)"', challenge))
 
 
-def registry_check(ref_digest: str) -> str | None:
-    """None when the registry holds repo@digest, else what it answered."""
+def anonymous_registry_check(ref_digest: str) -> str | None:
+    """None when the registry answers 200 to an anonymous HEAD for repo@digest, else what it answered.
+
+    Follows the registry's Bearer challenge for a pull token, so a private image answers 401 or 403 and stays.
+    """
     name, _, digest = ref_digest.partition("@")
     host, _, rest = name.partition("/")
-    if rest and ("." in host or ":" in host or host == "localhost") and host != "docker.io":
+    if not (rest and ("." in host or ":" in host or host == "localhost")):
+        host, rest = "docker.io", name.removeprefix("docker.io/")
+    if host == "localhost" or host.startswith("localhost:"):
+        return "is a local build"
+    if host == "docker.io":
+        host, rest = "registry-1.docker.io", rest if "/" in rest else f"library/{rest}"
+    url = f"https://{host}/v2/{rest}/manifests/{digest}"
+    headers = {"Accept": MANIFESTS}
+    for _ in range(2):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, method="HEAD", headers=headers), timeout=15):
+                return None
+        except urllib.error.HTTPError as e:
+            fields = challenge_fields(e.headers.get("WWW-Authenticate", ""))
+            if e.code != 401 or "Authorization" in headers or "realm" not in fields:
+                return f"answers {e.code}"
+            query = urllib.parse.urlencode({"service": fields.get("service", ""), "scope": f"repository:{rest}:pull"})
+            try:
+                with urllib.request.urlopen(f"{fields['realm']}?{query}", timeout=15) as r:
+                    body = json.load(r)
+                headers["Authorization"] = f"Bearer {body.get('token') or body['access_token']}"
+            except urllib.error.HTTPError as token_error:
+                return f"answers {token_error.code} for a pull token"
+            except (OSError, ValueError, KeyError) as token_error:
+                return f"unreachable: {token_error}"
+        except (OSError, ValueError) as e:
+            return f"unreachable: {e}"
+    return "answers 401"
+
+
+def registry_check(tool: str, ref_digest: str) -> str | None:
+    """None when the registry holds repo@digest, else what it answered.
+
+    Docker uses its stored login for a registry other than Docker Hub; Podman's checks are anonymous.
+    """
+    name = ref_digest.partition("@")[0]
+    host, _, rest = name.partition("/")
+    if tool == "docker" and rest and ("." in host or ":" in host or host == "localhost") and host != "docker.io":
         proc = subprocess.run(["docker", "buildx", "imagetools", "inspect", "--raw", ref_digest],
                               capture_output=True, text=True, timeout=60, check=False)
         return None if proc.returncode == 0 else (proc.stderr.strip().splitlines() or ["failed"])[-1][-120:]
-    repo = name.removeprefix("docker.io/")
-    repo = repo if "/" in repo else f"library/{repo}"
-    try:
-        head = urllib.request.Request(f"https://registry-1.docker.io/v2/{repo}/manifests/{digest}", method="HEAD",
-                                      headers={"Authorization": f"Bearer {hub_token(repo)}", "Accept": MANIFESTS})
-        with urllib.request.urlopen(head, timeout=15):
-            return None
-    except urllib.error.HTTPError as e:
-        return f"answers {e.code}"
-    except (OSError, ValueError, KeyError) as e:
-        return f"unreachable: {e}"
+    return anonymous_registry_check(ref_digest)
 
 
-def untagged_check(ref: str) -> str | None:
-    image = inspected("docker", "image", ref)
-    if name := container_images().get(image["Id"]):
+def untagged_check(tool: str, ref: str) -> str | None:
+    image = inspected(tool, "image", ref)
+    if name := container_images(tool).get(image["Id"]):
         return f"2: container `{name.lstrip('/')}` uses it"
     if tags := [t for t in image.get("RepoTags") or [] if "@" not in t]:
         return f"3: protected: tagged `{tags[0]}`"
@@ -338,25 +411,33 @@ def untagged_check(ref: str) -> str | None:
     if named := session_mentions([ref]).get(ref):
         return f"5: {named}"
     for ref_digest in image.get("RepoDigests") or []:
-        if why := registry_check(ref_digest):
+        if why := registry_check(tool, ref_digest):
             return f"6: `{ref_digest[:60]}` {why}"
     return None if image.get("RepoDigests") else "6: no registry digest"
 
 
-def container_check(name: str) -> str | None:
-    state = inspected("docker", "container", name)["State"]
-    if state["Status"] != "exited":
+def build_check(tool: str, ref: str) -> str | None:
+    """A Podman local build or untagged image: 2, no container uses it; then check 5."""
+    image = inspected(tool, "image", ref)
+    if name := container_images(tool).get(image["Id"]):
+        return f"2: container `{name.lstrip('/')}` uses it"
+    return stored_check(tool, ref, image)
+
+
+def container_check(tool: str, name: str) -> str | None:
+    state = inspected(tool, "container", name)["State"]
+    if state["Status"] not in STOPPED:
         return f"2: it is {state['Status']}"
     if reason := recent(datetime.datetime.fromisoformat(state["FinishedAt"]).timestamp(), RECENT, "exited"):
         return f"5: {reason}"
     return None
 
 
-def volume_check(name: str) -> str | None:
-    volume = inspected("docker", "volume", name)
-    if name not in dangling():
+def volume_check(tool: str, name: str) -> str | None:
+    volume = inspected(tool, "volume", name)
+    if name not in dangling(tool):
         return "2: a container uses it"
-    if ANONYMOUS not in (volume.get("Labels") or {}):
+    if not (volume.get("Anonymous") if tool == "podman" else ANONYMOUS in (volume.get("Labels") or {})):
         return "3: protected: a named volume"
     if reason := recent(created(volume), RECENT, "created"):
         return f"5: {reason}"
@@ -364,7 +445,8 @@ def volume_check(name: str) -> str | None:
 
 
 OBJECT_CHECKS = {"docker-image": image_check, "docker-untagged": untagged_check, "docker-volume": volume_check,
-                 "docker-container": container_check}
+                 "docker-container": container_check, "podman-image": image_check, "podman-build": build_check,
+                 "podman-volume": volume_check, "podman-container": container_check}
 
 
 def exists(row: Row, name: str, look=inspect) -> bool | None:
@@ -379,8 +461,8 @@ def operands(row: Row, name: str) -> list[str]:
     """What the row's command takes for name: an image goes by every reference it carries."""
     if row.how == "docker-builder":
         return []
-    if row.how in ("docker-image", "docker-untagged"):
-        return inspected("docker", "image", name).get("RepoTags") or [name]
+    if row.how in ("docker-image", "docker-untagged", "podman-image", "podman-build"):
+        return inspected(row.how.partition("-")[0], "image", name).get("RepoTags") or [name]
     return [name]
 
 
@@ -394,10 +476,11 @@ class Outcome:
 
 def fill_shared_caches(row: Row) -> None:
     """Fill the lookups the worker threads share before they start."""
-    if row.how in ("docker-image", "docker-untagged"):
-        container_images()
-    elif row.how == "docker-volume":
-        dangling()
+    tool = row.how.partition("-")[0]
+    if row.how in ("docker-image", "docker-untagged", "podman-image", "podman-build"):
+        container_images(tool)
+    elif row.how in ("docker-volume", "podman-volume"):
+        dangling(tool)
 
 
 def users_now(row: Row, going: list[str]) -> dict[str, list[Hit]]:
@@ -409,7 +492,7 @@ def users_now(row: Row, going: list[str]) -> dict[str, list[Hit]]:
 
 
 def process(row: Row | None, held: dict[str, list[Hit]], leaves: set[str], links: list[str],
-            docker_root: str | None, really: bool) -> Outcome:
+            really: bool) -> Outcome:
     """Check a row's paths, and remove the ones that pass when really is set."""
     if failed := row_check(row):
         return Outcome(f"check {failed}", kept=True)
@@ -423,7 +506,7 @@ def process(row: Row | None, held: dict[str, list[Hit]], leaves: set[str], links
     going = [p for p, c in checks.items() if not c]
     out = Outcome("", frees=sum(paths[p] for p in going))
     if really and going:
-        mounts = fs_mounts([docker_root] if row.how in OBJECTS else going)
+        mounts = fs_mounts([ENGINE_ROOTS[row.how.partition("-")[0]]] if row.how in OBJECTS else going)
         before = used(mounts) if row.how not in NO_READING else 0
         fresh = users_now(row, going)
         for p in going:
@@ -496,19 +579,27 @@ def main() -> int:
     if "docker_root" not in survey:
         print("survey.json comes from an older survey.py; run survey.py again.", file=sys.stderr)
         return 2
-    docker_root = survey["docker_root"]
+    ENGINE_ROOTS.update(docker=survey["docker_root"], podman=survey.get("podman_root"))
     if docker_host := survey["docker_host"]:
         os.environ["DOCKER_HOST"] = docker_host
         os.environ.pop("DOCKER_CONTEXT", None)
     rows = {r["path"]: Row(**r) for r in survey["rows"]}
-    member_of = {p: r for r in rows.values() if r.members is not None for p in r.members}
+    owners: dict[str, list[Row]] = {}
+    for r in rows.values():
+        for p in r.members or {}:
+            owners.setdefault(p, []).append(r)
+    member_of = {p: rs[0] for p, rs in owners.items()}
+    if clash := [p for p in args.paths if len(owners.get(p, [])) > 1]:
+        print(f"`{clash[0]}` is in more than one group ({', '.join(r.path for r in owners[clash[0]])}); "
+              "remove the group instead.", file=sys.stderr)
+        return 2
     if args.all:
         names = [p for p, r in rows.items() if r.kind == "delete"]
     else:
         names = [p if p in rows or p in member_of else os.path.abspath(os.path.expanduser(p)) for p in args.paths]
     picked = {n: pick(n, rows, member_of) for n in names}
     picked = dict(sorted(picked.items(), key=lambda kv: kv[1] is not None and kv[1].how == "docker-builder"))
-    leaves, links = leave_paths(rows.values(), scanned_docker_root(docker_root)), bin_links()
+    leaves, links = leave_paths(rows.values(), *map(scanned_engine_root, ENGINE_ROOTS.values())), bin_links()
     held = users([p for r in picked.values() if r and r.how not in OBJECTS for p in r.targets() if os.path.lexists(p)])
 
     lines = ["| Path | Frees | Drop | Result |", "| --- | --- | --- | --- |"]
@@ -516,7 +607,7 @@ def main() -> int:
     for name, row in picked.items():
         inodes = row.inodes if row and row.members is None else 0
         fs = filesystem(name) if inodes else None
-        out = process(row, held, leaves, links, docker_root, really=not args.dry_run)
+        out = process(row, held, leaves, links, really=not args.dry_run)
         kept |= out.kept
         label = row.label() if row else f"`{tilde(name)}`"
         frees = "-" if out.frees is None or row.how in NO_READING else bounded(out.frees, row.bound)

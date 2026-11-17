@@ -244,15 +244,15 @@ def trash_rows() -> list[Row]:
     return [Row("group:tmp-trash", "delete", reason, window=window, how=how, members=old)]
 
 
-def leave_paths(rows: Iterable[Row], scanned_root: str | None) -> set[str]:
-    """The LEAVE table's paths, every leave row that is a path, and the scanned Docker root."""
+def leave_paths(rows: Iterable[Row], *scanned_roots: str | None) -> set[str]:
+    """The LEAVE table's paths, every leave row that is a path, and each scanned Docker or Podman root."""
     return ({os.path.expanduser(k) for k in LEAVE}
             | {r.path for r in rows if r.kind == "leave" and r.path.startswith("/")}
-            | ({scanned_root} if scanned_root else set()))
+            | {r for r in scanned_roots if r})
 
 
-def scanned_docker_root(root: str | None) -> str | None:
-    """The Docker root when a scan root holds it, else None."""
+def scanned_engine_root(root: str | None) -> str | None:
+    """The Docker or Podman root when a scan root holds it, else None."""
     return root if root and any(inside(root, top) for top in SCAN) else None
 
 
