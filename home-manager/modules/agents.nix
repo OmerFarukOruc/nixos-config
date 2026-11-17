@@ -54,6 +54,7 @@ in
           ".claude/hooks" = live "claude/hooks";
           ".claude/statusline.sh" = live "claude/statusline.sh";
           ".claude/agents" = live "claude/agents";
+          ".config/opencode/agents" = live "opencode/agents";
           ".codex/AGENTS.md" = {
             text =
               builtins.readFile ../../agents/shared/core.md

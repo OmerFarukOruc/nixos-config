@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from claude_tools.accounts import accounts, config_dir_of
-from claude_tools.agents import SKIP_PERMISSIONS, Agents
+from claude_tools.agents import SKIP_PERMISSIONS, Agents, check_opencode_agent
 from claude_tools.errors import Failed, NoProcess
 from claude_tools.herdr import Herdr
 from claude_tools.settings import Settings
@@ -70,28 +70,57 @@ def caller(settings: Settings, ag: Agents) -> dict | None:
 def stop_started(ag: Agents, name: str, pane: str) -> None:
     if "result" in ag.herdr("agent", "get", name, check=False):
         try:
-            ag.exit_claude(name, ag.claude_pid(pane))
+            ag.end(name, pane)
         except Failed as e:
             print(f"claude-tools agent start: could not stop {name} after the failed start: {e}", file=sys.stderr)
 
 
+def check_kind_options(a: argparse.Namespace) -> None:
+    if a.kind == "claude" and a.agent:
+        raise Failed("--agent names an opencode agent; it needs --kind opencode")
+    if a.kind == "opencode" and not a.agent:
+        raise Failed("--kind opencode needs --agent, the opencode agent that sets the model and the permissions")
+    claude_only = [f for f, v in (("--account", a.account), ("--model", a.model), ("--effort", a.effort),
+                                  ("--permission-mode", a.permission_mode)) if v]
+    if a.kind == "opencode" and claude_only:
+        raise Failed(f"{', '.join(claude_only)}: Claude only; the opencode agent {a.agent} sets its own model "
+                     "and permissions")
+
+
+def start_claude_agent(ag: Agents, a: argparse.Namespace, pane: str, config_dir: str, brief: str | None) -> None:
+    flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
+             *(["--effort", a.effort] if a.effort else [])]
+    ag.start_claude(pane, a.name, config_dir, flags)
+    if a.permission_mode:
+        wait_for_mode(ag, a.name, a.permission_mode)
+    if brief:
+        ag.prompt_when_ready(a.name, brief)
+
+
+def start_opencode_agent(ag: Agents, a: argparse.Namespace, pane: str, brief: str | None) -> None:
+    ag.start_opencode(pane, a.name, a.agent)
+    if brief:
+        ag.prompt_opencode(a.name, brief)
+
+
 def start(settings: Settings, a: argparse.Namespace) -> None:
+    check_kind_options(a)
     ag = Agents(settings)
     if ag.running(a.name):
         raise Failed(f"{a.name} is already running; `claude-tools agent stop {a.name}` ends it once it is idle")
+    if a.kind == "opencode":
+        check_opencode_agent(a.cwd, a.agent)
     config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
+    brief = f"Your brief is in {a.brief.resolve()}. Read it and carry it out." if a.brief else None
     where = caller(settings, ag)
     created = ag.herdr("tab", "create", "--label", a.name, "--cwd", str(a.cwd), "--no-focus",
                        *(["--workspace", where["workspace_id"]] if where else []))["result"]
     tab, pane = created["tab"]["tab_id"], created["root_pane"]["pane_id"]
     try:
-        flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
-                 *(["--effort", a.effort] if a.effort else [])]
-        ag.start_claude(pane, a.name, config_dir, flags)
-        if a.permission_mode:
-            wait_for_mode(ag, a.name, a.permission_mode)
-        if a.brief:
-            ag.prompt_when_ready(a.name, f"Your brief is in {a.brief.resolve()}. Read it and carry it out.")
+        if a.kind == "opencode":
+            start_opencode_agent(ag, a, pane, brief)
+        else:
+            start_claude_agent(ag, a, pane, config_dir, brief)
     except BaseException:
         stop_started(ag, a.name, pane)
         ag.herdr("tab", "close", tab, check=False)
@@ -127,13 +156,9 @@ def stop(settings: Settings, a: argparse.Namespace) -> None:
                      f"then wait with `{herdr} agent wait {a.name} --until idle --until done` or answer its question. "
                      "Pass --force only to cut it off on purpose.")
     try:
-        ag.exit_claude(a.name, ag.claude_pid(agent["pane_id"]))
-    except NoProcess:
-        try:
-            pid = ag.codex_process(agent["pane_id"])
-        except Failed as e2:
-            raise Failed(f"{e2}, but herdr still lists {a.name}; the tab stays") from e2
-        ag.exit_codex(a.name, pid)
+        ag.end(a.name, agent["pane_id"])
+    except NoProcess as e:
+        raise Failed(f"{e}, but herdr still lists {a.name}; the tab stays") from e
     tab = ag.herdr("tab", "get", agent["tab_id"], check=False).get("result", {}).get("tab", {})
     if is_own_tab(a.name, tab):
         ag.herdr("tab", "close", agent["tab_id"])
@@ -153,15 +178,22 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
 
 
 def add_parser(sub: argparse._SubParsersAction) -> None:
-    ap = sub.add_parser("agent", help="start, stop or watch named Claude agents in herdr")
+    ap = sub.add_parser("agent", help="start, stop or watch named Claude or opencode agents in herdr")
     cmds = ap.add_subparsers(dest="cmd", required=True)
-    st = cmds.add_parser("start", help="start a named Claude agent in its own herdr tab",
-                         description="Start a named Claude agent in its own herdr tab, in the caller's workspace, "
-                                     "without moving anyone's focus. It runs with --dangerously-skip-permissions "
-                                     "and gets one prompt that names the brief file. On a failure after the tab "
-                                     "exists, the agent stops and the tab closes, so the command can run again.")
+    st = cmds.add_parser("start", help="start a named Claude or opencode agent in its own herdr tab",
+                         description="Start a named agent in its own herdr tab, in the caller's workspace, "
+                                     "without moving anyone's focus, and send it one prompt that names the brief "
+                                     "file. Claude runs with --dangerously-skip-permissions. opencode runs its TUI "
+                                     "with --standalone and starts in the agent that --agent names, which sets its "
+                                     "model and permissions. On a failure after the tab exists, the agent stops and "
+                                     "the tab closes, so the command can run again.")
     st.add_argument("name", type=agent_name)
     st.add_argument("--cwd", required=True, type=folder)
+    st.add_argument("--kind", choices=("claude", "opencode"), default="claude")
+    st.add_argument("--agent", help="with --kind opencode: the opencode agent the session starts in, such as "
+                                    "opencode-review; it must exist, set a model that `opencode models` lists in the "
+                                    "folder, and the folder's project config must leave it as its global file defines "
+                                    "it")
     st.add_argument("--account", help="an account name or a CLAUDE_CONFIG_DIR folder; default: the caller's account")
     st.add_argument("--model")
     st.add_argument("--effort", choices=EFFORTS)
@@ -172,9 +204,9 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     st.set_defaults(action=start)
     sp = cmds.add_parser("stop", help="end an agent and close its tab",
                          description="Refuse while the agent is working or waits at a question or approval, unless --force. "
-                                     "Type /exit in a claude agent's pane, or press ctrl+c in a codex agent's pane "
-                                     "until codex quits, wait until herdr frees the name, and close the tab when it "
-                                     "is named NAME and has one pane.")
+                                     "Type /exit in a claude agent's pane, or press ctrl+c in a codex or opencode "
+                                     "agent's pane until it quits, wait until herdr frees the name, and close the "
+                                     "tab when it is named NAME and has one pane.")
     sp.add_argument("name")
     sp.add_argument("--force", action="store_true",
                     help="stop the agent even while it is working or waits at a question or approval")

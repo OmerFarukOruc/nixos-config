@@ -8,6 +8,7 @@ export CLAUDE_TOOLS_HERDR_SESSION="$run" CLAUDE_TOOLS_STATE="$dir/state"
 name="$run-a"
 foreign="$run-foreign"
 slow="$run-slow"
+oc="$run-oc"
 work="$dir/work"
 watch_pid=""
 watch_deadline_s=3600
@@ -25,6 +26,7 @@ cleanup() {
   "$tools" agent stop --force "$name" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$foreign" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$slow" >/dev/null 2>&1 || true
+  "$tools" agent stop --force "$oc" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
@@ -77,6 +79,27 @@ cat >"$dir/shell" <<EOF2
 exec "$caller_shell" "\$@"
 EOF2
 chmod +x "$dir/shell"
+oc_agent=e2e-review
+oc_footer=E2e-Review
+oc_ready=""
+if command -v opencode >/dev/null && [[ -d "$HOME/.config/opencode" ]]; then
+  oc_files="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agents/opencode/agents" && pwd)"
+  for made in "$oc_agent" e2e-no-model; do
+    [[ ! -e "$oc_files/$made.md" ]] || fail "the checkout has an agent file $made.md, the name of an agent this test writes"
+  done
+  mkdir -p "$dir/opencode/agents"
+  for entry in "$HOME/.config/opencode"/*; do
+    [[ "$(basename "$entry")" == agents ]] || ln -s "$entry" "$dir/opencode/"
+  done
+  ln -s "$oc_files"/*.md "$dir/opencode/agents/"
+  export OPENCODE_CONFIG_DIR="$dir/opencode"
+  (cd "$dir" && opencode models --standalone) >"$dir/opencode-models" || fail "opencode models exited $?"
+  oc_model=$(grep -m 1 -v -E '[[:space:]|&\\]' "$dir/opencode-models" || true)
+  [[ -n "$oc_model" ]] || fail "opencode models lists no model"
+  sed "s|^model: .*|model: $oc_model|" "$oc_files/opencode-review.md" >"$dir/opencode/agents/$oc_agent.md"
+  sed 's|^model: .*|model: e2e/no-such-model|' "$oc_files/opencode-review.md" >"$dir/opencode/agents/e2e-no-model.md"
+  oc_ready=1
+fi
 export SHELL="$dir/shell"
 
 "$tools" limit-switch restore || fail "restore could not start the $run server"
@@ -209,6 +232,42 @@ if foreign_available; then
   [[ -z "$(foreign_pids)" ]] || fail "a claude process of sl-factory survived agent stop"
 else
   echo "step 12: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"
+fi
+
+refused() {
+  local label=$1 reason=$2 rc=0
+  shift 2
+  "$tools" agent start "$oc" "$@" >/dev/null 2>"$dir/refused.err" || rc=$?
+  [[ "$rc" == 1 ]] || fail "agent start $label exited $rc, wanted 1"
+  grep -qF -- "$reason" "$dir/refused.err" || fail "agent start $label failed for another reason: $(cat "$dir/refused.err")"
+  tab_labelled "$oc" && fail "agent start $label left a tab"
+  return 0
+}
+if [[ -n "$oc_ready" ]]; then
+  step 13 "opencode lists the checkout's agents; an opencode agent starts in its agent and stops; a wrong --agent, an unreachable model, a Claude flag and a project override are refused before any tab opens"
+  listed=$(cd "$dir" && opencode debug agents --standalone) || fail "opencode debug agents exited $?"
+  for file in "$oc_files"/*.md "$dir/opencode/agents/$oc_agent.md" "$dir/opencode/agents/e2e-no-model.md"; do
+    want=$(sed -n 's/^model: //p' "$file")
+    got=$(jq -r --arg id "$(basename "$file" .md)" '.[] | select(.id == $id) | .model | "\(.providerID)/\(.id)\(if .variant then "#" + .variant else "" end)"' <<<"$listed")
+    [[ "$got" == "$want" ]] || fail "opencode lists the agent of $file on model '$got', wanted '$want'"
+  done
+  refused "of an unknown opencode agent" "has no global agent no-such-agent" --cwd "$work" --kind opencode --agent no-such-agent
+  refused "of an opencode agent whose model opencode cannot reach" "does not list e2e/no-such-model" --cwd "$work" --kind opencode --agent e2e-no-model
+  refused "without --agent" "--kind opencode needs --agent" --cwd "$work" --kind opencode
+  refused "with --model" "--model: Claude only" --cwd "$work" --kind opencode --agent "$oc_agent" --model sonnet
+  refused "of --agent with Claude" "--agent names an opencode agent" --cwd "$work" --agent "$oc_agent"
+  mkdir -p "$dir/override/.opencode/agents"
+  printf -- '---\npermissions:\n  - action: shell\n    resource: "*"\n    effect: allow\n---\n' >"$dir/override/.opencode/agents/$oc_agent.md"
+  refused "in a project that overrides $oc_agent" "changes the permissions of agent $oc_agent" --cwd "$dir/override" --kind opencode --agent "$oc_agent"
+  "$tools" agent start "$oc" --kind opencode --agent "$oc_agent" --cwd "$work" || fail "agent start --kind opencode exited $?"
+  [[ "$(h agent get "$oc" | jq -r '.result.agent.agent')" == opencode ]] || fail "herdr does not list $oc as an opencode agent"
+  wait_for 30 bash -c "\"$real_herdr\" --session \"$run\" agent read \"$oc\" --source visible | grep -q $oc_footer" ||
+    fail "the opencode footer never named the $oc_footer agent; its pane: $(h agent read "$oc" --source visible 2>&1 | grep -v '^\s*$' | tail -n 15)"
+  "$tools" agent stop "$oc" || fail "agent stop of the opencode agent exited $?"
+  agent_listed "$oc" && fail "the opencode agent is still listed after agent stop"
+  tab_labelled "$oc" && fail "the opencode agent's tab is still open after agent stop"
+else
+  echo "step 13: skipped, opencode or ~/.config/opencode is missing on this host"
 fi
 
 echo PASS
