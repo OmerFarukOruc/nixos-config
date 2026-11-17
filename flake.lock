@@ -600,11 +600,11 @@
     "skills-archify": {
       "flake": false,
       "locked": {
-        "lastModified": 1794734770,
-        "narHash": "sha256-BFDm8AbQyvBkEtth5tTpVMZxmdcPjXw7JwnL7v5PZ2Q=",
+        "lastModified": 1794916930,
+        "narHash": "sha256-fII0jYhErYSQY4dbc/8cKL/kex5/tefl9Rw01nSYYwA=",
         "owner": "tt-a1i",
         "repo": "archify",
-        "rev": "a7ed6fd6657da90414831d1d42cf95987188750c",
+        "rev": "44781293f38728baf04dbad33ce1a0cef8c39cca",
         "type": "github"
       },
       "original": {
