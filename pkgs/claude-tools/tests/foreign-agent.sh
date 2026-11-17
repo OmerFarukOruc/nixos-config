@@ -5,8 +5,10 @@ foreign_available() {
 foreign_account() {
   sudo -n -u sl-factory sh -c 'for d in "$HOME"/.claude-accounts/*/; do [ -f "$d.claude.json" ] && [ -s "$d.credentials.json" ] && basename "$d" && break; done' 2>/dev/null
 }
+foreign_sid=""
 foreign_pids() {
-  pgrep -u sl-factory -x 'claude|\.claude-wrapped' || true
+  ps -u sl-factory -o pid= -o sid= -o comm= |
+    awk -v sid="$foreign_sid" '$2 == sid && ($3 == "claude" || $3 == ".claude-wrapped") { print $1 }'
 }
 start_foreign_agent() {
   local name=$1 dir=$2 account shim pane
@@ -25,7 +27,10 @@ RUN
   printf '%s\n' '#!/usr/bin/env bash' "exec sudo -n -u sl-factory -i bash $shim/as-sl-factory.sh $account \"\$@\"" >"$shim/claude"
   chmod 755 "$shim/claude" "$shim/as-sl-factory.sh" "$shim"
   chmod 711 "$dir"
-  pane=$(h workspace create --cwd "$dir" --label "$name" --no-focus --env "PATH=$shim:$PATH" --env CLAUDE_TOOLS_PLAIN=1 | jq -r '.result.root_pane.pane_id')
+  pane=$(h workspace create --cwd "$dir" --label "$name" --no-focus --env "PATH=$shim:$PATH" --env CLAUDE_TOOLS_PLAIN=1 |
+    jq -er '.result.root_pane.pane_id') || fail "herdr could not create the workspace of the agent that runs as sl-factory"
   h agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- --model haiku --dangerously-skip-permissions >/dev/null ||
     fail "herdr could not start the agent that runs as sl-factory"
+  foreign_sid=$(h pane process-info --pane "$pane" | jq -er '.result.process_info.shell_pid') ||
+    fail "herdr did not report the shell of the pane that runs as sl-factory"
 }
