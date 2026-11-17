@@ -616,11 +616,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1794898800,
-        "narHash": "sha256-BjoomlRr0lD7oZntIltLVN+7xofRUt6sfRmk6uz49+g=",
+        "lastModified": 1794930848,
+        "narHash": "sha256-YYZ5GCiNnH5JdgOztmyVx11Hc32yHYCXDXRjm/gKW9U=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "563be13825ef803f9b1bfd71453e702ce791ddb7",
+        "rev": "465d00e0a6004851564e4ca1781eec11d582652e",
         "type": "github"
       },
       "original": {
@@ -632,11 +632,11 @@
     "skills-caldoai": {
       "flake": false,
       "locked": {
-        "lastModified": 1794891264,
-        "narHash": "sha256-b0V4zEayahE99iDsrx+B3g3LOlhodKrFshbRIVPANfw=",
+        "lastModified": 1794930345,
+        "narHash": "sha256-djEr+pBapwR0J4RlSrU1CIHa3/RKnGQzBZ5mkqzu9QY=",
         "owner": "caldoai",
         "repo": "skills",
-        "rev": "2e157218049708bf337717847bc1b2a971203e3f",
+        "rev": "bd73b2ea5eb854ab8f0553fb41f77c8786f28f82",
         "type": "github"
       },
       "original": {
