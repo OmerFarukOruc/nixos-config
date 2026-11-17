@@ -62,8 +62,6 @@ function copyFlags(plan: CopyPlan, isFirstTurn: boolean): string[] {
     DENIED_TOOLS,
     '--settings',
     COPY_SETTINGS,
-    '--add-dir',
-    SCRATCH_ROOT,
   ]
   if (!isFirstTurn) {
     return ['--resume', plan.sessionId, ...shared]
