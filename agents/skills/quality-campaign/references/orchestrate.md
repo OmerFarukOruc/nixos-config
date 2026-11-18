@@ -30,7 +30,7 @@ One slice: one worktree, one branch off the integration head, one writer.
 
 ## 3. Review loop, per slice
 
-1. Re-run the issue's Done-criteria commands yourself in the worktree, with cache-busting flags. A from-cache result proves nothing. Never merge on the writer's self-report.
+1. Re-run the issue's Done-criteria commands yourself in the worktree, with every result cache off, as "The artifact" in `~/.claude/shared/testing-discipline.md` says. Never merge on the writer's self-report.
 2. Load the standards-spec-review skill and run it on the slice branch against its merge base with integration, judged against the subissue. Review subagents work read-only and run no builds while writers run.
 3. On failure: write a verdict file with the findings and resume the writer with it. When it reports, check its fixes yourself with `git range-diff` between the reviewed and the fixed branch; start no second review.
 4. On a STOP condition or scope exception: verify the writer's claim independently. Override only with evidence, recorded in a verdict file, expanding scope by the minimum, normally a single file.
@@ -39,7 +39,7 @@ One slice: one worktree, one branch off the integration head, one writer.
 7. Run the full test and policy suite on integration after every merge. Slice-local gates missed three cross-cutting breaks in the live trial.
 8. Close the subissue with a Check, Command, Result table.
 
-Failure attribution: before blaming a failure on the campaign, reproduce it in a same-commit baseline worktree of the default branch. Re-run transient infrastructure failures, such as port collisions between concurrent test runs, serially before any verdict.
+Failure attribution: before blaming a failure on the campaign, reproduce it in a same-commit baseline worktree of the default branch. Re-run transient infrastructure failures, such as port collisions between concurrent test runs, serially before any verdict, then report the collision as a finding under "A test owns its resources" (`testing-discipline.md`).
 
 A regression traced to a closed slice: fix it through the normal cycle, then comment the fix commit and evidence on the closed issue. Do not reopen.
 
