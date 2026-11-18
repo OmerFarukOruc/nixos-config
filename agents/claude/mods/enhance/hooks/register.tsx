@@ -86,7 +86,7 @@ async function converse($: EngineInterface, copy: Copy, copyId: string, draft: s
   }
 }
 
-async function recordSeat($: EngineInterface, me: ActiveRun, copyId: string, seat: Seat): Promise<void> {
+async function recordSeat($: EngineInterface, me: ActiveRun, copyId: string, seat: Seat | null): Promise<void> {
   const seated: Run = { kind: 'running', runId: me.id, copyId, seat }
   await update($, run, cur => (cur.kind === 'running' && cur.runId === me.id ? seated : cur))
 }

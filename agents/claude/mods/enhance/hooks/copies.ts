@@ -19,7 +19,7 @@ export type CopyPlan = {
   parentId: string | null
   cwd: string
   cancel: Cancel
-  onSeat: (seat: Seat) => Promise<void>
+  onSeat: (seat: Seat | null) => Promise<void>
 }
 
 export type Place = 'beside-session' | 'new-workspace'
@@ -42,10 +42,13 @@ const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
 const GONE = new Set(['pane_not_found', 'workspace_not_found'])
 const TRANSCRIPT_ROWS = '400'
 const TRANSCRIPT_RETRY_MS = 1000
+const TRUST_DIALOG_MARKERS = ['Yes, I trust this folder', 'No, exit']
 
 type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
 
 class CopyCancelled extends Error {}
+
+class FolderNotTrusted extends Error {}
 
 function runTool($: EngineInterface, argv: readonly string[], init: Omit<ProcessRunInit, 'cwd'> = {}): Promise<ProcessRunResult> {
   return $.process.run(argv, { ...init, cwd: TOOL_CWD })
@@ -284,7 +287,11 @@ async function startAgent($: EngineInterface, name: string, pane: string, plan: 
     }
     checkCancel(plan.cancel)
     if (started.code === 'agent_not_ready') {
-      throw new Error(`the copy is blocked at startup; its screen ended: ${(await screenOf($, name)).slice(-400)}`)
+      const screen = await screenOf($, name)
+      if (TRUST_DIALOG_MARKERS.every(marker => screen.includes(marker))) {
+        throw new FolderNotTrusted()
+      }
+      throw new Error(`the copy is blocked at startup; its screen ended: ${screen.slice(-400)}`)
     }
     if (started.code !== 'agent_pane_busy' || attempt === START_TRIES) {
       throw new Error(`herdr could not start the copy: ${started.code}`)
@@ -365,16 +372,41 @@ async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: num
   }
 }
 
+type HerdrCopyState = { kind: 'unstarted' } | { kind: 'seated'; seat: Seat } | { kind: 'headless'; copy: Copy }
+
 export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Copy {
   const name = `enhance-${plan.sessionId.slice(0, 8)}`
-  let seat: Seat | null = null
+  let state: HerdrCopyState = { kind: 'unstarted' }
+
+  const closeOwnSeat = async (seat: Seat): Promise<void> => {
+    if (!(await closeSeat($, seat))) {
+      throw new Error(`herdr could not close the copy's ${seat.kind} ${seat.id}; close it yourself`)
+    }
+  }
+
+  const start = async (): Promise<HerdrCopyState> => {
+    checkCancel(plan.cancel)
+    const seat = await openSeat($, place, plan.cwd)
+    state = { kind: 'seated', seat }
+    await plan.onSeat(seat)
+    try {
+      await startAgent($, name, seat.pane, plan)
+      return state
+    } catch (error) {
+      if (!(error instanceof FolderNotTrusted)) {
+        throw error
+      }
+      await closeOwnSeat(seat)
+      state = { kind: 'headless', copy: headlessCopy($, plan) }
+      await plan.onSeat(null)
+      return state
+    }
+  }
 
   const send = async (text: string): Promise<Turn> => {
-    if (seat === null) {
-      checkCancel(plan.cancel)
-      seat = await openSeat($, place, plan.cwd)
-      await plan.onSeat(seat)
-      await startAgent($, name, seat.pane, plan)
+    const current = state.kind === 'unstarted' ? await start() : state
+    if (current.kind === 'headless') {
+      return current.copy.send(text)
     }
 
     const rowsBefore = await transcriptRows($, await transcriptPath($, plan.sessionId))
@@ -403,13 +435,20 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
       }
     },
     stop: async () => {
-      if (seat !== null && (await closeSeat($, seat))) {
-        await forgetCopy($, plan.sessionId)
+      switch (state.kind) {
+        case 'unstarted':
+          return
+        case 'headless':
+          return state.copy.stop()
+        case 'seated':
+          if (await closeSeat($, state.seat)) {
+            await forgetCopy($, plan.sessionId)
+          }
       }
     },
     close: async () => {
-      if (seat !== null && !(await closeSeat($, seat))) {
-        throw new Error(`herdr could not close the copy's ${seat.kind} ${seat.id}; close it yourself`)
+      if (state.kind === 'seated') {
+        await closeOwnSeat(state.seat)
       }
       await forgetCopy($, plan.sessionId)
     },
