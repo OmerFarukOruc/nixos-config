@@ -7,7 +7,7 @@
 - [Secrets](#secrets)
 - [Home Manager](#home-manager)
 - [Failure popups](#failure-popups)
-- [DPI bypass and the WARP proxy](#dpi-bypass-and-the-warp-proxy)
+- [DPI bypass](#dpi-bypass)
 - [nixos-desktop GPU](#nixos-desktop-gpu)
 - [nixos-desktop case fans](#nixos-desktop-case-fans)
 
@@ -567,9 +567,8 @@ running from an older store path counts too. A Codex `app-server` or opencode
 `serve` process and its children do not count, because such a background
 server writes the file only for a client. A file with a `lock` waits only while
 that Chromium `SingletonLock` names another host or a running process of the
-app, so each browser profile waits on its own lock, a closed Brave (WARP)
-profile changes while Brave runs, and a lock left by a crash holds nothing. The
-tool compares parsed values, so an app that writes the same
+app, so each browser profile waits on its own lock, and a lock left by a crash
+holds nothing. The tool compares parsed values, so an app that writes the same
 settings in its own layout leaves nothing to change. It reports a file it
 cannot parse and still writes the others. `oruc-app-settings --check` exits 1
 when a file's values differ from what the stored scheme sets. `settings_file.py` holds the TOML merge and the
@@ -619,7 +618,7 @@ switch once it has loaded this one.
 a policy that installs it, and its native host. The reload `pywalfox` writes
 `~/.cache/wal/colors.json` from the pack's `pywal-colors` fact and
 `oruc-wallpaper-path`, sets Pywalfox's dark or light mode and tells a running
-Firefox to read the colours again. Brave, Brave (WARP) and Chromium follow the
+Firefox to read the colours again. Brave and Chromium follow the
 desktop's colours, because their `Preferences` set
 `extensions.theme.system_theme` to Qt (2) on a host with Plasma, whose KDE
 colours they then follow at once, and to GTK (1) elsewhere, whose colours
@@ -774,14 +773,14 @@ lists, so a new service needs that line by hand.
 A new service adds its name where its neighbours are listed. A service that
 needs no popup gets a line with its reason in the list of exceptions.
 
-## DPI bypass and the WARP proxy
+## DPI bypass
 
-`nixos-desktop` and `nixos-rog` carry two ways to reach Discord when the line
-blocks it. zapret2 (`nixosModules/zapret2.nix`, the hosts set
-`services.zapret2.firewall.interfaces`) comes first, and the Cloudflare WARP
-proxy (`nixosModules/warp.nix`) is the fallback for the Vesktop and Brave
-launchers in `home-manager/modules/warp-launchers.nix`. The commands below ran
-on nixos-rog; nixos-desktop runs the same modules with its own uplink.
+`nixos-desktop` and `nixos-rog` reach Discord past the line's DPI with zapret2
+(`nixosModules/zapret2.nix`; the hosts set
+`services.zapret2.firewall.interfaces`). When a strategy stops working, the
+fix is another strategy ([Router bypass](home-network.md#router-bypass) lists
+the tested ones). The commands below ran on nixos-rog; nixos-desktop runs the
+same module with its own uplink.
 
 **zapret2.** `nfqws2@default.service` rewrites the first packets of outgoing
 HTTP and TLS connections, and STUN and Discord voice packets, so the DPI on the line
@@ -848,18 +847,8 @@ the service running, over one UDP flow to port 19313, inside the
 `discord-voice` range, with 33 packets out and 106 in. Voice was not tried with
 the service stopped, so this run does not show that `discord-voice` was needed.
 
-**WARP proxy.** `usque.service` runs `usque socks` on `127.0.0.1:1080`
-(`oruc.warpProxy` holds the address). It carries only the traffic of an app that
-points at it. `usque` keeps one registered WARP device in
-`/var/lib/usque/config.json` (`sudo ls -l /var/lib/usque` lists it, owned by the
-`usque` user). `preStart` registers a device when that file is missing or empty. When the
-machine is offline at boot, registration fails and the service restarts with a
-growing delay (`RestartSec=3`, up to `RestartMaxDelaySec=5min`), so it does not
-ask Cloudflare every 3 s. Removing `config.json` therefore makes the next start
-register a new device; that step was not run.
-
-`sudo systemctl status nfqws2@default usque` shows whether either service runs,
-and both raise the failure popup ([Failure popups](#failure-popups)).
+`sudo systemctl status nfqws2@default` shows whether the service runs, and it
+raises the failure popup ([Failure popups](#failure-popups)).
 
 ## nixos-desktop GPU
 

@@ -31,7 +31,7 @@ Windows PC:               DoH to NextDNS, its own winws2 bypass stopped
 ```
 
 Every LAN device goes through the router's bypass. The NixOS hosts' own
-zapret2 is in [DPI bypass and the WARP proxy](architecture.md#dpi-bypass-and-the-warp-proxy).
+zapret2 is in [DPI bypass](architecture.md#dpi-bypass).
 
 ## Diagnose
 
@@ -73,7 +73,7 @@ Work through the steps in order; a step is done when its expected output shows.
 | A name resolves to `0.0.0.0` on every device | a NextDNS list blocks it; Logs shows the blocked query | [NextDNS profile](#nextdns-profile) |
 | A name resolves, but TLS fails or resets on every device | the router's auto-list treats a healthy host | [Router bypass](#router-bypass) |
 | `test.nextdns.io` passes, but a browser shows "no profile" | the browser resolves names itself | [Windows PC](#windows-pc) |
-| A site breaks only on a NixOS host | zapret2's auto-list on that host | [DPI bypass](architecture.md#dpi-bypass-and-the-warp-proxy) |
+| A site breaks only on a NixOS host | zapret2's auto-list on that host | [DPI bypass](architecture.md#dpi-bypass) |
 | A game refuses to start on the Windows PC | WinDivert loaded | [Windows PC](#windows-pc) |
 
 ## Router
@@ -356,6 +356,6 @@ its next start.
 | Scope | Discord in browser, app and voice, plus an auto-list; Microsoft, banks, payment sites, `gov.tr` and the work domain are never treated |
 | DNS | Omer's NextDNS profile, natively on each device and through the router, with no helper software |
 | Updates | by hand only |
-| VPN | Cloudflare WARP is not a workaround for the home line; the WARP launchers are only the NixOS hosts' fallback |
+| VPN | Cloudflare WARP or another VPN is not a workaround for Discord; a broken strategy gets a new strategy |
 | Anti-cheat | never disguise or hide WinDivert from an anti-cheat |
 | Security settings | Secure Boot and other security settings change only with Omer's yes |

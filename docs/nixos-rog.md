@@ -94,10 +94,10 @@ over the tailnet. The IPTVnator entry in the app menu starts IPTVnator this way
 Cloudflare firewall refuses Turkish addresses, Cloudflare WARP's included
 (observed 2026-10-31). IPTVnator ignores proxy settings for its portal requests
 (it sets `proxy: false` in `apps/electron-backend/src/app/util/validated-axios.ts`
-of 4gray/iptvnator v0.24.0), so a proxy launcher like the WARP ones does not
-work. In IPTVnator's settings, pick the MPV player: the provider answers 401 to
-every request that names VLC as its user agent, while mpv's `libmpv` gets the
-stream (measured 2026-10-31). The account allows one stream at a time: a new
+of 4gray/iptvnator v0.24.0), so a proxy launcher does not work. In IPTVnator's
+settings, pick the MPV player: the provider answers 401 to every request that
+names VLC as its user agent, while mpv's `libmpv` gets the stream (measured
+2026-10-31). The account allows one stream at a time: a new
 stream ends the one already playing, which mpv shows as playback that stops
 after its buffer of about 30 seconds runs out.
 

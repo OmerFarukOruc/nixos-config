@@ -27,7 +27,6 @@ in
     ../modules/box-view.nix
     ../modules/sshfs-devbox.nix
     ../modules/via-devbox-launchers.nix
-    ../modules/warp-launchers.nix
     ../modules/deskflow.nix
     ../modules/agent-cli.nix
     ../modules/codex-runtime-roots.nix

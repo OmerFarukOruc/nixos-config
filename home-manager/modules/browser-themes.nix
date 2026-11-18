@@ -75,10 +75,7 @@ in
             path = "opt/brave.com/brave-origin/brave";
           }
         ];
-        files = map chromiumPreferences [
-          "BraveSoftware/Brave-Origin"
-          "BraveSoftware/Brave-WARP"
-        ];
+        files = [ (chromiumPreferences "BraveSoftware/Brave-Origin") ];
       };
       chromium = {
         label = "Chromium";

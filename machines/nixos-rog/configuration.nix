@@ -25,7 +25,6 @@
     ./powertop.nix
     ./profile-sync.nix
     ../../nixosModules/via-devbox.nix
-    ../../nixosModules/warp.nix
     ./zapret2.nix
   ];
 
