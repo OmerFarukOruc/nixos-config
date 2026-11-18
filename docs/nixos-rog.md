@@ -62,7 +62,8 @@ The public names under `risoluto.dev` (`openchamber.risoluto.dev`,
 addresses. The NextDNS profile's DNS-rebinding protection answers those names
 with `0.0.0.0`. So the NextDNS profile's Allowlist in the dashboard holds
 `risoluto.dev` and `statuslantern.com`. Each entry also turns off NextDNS
-filtering for that one domain.
+filtering for that one domain. The rest of the profile, which every device at
+home shares, is in [NextDNS profile](home-network.md#nextdns-profile).
 
 Without the entries, OpenChamber, cliproxy and SigNoz fail to connect as if the
 server were down. The `risoluto-dev-allowlisted` or

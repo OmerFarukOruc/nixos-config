@@ -15,3 +15,8 @@ tailnet_name=$(tailscale status --json --peers=false 2>/dev/null |
   sed -n 's/^ *"DNSName": "\(.*\)\.",$/\1/p')
 check tailscale-running "${tailnet_name:-not logged in}" test -n "$tailnet_name"
 check magicdns-resolves "$tailnet_name" resolvectl query "$tailnet_name"
+for discord_name in discord.com gateway.discord.gg cdn.discordapp.com; do
+  discord_answer=$(resolvectl query --cache=no --legend=no -4 "$discord_name" 2>/dev/null | awk 'NR == 1 { print $2 }')
+  check "${discord_name//./-}-resolves" "$discord_name -> ${discord_answer:-no answer}" \
+    bash -c '[[ -n $1 && $1 != 0.0.0.0 ]]' _ "$discord_answer"
+done

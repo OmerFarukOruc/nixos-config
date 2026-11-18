@@ -834,11 +834,9 @@ it when it is missing. Read it with `sudo cat /var/lib/zapret2/auto-hosts.txt`.
 To remove a host, rewrite the file in place, as `agents/reference/nixos-hosts.md`
 ("A public site fails TLS or resets the connection") shows.
 
-**Home router.** At home both hosts sit behind a router that runs its own
-zapret2 bypass for every LAN device, with a different TLS strategy
-(`multidisorder:pos=2:seqovl=1`) and the same voice rule. The router's
-configuration lives outside this repository. Both layers then act on the same
-Discord flows; on nixos-rog on 2026-11-18, 42 of 42 Discord requests succeeded
+**Home router.** At home both hosts also sit behind the router's own bypass,
+which [Home network](home-network.md) describes. Both layers then act on the
+same Discord flows; on nixos-rog on 2026-11-18, 42 of 42 Discord requests succeeded
 with the local service active and 42 of 42 with it stopped, for both a small
 and a post-quantum ClientHello. Away from home the local service is the only
 bypass; it has not been tested on another line.

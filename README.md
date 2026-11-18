@@ -275,6 +275,7 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 | [Secure Boot playbook](docs/secure-boot-playbook.md) | a procedure for a coding agent that turns Secure Boot on for a Linux and Windows dual boot on any distribution, with what was tested on nixos-desktop |
 | [Workstations](docs/workstations.md) | the hourly updater and its failures, heavy commands, switching the scheme on every PC, and gaming |
 | [nixos-rog](docs/nixos-rog.md) | secrets, DNS, apps through devbox, the Claude Code and Codex setup, Deskflow, keyboard keys, Plasma panels, power and heat, known faults, the checks of the running laptop and of a visual change, and how to drive VS Code |
+| [Home network](docs/home-network.md) | the home router's Discord bypass and DNS, the shared NextDNS profile, and the Windows PC |
 | [nixos-latitude](docs/nixos-latitude.md) | the hardware facts and measured dead ends |
 | [devbox](docs/devbox.md) | the server host: disk, boot, access, secrets, web names, containers, agent runtime, streamed desktop, and its tests in a VM |
 | [Install nixos-latitude](docs/install-nixos-latitude.md) | a first install from the NixOS ISO |
