@@ -1,7 +1,7 @@
 import type { EngineInterface, ProcessRunInit, ProcessRunResult } from 'claude-code'
 
 import type { Seat } from '../types'
-import { isCommandTurn, isSessionId, lastAssistantText, parseHeadless, slashCommandOf, textAt, valueAt } from './reply'
+import { isCommandTurn, isSessionId, parseHeadless, slashCommandOf, textAt, turnOf, valueAt } from './reply'
 import type { SlashCommand } from './reply'
 
 export type Turn = { kind: 'reply'; text: string } | { kind: 'failed'; reason: string; notes: string } | { kind: 'cancelled' }
@@ -27,7 +27,7 @@ export type Place = 'beside-session' | 'new-workspace'
 const COPY_MODEL = 'claude-sonnet-5-5'
 const DENIED_TOOLS = 'Edit,Write,NotebookEdit,AskUserQuestion'
 const COPY_PERMISSION_MODE = 'bypassPermissions'
-const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfPrompting":true}}'
+const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfPrompting":true},"env":{"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS":"1"}}'
 const SCRATCH_ROOT = '/tmp/agents'
 const TOOL_CWD = '/'
 const AGENT_START_TIMEOUT_MS = 120_000
@@ -41,7 +41,6 @@ const PROMPT_TRIES = 60
 const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
 const GONE = new Set(['pane_not_found', 'workspace_not_found'])
 const TRANSCRIPT_ROWS = '400'
-const TRANSCRIPT_TRIES = 4
 const TRANSCRIPT_RETRY_MS = 1000
 
 type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
@@ -333,29 +332,34 @@ async function commandRows($: EngineInterface, path: string, call: SlashCommand)
   return rows.isStdoutTruncated ? null : rows.stdout
 }
 
-async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: number, call: SlashCommand | null): Promise<Turn> {
+async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: number, call: SlashCommand | null, cancel: Cancel, deadline: number): Promise<Turn> {
   const path = await transcriptPath($, sessionId)
   if (path === null) {
     return { kind: 'failed', reason: 'the copy left no transcript', notes: '' }
   }
 
-  for (let attempt = 1; ; attempt += 1) {
+  for (;;) {
+    checkCancel(cancel)
     const tail = await runTool($, ['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
     if (tail.isStdoutTruncated) {
       return { kind: 'failed', reason: 'the copy transcript tail is over 4 MiB', notes: '' }
     }
-    const text = lastAssistantText(tail.stdout)
-    const commands = call === null ? null : await commandRows($, path, call)
-    if (commands === null && call !== null) {
-      return { kind: 'failed', reason: 'the copy transcript rows that name the command are over 4 MiB', notes: text ?? '' }
+    const turn = turnOf(tail.stdout)
+    if (turn.isApiError) {
+      return { kind: 'failed', reason: `the copy stopped at an API error: ${turn.text ?? 'no text'}`, notes: '' }
     }
-    const isLoaded = call === null || isCommandTurn(commands ?? '', call)
-    if (text !== null && isLoaded) {
-      return { kind: 'reply', text }
+    if (turn.hasEnded) {
+      const commands = call === null ? null : await commandRows($, path, call)
+      if (commands === null && call !== null) {
+        return { kind: 'failed', reason: 'the copy transcript rows that name the command are over 4 MiB', notes: turn.text ?? '' }
+      }
+      if (call !== null && !isCommandTurn(commands ?? '', call)) {
+        return { kind: 'failed', reason: `the copy did not load ${call.name}`, notes: turn.text ?? '' }
+      }
+      return turn.text === null ? { kind: 'failed', reason: 'the copy wrote no reply to this turn', notes: '' } : { kind: 'reply', text: turn.text }
     }
-    if (attempt === TRANSCRIPT_TRIES) {
-      const reason = isLoaded ? 'the copy wrote no reply to this turn' : `the copy did not load ${call?.name}`
-      return { kind: 'failed', reason, notes: text ?? '' }
+    if ((await $.clock.now()) >= deadline) {
+      return { kind: 'failed', reason: `the copy's turn did not end in ${PROMPT_TIMEOUT_MS / 1000} s`, notes: turn.text ?? '' }
     }
     await $.clock.sleep(TRANSCRIPT_RETRY_MS)
   }
@@ -374,6 +378,7 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
     }
 
     const rowsBefore = await transcriptRows($, await transcriptPath($, plan.sessionId))
+    const deadline = (await $.clock.now()) + PROMPT_TIMEOUT_MS
     const prompted = await promptAgent($, name, text, plan.cancel)
     checkCancel(plan.cancel)
     if (!prompted.ok) {
@@ -383,7 +388,7 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
       return { kind: 'failed', reason: 'the copy stopped at a question or approval; Details shows its screen', notes: await screenOf($, name) }
     }
 
-    return replyAfter($, plan.sessionId, rowsBefore, slashCommandOf(text))
+    return replyAfter($, plan.sessionId, rowsBefore, slashCommandOf(text), plan.cancel, deadline)
   }
 
   return {

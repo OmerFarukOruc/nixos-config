@@ -7,12 +7,15 @@ export type SlashCommand = { name: string; args: string }
 
 export type HeadlessResult = { kind: 'answered'; text: string } | { kind: 'failed'; reason: string }
 
+export type TurnState = { text: string | null; hasEnded: boolean; isApiError: boolean }
+
 type Block = { tag: string; body: string; start: number; end: number | null }
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(\S*)/
 const OPTION = /^- (.+)$/
 const SLASH_COMMAND = /^(\/[\w:-]+)(?:\s+([\s\S]*))?$/
+const PENDING_COUNTS = ['pendingBackgroundAgentCount', 'pendingWorkflowCount'] as const
 
 export function isSessionId(text: string): boolean {
   return SESSION_ID.test(text)
@@ -57,16 +60,47 @@ export function parseHeadless(stdout: string): HeadlessResult {
   return { kind: 'answered', text }
 }
 
-export function lastAssistantText(jsonl: string): string | null {
-  const texts = jsonl.split('\n').flatMap(line => {
-    const row = parseLine(line)
-    const content = textAt(row, ['type']) === 'assistant' ? valueAt(row, ['message', 'content']) : undefined
-    const blocks: unknown[] = Array.isArray(content) ? content : []
+function blocksOfRow(row: unknown): unknown[] {
+  const content = valueAt(row, ['message', 'content'])
 
-    return blocks.flatMap(block => (textAt(block, ['type']) === 'text' ? [textAt(block, ['text']) ?? ''] : []))
-  })
+  return Array.isArray(content) ? content : []
+}
 
-  return texts.at(-1) ?? null
+function isTurnEnd(row: unknown): boolean {
+  return (
+    textAt(row, ['subtype']) === 'turn_duration' &&
+    PENDING_COUNTS.every(key => {
+      const count = valueAt(row, [key])
+      return typeof count !== 'number' || count === 0
+    })
+  )
+}
+
+function isToolResult(row: unknown): boolean {
+  return blocksOfRow(row).some(block => textAt(block, ['type']) === 'tool_result')
+}
+
+export function turnOf(jsonl: string): TurnState {
+  return jsonl.split('\n').reduce<TurnState>(
+    (turn, line) => {
+      const row = parseLine(line)
+      const type = textAt(row, ['type'])
+      if (type === 'system') {
+        return isTurnEnd(row) ? { ...turn, hasEnded: true } : turn
+      }
+      if (type === 'user') {
+        return { text: isToolResult(row) ? turn.text : null, hasEnded: false, isApiError: false }
+      }
+      if (type !== 'assistant') {
+        return turn
+      }
+      const texts = blocksOfRow(row).flatMap(block => (textAt(block, ['type']) === 'text' ? [textAt(block, ['text']) ?? ''] : []))
+      const isApiError = valueAt(row, ['isApiErrorMessage']) === true
+
+      return { ...turn, text: texts.at(-1) ?? turn.text, isApiError }
+    },
+    { text: null, hasEnded: false, isApiError: false },
+  )
 }
 
 export function slashCommandOf(prompt: string): SlashCommand | null {
