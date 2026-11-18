@@ -107,8 +107,9 @@ ip=$(nix shell nixpkgs#knot-dns -c kdig +short @<router-ip> "$h" A | tail -1)
 curl -s --resolve "$h:443:$ip" "https://$h/" | grep -oE '"(status|protocol|profile)": *"[^"]*"'
 ```
 
-On 2026-11-18 this printed `"protocol": "DOH"` and the same `"profile"`
-fingerprint as a query from nixos-rog.
+On 2026-11-18, before and after a router reboot, this printed
+`"protocol": "DOH"` and the same `"profile"` fingerprint as a query from
+nixos-rog.
 
 ## Router bypass
 
@@ -196,7 +197,11 @@ Traffic Control and the SSH server. Entware's `opkg` fetched its HTTPS feed only
 after the busybox `wget` link at `/opt/usr/bin/wget`, which shadowed
 `/opt/bin/wget` (wget-ssl), was removed. To remove Entware, run `no opkg disk`,
 `no system mount storage:` and `erase storage:` in the web command line.
-Whether the service starts by itself after a router reboot is not verified.
+Verified after a router reboot (2026-11-18, reported by Omer; router uptime
+and `S51nfqws2 status` were not read): from nixos-rog with its own bypass
+stopped, requests to `discord.com`, `gateway.discord.gg` and
+`cdn.discordapp.com` passed in 3 rounds (9 of 9), so the router bypass ran
+without a manual start.
 
 ## Router DNS
 
