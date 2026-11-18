@@ -801,7 +801,7 @@ packet among the first 16 packets of a flow, to any host on UDP ports
 19294-19344 and 50000-50099, the rule the bypass on the home router runs. The
 range holds Google's STUN port 19302, so WebRTC STUN to Google gets the fakes
 too. No automated check covers voice; joining a voice channel away from home
-is the test.
+is the test, and **Away from home** below records the one run so far.
 
 The service queues no QUIC (UDP 443). When the post-quantum key share splits a
 QUIC Initial over two datagrams, `nfqws2` drops both and sends them again with
@@ -838,8 +838,15 @@ To remove a host, rewrite the file in place, as `agents/reference/nixos-hosts.md
 which [Home network](home-network.md) describes. Both layers then act on the
 same Discord flows; on nixos-rog on 2026-11-18, 42 of 42 Discord requests succeeded
 with the local service active and 42 of 42 with it stopped, for both a small
-and a post-quantum ClientHello. Away from home the local service is the only
-bypass; it has not been tested on another line.
+and a post-quantum ClientHello.
+
+**Away from home.** The local service is the only bypass. On nixos-rog, on one
+phone hotspot on 2026-11-18, the line reset `discord.com`, `gateway.discord.gg`
+and `cdn.discordapp.com` with the service stopped, and all three returned HTTP
+responses with it running. A Vesktop voice call showed Voice Connected with
+the service running, over one UDP flow to port 19313, inside the
+`discord-voice` range, with 33 packets out and 106 in. Voice was not tried with
+the service stopped, so this run does not show that `discord-voice` was needed.
 
 **WARP proxy.** `usque.service` runs `usque socks` on `127.0.0.1:1080`
 (`oruc.warpProxy` holds the address). It carries only the traffic of an app that
