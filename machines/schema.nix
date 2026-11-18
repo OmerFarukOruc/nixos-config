@@ -188,7 +188,7 @@ let
           diskSelfTests = mkFeature "Schedule the smartd short and long disk self-tests.";
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
           alwaysOn = mkFeature "Never sleep, and reboot after a panic or a hang (nixosModules/always-on.nix). It does not mean the machine stays powered on.";
-          boxBrowser = mkFeature "Run a signed-in Chromium on a VNC display for coding agents, with the box-browser command (nixosModules/box-browser.nix).";
+          boxBrowser = mkFeature "Run a signed-in Chromium on a VNC display for coding agents, which the box-browser command drives (nixosModules/box-browser.nix, docs/box-browser.md).";
           gaming = mkFeature "Run Steam with the Proton builds, ntsync and the themed MangoHud (nixosModules/gaming.nix, home-manager/modules/gaming.nix).";
           lavdScheduler = mkFeature "Run the scx_lavd sched_ext scheduler in its performance mode (nixosModules/lavd-scheduler.nix).";
         };

@@ -67,7 +67,7 @@ infisical secrets get DEVBOX_OMER_SUDO_PASSWORD --plain --silent \
 
 The box carries `tag:infra-agent`, and the tailnet policy decides what it reaches.
 
-- Agents cannot open a shell on nixos-desktop or nixos-rog; ask Omer instead. From this box MagicDNS resolves tailnet names since the deploy of 13-11-2026, so `nixos-desktop` and `ci-1.tail539d7d.ts.net` resolve, but the tailnet policy still decides what connects. Omer's browser there is reachable over CDP once he runs `browser-lend on` (Browsers, below).
+- Agents cannot open a shell on nixos-desktop or nixos-rog; ask Omer instead. From this box MagicDNS resolves tailnet names since the deploy of 13-11-2026, so `nixos-desktop` and `ci-1.tail539d7d.ts.net` resolve, but the tailnet policy still decides what connects. Omer's Brave there reaches this box once he runs `browser-lend on` (Browsers, below).
 - The six Status Lantern hosts (staging-1, prod-backend-1, prod-scraper-1, observability-1, ci-1, spare-1) take root SSH over the Status Lantern tailnet by their tailnet address and the repository's pinned host key (StatusLantern/statuslantern `docs/hosts.md`, Reach a host). Production deploys run through that repository's release; `devenv machines deploy` on a prod host by hand needs a founder's yes (`docs/hosts.md`, Deploy a host).
 - A `!` command that Omer types in an agent session here runs on devbox with your own reach, so it adds nothing you could not run. Run every command yourself that this box reaches or that Sudo above covers. A step that needs Omer's machine or login, such as `browser-lend on`, names the machine first: "In a terminal on nixos-desktop, run ...".
 - The SigNoz API (`signoz.statuslantern.com` on observability-1) answers this box on TCP 443, so the SigNoz MCP server works here. When it times out at session start, `/mcp` reconnects it.
@@ -76,9 +76,9 @@ The box carries `tag:infra-agent`, and the tailnet policy decides what it reache
 
 Agents drive browsers with agent-browser; the agent-browser skill says which browser to use and how.
 
-- The box browser holds Omer's logins: Chromium on the VNC display `:20`, DevTools on `127.0.0.1:9344`, profile in `~/.local/share/box-browser/profile`. Agents drive it with `box-browser`, and Omer signs in from his PC with `box-view devbox`. nixos-config `nixosModules/box-browser.nix` runs the display and the browser as user units.
+- The box browser runs here: Chromium on the VNC display `:20`, DevTools on `127.0.0.1:9344`, profile in `~/.local/share/box-browser/profile`, which holds cookies, so read none of its files. Agents drive it with `box-browser`, and Omer signs in from his PC with `box-view`. nixos-config `docs/box-browser.md` describes it and its security model.
 - The box browser is signed in to GitHub as `statuslantern-tailscale`, not `OmerFarukOruc`, so a GitHub App or setting made there belongs to that account; one that must belong to `OmerFarukOruc` needs his Brave. When GitHub asks that account for sudo mode or a 2FA code, compute the code from the setup key `GITHUB_STATUSLANTERN_TAILSCALE_TOTP_SEED` in Infisical `personal-secrets` `/personal-secrets` with `oathtool --totp -b -` on stdin (`nix build nixpkgs#oath-toolkit`), and enter it through `box-browser eval --stdin` as the agent-browser skill says, so the code never reaches a command line or the output (enrolled 11-11-2026).
-- Omer's lent Brave (`browser-lend on` on his PC, `brave-browser --on <machine>` here) is for copying a passkey-only site's cookies into the box browser.
+- Omer's lent Brave (`browser-lend on` on his PC, `box-browser --brave --on <machine>` here) is for copying a passkey-only site's cookies into the box browser. `browser-lend` forwards a loopback port here over SSH and writes its port to `~/.local/state/browser-lend/<machine>`.
 - A public page needs no lent browser: `agent-browser --session <name> open <url>` starts a throwaway headless Chrome.
 
 ## Accounts and logins

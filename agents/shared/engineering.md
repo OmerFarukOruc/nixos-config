@@ -28,7 +28,7 @@
 
 ## Browsers
 
-- Drive browsers with the agent-browser skill. Use the box browser on devbox and nixos-desktop freely, within the task's authorization. Default to headless for a page that needs no login. When the box browser lacks a login that a secret store this session reads holds, sign it in yourself as the agent-browser skill says. When no store holds it, ask Omer to sign in once with `box-view <host>`, naming the host whose box browser you drive, because that login then serves every later agent at any hour; on nixos-rog with Omer present, the step may move to his local Brave instead, where he clicks Allow. In his Brave, local or lent, a click, a read, or a write the task already authorizes runs without asking. Ask before other GUI automation there; a request in the session that names agent-browser or an existing CDP session has already answered. Phrase the ask as an offer to do the step in his browser ("I can submit the domain verification form in your Brave; go?"), so a step this session can do never reaches him as his to-do.
+- Drive browsers with the agent-browser skill, which says which browser fits, how a session signs in, and which actions need Omer's yes. Default to headless for a page that needs no login. In Omer's Brave, local or lent, a click, a read, or a write the task already authorizes runs without asking. Ask before other GUI automation there; a request in the session that names agent-browser or an existing CDP session has already answered. Phrase the ask as an offer to do the step in his browser ("I can submit the domain verification form in your Brave; go?"), so a step this session can do never reaches him as his to-do.
 
 ## Hand fixes to live state
 

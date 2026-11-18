@@ -141,7 +141,7 @@ box_browser() {
   out=$(nix eval "${NIX_OPTS[@]}" --json --impure \
     --expr 'import ./ci/box-browser.nix (builtins.getFlake (toString ./.))') || return 1
   jq -e '.userUnits | contains(["box-browser", "box-display"])' <<<"$out" >/dev/null || {
-    echo "nixos-desktop lacks a box browser unit." >&2
+    echo "devbox lacks a box browser unit." >&2
     return 1
   }
   jq -e '.displayCommand | contains(" -localhost ") and contains(" -SecurityTypes None")' \

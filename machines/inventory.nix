@@ -88,7 +88,6 @@ let
         docker = true;
         diskSelfTests = true;
         alwaysOn = true;
-        boxBrowser = true;
         gaming = true;
         lavdScheduler = true;
       };

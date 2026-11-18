@@ -180,11 +180,22 @@ svc_podman_docker = f"env DOCKER_HOST=unix://{svc_rt}/podman/podman.sock docker"
 svc_user(f"{svc_podman_docker} load -i /etc/server-boot/probe-image.tar")
 svc_user(f"{svc_podman_docker} run --rm probe:1 echo podman-ok | grep -Fx podman-ok")
 
-machine.wait_until_succeeds(
-    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus box-browser status"
+box_browser = (
+    f"runuser -u {BOX_USER} -- env XDG_RUNTIME_DIR={svc_rt} DBUS_SESSION_BUS_ADDRESS=unix:path={svc_rt}/bus "
+    f"PATH=/etc/profiles/per-user/{BOX_USER}/bin:/run/current-system/sw/bin box-browser"
 )
-machine.succeed(r"ss -Htln | grep -E '127\.0\.0\.1:5920 '")
-machine.fail(r"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):5920 '")
+machine.wait_until_succeeds(f"{box_browser} status")
+for box_port in (5920, 9344):
+    machine.succeed(rf"ss -Htln | grep -E '127\.0\.0\.1:{box_port} '")
+    machine.fail(rf"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):{box_port} '")
+machine.succeed(f"{box_browser} --session boot-test open chrome://prefs-internals")
+box_password_manager = machine.succeed(
+    f"{box_browser} --session boot-test eval "
+    """'(p => p.metadata.includes("managed") && p.value === false ? "managed-off" : "user-set")"""
+    """(JSON.parse(document.body.innerText).credentials_enable_service)'"""
+)
+assert "managed-off" in box_password_manager, f"the box browser's password manager is not off by policy: {box_password_manager}"
+machine.succeed(f"{box_browser} --session boot-test close")
 
 svc_hm_vars = f"/etc/profiles/per-user/{BOX_USER}/etc/profile.d/hm-session-vars.sh"
 svc_user(

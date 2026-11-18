@@ -49,10 +49,6 @@
   security.tpm2.enable = true;
   users.users.oruc.extraGroups = [ "tss" ];
 
-  # browser-lend runs `tailscale serve` as oruc, which needs the operator. The
-  # list adds to the shared flags in nixosModules/connectivity.nix.
-  services.tailscale.extraSetFlags = [ "--operator=oruc" ];
-
   systemd.services.sshd.serviceConfig.OOMScoreAdjust = -900;
   systemd.services.tailscaled.serviceConfig.OOMScoreAdjust = -900;
 

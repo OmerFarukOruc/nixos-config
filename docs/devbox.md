@@ -419,8 +419,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   worker's session; the Debian box had none installed (`dpkg-query` for
   xfce4-screensaver, light-locker and xscreensaver on 2026-10-28). The boot
   test shows that these tools exist, not that an XFCE or labwc session starts.
-- `features.boxBrowser` is on in the host record, so `box-browser` and its two
-  user units exist ([box-browser.md](box-browser.md)).
+- `features.boxBrowser` is on in the host record, so the box browser's two user
+  units and its Chromium policy exist; agents drive it with `box-browser` from
+  agent-tools ([box-browser.md](box-browser.md)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
   Claude account tools of `pkgs/claude-tools` with their usage timer, and
   `claude-tools-limit-switch.timer` (next bullet).

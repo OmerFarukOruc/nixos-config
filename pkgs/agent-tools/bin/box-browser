@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# Run agent-browser against a shared signed-in browser, each session in its own pinned tab.
+#   box-browser [--session NAME] [--on HOST] COMMAND...
+#       the box browser: this host's when it runs box-browser.service, else devbox's over SSH; --on names the host
+#   box-browser [--session NAME] --brave [--on MACHINE] COMMAND...
+#       Omer's Brave: this host's Brave Origin, or with --on the Brave that MACHINE lends to this host with browser-lend
+#   box-browser [--on HOST] status
+# The session is NAME, else AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
+# The first --brave call of a session waits up to 10 min for Omer to click Allow in Brave. Write `close` as the first
+# word of COMMAND, so it skips that wait.
+set -euo pipefail
+
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
+fail_usage() {
+  usage >&2
+  exit 2
+}
+
+session=${AGENT_BROWSER_SESSION:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}}
+on=
+brave=false
+while (($#)); do
+  case $1 in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --session | --on)
+      [[ -n ${2-} && $2 != -* ]] || fail_usage
+      if [[ $1 == --on ]]; then on=$2; else session=$2; fi
+      shift 2
+      ;;
+    --session=* | --on=*)
+      if [[ $1 == --on=* ]]; then on=${1#*=}; else session=${1#*=}; fi
+      shift
+      ;;
+    --brave)
+      brave=true
+      shift
+      ;;
+    *) break ;;
+  esac
+done
+(($#)) || fail_usage
+args=()
+while (($#)); do
+  case $1 in
+    --session)
+      [[ -n ${2-} ]] || fail_usage
+      session=$2
+      shift 2
+      ;;
+    --session=*)
+      session=${1#*=}
+      shift
+      ;;
+    *)
+      args+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${args[@]}"
+
+cdp_port=9344
+box_unit=/etc/systemd/user/box-browser.service
+lent_dir=$HOME/.local/state/browser-lend
+
+need_session() {
+  [[ -n $session ]] || {
+    echo "box-browser: no session name; pass --session NAME or set AGENT_BROWSER_SESSION" >&2
+    exit 2
+  }
+  [[ $session =~ ^[A-Za-z0-9_-]+$ ]] || {
+    echo "box-browser: a session name holds only letters, digits, - and _" >&2
+    exit 2
+  }
+}
+
+local_box() {
+  case $on in
+    '') [[ -e $box_unit ]] ;;
+    local | "$(uname -n)")
+      [[ -e $box_unit ]] || {
+        echo "box-browser: $(uname -n) runs no box browser" >&2
+        exit 1
+      }
+      ;;
+    *) false ;;
+  esac
+}
+
+box_status() {
+  local failed=0 unit
+  for unit in box-display box-browser; do
+    if systemctl --user is-active --quiet "$unit.service"; then
+      echo "$unit: active"
+    else
+      echo "$unit: not active" >&2
+      failed=1
+    fi
+  done
+  if curl --silent --fail --max-time 5 --output /dev/null "http://127.0.0.1:$cdp_port/json/version"; then
+    echo "CDP: answers on 127.0.0.1:$cdp_port"
+  else
+    echo "CDP: no answer on 127.0.0.1:$cdp_port" >&2
+    failed=1
+  fi
+  return "$failed"
+}
+
+# The remote login shell may be zsh, which expands a word that starts with `=` even when bash's %q left it bare, so
+# each argument goes in single quotes.
+remote_box() {
+  local host=${on:-devbox} arg quoted=
+  for arg in --on local "$@"; do
+    quoted+=" '${arg//\'/\'\\\'\'}'"
+  done
+  exec ssh -o BatchMode=yes "$host" "box-browser$quoted"
+}
+
+# Brave Origin writes its debugging port and path to DevToolsActivePort once remote debugging is on; its /json
+# answers 404, so the path comes from that file.
+brave_ws() {
+  local f=$HOME/.config/BraveSoftware/Brave-Origin/DevToolsActivePort
+  [[ -r $f ]] || {
+    echo "box-browser: turn on brave://inspect/#remote-debugging in Brave Origin" >&2
+    exit 1
+  }
+  echo "ws://127.0.0.1:$(sed -n 1p "$f")$(sed -n 2p "$f")"
+}
+
+lent_ws() {
+  local f=$lent_dir/$1 port path
+  if [[ -r $f ]] && read -r port path < "$f" && (exec 3<> "/dev/tcp/127.0.0.1/$port") 2> /dev/null; then
+    echo "ws://127.0.0.1:$port${path%$'\r'}"
+  else
+    echo "box-browser: $1 lends no browser to $(uname -n); run browser-lend on there" >&2
+    exit 1
+  fi
+}
+
+if ! $brave; then
+  if [[ $1 == status ]]; then
+    if local_box; then box_status; else remote_box status; fi
+    exit
+  fi
+  need_session
+  local_box || remote_box --session "$session" "$@"
+  export AGENT_BROWSER_SESSION=$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_PIN_TAB=1
+  exec agent-browser "$@"
+fi
+
+need_session
+export AGENT_BROWSER_SESSION=$session
+state=${XDG_RUNTIME_DIR:?}/box-browser
+mkdir -p "$state"
+attached=$state/$session.attached
+exec 9> "$state/$session.lock"
+if ! flock -n 9; then
+  echo "box-browser: waiting for another call of session $session" >&2
+  flock 9
+fi
+
+# `close` runs without --cdp, because with --cdp a session that has no daemon would attach again and wait for Allow.
+if [[ $1 == close ]]; then
+  status=0
+  agent-browser "$@" 9>&- || status=$?
+  rm -f "$attached"
+  exit "$status"
+fi
+
+if [[ -n $on ]]; then
+  where=$on
+  ws=$(lent_ws "$on")
+else
+  where=$(uname -n)
+  ws=$(brave_ws)
+fi
+
+# Every other call passes --cdp: a session whose attach failed would otherwise launch a local browser on its next
+# command. agent-browser lists a session as soon as its daemon starts, before Allow. Brave holds the CDP connection
+# open until Allow, and agent-browser's client stops reading after 30 s with "os error 11" while its daemon keeps
+# waiting on that connection. A repeat call joins the pending connection instead of opening a new one, so retrying
+# gives the 10 min wait without a second Allow dialog. Each agent-browser call closes fd 9, so a daemon it starts does
+# not hold the lock.
+if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! agent-browser session list 9>&- | awk 'NR > 1 { print $NF }' | grep -qxF "$session"; then
+  rm -f "$attached"
+  echo "box-browser: waiting for Allow in Brave on $where" >&2
+  deadline=$((SECONDS + 600))
+  until err=$(agent-browser --pin-tab --cdp "$ws" wait --fn true 2>&1 > /dev/null 9>&-); do
+    # agent-browser 0.43.0 keeps a session's tab pin after `close` (`agent-browser tab --help`), so the first attach
+    # after the pinned tab closed fails with tab_gone until the wrapper opens a new tab.
+    if [[ $err == *tab_gone* && -z ${new_tab-} ]] && agent-browser --cdp "$ws" tab new > /dev/null 9>&-; then
+      new_tab=1
+      continue
+    fi
+    if [[ $err != *"(os error 11)"* ]] || ((SECONDS >= deadline)); then
+      printf '%s\n' "$err" >&2
+      exit 1
+    fi
+  done
+  # Brave leaves a background tab that CDP created without a working page, so the attach brings it to the front.
+  tab=$(agent-browser --cdp "$ws" --json tab list 9>&- | jq -r '.data.tabs[] | select(.active) | .targetId')
+  agent-browser --cdp "$ws" tab "$tab" > /dev/null 9>&-
+  printf '%s' "$ws" > "$attached"
+fi
+exec 9>&-
+exec agent-browser --cdp "$ws" "$@"

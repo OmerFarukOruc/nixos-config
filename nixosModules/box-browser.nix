@@ -42,55 +42,6 @@ let
     '';
   };
 
-  boxBrowser = pkgs.writeShellApplication {
-    name = "box-browser";
-    runtimeInputs = [
-      pkgs.curl
-      pkgs.systemd
-    ];
-    text = ''
-      status() {
-        local failed=0 unit
-        for unit in box-display box-browser; do
-          if systemctl --user is-active --quiet "$unit.service"; then
-            echo "$unit: active"
-          else
-            echo "$unit: not active" >&2
-            failed=1
-          fi
-        done
-        if curl --silent --fail --max-time 5 --output /dev/null http://127.0.0.1:${toString cdpPort}/json/version; then
-          echo "CDP: answers on 127.0.0.1:${toString cdpPort}"
-        else
-          echo "CDP: no answer on 127.0.0.1:${toString cdpPort}" >&2
-          failed=1
-        fi
-        return "$failed"
-      }
-
-      if [[ ''${1:-} == status ]]; then
-        status
-        exit
-      fi
-
-      has_session=false
-      for arg in "$@"; do
-        case $arg in
-          --session | --session=*) has_session=true ;;
-        esac
-      done
-      if [[ $has_session == false && -z ''${AGENT_BROWSER_SESSION:-} ]]; then
-        if [[ -z ''${CLAUDE_CODE_SESSION_ID:-} ]]; then
-          echo "box-browser: no session name. Pass --session NAME or set AGENT_BROWSER_SESSION; a Claude Code session names itself." >&2
-          exit 2
-        fi
-        export AGENT_BROWSER_SESSION=$CLAUDE_CODE_SESSION_ID
-      fi
-      export AGENT_BROWSER_CDP=${toString cdpPort}
-      export AGENT_BROWSER_PIN_TAB=1
-      exec agent-browser "$@"
-    '';
-  };
 in
 {
   config = lib.mkIf config.oruc.machine.features.boxBrowser {
@@ -98,7 +49,9 @@ in
 
     fonts.enableDefaultPackages = lib.mkDefault true;
 
-    environment.systemPackages = [ boxBrowser ];
+    environment.etc."chromium/policies/managed/box-browser.json".text = builtins.toJSON {
+      PasswordManagerEnabled = false;
+    };
 
     systemd.user.services.box-display = {
       description = "Box browser display: Xvnc ${display}, localhost only, no VNC password, X cookie in ~/.Xauthority";

@@ -14,7 +14,7 @@ The commands the agent rules name, in one package that `home-manager/modules/age
 - `gh-issue-tree <owner/repo> <number> <dir>` saves a GitHub issue, its comments, and its sub-issues as Markdown files.
 - `cc-setting KEY...` says whether Claude Code keeps a setting as a `settings.json` key, an environment variable, or a per-account preference in `~/.claude.json`, and lists the environment variables whose names contain KEY.
 - `oom-report [--since TIME] [--all]` summarizes the latest kernel OOM incident from the journal: what the kernel killed, the processes in its task table by name, the units that stopped with their memory and swap peaks, and the Claude sessions that wrote during the incident and then went quiet, with their resume commands. Some of those may only be idle.
-- `brave-browser` runs agent-browser against Omer's Brave: this host's Brave Origin, found by `brave-cdp`, or with `--on <machine>` the Brave that machine lends with `browser-lend`, found by `lend-cdp`.
+- `box-browser` runs agent-browser against devbox's box browser, or with `--brave` against Omer's Brave, local or lent with `browser-lend`; `login-code` writes a sign-in code from the login-code mailbox to a 0600 file. [Agent browsers](../../docs/box-browser.md) describes all three.
 - `infisical-describe` lists Infisical records without a description and writes one; `agents/infisical.md` says when to run it.
 - `agent-watch NAME REPORT SECONDS` waits for a named Claude Code subagent's report file and exits 3 early, with the agent's last answer, when the agent ended its turn without writing it.
 - `gh-wait-checks <owner/repo> <sha> <seconds> [name-regex ...]` waits until every GitHub check run on a commit has completed and exits with their verdict.
@@ -26,15 +26,6 @@ The commands the agent rules name, in one package that `home-manager/modules/age
 - `pkgs/agent-tools.nix` copies `bin/` as it is. A bash command runs with this package's commands and git, gh, jq, curl, bubblewrap, glow, less and the coreutils-style tools first on `PATH`. `wt`, `codex`, `heavy`, `tailscale`, `agent-browser`, `herdr`, `infisical` and the desktop tools that `ropen` opens still come from the caller's `PATH`. A Python command uses the standard library only.
 - `dryer` runs `unclebob/dryer` at the commit `pkgs/agent-tools.nix` pins, built with the tree-sitter packages from nixpkgs. To move the pin, change `rev`, set `hash` to `lib.fakeHash`, and take the hash the build prints.
 - Prove a change with `scripts/build.sh pkgs/agent-tools.nix`, then run the changed command from the printed store path. `tests/sandbox-run-e2e.sh <store path>/bin/sandbox-run` checks `sandbox-run`'s binds.
-
-## Lend a browser
-
-`browser-lend` (Linux and macOS) and `share/browser-lend.ps1` (Windows) let agents on `devbox` drive a logged-in Brave, Chrome, Chromium, or Edge on any tailnet machine. On a machine without this package, copy the one file there.
-
-1. In the browser, open `<browser>://inspect/#remote-debugging` (for example `brave://inspect/#remote-debugging`) and turn remote debugging on.
-2. Run `browser-lend on` on Linux or macOS, or `powershell -ExecutionPolicy Bypass -File browser-lend.ps1 on` on Windows. It prints the exact command for the agent on the box. When several browsers are open, add a name to pick one, for example `browser-lend on chrome`.
-3. When the agent first connects, click Allow in the browser.
-4. Run `browser-lend off` (on Windows, `browser-lend.ps1 off`) when the task is done. While it is on, any process under `omer` on the box can drive that browser.
 
 ## Read remote files
 

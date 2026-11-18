@@ -1,6 +1,6 @@
 flake:
 let
-  inherit (flake.nixosConfigurations.nixos-desktop) config;
+  inherit (flake.nixosConfigurations.devbox) config;
 in
 {
   userUnits = builtins.attrNames config.systemd.user.services;

@@ -134,16 +134,14 @@ what you keep first. Before you start, have these ready:
    ```
 
    Open the printed URL on any device and approve the machine. `tailscale up`
-   resets the operator that `tailscaled-set` applied at boot, so apply it
+   resets the flags that `tailscaled-set` applied at boot, so apply them
    again:
 
    ```
    sudo systemctl restart tailscaled-set
-   tailscale debug prefs | jq -r .OperatorUser
    ```
 
-   It prints `oruc`. Then delete the node of the old system in the admin
-   console.
+   Then delete the node of the old system in the admin console.
 
 8. From nixos-rog, check that sops-nix decrypted the secrets and that the host
    runs what was installed:

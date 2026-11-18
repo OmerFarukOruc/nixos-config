@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+# Write the login code from the newest mail of one sender in the login-code mailbox to a 0600 file, and print only
+# its length, so no agent reads the mail itself.
+#   login-code [--after EPOCH] [--wait SECONDS] [--max-age SECONDS] [--pattern REGEX] SENDER FILE
+#   t=$(date +%s); <request the code>; login-code --after "$t" --wait 120 noreply@github.com "$d/code"
+# SENDER is the From address, or a domain whose addresses count. The mailbox address and its app password come from
+# LOGIN_CODE_IMAP_USER and LOGIN_CODE_IMAP_PASSWORD, so the command runs under `infisical run`; LOGIN_CODE_IMAP_HOST
+# (imap.gmail.com) and LOGIN_CODE_IMAP_PORT (993) name another server. Only a mail the server received after EPOCH
+# and within --max-age (default 600 s) counts; with --wait the command checks every 5 s until one arrives. The code
+# is the first match of REGEX (default: a 6-digit number) in the subject, then in the text of the body, and must be
+# 4 to 12 letters, digits or dashes. The mailbox opens read-only, and only the sender's mails are downloaded.
+# Exit 0 when FILE holds a code, 1 when no mail or no code was found, 2 on a usage, login or mailbox error.
+from __future__ import annotations
+
+import argparse
+import contextlib
+import email
+import email.policy
+import email.utils
+import imaplib
+import os
+import re
+import ssl
+import sys
+import tempfile
+import time
+from email.message import EmailMessage
+from html.parser import HTMLParser
+
+DEFAULT_PATTERN = r"(?<!\d)\d{6}(?!\d)"
+CODE = re.compile(r"[A-Za-z0-9-]{4,12}")
+SENDER = re.compile(r"[A-Za-z0-9._%+-]+(@[A-Za-z0-9.-]+)?")
+BLOCK_TAGS = {"br", "p", "div", "td", "th", "tr", "li", "table", "h1", "h2", "h3", "h4", "h5", "h6"}
+
+
+class NoCode(Exception):
+    pass
+
+
+class MailboxError(Exception):
+    pass
+
+
+class TextOfHtml(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"style", "script"}:
+            self.hidden += 1
+        elif tag in BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"style", "script"}:
+            self.hidden = max(0, self.hidden - 1)
+        elif tag in BLOCK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def body_text(message: EmailMessage) -> str:
+    part = message.get_body(preferencelist=("plain", "html"))
+    if part is None:
+        return ""
+    text = part.get_content()
+    if part.get_content_subtype() == "html":
+        parser = TextOfHtml()
+        parser.feed(text)
+        parser.close()
+        text = "".join(parser.parts)
+    return text
+
+
+def code_in(message: EmailMessage, pattern: re.Pattern[str]) -> str | None:
+    for text in (str(message.get("Subject", "")), body_text(message)):
+        if match := pattern.search(text):
+            return match.group(0) if CODE.fullmatch(match.group(0)) else None
+    return None
+
+
+def sender_matches(from_header: str, sender: str) -> bool:
+    address = email.utils.parseaddr(from_header)[1].lower()
+    if "@" in sender:
+        return address == sender
+    return address.endswith(("@" + sender, "." + sender))
+
+
+def fetch(imap: imaplib.IMAP4, number: bytes, items: str) -> tuple[bytes, bytes]:
+    status, parts = imap.fetch(number, items)
+    if status != "OK" or not parts or not isinstance(parts[0], tuple):
+        raise MailboxError(f"fetching mail {number.decode()} failed")
+    return parts[0][0], parts[0][1]
+
+
+def newest_code(imap: imaplib.IMAP4, sender: str, oldest: float, pattern: re.Pattern[str]) -> str:
+    imap.noop()
+    since = time.strftime("%d-%b-%Y", time.gmtime(oldest - 86400))
+    status, data = imap.search(None, "FROM", f'"{sender}"', "SINCE", since)
+    if status != "OK":
+        raise MailboxError("the mailbox search failed")
+    for number in reversed(data[0].split()):
+        meta, header = fetch(imap, number, "(INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM)])")
+        received = imaplib.Internaldate2tuple(meta)
+        if received is None:
+            raise MailboxError(f"mail {number.decode()} has no receive time")
+        if time.mktime(received) < oldest:
+            break
+        try:
+            from_header = str(email.message_from_bytes(header, policy=email.policy.default).get("From", ""))
+            if not sender_matches(from_header, sender):
+                continue
+            message = email.message_from_bytes(fetch(imap, number, "(BODY.PEEK[])")[1], policy=email.policy.default)
+            code = code_in(message, pattern)
+        except (ValueError, LookupError):
+            continue
+        if code:
+            return code
+        raise NoCode(f"the newest mail from {sender} holds no code that matches the pattern")
+    raise NoCode(f"no new mail from {sender}")
+
+
+def write_secret(path: str, value: str) -> None:
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".login-code-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(value)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
+def wait_for_code(imap: imaplib.IMAP4, args: argparse.Namespace, pattern: re.Pattern[str]) -> str:
+    deadline = time.monotonic() + args.wait
+    while True:
+        oldest = max(time.time() - args.max_age, args.after)
+        try:
+            return newest_code(imap, args.sender, oldest, pattern)
+        except NoCode:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(5)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Write the newest login code from SENDER to FILE.")
+    parser.add_argument("--after", type=float, default=0, help="oldest receive time that counts, in epoch seconds")
+    parser.add_argument("--wait", type=int, default=0, help="seconds to wait for the mail (default 0)")
+    parser.add_argument("--max-age", type=int, default=600, help="oldest mail that counts, in seconds (default 600)")
+    parser.add_argument("--pattern", default=DEFAULT_PATTERN, help="regular expression of the code")
+    parser.add_argument("sender")
+    parser.add_argument("file")
+    args = parser.parse_args()
+    args.sender = args.sender.lower()
+    if not SENDER.fullmatch(args.sender):
+        print("login-code: SENDER is an address or a domain", file=sys.stderr)
+        return 2
+    try:
+        pattern = re.compile(args.pattern, re.ASCII)
+        port = int(os.environ.get("LOGIN_CODE_IMAP_PORT", "993"))
+    except (re.error, ValueError) as error:
+        print(f"login-code: {error}", file=sys.stderr)
+        return 2
+    user, password = os.environ.get("LOGIN_CODE_IMAP_USER"), os.environ.get("LOGIN_CODE_IMAP_PASSWORD")
+    if not user or not password:
+        print("login-code: set LOGIN_CODE_IMAP_USER and LOGIN_CODE_IMAP_PASSWORD, e.g. with infisical run", file=sys.stderr)
+        return 2
+    host = os.environ.get("LOGIN_CODE_IMAP_HOST", "imap.gmail.com")
+    try:
+        imap = imaplib.IMAP4_SSL(host, port, ssl_context=ssl.create_default_context(), timeout=30)
+        imap.login(user, password)
+    except (imaplib.IMAP4.error, OSError) as error:
+        print(f"login-code: cannot log in to {host}: {error}", file=sys.stderr)
+        return 2
+    try:
+        imap.select("INBOX", readonly=True)
+        code = wait_for_code(imap, args, pattern)
+    except NoCode as reason:
+        print(f"login-code: {reason}", file=sys.stderr)
+        return 1
+    except (MailboxError, imaplib.IMAP4.error, OSError) as error:
+        print(f"login-code: the mailbox on {host} failed: {error}", file=sys.stderr)
+        return 2
+    finally:
+        with contextlib.suppress(imaplib.IMAP4.error, OSError):
+            imap.logout()
+    try:
+        write_secret(args.file, code)
+    except OSError as error:
+        print(f"login-code: cannot write {args.file}: {error.strerror}", file=sys.stderr)
+        return 2
+    print(f"login-code: wrote {len(code)} characters to {args.file}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

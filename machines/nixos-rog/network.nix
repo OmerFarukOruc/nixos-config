@@ -5,11 +5,6 @@ _: {
     options mt7925e disable_aspm=Y
   '';
 
-  # browser-lend runs `tailscale serve` as oruc to lend Brave's debugging port
-  # to devbox, and only the operator may change serve without sudo.
-  # The list adds to the shared flags in nixosModules/connectivity.nix.
-  services.tailscale.extraSetFlags = [ "--operator=oruc" ];
-
   boot.kernel.sysctl = {
     "net.ipv4.tcp_congestion_control" = "bbr";
     "net.core.default_qdisc" = "fq";

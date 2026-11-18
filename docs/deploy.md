@@ -178,8 +178,9 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
    fails when an overlay in `overlays/` patches a package it does not list, so
    a nixpkgs move after which a patch no longer applies fails without a build
    of the whole system.
-6. `box browser feature`: evaluates nixos-desktop's box browser
-   (`ci/box-browser.nix`), to check its units and the display's command line.
+6. `box browser feature`: evaluates devbox's box browser
+   (`ci/box-browser.nix`), to check its units and the display's command line
+   ([Check](box-browser.md#check)).
 7. `server record`: evaluates a bare server record (`ci/server.nix`) and
    checks that it gets no workstation piece, keeps its access setup (sshd on
    port 2222 by public key, Tailscale SSH, only Tailscale's UDP port) and the
