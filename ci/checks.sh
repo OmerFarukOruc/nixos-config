@@ -67,9 +67,9 @@ host_system() {
 }
 
 unit_cycles() {
-  local host=$1 paths units systemd rc=0 analysis
+  local host=$1 paths units user_units systemd rc=0 analysis runtime
   paths=$(nix build --no-link --print-out-paths --impure "${NIX_OPTS[@]}" \
-    --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units systemd) ||
+    --expr "import ./ci/unit-cycles.nix (builtins.getFlake (toString ./.)) \"$host\"" units userUnits systemd) ||
     {
       echo "$host: the units do not build."
       return 1
@@ -78,7 +78,11 @@ unit_cycles() {
     echo "$host: the build printed no unit folder."
     return 1
   }
-  systemd=$(grep -v -- '-system-units$' <<<"$paths") || {
+  user_units=$(grep -- '-user-units$' <<<"$paths") || {
+    echo "$host: the build printed no user unit folder."
+    return 1
+  }
+  systemd=$(grep -v -e '-system-units$' -e '-user-units$' <<<"$paths") || {
     echo "$host: the build printed no systemd package."
     return 1
   }
@@ -86,11 +90,16 @@ unit_cycles() {
   # counts; any other status means it did not check.
   # --man=no: a unit's man page lookup fails where man is not on PATH.
   analysis=$(SYSTEMD_UNIT_PATH=$units "$systemd/bin/systemd-analyze" verify --man=no default.target 2>&1) || rc=$?
+  # A user manager needs a runtime directory, which a CI runner lacks.
+  runtime=$(mktemp -d)
+  analysis+=$'\n'$(SYSTEMD_UNIT_PATH=$user_units XDG_RUNTIME_DIR=$runtime HOME=$runtime \
+    "$systemd/bin/systemd-analyze" --user verify --man=no default.target graphical-session.target 2>&1) || rc=$?
+  rm -rf "${runtime:?}"
   if ((rc != 0)); then
     printf '%s\n' "$analysis" "$host: systemd-analyze could not check the units (exit $rc)."
     return 1
   elif grep -q 'Found ordering cycle' <<<"$analysis"; then
-    echo "$host: the units hold an ordering cycle, so the next boot would not finish."
+    echo "$host: the units hold an ordering cycle, so the next boot or login would not finish."
     grep -E 'ordering cycle|Job .* deleted' <<<"$analysis" || true
     return 1
   fi
@@ -137,22 +146,33 @@ pool() {
 }
 
 box_browser() {
-  local out
+  local out host
   out=$(nix eval "${NIX_OPTS[@]}" --json --impure \
     --expr 'import ./ci/box-browser.nix (builtins.getFlake (toString ./.))') || return 1
-  jq -e '.userUnits | contains(["box-browser", "box-display"])' <<<"$out" >/dev/null || {
-    echo "devbox lacks a box browser unit." >&2
+  for host in $(jq -r 'keys[]' <<<"$out"); do
+    box_browser_host "$host" "$(jq -c --arg h "$host" '.[$h]' <<<"$out")" || return 1
+  done
+}
+
+box_browser_host() {
+  local host=$1 record=$2
+  jq -e '.userUnits | contains(["box-browser", "box-display"])' <<<"$record" >/dev/null || {
+    echo "$host lacks a box browser unit." >&2
     return 1
   }
   jq -e '.displayCommand | contains(" -localhost ") and contains(" -SecurityTypes None")' \
-    <<<"$out" >/dev/null || {
-    echo "The box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
+    <<<"$record" >/dev/null || {
+    echo "$host: the box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
     return 1
   }
   jq -e '(.displayCommand | capture(" (?<display>:[0-9]+) -auth (?<auth>[^ ]+) ")) as $x
     | .browserEnvironment | .DISPLAY == $x.display and .XAUTHORITY == $x.auth' \
-    <<<"$out" >/dev/null || {
-    echo "box-browser.service does not use the display and the -auth file of box-display, so under Plasma it reads KDE's xauth file and cannot open the display." >&2
+    <<<"$record" >/dev/null || {
+    echo "$host: box-browser.service does not use the display and the -auth file of box-display, so under Plasma it reads KDE's xauth file and cannot open the display." >&2
+    return 1
+  }
+  jq -e '(.browserCommand | contains("--password-store=basic")) == .passwordPolicy' <<<"$record" >/dev/null || {
+    echo "$host: the box browser saves passwords under Chromium's fixed key, or turns its password manager off while KWallet holds the key." >&2
     return 1
   }
 }

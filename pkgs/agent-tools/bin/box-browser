@@ -175,11 +175,13 @@ fi
   echo "box-browser: --brave drives only this host's Brave Origin; run it on the PC Omer sits at" >&2
   exit 2
 }
-[[ ! -e $box_unit ]] || {
-  echo "box-browser: $(uname -n) runs the box browser, not Omer's Brave; --brave runs only on the PC Omer sits at" >&2
+systemctl --user --quiet is-active graphical-session.target || {
+  echo "box-browser: $(uname -n) has no desktop session, so no Brave; --brave runs only on the PC Omer sits at" >&2
   exit 1
 }
 need_session
+# The box browser on the same PC uses the plain name, and one agent-browser session cannot hold two browsers.
+session=$session-brave
 export AGENT_BROWSER_SESSION=$session
 state=${XDG_RUNTIME_DIR:?}/box-browser
 mkdir -p "$state"

@@ -4,15 +4,17 @@ Coding agents drive signed-in browsers with agent-browser through one command,
 `box-browser` (`pkgs/agent-tools/bin/box-browser`), installed on nixos-desktop,
 nixos-rog and devbox. It reaches two kinds of browser:
 
-- The box browser: one Chromium on devbox that agents sign in to from
-  Infisical and that every agent session shares, each in its own tab. Agents
+- A box browser: one Chromium on each of nixos-desktop, nixos-rog and devbox
+  that every agent session on that host shares, each in its own tab. Agents
   use it by default, because it never waits for Omer, and they act in its
-  signed-in sites without asking him. It stays signed out of Google, so no
-  agent reaches Omer's Gmail there.
+  signed-in sites without asking him. A PC's box browser holds Omer's own
+  logins, his Google account among them, and saves passwords in KWallet.
+  devbox's holds the logins agents there need, stays signed out of Google and
+  saves no password, because every process on devbox can drive it.
 - Omer's Brave Origin, on the PC he sits at, for an agent that runs on that
   PC. Brave asks him to click Allow for each new agent session, so agents use
-  it only for what the box browser cannot do, such as a site that signs in
-  only with a passkey. No agent on devbox reaches it.
+  it only for a site that signs in only with a passkey. No agent on devbox
+  reaches it.
 
 A page that needs no login opens in a throwaway headless browser
 (`agent-browser --session <name>`) instead. The agent-browser skill
@@ -41,10 +43,11 @@ command exits 2. Each session keeps its own pinned tab
 
 Without `--brave`, the command drives this host's box browser when the host
 runs `box-browser.service`, and devbox's over `ssh devbox` otherwise; `--on`
-names another host. A file the box browser writes, such as a screenshot, stays
-on devbox. With `--brave`, it drives this host's Brave Origin; it refuses
-`--on`, and it fails on a host that runs the box browser. The first `--brave` call of a session waits up to 10 minutes for
-Omer's Allow click.
+names another host, such as `--on devbox` from a PC. A file a box browser
+writes, such as a screenshot, stays on the host that runs it. With `--brave`,
+it drives this host's Brave Origin; it refuses `--on`, and it fails on a host
+with no desktop session, such as devbox. The first `--brave` call of a session
+waits up to 10 minutes for Omer's Allow click.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
 installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
@@ -52,8 +55,9 @@ installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
 ## Box browser
 
 `features.boxBrowser` in a host's record in `machines/inventory.nix` turns it
-on; devbox is the only host that sets it. `nixosModules/box-browser.nix` holds
-the units and the policy, and `home-manager/modules/box-view.nix` the viewer.
+on; nixos-desktop, nixos-rog and devbox set it. `nixosModules/box-browser.nix`
+holds the units and the policy, and `home-manager/modules/box-view.nix` the
+viewer.
 The feature needs no secret and no tailnet policy change. A host that turns it
 off keeps the signed-in profile in `~/.local/share/box-browser`; delete that
 folder there.
@@ -64,10 +68,18 @@ folder there.
 - `box-browser.service` (user unit) is nixpkgs Chromium on that display, with
   the profile in `~/.local/share/box-browser/profile` and DevTools on
   `127.0.0.1:9344`. Both units restart on failure, and a restart of the display
-  restarts the browser. `users.users.<user>.linger` keeps them running without a
-  login.
-- `/etc/chromium/policies/managed/box-browser.json` turns Chromium's password
-  manager off (`PasswordManagerEnabled`), so the profile saves no password
+  restarts the browser.
+- On a PC, both units are part of `graphical-session.target`, so they run while
+  Omer is logged in to his desktop, and Chromium keeps the key of its cookies
+  and saved passwords in KWallet (`--password-store=kwallet6`), as Brave does.
+  Chromium falls back to its fixed key when the wallet is closed, so the
+  browser waits until the wallet is open (`box-browser-wallet-open`): at login
+  on nixos-rog, and at Omer's first unlock after boot on nixos-desktop, which
+  logs in by itself.
+- On devbox, `users.users.<user>.linger` keeps them running without a login.
+  devbox has no keyring, so Chromium runs with `--password-store=basic`, and
+  `/etc/chromium/policies/managed/box-browser.json` turns its password manager
+  off (`PasswordManagerEnabled`), so the profile saves no password
   ([Security model](#security-model)).
 - `box-view` (command and menu entry "Box browser", on nixos-desktop and
   nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it runs
@@ -77,10 +89,9 @@ folder there.
   desktop notification, since the menu entry has no terminal.
 
 To sign in, run `box-view`, or open Box browser from the menu, sign in to the
-site in the Chromium window, then close the viewer. The session stays in
-devbox's profile. With no argument the viewer opens devbox's display from a
-PC, and the host's own display on a host with `features.boxBrowser`; `box-view
-<host>` names another host. Agents sign in by themselves when a secret store
+site in the Chromium window, then close the viewer. The session stays in the
+host's profile. With no argument the viewer opens the host's own box browser;
+`box-view devbox` opens devbox's. Agents sign in by themselves when a secret store
 holds the password, as the agent-browser skill says, so Omer signs in only to
 what no store holds or what needs a passkey or a captcha. When a site sends a
 sign-in code, the agent asks Omer for it and enters it.
@@ -99,7 +110,7 @@ reads, because its `/json` answers 404.
 
 ## Login codes
 
-The box browser holds no mail account. By default an agent asks Omer for a
+devbox's box browser holds no mail account. By default an agent asks Omer for a
 code a site sends. Optionally, a Gmail filter forwards the code mails of each
 named sender to a separate login-code mailbox, and agents fetch the code
 themselves. `login-code`
@@ -135,35 +146,43 @@ A new site needs only step 4.
 
 ## Security model
 
-Whoever drives the box browser acts as every account signed in there, and
-agents act there without asking Omer. The design keeps his mailbox and his
-Google login out of it, so nobody who drives it reads the reset links of his
-other accounts, and accepts the rest.
+Whoever drives a box browser acts as every account signed in there, and
+agents act there without asking Omer. DevTools has no password and listens on
+loopback only, so who can drive a box browser is who runs on its host.
 
-- **Who can drive it.** DevTools has no password, so every process of devbox's
-  user and root can drive the browser. That includes every agent, any session
+- **A PC's box browser.** Only Omer's user and root on that PC can drive it,
+  the same processes that already reach his files, his SSH keys and his
+  Brave: the `box-browser` nftables table rejects other local users, such as
+  the Nix build users, on loopback ports 5920 and 9344. No other host reaches
+  it. It holds his own logins, his Google
+  account among them, and its saved passwords and cookies are encrypted with
+  a key in KWallet, so a copy of the profile without his login is useless.
+- **Who can drive devbox's.** Every process of devbox's user and root can
+  drive the browser. That includes every agent, any session
   that logs in as that user over SSH or Tailscale SSH, the Grok bots'
   tailnet device among them ([devbox](devbox.md#access)), and the herdr web
   UI on the tailnet. The other local user `sl-factory` cannot: the firewall
   rejects its packets to loopback
   ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
   off the display.
-- **What it holds.** No saved password: the policy turns the password manager
-  off, and passwords live in Infisical, from which agents type them through
+- **What devbox's holds.** No saved password: the policy turns the password
+  manager off, and passwords live in Infisical, from which agents type them through
   `eval --stdin`. No mail account and no Google login: Omer gives codes, or
   `login-code` reads them, downloading only the named sender's mails and
   writing only a short code. The From header it matches is not
   authenticated, so a mail that forges the sender reaches the mailbox only if
   Gmail's filter forwards it.
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
-  to read a sign-in code finds no mailbox in the browser, the attack Brave
+  to read a sign-in code finds no mailbox in devbox's box browser, the attack Brave
   showed against Perplexity Comet
   ([brave.com/blog/comet-prompt-injection](https://brave.com/blog/comet-prompt-injection/)).
   Agents act in signed-in sites without asking, so a page can also steer an
   agent into a change in GitHub, AWS, Cloudflare or Tailscale, such as a new
-  token or a changed recovery address. The box limits only what such a
-  change reaches: no mailbox, no saved password and no Google login.
-- **The profile at rest.** Chromium runs with `--password-store=basic`,
+  token or a changed recovery address. devbox's box browser limits only what
+  such a change reaches there: no mailbox, no saved password and no Google
+  login. A PC's box browser holds Gmail, so there only the agent-browser
+  skill's mail rule keeps agents out of the mailbox.
+- **devbox's profile at rest.** Chromium runs with `--password-store=basic`,
   because devbox has no keyring. Chromium then encrypts cookies with a fixed
   key (`kV10Key`, PBKDF2 of "peanuts", in Chromium's
   [posix_key_provider.cc](https://chromium.googlesource.com/chromium/src/+/main/components/os_crypt/async/browser/posix_key_provider.cc)),
@@ -191,10 +210,13 @@ other accounts, and accepts the rest.
 
 ## Check
 
-`ci/checks.sh` reads devbox's system through `ci/box-browser.nix`. It fails
-when a unit is missing, when the display command loses `-localhost` or
-`-SecurityTypes None`, and when the browser unit's `DISPLAY` and `XAUTHORITY` are
-not the display and the `-auth` file of that command line. devbox's boot test
+`ci/checks.sh` reads the systems of devbox, nixos-rog and nixos-desktop
+through `ci/box-browser.nix`. It fails when a unit is missing, when the display
+command loses `-localhost` or `-SecurityTypes None`, when the browser unit's
+`DISPLAY` and `XAUTHORITY` are not the display and the `-auth` file of that
+command line, and when a box browser that uses Chromium's fixed key lacks the
+policy that turns its password manager off, or one that uses KWallet has it.
+Each host job also checks the user units for an ordering cycle. devbox's boot test
 (`ci/server-boot/checks/20-services.py`) starts the units, runs `box-browser
 status`, checks that ports 5920 and 9344 listen on loopback only, and reads
 `chrome://prefs-internals` in the box browser to check that the policy turns the

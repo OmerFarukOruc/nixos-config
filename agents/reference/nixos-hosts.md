@@ -50,7 +50,7 @@ zapret2, the DPI bypass from nixos-config `nixosModules/zapret2.nix`, runs as `n
 ## Brave Origin CDP for agent-browser
 
 - Which browser an agent drives on each host is in the agent-browser skill, Pick the browser. The bullets below cover Omer's Brave Origin when that table sends you to it.
-- Enable remote debugging at `brave://inspect/#remote-debugging`, then drive it with `box-browser --brave` (nixos-config `pkgs/agent-tools`), which reads the websocket from Brave Origin's `~/.config/BraveSoftware/Brave-Origin/DevToolsActivePort`, since `/json` answers 404.
+- Agents on this PC use its box browser (`box-browser`), which never asks Allow; use Omer's Brave only for a passkey-only site. Enable remote debugging at `brave://inspect/#remote-debugging`, then drive it with `box-browser --brave` (nixos-config `pkgs/agent-tools`), which reads the websocket from Brave Origin's `~/.config/BraveSoftware/Brave-Origin/DevToolsActivePort`, since `/json` answers 404.
 - Only an agent on the same PC drives Brave: `box-browser --brave` refuses `--on`, and nothing forwards Brave's DevTools port to another host.
 - Each new debugging client waits for an allow prompt inside Brave (observed 14-09-2026). A websocket handshake that hangs while `/json/version` still answers 404 means the prompt is unanswered; ask Omer to accept it in Brave, and do not restart the daemon or Brave.
 - A hidden tab can pause rendering: `document.visibilityState` reads `hidden`, scrolling times out and a Radix dropdown stays closed (observed 10-10-2026). Bring the tab to the front only when that happens; it switches Omer's visible tab.

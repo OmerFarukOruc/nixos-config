@@ -237,7 +237,7 @@ hosts. Its ID is the sops secret `nextdns-profile`
 (`/run/secrets/nextdns-profile` on nixos-rog and nixos-desktop); compare
 against it with `sudo grep -q`, never print it, and write `<profile-id>` in
 this repository. The dashboard is `https://my.nextdns.io/<profile-id>/` and
-needs Omer's login, which his Brave holds and devbox's box browser does not.
+needs Omer's login, which his Brave and a PC's box browser hold and devbox's box browser does not.
 
 NextDNS names a device by the part of the DoT server name before the profile
 ID, so nixos-rog and nixos-desktop appear by host name

@@ -58,6 +58,7 @@ let
         audioEffects = true;
         gaming = true;
         lavdScheduler = true;
+        boxBrowser = true;
       };
     };
 
@@ -90,6 +91,7 @@ let
         alwaysOn = true;
         gaming = true;
         lavdScheduler = true;
+        boxBrowser = true;
       };
     };
 

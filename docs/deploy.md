@@ -165,7 +165,9 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
    `nixosConfigurations`.
 4. The host job: the host's system derivation type and `drvPath`, evaluated in
    its own process, then the ordering-cycle check of the deploy's step 8
-   ([What the deploy does](#what-the-deploy-does)) on its units.
+   ([What the deploy does](#what-the-deploy-does)) on its units, and the same
+   check on its user units from `default.target` and
+   `graphical-session.target`.
    `ci/unit-cycles.nix` builds the unit files without the programs they start,
    so it downloaded about 1.8 GiB instead of the whole system on a GitHub
    runner on 2026-10-13, and `systemd-analyze verify` reads them.
@@ -178,8 +180,9 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
    fails when an overlay in `overlays/` patches a package it does not list, so
    a nixpkgs move after which a patch no longer applies fails without a build
    of the whole system.
-6. `box browser feature`: evaluates devbox's box browser
-   (`ci/box-browser.nix`), to check its units and the display's command line
+6. `box browser feature`: evaluates the box browser of devbox, nixos-rog and
+   nixos-desktop (`ci/box-browser.nix`), to check its units, the display's
+   command line and where each keeps its passwords
    ([Check](box-browser.md#check)).
 7. `server record`: evaluates a bare server record (`ci/server.nix`) and
    checks that it gets no workstation piece, keeps its access setup (sshd on

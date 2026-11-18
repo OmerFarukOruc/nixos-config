@@ -457,10 +457,9 @@ shows it hanging at boot. May I reset the box and pick the previous generation
 in the Limine menu?" Never use SCP's reinstall, rescue system, image, snapshot
 or disk options; those are Omer's to run.
 
-**Steps.** Drive Omer's Brave on nixos-desktop with the agent-browser skill
-(`box-browser --brave`, [box-browser.md](box-browser.md#omers-brave)), because
-the box browser runs on devbox, which is down; Omer clicks Allow in Brave for
-the session.
+**Steps.** Drive nixos-desktop's box browser with the agent-browser skill
+(`box-browser` on nixos-desktop, [box-browser.md](box-browser.md#box-browser)),
+because devbox's box browser is down with the box.
 Save a screenshot of the console after each step under
 `/tmp/agents/<task>-<session8>/console/`, and report each step and its
 screenshot in the final message, so Omer can follow what was done.
