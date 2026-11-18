@@ -49,6 +49,14 @@ declares. It prints key names only.
 Public names go only to NextDNS over TLS. Tailnet names go to Tailscale's
 MagicDNS.
 
+`nixosModules/nextdns.nix` puts the host name before the profile ID in the TLS
+server name (`<host>-<profile>.dns.nextdns.io`), so the NextDNS logs and
+analytics name nixos-rog and nixos-desktop as separate devices. NextDNS turns
+a `--` in that name into a space, and the label holds at most 63 characters, so
+the module refuses a host name with `--` or over 56 characters. With
+`captive-dns` off, `https://test.nextdns.io` in a browser that uses the system
+resolver prints `"protocol": "DOT"` and the host name as `deviceName`.
+
 The public names under `risoluto.dev` (`openchamber.risoluto.dev`,
 `cliproxy.risoluto.dev`) and `signoz.statuslantern.com` point at Tailscale
 addresses. The NextDNS profile's DNS-rebinding protection answers those names

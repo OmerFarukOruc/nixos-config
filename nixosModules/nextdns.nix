@@ -6,12 +6,20 @@
 }:
 let
   profile = config.sops.placeholder.nextdns-profile;
+  device = config.networking.hostName;
   servers = [
     "45.90.28.0"
     "45.90.30.0"
   ];
 in
 {
+  assertions = [
+    {
+      assertion = builtins.stringLength device <= 56 && !lib.hasInfix "--" device;
+      message = "nextdns.nix: the host name '${device}' must be at most 56 characters and hold no '--', because NextDNS reads it from the first DNS label before the 6-character profile ID and turns '--' into a space.";
+    }
+  ];
+
   services.resolved = {
     enable = true;
     settings.Resolve = {
@@ -30,7 +38,7 @@ in
     content = ''
       [Resolve]
       DNS=
-      ${lib.concatMapStrings (server: "DNS=${server}#${profile}.dns.nextdns.io\n") servers}'';
+      ${lib.concatMapStrings (server: "DNS=${server}#${device}-${profile}.dns.nextdns.io\n") servers}'';
   };
   environment.etc."systemd/resolved.conf.d/nextdns.conf".source =
     config.sops.templates."nextdns.conf".path;
