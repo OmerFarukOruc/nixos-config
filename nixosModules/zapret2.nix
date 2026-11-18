@@ -1,10 +1,19 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  autoHosts = "/var/lib/zapret2/auto-hosts.txt";
   autodetect = {
     enable = true;
-    file = autoHosts;
+    file = "/var/lib/zapret2/auto-hosts.txt";
   };
+  autodetectTuning = [
+    "--hostlist-auto-retrans-threshold=10"
+    "--hostlist-auto-retrans-maxseq=1800"
+    "--hostlist-auto-retrans-reset=0"
+  ];
   # Microsoft's servers accept the TCP MD5 fake, which breaks TLS.
   # Their early RSTs also make autodetection add Microsoft hosts.
   microsoft = [
@@ -18,6 +27,26 @@ let
     "discordapp.com"
     "discordapp.net"
   ];
+  discordVoicePorts = [
+    {
+      from = 19294;
+      to = 19344;
+    }
+    {
+      from = 50000;
+      to = 50099;
+    }
+  ];
+  discordVoiceFilter = lib.concatMapStringsSep "," (
+    { from, to }: "${toString from}-${toString to}"
+  ) discordVoicePorts;
+  learnedDiscordProfile = priority: parameters: {
+    inherit priority;
+    hosts.autodetect = autodetect;
+    hosts.include = discordHosts;
+    hosts.exclude = microsoft;
+    parameters = parameters ++ autodetectTuning;
+  };
 in
 {
   assertions = [
@@ -42,48 +71,31 @@ in
         80
         443
       ];
-      udpPorts = [ 443 ];
+      udpPorts = lib.concatMap ({ from, to }: lib.range from to) discordVoicePorts;
     };
     profiles = {
-      http = {
-        priority = 1;
-        hosts.autodetect = autodetect;
-        hosts.include = discordHosts;
-        hosts.exclude = microsoft;
-        parameters = [
-          "--filter-tcp=80"
-          "--filter-l7=http"
-          "--payload=http_req"
-          "--lua-desync=fake:blob=fake_default_http:tcp_md5"
-          "--lua-desync=multisplit:pos=method+2"
-        ];
-      };
-      tls = {
-        priority = 2;
-        hosts.autodetect = autodetect;
-        hosts.include = discordHosts;
-        hosts.exclude = microsoft;
-        parameters = [
-          "--filter-tcp=443"
-          "--filter-l7=tls"
-          "--payload=tls_client_hello"
-          "--lua-desync=fake:blob=fake_default_tls:tcp_md5:repeats=1"
-        ];
-      };
-      quic = {
+      http = learnedDiscordProfile 1 [
+        "--filter-tcp=80"
+        "--filter-l7=http"
+        "--payload=http_req"
+        "--lua-desync=fake:blob=fake_default_http:tcp_md5"
+        "--lua-desync=multisplit:pos=method+2"
+      ];
+      tls = learnedDiscordProfile 2 [
+        "--filter-tcp=443"
+        "--filter-l7=tls"
+        "--payload=tls_client_hello"
+        "--lua-desync=fake:blob=fake_default_tls:tcp_md5:repeats=1"
+      ];
+      discord-voice = {
         priority = 3;
-        hosts.include = discordHosts;
-        hosts.exclude = microsoft;
         parameters = [
-          "--filter-udp=443"
-          "--filter-l7=quic"
-          "--hostlist=${autoHosts}"
-          "--payload=quic_initial"
-          "--lua-desync=fake:blob=fake_default_quic:repeats=6"
+          "--filter-udp=${discordVoiceFilter}"
+          "--filter-l7=stun,discord"
+          "--payload=stun,discord_ip_discovery"
+          "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2"
         ];
       };
     };
   };
-  systemd.services."nfqws2@default".serviceConfig.ExecStartPre =
-    "${pkgs.coreutils}/bin/touch ${autoHosts}";
 }

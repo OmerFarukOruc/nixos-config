@@ -781,34 +781,67 @@ blocks it. zapret2 (`nixosModules/zapret2.nix`, the hosts set
 `services.zapret2.firewall.interfaces`) comes first, and the Cloudflare WARP
 proxy (`nixosModules/warp.nix`) is the fallback for the Vesktop and Brave
 launchers in `home-manager/modules/warp-launchers.nix`. The commands below ran
-on nixos-rog on 2026-11-02 and only read state; nixos-desktop runs the same
-modules with its own uplink.
+on nixos-rog; nixos-desktop runs the same modules with its own uplink.
 
-**zapret2.** `nfqws2@default.service` rewrites the first packets of outgoing HTTP, TLS
-and QUIC connections so the DPI on the line cannot match them. The firewall
-rules (`sudo nft list table inet zapret2`) queue the first 16 packets of each
-connection, in both directions, to `nfqws2` on the named uplink only: `wlp99s0`
-on nixos-rog and `enp14s0` on nixos-desktop. Traffic on any other interface, and
-connections to private addresses, pass untouched. The queue number and the
-flags of each profile show in `systemctl cat nfqws2@default`.
+**zapret2.** `nfqws2@default.service` rewrites the first packets of outgoing
+HTTP and TLS connections, and STUN and Discord voice packets, so the DPI on the line
+cannot match them. The firewall rules (`sudo nft list table inet zapret2`) queue
+the first 16 packets of each connection, in both directions, to `nfqws2` on the
+named uplink only: `wlp99s0` on nixos-rog and `enp14s0` on nixos-desktop.
+Traffic on any other interface, and connections to private addresses, pass
+untouched. The queue number and the flags of each profile show in
+`systemctl cat nfqws2@default`.
 
 The service runs three profiles. `http` and `tls` start with the Discord
 domains in their include list, exclude Microsoft's domains, and pass
 `--hostlist-auto=/var/lib/zapret2/auto-hosts.txt`, so they also add a host to
-that file when connections to it keep failing. `nfqws2 --help` on this host
-gives the defaults: 3 failed attempts within 60 s. `quic` only reads the same
-file, so a host reaches QUIC treatment only after the `http` or `tls` profile
-has learnt it. The zapret2 manual says a profile with an automatic list applies
-to every host that has a name, which is why autodetection can add hosts that
-break under the TCP MD5 fake; Microsoft's domains are excluded for that reason
-(`3372db2`), and another host that breaks the same way needs another exclusion
-in `nixosModules/zapret2.nix`. The manual's statement was not tested here.
+that file when connections to it keep failing. `discord-voice` sends two
+zero-filled fake datagrams before each outgoing STUN or Discord IP-discovery
+packet among the first 16 packets of a flow, to any host on UDP ports
+19294-19344 and 50000-50099, the rule the bypass on the home router runs. The
+range holds Google's STUN port 19302, so WebRTC STUN to Google gets the fakes
+too. No automated check covers voice; joining a voice channel away from home
+is the test.
+
+The service queues no QUIC (UDP 443). When the post-quantum key share splits a
+QUIC Initial over two datagrams, `nfqws2` drops both and sends them again with
+its mark, and the `predefrag` chain marks those packets `notrack`. On nixos-rog
+on 2026-11-18 the flow then had no entry in `/proc/net/nf_conntrack`, curl
+received no datagram although the replies reached `wlp99s0`, and every HTTP/3
+connection timed out (`curl --http3-only` to cloudflare.com, google.com and
+discord.com; all succeeded with the service stopped). The likely cause, not
+observed, is that the NixOS firewall's input chain drops the reply as a new
+connection. With the service stopped, `curl --http3-only https://discord.com`
+succeeded 6 of 6 times at home, behind the router, whose bypass queues no QUIC.
+
+The zapret2 manual says a profile with an automatic list applies to every host
+that has a name, which is why autodetection can add hosts that break under the
+TCP MD5 fake; Microsoft's domains are excluded for that reason (`3372db2`), and
+another host that breaks the same way needs another exclusion in
+`nixosModules/zapret2.nix`. With nfqws2's defaults (3 retransmissions count as
+a failure, 3 failures within 60 s add the host, and a reset is sent to the
+retransmitting connection) the list on nixos-rog held 66 hosts on 2026-11-18,
+among them `*.tailscale.com`, `sentry.io`, `chatgpt.com` and
+`api.anthropic.com`, which work without the bypass. The profiles therefore pass
+`--hostlist-auto-retrans-threshold=10`, `--hostlist-auto-retrans-maxseq=1800`
+and `--hostlist-auto-retrans-reset=0`: a failure takes 10 retransmissions
+within the first 1800 bytes of the request, and `nfqws2` sends no reset
+itself. Their effect on the list's size on these hosts is not measured yet.
 
 The list survives rebuilds and reboots. It is `/var/lib/zapret2/auto-hosts.txt`
-in the service's state folder (`StateDirectory=zapret2`), and `ExecStartPre`
-creates it empty when it is missing. Read it with
-`sudo cat /var/lib/zapret2/auto-hosts.txt`; it held 60 hosts on nixos-rog on
-2026-11-02. Emptying or deleting the file was not run.
+in the service's state folder (`StateDirectory=zapret2`), and `nfqws2` creates
+it when it is missing. Read it with `sudo cat /var/lib/zapret2/auto-hosts.txt`.
+To remove a host, rewrite the file in place, as `agents/reference/nixos-hosts.md`
+("A public site fails TLS or resets the connection") shows.
+
+**Home router.** At home both hosts sit behind a router that runs its own
+zapret2 bypass for every LAN device, with a different TLS strategy
+(`multidisorder:pos=2:seqovl=1`) and the same voice rule. The router's
+configuration lives outside this repository. Both layers then act on the same
+Discord flows; on nixos-rog on 2026-11-18, 42 of 42 Discord requests succeeded
+with the local service active and 42 of 42 with it stopped, for both a small
+and a post-quantum ClientHello. Away from home the local service is the only
+bypass; it has not been tested on another line.
 
 **WARP proxy.** `usque.service` runs `usque socks` on `127.0.0.1:1080`
 (`oruc.warpProxy` holds the address). It carries only the traffic of an app that
