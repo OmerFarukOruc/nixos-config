@@ -269,7 +269,7 @@ when someone needs a move now ([Update by hand](docs/updates.md#update-by-hand))
 | --- | --- |
 | [Architecture](docs/architecture.md) | the inventory, login sessions, theme, Home Manager and the desktop GPU |
 | [Deploy](docs/deploy.md) | evaluation checks, the deploy and rollback steps, exit codes, release records |
-| [Agent browsers](docs/box-browser.md) | the signed-in browsers coding agents drive: devbox's box browser, Omer's lent Brave, the `box-browser`, `box-view`, `browser-lend` and `login-code` commands, and their security model |
+| [Agent browsers](docs/box-browser.md) | the signed-in browsers coding agents drive: devbox's box browser, Omer's Brave, the `box-browser`, `box-view` and `login-code` commands, and their security model |
 | [Updates](docs/updates.md) | the update by hand, the kernel, release-tagged inputs and app packages |
 | [Recovery](docs/recovery.md) | rollback, older generations, the recovery kernel, bootloader repair, swap on nixos-latitude |
 | [Secure Boot playbook](docs/secure-boot-playbook.md) | a procedure for a coding agent that turns Secure Boot on for a Linux and Windows dual boot on any distribution, with what was tested on nixos-desktop |

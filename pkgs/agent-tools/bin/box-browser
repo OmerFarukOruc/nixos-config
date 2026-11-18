@@ -2,8 +2,8 @@
 # Run agent-browser against a shared signed-in browser, each session in its own pinned tab.
 #   box-browser [--session NAME] [--on HOST] COMMAND...
 #       the box browser: this host's when it runs box-browser.service, else devbox's over SSH; --on names the host
-#   box-browser [--session NAME] --brave [--on MACHINE] COMMAND...
-#       Omer's Brave: this host's Brave Origin, or with --on the Brave that MACHINE lends to this host with browser-lend
+#   box-browser [--session NAME] --brave COMMAND...
+#       Omer's Brave: this host's Brave Origin
 #   box-browser [--on HOST] status
 # The session is NAME, else AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
 # The first --brave call of a session waits up to 10 min for Omer to click Allow in Brave. Write `close` as the first
@@ -31,6 +31,7 @@ while (($#)); do
       shift 2
       ;;
     --session=* | --on=*)
+      [[ -n ${1#*=} ]] || fail_usage
       if [[ $1 == --on=* ]]; then on=${1#*=}; else session=${1#*=}; fi
       shift
       ;;
@@ -64,7 +65,6 @@ set -- "${args[@]}"
 
 cdp_port=9344
 box_unit=/etc/systemd/user/box-browser.service
-lent_dir=$HOME/.local/state/browser-lend
 
 need_session() {
   [[ -n $session ]] || {
@@ -130,16 +130,6 @@ brave_ws() {
   echo "ws://127.0.0.1:$(sed -n 1p "$f")$(sed -n 2p "$f")"
 }
 
-lent_ws() {
-  local f=$lent_dir/$1 port path
-  if [[ -r $f ]] && read -r port path < "$f" && (exec 3<> "/dev/tcp/127.0.0.1/$port") 2> /dev/null; then
-    echo "ws://127.0.0.1:$port${path%$'\r'}"
-  else
-    echo "box-browser: $1 lends no browser to $(uname -n); run browser-lend on there" >&2
-    exit 1
-  fi
-}
-
 if ! $brave; then
   if [[ $1 == status ]]; then
     if local_box; then box_status; else remote_box status; fi
@@ -151,6 +141,14 @@ if ! $brave; then
   exec agent-browser "$@"
 fi
 
+[[ -z $on ]] || {
+  echo "box-browser: --brave drives only this host's Brave Origin; run it on the PC Omer sits at" >&2
+  exit 2
+}
+[[ ! -e $box_unit ]] || {
+  echo "box-browser: $(uname -n) runs the box browser, not Omer's Brave; --brave runs only on the PC Omer sits at" >&2
+  exit 1
+}
 need_session
 export AGENT_BROWSER_SESSION=$session
 state=${XDG_RUNTIME_DIR:?}/box-browser
@@ -170,13 +168,7 @@ if [[ $1 == close ]]; then
   exit "$status"
 fi
 
-if [[ -n $on ]]; then
-  where=$on
-  ws=$(lent_ws "$on")
-else
-  where=$(uname -n)
-  ws=$(brave_ws)
-fi
+ws=$(brave_ws)
 
 # Every other call passes --cdp: a session whose attach failed would otherwise launch a local browser on its next
 # command. agent-browser lists a session as soon as its daemon starts, before Allow. Brave holds the CDP connection
@@ -186,7 +178,7 @@ fi
 # not hold the lock.
 if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! agent-browser session list 9>&- | awk 'NR > 1 { print $NF }' | grep -qxF "$session"; then
   rm -f "$attached"
-  echo "box-browser: waiting for Allow in Brave on $where" >&2
+  echo "box-browser: waiting for Allow in Brave on $(uname -n)" >&2
   deadline=$((SECONDS + 600))
   until err=$(agent-browser --pin-tab --cdp "$ws" wait --fn true 2>&1 > /dev/null 9>&-); do
     # agent-browser 0.43.0 keeps a session's tab pin after `close` (`agent-browser tab --help`), so the first attach

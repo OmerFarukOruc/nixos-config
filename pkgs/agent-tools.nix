@@ -69,7 +69,6 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
     install -Dm755 -t $out/bin bin/*
-    install -Dm644 -t $out/share/agent-tools share/browser-lend.ps1
     substituteInPlace $out/bin/dryer --replace-fail @python@ ${
       lib.getExe (python3.withPackages (_: [ dryer ]))
     }

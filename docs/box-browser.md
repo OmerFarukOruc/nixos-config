@@ -7,10 +7,10 @@ nixos-rog and devbox. It reaches two kinds of browser:
 - The box browser: one Chromium on devbox that Omer signs in to once and that
   every agent session shares, each in its own tab. Agents use it by default,
   because it never waits for Omer.
-- Omer's Brave Origin, on the PC he sits at or lent to devbox with
-  `browser-lend`. Brave asks him to click Allow for each new agent session, so
-  agents use it only for what the box browser cannot do, such as a site that
-  signs in only with a passkey.
+- Omer's Brave Origin, on the PC he sits at, for an agent that runs on that
+  PC. Brave asks him to click Allow for each new agent session, so agents use
+  it only for what the box browser cannot do, such as a site that signs in
+  only with a passkey. No agent on devbox reaches it.
 
 A page that needs no login opens in a throwaway headless browser
 (`agent-browser --session <name>`) instead. The agent-browser skill
@@ -27,7 +27,7 @@ A page that needs no login opens in a throwaway headless browser
 
 ```sh
 box-browser [--session NAME] [--on HOST] COMMAND...                  # box browser
-box-browser [--session NAME] --brave [--on MACHINE] COMMAND...       # Omer's Brave
+box-browser [--session NAME] --brave COMMAND...                      # Omer's Brave
 box-browser [--on HOST] status                                       # box browser units and DevTools
 ```
 
@@ -40,9 +40,9 @@ command exits 2. Each session keeps its own pinned tab
 Without `--brave`, the command drives this host's box browser when the host
 runs `box-browser.service`, and devbox's over `ssh devbox` otherwise; `--on`
 names another host. A file the box browser writes, such as a screenshot, stays
-on devbox. With `--brave`, it drives this host's Brave Origin, or with `--on
-MACHINE` the Brave that MACHINE lends to this host. The first `--brave` call of
-a session waits up to 10 minutes for Omer's Allow click.
+on devbox. With `--brave`, it drives this host's Brave Origin; it refuses
+`--on`, and it fails on a host that runs the box browser. The first `--brave` call of a session waits up to 10 minutes for
+Omer's Allow click.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
 installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
@@ -89,28 +89,6 @@ Origin. Turn on `brave://inspect/#remote-debugging` once; Brave Origin then
 writes its port and path to
 `~/.config/BraveSoftware/Brave-Origin/DevToolsActivePort`, which the command
 reads, because its `/json` answers 404.
-
-`browser-lend` (Linux and macOS) and `pkgs/agent-tools/share/browser-lend.ps1`
-(Windows) lend a logged-in Brave, Chrome, Chromium or Edge to agents on devbox.
-On a machine without this package, copy the one file there. The machine needs
-`ssh devbox` to work as devbox's user; `BROWSER_LEND_HOST` names another SSH
-destination.
-
-1. In the browser, open `<browser>://inspect/#remote-debugging` and turn
-   remote debugging on.
-2. Run `browser-lend on` on Linux or macOS, or `powershell -ExecutionPolicy
-   Bypass -File browser-lend.ps1 on` on Windows. It forwards a free loopback
-   port on devbox to the browser's DevTools port over SSH, writes the port and
-   path to `~/.local/state/browser-lend/<machine>` on devbox (mode 0600), and
-   prints the command for the agent: `box-browser --brave --on <machine>`. When
-   several browsers are open, add a name to pick one, such as `browser-lend on
-   chrome`.
-3. When the agent first connects, click Allow in the browser.
-4. Run `browser-lend off` (on Windows, `browser-lend.ps1 off`) when the task is
-   done. It removes the file and ends the SSH connection.
-
-The forward listens on devbox's loopback only, so nothing on the tailnet
-reaches the lent browser.
 
 ## Login codes
 
@@ -178,9 +156,8 @@ it, and accepts the rest.
   and devbox's disk has no disk encryption, so anyone with a copy of the disk
   reads the cookies. A keyring would not stop the agents either, because the
   same user unlocks it.
-- **Lent Brave.** `browser-lend` forwards to devbox's loopback only, so the
-  same processes as above reach a lent Brave, and Brave asks Allow for each
-  new session.
+- **Omer's Brave.** No command forwards a PC's browser to devbox, so nothing
+  on devbox reaches it. On the PC, Brave asks Allow for each new session.
 - **Left out.** A VM or a second user for the browser would not separate it
   from the agents, which need DevTools. agent-browser refuses its domain
   allowlist in `--cdp` mode and calls it "not an OS firewall"

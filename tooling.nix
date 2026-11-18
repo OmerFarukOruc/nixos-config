@@ -65,7 +65,6 @@ in
             "pkgs/claude-tools/libexec/login-browser"
             "pkgs/claude-tools/libexec/rotate-on-limit"
             "pkgs/agent-tools/bin/box-browser"
-            "pkgs/agent-tools/bin/browser-lend"
             "pkgs/agent-tools/bin/codex-ask"
             "pkgs/agent-tools/bin/dryer"
             "pkgs/agent-tools/bin/gh-issue-tree"
