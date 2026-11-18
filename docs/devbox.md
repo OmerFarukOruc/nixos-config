@@ -629,7 +629,7 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   and `comment-sicko` agents and the `ub-mode` and
   `thermo-nuclear-code-quality-review` skills into `~/.claude` and into each
   account folder in its `accounts` list, and `core.md`,
-  `testing-discipline.md`, `engineering.md` and `reviews.md` into
+  `testing-discipline.md`, `flaky-load.md`, `engineering.md` and `reviews.md` into
   `~/.claude/shared`, which are the files the reviewer reads. `agents`,
   `skills` and `shared` are whole links to a read-only store path, so no run
   plants an agent or a skill that stays, and

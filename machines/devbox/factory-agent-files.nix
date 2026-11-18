@@ -41,6 +41,10 @@ let
       path = ../../agents/shared/testing-discipline.md;
     }
     {
+      name = "shared/flaky-load.md";
+      path = ../../agents/shared/flaky-load.md;
+    }
+    {
       name = "shared/engineering.md";
       path = ../../agents/shared/engineering.md;
     }

@@ -49,14 +49,14 @@ Done when each lane plan names its keepers, the carried assertions, the retired 
 
 Land the shared harness change first, through one owner, so every lane builds on it. Then one change per lane, each in its own worktree off the default branch, by a writer agent (prompt in [references/prompts.md](references/prompts.md), "Lane writer"):
 
-- Apply every mark. Remove the seams the lane unlocks and move their proof to the real boundary.
+- Apply every mark. Remove the seams the lane unlocks and move their proof to the real boundary, and remove the test support that only deleted tests used, as the discipline's "Changing and deleting existing tests" says. Test support in a file no lane owns, such as a shared fixture or a dev dependency, goes in one last change by one owner after the lanes land, because only then has it lost its last reader.
 - Every `F`, every `C`, and every seam removal that changes what a test reaches gets a **caught mutation**, as the discipline's "Changing and deleting existing tests" defines it. Record each one: ledger row, regression, production file and line, the failing assertion from the output, the byte-for-byte restore check, the passing rerun.
 - A retained test that is red because the product is wrong keeps its assertion. The caller's policy decides between a fix in a separate change and a skip whose reason names the follow-up.
 - Before each land, the `code-reviewer` agent, which wrote none of the change, reviews the diff against the default branch once; that is the lane's one review, and it judges each test because a lane's change is mostly tests. Check each finding against the source before you act on it, then fix, gate, and land.
 
 A long campaign outlives many commits on the default branch. Merge the default branch into a lane branch; do not rebase it. When the default branch changed a test the lane deletes, keep the deletion and port the new contract into the keeper.
 
-Done when every lane plan is applied and merged and the gate passes on the default branch.
+Done when every lane plan is applied and merged, the gate passes on the default branch, and the repository's dead-code check, when it has one, passes there.
 
 ## 6. Preservation review
 
@@ -71,7 +71,7 @@ Done when every row has a final proof or a settled gap, and every restored contr
 ## 7. Keep it from coming back
 
 - A pattern a parser can decide, such as a test with no assertion or a test that reads source text, becomes a lint rule on the test directory, with a gate test that runs the real linter on bad samples.
-- The repository gets a testing document, usually `docs/TESTING.md`: how to run the tests, the shared harness, the keeper for each area, every end-to-end script with the gate task that runs it or its manual prerequisites, and the pitfalls the campaign found. It holds repository facts; the rules stay in the discipline file. One line in `AGENTS.md` points to it for writing, changing, or deleting a test.
+- The repository gets a testing document, usually `docs/TESTING.md`: how to run the tests, the shared harness, the keeper for each area, every end-to-end script with the gate task that runs it or its manual prerequisites, and the pitfalls the campaign found. It holds repository facts and the rules that hold only for this repository. One line in `AGENTS.md` points to it for writing, changing, or deleting a test.
 - A lesson that holds beyond this repository goes into the discipline file.
 
 Done when the lint rules run in the gate, the testing document is merged, and its pointer is in `AGENTS.md`.

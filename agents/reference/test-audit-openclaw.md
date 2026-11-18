@@ -1,6 +1,6 @@
 # openclaw test-audit rules: adopt, adapt or reject
 
-Each rule in openclaw's test-audit material at commit 70bfdc2b58e42f02af5bdc4d345875a9e6ad3928, and where Omer's rules hold it. The sources are `.agents/skills/test-audit/SKILL.md` (S), `.agents/skills/test-audit/references/audit.md` (A), `.agents/skills/test-audit/CAMPAIGN.md` (C) and `docs/help/testing/writing-tests.md` (W). "Discipline" is `agents/shared/testing-discipline.md`; "skill" is `agents/skills/test-audit/SKILL.md`. When the upstream files change, read their diff and update this table with the rules.
+Each rule in openclaw's test-audit material at commit 1fc5296cba84c80cfe23321cba053caf3bcda75f, and where Omer's rules hold it. The sources are `.agents/skills/test-audit/SKILL.md` (S), `.agents/skills/test-audit/references/audit.md` (A), `.agents/skills/test-audit/CAMPAIGN.md` (C) and `docs/help/testing/writing-tests.md` (W). "Discipline" is `agents/shared/testing-discipline.md`; "skill" is `agents/skills/test-audit/SKILL.md`. When the upstream files change, read their diff and update this table with the rules.
 
 | openclaw rule | Decision | Where and why |
 | --- | --- | --- |
@@ -13,11 +13,11 @@ Each rule in openclaw's test-audit material at commit 70bfdc2b58e42f02af5bdc4d34
 | Reject self-comparisons and subject-generated expected values (S, A) | Adopt | Discipline tautological and assertion-free tests; lint rule where a parser can decide it |
 | Reject copied inventories, manifests and export lists (S, A) | Adapt | Discipline tautological test, with the exception in "Contracts that stay" for a list checked against a second artifact maintained on its own, such as backup table coverage |
 | Reject exact source, import and string greps (S, A) | Adapt | Discipline: a lint rule's job; reading a file stays allowed when the bytes are a consumer-facing contract |
-| Reject private predicate and call-shape tests that duplicate boundary proof (S, A) | Adopt | Discipline change-detector and call-count items, "One owner per contract" |
-| Reject duplicate contracts and provider-local replays of shared helpers (S, A) | Adopt | Discipline duplicate-assertion item |
-| Reject mocks that implement the asserted behaviour (S, A) | Adopt | Discipline fake-against-fake item |
+| Reject private predicate and call-shape tests that duplicate boundary proof (S, A) | Adopt | Discipline change-detector test and call-count or call-order assertion, "One owner per contract" |
+| Reject duplicate contracts and provider-local replays of shared helpers (S, A) | Adopt | Discipline duplicate test |
+| Reject mocks that implement the asserted behaviour (S, A) | Adopt | Discipline fake collaborator |
 | Fixtures do not fabricate receipts, admission, callback order or a persistence path the code never writes (S, A) | Adopt | Discipline fabricated fixture |
-| Reject capability flags asserted instead of delivery (A) | Adopt | Discipline capability-flag item |
+| Reject capability flags asserted instead of delivery (A) | Adopt | Discipline capability-flag assertion |
 | A negative control fails at its intended guard; names match what the test exercises (S, A) | Adopt | Discipline misaimed negative test; "The single test" on names |
 | Retention bar: independent API, SDK, protocol, config, migration, storage, security, platform, default, prompt-byte, generated-language, package, release, architecture and ordering contracts (S, A) | Adapt | Discipline "Contracts that stay": the kinds that occur in Omer's repositories, plus the second-artifact test so the bar does not collide with the tautology ban |
 | Static or slow is not a reason to delete (S, A) | Adopt | Discipline "Contracts that stay" |
@@ -41,10 +41,17 @@ Each rule in openclaw's test-audit material at commit 70bfdc2b58e42f02af5bdc4d34
 | Merge main rather than rebase; keep a deletion main touched and port the new contract (C8) | Adopt | Skill step 5 |
 | Review tooling sees a truncated file list on a large diff (C8) | Adapt | Skill step 5 reviews each lane change on its own |
 | Cost budget of 5 s per file, 30 s needs a reason (W) | Reject | No measured basis here; a full suite run in the audited repository took about 10 s |
-| Inject clocks; avoid real timers, sleeps and polling (W) | Adapt | Discipline seam paragraph: use the runner's mock timers or a clock production already passes; an injected clock only tests pass is a seam |
+| Inject clocks; do not add real timers, sleeps or polling (W) | Adapt | Discipline "Cross the real boundary", clock paragraph: the runner's mock timers, a clock production already passes, or a patch that replaces only the current time; an injected clock only tests pass is a seam. A test on a real boundary cannot freeze the other process, so "Wait for the state the assertion reads" has it poll the state its assertion reads, with a deadline |
 | Isolate each file's state; fix shared state instead of serial configs or worker pins (W) | Adopt | Discipline flaky-test item |
-| Flake triage: reproduce the original order first, repair the producer (W) | Adopt, extended | Discipline flaky-test item, plus reproduction under the gate's load |
+| Flake triage: reproduce the original order first, repair the producer (W) | Adopt, extended | Discipline flaky-test item, plus reproduction under the gate's load (`agents/shared/flaky-load.md`) |
 | Synthetic content; credentials stay out of captures (W) | Adopt | core.md "Secrets" |
 | Live provider bugs: CI-safe regression at the smallest composition; live-only checks narrow and opt-in (W) | Adapt | Skill step 7: manual end-to-end scripts are listed in the repository testing document with their prerequisites |
 | Many private controls point to fragmented ownership, not a need for test-only exports (W) | Adopt | Discipline seam paragraph, last sentence |
-| Module mock export completeness, raw SQLite access, watcher cleanup, port claims, SecretRef classification (W) | Reject | openclaw harness specifics |
+| Module mock export completeness, raw SQLite access, skills discovery cleanup, port claims, SecretRef classification (W) | Reject | openclaw harness specifics |
+| After removal batches, run the dead-code checks for dependencies, unused files and exports (A) | Adapt | Discipline "Changing and deleting existing tests": a deletion takes its test support with it and runs the repository's dead-code check; skill step 5 removes the test support, and the caller's repository supplies the command |
+| Async end-to-end waits read produced state, never the action's return (W) | Adopt | Discipline "Wait for the state the assertion reads" |
+| A PR adds at most 400 net test lines without an allocation record, and states wall time and CI seconds for each changed test file (W) | Reject | Discipline "Enforcement" allows no test-admission gate; the skill report counts test lines as a report item |
+| Seconds-long tests must prove a contract no cheaper layer can; long end-to-end compositions belong in a release-only tier (W) | Reject | Discipline "One owner per contract" puts the owner at the strongest real boundary, and "Running end-to-end tests" runs the full suite before landing |
+| Never boot a Gateway or process fixture per test when a suite-level fixture exists (W) | Adapt | Discipline "One owner per contract": repeated setup moves into one helper; the fixture names are openclaw's |
+| After a merge of main, PR CI reruns the subsystem suite, and the local rerun covers only the tests the merge touched or CI failed (C8) | Adapt | Skill step 5: the gate runs on the merged head before each land, and the caller's repository decides where the gate runs. The repeat of a live proof is discipline "Running end-to-end tests": an edit after the full run to a file it exercises means one more run |
+| UI test leak guard that reports leftover DOM, listeners and fake timers after teardown (W) | Reject | openclaw harness specifics |
