@@ -84,8 +84,13 @@ keeps 0.0.0.0 until `docker compose down` or `docker network rm` removes it.
   on the public interface and accepts everything on tailscale0, so only the
   tailnet reaches sshd. Port 22 on the tailnet address belongs to Tailscale SSH.
 - Root logs in by key, and only with the three keys in the module (Omer's shared
-  key, the box's own key and the co-admin's). omer keeps `~/.ssh/authorized_keys`
-  on top of the declared key. Omer adds the Grok bots' key there by hand.
+  key, the box's own key and the co-admin's). omer logs in with Omer's shared
+  key. sshd also reads `~/.ssh/authorized_keys`, which omer does not have, so
+  the Grok bots' key in Infisical `/risoluto-fleet` opens no OpenSSH login
+  here. Tailscale SSH on port 22 does let the bots' tailnet device
+  (`grokbot-user-…`) in as omer, with the tailnet's other member devices,
+  because the tailnet policy, kept in the Tailscale admin console and not in
+  this repository, admits them (both checked 2026-11-18).
   `AllowUsers` lists root and omer.
 
 ## Install

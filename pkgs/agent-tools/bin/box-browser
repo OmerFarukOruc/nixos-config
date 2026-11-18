@@ -6,11 +6,12 @@
 #       Omer's Brave: this host's Brave Origin
 #   box-browser [--on HOST] status
 # The session is NAME, else AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
+# On the box browser, `close` closes the session's tab, then ends the session.
 # The first --brave call of a session waits up to 10 min for Omer to click Allow in Brave. Write `close` as the first
 # word of COMMAND, so it skips that wait.
 set -euo pipefail
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
 fail_usage() {
   usage >&2
   exit 2
@@ -90,6 +91,30 @@ local_box() {
   esac
 }
 
+session_running() {
+  agent-browser session list | awk 'NR > 1 { print $NF }' | grep -qxF -- "$session"
+}
+
+# agent-browser keeps a session's tab pin after the session ends (`agent-browser tab --help`), so a session whose pinned
+# tab closed fails with tab_gone on its next command until it opens a new tab.
+reopen_pinned_tab() {
+  local err
+  if ! err=$(agent-browser get url 2>&1 > /dev/null) && [[ $err == *tab_gone* ]]; then
+    agent-browser tab new > /dev/null
+  fi
+}
+
+# Chromium refuses to close its last tab, so that tab is blanked instead, which leaves no signed-in page open.
+close_session_tab() {
+  local err
+  err=$(agent-browser tab close 2>&1 > /dev/null) && return
+  case $err in
+    *tab_gone*) ;;
+    *"last tab"*) agent-browser open about:blank > /dev/null ;;
+    *) printf '%s\n' "$err" >&2 ;;
+  esac
+}
+
 box_status() {
   local failed=0 unit
   for unit in box-display box-browser; do
@@ -138,6 +163,11 @@ if ! $brave; then
   need_session
   local_box || remote_box --session "$session" "$@"
   export AGENT_BROWSER_SESSION=$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_PIN_TAB=1
+  if (($# == 1)) && [[ $1 == close ]]; then
+    session_running && close_session_tab
+  elif ! session_running; then
+    reopen_pinned_tab
+  fi
   exec agent-browser "$@"
 fi
 
@@ -176,7 +206,7 @@ ws=$(brave_ws)
 # waiting on that connection. A repeat call joins the pending connection instead of opening a new one, so retrying
 # gives the 10 min wait without a second Allow dialog. Each agent-browser call closes fd 9, so a daemon it starts does
 # not hold the lock.
-if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! agent-browser session list 9>&- | awk 'NR > 1 { print $NF }' | grep -qxF "$session"; then
+if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! session_running 9>&-; then
   rm -f "$attached"
   echo "box-browser: waiting for Allow in Brave on $(uname -n)" >&2
   deadline=$((SECONDS + 600))

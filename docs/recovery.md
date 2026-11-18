@@ -448,14 +448,14 @@ minutes, and `timeout 10 ssh root@devbox true` fails. A shorter outage is a
 reboot in progress ([Deploy to a server](deploy.md#deploy-to-a-server)).
 Write down what you checked and when (`date -u +%FT%TZ`) before step 1.
 
-**Ask first, every time.** The SCP needs Omer's netcup login, and a reset there
-cuts every process on the box, so neither an earlier yes nor this section
-authorizes it. Ask with one question that names what is down, since when, and
-the steps you will take, for example: "devbox is offline since 02:14 UTC after
-the night reboot. May I open netcup's console in your Brave on nixos-desktop,
-look at the screen, and if it hangs at boot, reset the box and pick the
-previous generation in the Limine menu?" Never use SCP's reinstall, rescue
-system, image, snapshot or disk options; those are Omer's to run.
+**Ask before the reset.** Opening the SCP and reading the console need no
+question. A reset cuts every process on the box, so neither an earlier yes nor
+this section authorizes it. Ask with one question that names what is down,
+since when, what the console shows, and the steps you will take, for example:
+"devbox is offline since 02:14 UTC after the night reboot, and netcup's console
+shows it hanging at boot. May I reset the box and pick the previous generation
+in the Limine menu?" Never use SCP's reinstall, rescue system, image, snapshot
+or disk options; those are Omer's to run.
 
 **Steps.** Drive Omer's Brave on nixos-desktop with the agent-browser skill
 (`box-browser --brave`, [box-browser.md](box-browser.md#omers-brave)), because
@@ -466,8 +466,8 @@ Save a screenshot of the console after each step under
 screenshot in the final message, so Omer can follow what was done.
 
 1. Open `https://www.servercontrolpanel.de/` (unverified address). When it shows
-   a login, stop and ask Omer to sign in in that tab; never type his password or
-   his second factor.
+   a login, sign in from the secret store as the agent-browser skill says; when
+   no store holds the netcup login, ask Omer to sign in in that tab.
 2. Pick the server whose name or IP matches devbox and open its console
    (noVNC). Read the screen before you press anything:
    - a login prompt on tty1 means the system runs, so the fault is the network,

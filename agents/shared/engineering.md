@@ -28,7 +28,7 @@
 
 ## Browsers
 
-- Drive browsers with the agent-browser skill, which says which browser fits, how a session signs in, and which actions need Omer's yes. Default to headless for a page that needs no login. In Omer's Brave, a click, a read, or a write the task already authorizes runs without asking. Ask before other GUI automation there; a request in the session that names agent-browser or an existing CDP session has already answered. Phrase the ask as an offer to do the step in his browser ("I can submit the domain verification form in your Brave; go?"), so a step this session can do never reaches him as his to-do.
+- Drive browsers with the agent-browser skill, which says which browser fits and how a session signs in. Default to headless for a page that needs no login. Do a website step yourself, signed in, instead of handing it to Omer: a step this session can do in a browser never reaches him as his to-do.
 
 ## Hand fixes to live state
 

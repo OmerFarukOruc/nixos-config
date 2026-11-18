@@ -4,9 +4,11 @@ Coding agents drive signed-in browsers with agent-browser through one command,
 `box-browser` (`pkgs/agent-tools/bin/box-browser`), installed on nixos-desktop,
 nixos-rog and devbox. It reaches two kinds of browser:
 
-- The box browser: one Chromium on devbox that Omer signs in to once and that
-  every agent session shares, each in its own tab. Agents use it by default,
-  because it never waits for Omer.
+- The box browser: one Chromium on devbox that agents sign in to from
+  Infisical and that every agent session shares, each in its own tab. Agents
+  use it by default, because it never waits for Omer, and they act in its
+  signed-in sites without asking him. It stays signed out of Google, so no
+  agent reaches Omer's Gmail there.
 - Omer's Brave Origin, on the PC he sits at, for an agent that runs on that
   PC. Brave asks him to click Allow for each new agent session, so agents use
   it only for what the box browser cannot do, such as a site that signs in
@@ -80,7 +82,12 @@ devbox's profile. With no argument the viewer opens devbox's display from a
 PC, and the host's own display on a host with `features.boxBrowser`; `box-view
 <host>` names another host. Agents sign in by themselves when a secret store
 holds the password, as the agent-browser skill says, so Omer signs in only to
-what no store holds.
+what no store holds or what needs a passkey or a captcha. When a site sends a
+sign-in code, the agent asks Omer for it and enters it.
+
+`box-browser close` closes the session's own tab, or blanks it when it is the
+browser's last, before it ends the session; the agent closes any other tab it
+opened first.
 
 ## Omer's Brave
 
@@ -92,9 +99,10 @@ reads, because its `/json` answers 404.
 
 ## Login codes
 
-The box browser holds no mail account. A site that sends a sign-in code by
-email sends it to Omer's Gmail, where a filter forwards the code mails of each
-named sender to a separate login-code mailbox. `login-code`
+The box browser holds no mail account. By default an agent asks Omer for a
+code a site sends. Optionally, a Gmail filter forwards the code mails of each
+named sender to a separate login-code mailbox, and agents fetch the code
+themselves. `login-code`
 (`pkgs/agent-tools/bin/login-code`) reads that mailbox read-only over IMAP,
 downloads only the sender's mails, and writes only the code, 4 to 12 letters,
 digits or dashes, to a 0600 file, so no agent reads a mail. Take the time
@@ -119,7 +127,7 @@ Setup, once:
 2. Store the address as `LOGIN_CODE_IMAP_USER` and the app password as
    `LOGIN_CODE_IMAP_PASSWORD` in Infisical `personal-secrets`, env `secrets`,
    folder `/login-code`.
-3. In Omer's Gmail, add the mailbox as a forwarding address and confirm it.
+3. Omer, in his Gmail: add the mailbox as a forwarding address and confirm it.
 4. For each site, add a Gmail filter with `from:<sender>` that forwards to the
    mailbox.
 
@@ -127,28 +135,34 @@ A new site needs only step 4.
 
 ## Security model
 
-Whoever drives the box browser acts as every account signed in there. The
-design keeps the accounts that would let an attacker take over others out of
-it, and accepts the rest.
+Whoever drives the box browser acts as every account signed in there, and
+agents act there without asking Omer. The design keeps his mailbox and his
+Google login out of it, so nobody who drives it reads the reset links of his
+other accounts, and accepts the rest.
 
 - **Who can drive it.** DevTools has no password, so every process of devbox's
   user and root can drive the browser. That includes every agent, any session
-  that logs in with a key in that user's `~/.ssh/authorized_keys` (the Grok
-  bots' key among them, [devbox](devbox.md#access)), and the herdr web UI on
-  the tailnet. The other local user `sl-factory` cannot: the firewall rejects its
-  packets to loopback ([Factory run user](devbox.md#factory-run-user)), and the
-  X cookie keeps it off the display.
+  that logs in as that user over SSH or Tailscale SSH, the Grok bots'
+  tailnet device among them ([devbox](devbox.md#access)), and the herdr web
+  UI on the tailnet. The other local user `sl-factory` cannot: the firewall
+  rejects its packets to loopback
+  ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
+  off the display.
 - **What it holds.** No saved password: the policy turns the password manager
   off, and passwords live in Infisical, from which agents type them through
-  `eval --stdin`. No mail account: codes come through `login-code`, which
-  downloads only the named sender's mails and writes only a short code. The
-  From header it matches is not authenticated, so a mail that forges the
-  sender reaches the mailbox only if Gmail's filter forwards it.
+  `eval --stdin`. No mail account and no Google login: Omer gives codes, or
+  `login-code` reads them, downloading only the named sender's mails and
+  writing only a short code. The From header it matches is not
+  authenticated, so a mail that forges the sender reaches the mailbox only if
+  Gmail's filter forwards it.
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
   to read a sign-in code finds no mailbox in the browser, the attack Brave
   showed against Perplexity Comet
   ([brave.com/blog/comet-prompt-injection](https://brave.com/blog/comet-prompt-injection/)).
-  The agent-browser skill lists the actions an agent asks Omer about first.
+  Agents act in signed-in sites without asking, so a page can also steer an
+  agent into a change in GitHub, AWS, Cloudflare or Tailscale, such as a new
+  token or a changed recovery address. The box limits only what such a
+  change reaches: no mailbox, no saved password and no Google login.
 - **The profile at rest.** Chromium runs with `--password-store=basic`,
   because devbox has no keyring. Chromium then encrypts cookies with a fixed
   key (`kV10Key`, PBKDF2 of "peanuts", in Chromium's
@@ -157,7 +171,9 @@ it, and accepts the rest.
   reads the cookies. A keyring would not stop the agents either, because the
   same user unlocks it.
 - **Omer's Brave.** No command forwards a PC's browser to devbox, so nothing
-  on devbox reaches it. On the PC, Brave asks Allow for each new session.
+  on devbox reaches it. On the PC, Brave asks Allow for each new session. Omer
+  is signed in to Gmail there, and only the agent-browser skill's rule keeps
+  agents out of it.
 - **Left out.** A VM or a second user for the browser would not separate it
   from the agents, which need DevTools. agent-browser refuses its domain
   allowlist in `--cdp` mode and calls it "not an OS firewall"
