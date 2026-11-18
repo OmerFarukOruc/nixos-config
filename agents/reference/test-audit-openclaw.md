@@ -37,7 +37,7 @@ Each rule in openclaw's test-audit material at commit 1fc5296cba84c80cfe23321cba
 | Update shrink-only line-cap baselines (C5) | Reject | No such baselines in Omer's repositories |
 | Durable test-ownership rules in the subsystem's `AGENTS.md` (C5) | Adapt | Skill step 7: a repository testing document with one `AGENTS.md` pointer, so `AGENTS.md` stays short |
 | Preservation review, one reviewer per boundary group, a mutation per restored contract (C6) | Adopt, extended | Skill step 6; the discipline also asks for a mutation to confirm a deletion's remaining proof in another file or layer |
-| Fix product defects inside the campaign with a control run (C7) | Reject | Omer's decision: a product bug becomes a follow-up; a red test is skipped with the follow-up as its reason |
+| Fix product defects inside the campaign with a control run (C7) | Adapt | Omer's decision: a lane's change never fixes a product bug. Skill step 5: the red test keeps its assertion, and the caller's policy decides between a fix in a separate change and a skip whose reason names the follow-up |
 | Merge main rather than rebase; keep a deletion main touched and port the new contract (C8) | Adopt | Skill step 5 |
 | Review tooling sees a truncated file list on a large diff (C8) | Adapt | Skill step 5 reviews each lane change on its own |
 | Cost budget of 5 s per file, 30 s needs a reason (W) | Reject | No measured basis here; a full suite run in the audited repository took about 10 s |
