@@ -38,8 +38,10 @@ box-browser [--on HOST] status                                       # box brows
 COMMAND is an agent-browser command, such as `open <url>` or `snapshot -i`.
 The session is `--session`, else `AGENT_BROWSER_SESSION`, else
 `CLAUDE_CODE_SESSION_ID`, else `CODEX_THREAD_ID`; with none of them the
-command exits 2. Each session keeps its own pinned tab
-(`AGENT_BROWSER_PIN_TAB=1`).
+command exits 2. A session name holds only letters, digits, `-` and `_`.
+Each session keeps its own pinned tab (`AGENT_BROWSER_PIN_TAB=1`). `--brave`
+runs the session as `brave_<session>`, so its tab pin stays apart from the box
+browser's, and a box browser session name that starts with `brave_` exits 2.
 
 Without `--brave`, the command drives this host's box browser when the host
 runs `box-browser.service`, and devbox's over `ssh devbox` otherwise; `--on`
@@ -82,11 +84,16 @@ folder there.
   off (`PasswordManagerEnabled`), so the profile saves no password
   ([Security model](#security-model)).
 - `box-view` (command and menu entry "Box browser", on nixos-desktop and
-  nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it runs
-  `vncviewer -via <host>`, and TigerVNC's viewer opens the SSH tunnel itself
-  with the command in `VNC_VIA_CMD`, which keeps `BatchMode` and
-  `ExitOnForwardFailure`. A failure of the viewer or its tunnel also shows as a
-  desktop notification, since the menu entry has no terminal.
+  nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it
+  forwards a socket in `$XDG_RUNTIME_DIR` (mode 0700, so no other local user
+  reaches it) to the host's `127.0.0.1:5920` with `ssh -N -L`, which keeps
+  `BatchMode` and `ExitOnForwardFailure`, and opens the viewer on that socket.
+  A failure of the viewer or its tunnel also shows as a desktop notification,
+  since the menu entry has no terminal.
+- `browser-lend-off.service` (a NixOS oneshot on nixos-rog and nixos-desktop)
+  removes any `tailscale serve` listener on tailnet ports 9222 and 9223, the
+  ports that once published Brave's DevTools, because tailscaled keeps them
+  across restarts, and fails when they remain.
 
 To sign in, run `box-view`, or open Box browser from the menu, sign in to the
 site in the Chromium window, then close the viewer. The session stays in the
@@ -122,13 +129,13 @@ before you request the code, so an older code does not count:
 ```sh
 d=$(mktemp -d) && t=$(date +%s)
 # request the code on the site, then:
-INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token") \
-  infisical run --projectId "$INFISICAL_PERSONAL_SECRETS_PROJECT" --domain https://eu.infisical.com \
+infisical run --projectId "$INFISICAL_PERSONAL_SECRETS_PROJECT" --domain https://eu.infisical.com \
   --env secrets --path /login-code -- login-code --after "$t" --wait 120 noreply@github.com "$d/code"
 ```
 
-On a PC, where the Infisical CLI has its own login, drop the `INFISICAL_TOKEN`
-prefix and the two flags before `--env`. `login-code --help` lists the options;
+It runs on a PC, where the Infisical CLI has Omer's login; devbox's
+`omer-machines` identity reads only `/harness/**`, so it cannot read
+`/login-code`. `login-code --help` lists the options;
 `--pattern` takes the code's regular expression when it is not 6 digits.
 
 Setup, once:
@@ -153,7 +160,8 @@ loopback only, so who can drive a box browser is who runs on its host.
 - **A PC's box browser.** Only Omer's user and root on that PC can drive it,
   the same processes that already reach his files, his SSH keys and his
   Brave: the `box-browser` nftables table rejects other local users, such as
-  the Nix build users, on loopback ports 5920 and 9344. No other host reaches
+  the Nix build users, on loopback ports 5920 and 9344. devbox, whose firewall
+  runs on iptables, gets the same rule as its `box-browser-out` chain. No other host reaches
   it. It holds his own logins, his Google
   account among them, and its saved passwords and cookies are encrypted with
   a key in KWallet, so a copy of the profile without his login is useless.
@@ -161,8 +169,9 @@ loopback only, so who can drive a box browser is who runs on its host.
   drive the browser. That includes every agent, any session
   that logs in as that user over SSH or Tailscale SSH, the Grok bots'
   tailnet device among them ([devbox](devbox.md#access)), and the herdr web
-  UI on the tailnet. The other local user `sl-factory` cannot: the firewall
-  rejects its packets to loopback
+  UI on the tailnet. Other local users cannot: the `box-browser-out` chain
+  rejects their connections to ports 5920 and 9344, and the firewall rejects
+  `sl-factory`'s loopback packets other than DNS
   ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
   off the display.
 - **What devbox's holds.** No saved password: the policy turns the password
@@ -215,10 +224,15 @@ through `ci/box-browser.nix`. It fails when a unit is missing, when the display
 command loses `-localhost` or `-SecurityTypes None`, when the browser unit's
 `DISPLAY` and `XAUTHORITY` are not the display and the `-auth` file of that
 command line, and when a box browser that uses Chromium's fixed key lacks the
-policy that turns its password manager off, or one that uses KWallet has it.
-Each host job also checks the user units for an ordering cycle. devbox's boot test
+policy that turns its password manager off, or one that uses KWallet has it,
+when a Plasma host's browser does not wait for the wallet or keeps its key
+anywhere but KWallet, and when the browser does not start with the desktop
+session on a host that has one, or at boot on one without. Each host job also
+checks the user units for an ordering cycle. devbox's boot test
 (`ci/server-boot/checks/20-services.py`) starts the units, runs `box-browser
-status`, checks that ports 5920 and 9344 listen on loopback only, and reads
-`chrome://prefs-internals` in the box browser to check that the policy turns the
-password manager off. On the host, `box-browser status` checks that both units
+status`, checks that ports 5920 and 9344 listen on loopback only and that its
+user reaches them while `nobody` does not, reads `chrome://prefs-internals` in
+the box browser to check that the policy turns the password manager off, and
+checks that `close` closes only the session's tab, or blanks it when it is the
+browser's last. On the host, `box-browser status` checks that both units
 are active and that DevTools answers.

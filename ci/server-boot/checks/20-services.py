@@ -5,6 +5,7 @@ import re as svc_re
 import shlex as svc_shlex
 import socket as svc_socket
 import ssl as svc_ssl
+import time as svc_time
 
 svc_uid = machine.succeed(f"id -u {BOX_USER}").strip()
 svc_rt = f"/run/user/{svc_uid}"
@@ -186,8 +187,10 @@ box_browser = (
 )
 machine.wait_until_succeeds(f"{box_browser} status")
 for box_port in (5920, 9344):
-    machine.succeed(rf"ss -Htln | grep -E '127\.0\.0\.1:{box_port} '")
-    machine.fail(rf"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):{box_port} '")
+    box_listeners = machine.succeed(rf"ss -Htln | awk '$4 ~ /:{box_port}$/ {{print $4}}'").split()
+    assert "127.0.0.1:" + str(box_port) in box_listeners, f"nothing listens on 127.0.0.1:{box_port}: {box_listeners}"
+    box_outside = [a for a in box_listeners if not a.startswith(("127.0.0.1:", "[::1]:"))]
+    assert not box_outside, f"port {box_port} listens beyond loopback: {box_outside}"
 machine.succeed(f"{box_browser} --session boot-test open chrome://prefs-internals")
 box_password_manager = machine.succeed(
     f"{box_browser} --session boot-test eval "
@@ -195,7 +198,42 @@ box_password_manager = machine.succeed(
     """(JSON.parse(document.body.innerText).credentials_enable_service)'"""
 )
 assert "managed-off" in box_password_manager, f"the box browser's password manager is not off by policy: {box_password_manager}"
+for box_port in (5920, 9344):
+    box_connect = f"-- bash -c 'exec 3<> /dev/tcp/127.0.0.1/{box_port}'"
+    machine.succeed(f"runuser -u {BOX_USER} {box_connect}")
+    machine.fail(f"runuser -u nobody {box_connect}")
+
+
+def svc_box_pages():
+    targets = svc_json.loads(machine.succeed("curl -s http://127.0.0.1:9344/json/list"))
+    return [t for t in targets if t["type"] == "page"]
+
+
+def svc_box_open(url):
+    machine.succeed(f"{box_browser} --session boot-test open {url}")
+    pinned = [t["id"] for t in svc_box_pages() if t["url"] == url]
+    assert len(pinned) == 1, f"no single page shows {url}: {svc_box_pages()}"
+    return pinned[0]
+
+
+machine.succeed("curl -s -X PUT 'http://127.0.0.1:9344/json/new?about:blank'")
+box_pinned = svc_box_open("data:text/plain,boot-test-a")
+box_before = {t["id"] for t in svc_box_pages()}
 machine.succeed(f"{box_browser} --session boot-test close")
+box_after = {t["id"] for t in svc_box_pages()}
+assert box_after == box_before - {box_pinned}, f"close did not close only the session's tab: {box_before} before, {box_after} after"
+
+box_pinned = svc_box_open("data:text/plain,boot-test-b")
+for box_page in svc_box_pages():
+    if box_page["id"] != box_pinned:
+        machine.succeed(f"curl -s http://127.0.0.1:9344/json/close/{box_page['id']}")
+for _ in range(50):
+    if len(svc_box_pages()) == 1:
+        break
+    svc_time.sleep(0.2)
+machine.succeed(f"{box_browser} --session boot-test close")
+box_last = svc_box_pages()
+assert [(t["id"], t["url"]) for t in box_last] == [(box_pinned, "about:blank")], f"close of the last tab did not blank it: {box_last}"
 
 svc_hm_vars = f"/etc/profiles/per-user/{BOX_USER}/etc/profile.d/hm-session-vars.sh"
 svc_user(

@@ -59,7 +59,7 @@ let
     ];
     text = ''
       kwallet() { busctl --user --json=short call org.kde.kwalletd6 /modules/kwalletd6 org.kde.KWallet "$@" 2> /dev/null | jq -r '.data[0]'; }
-      until wallet=$(kwallet localWallet) && [[ $(kwallet isOpen s "$wallet") == true ]]; do
+      until wallet=$(kwallet networkWallet) && [[ $(kwallet isOpen s "$wallet") == true ]]; do
         sleep 5
       done
     '';
@@ -69,6 +69,24 @@ in
 {
   config = lib.mkIf machine.features.boxBrowser {
     users.users.${machine.user}.linger = lib.mkIf (!desktop) true;
+
+    systemd.services.browser-lend-off = lib.mkIf (desktop && config.services.tailscale.enable) {
+      description = "Remove tailscale serve listeners on tailnet ports 9222 and 9223";
+      after = [ "tailscaled.service" ];
+      wants = [ "tailscaled.service" ];
+      wantedBy = [ "multi-user.target" ];
+      path = [
+        config.services.tailscale.package
+        pkgs.jq
+      ];
+      serviceConfig.Type = "oneshot";
+      script = ''
+        serve=$(tailscale serve status --json)
+        if jq -e '.TCP["9222"]' <<< "$serve" > /dev/null; then tailscale serve --tcp=9222 off; fi
+        if jq -e '.TCP["9223"]' <<< "$serve" > /dev/null; then tailscale serve --https=9223 off; fi
+        tailscale serve status --json | jq -e '.TCP // {} | has("9222") or has("9223") | not' > /dev/null
+      '';
+    };
 
     # The ruleset check runs in the build sandbox, which has no such user.
     networking.nftables.preCheckRuleset = lib.mkIf config.networking.nftables.enable ''
@@ -83,6 +101,20 @@ in
         }
       '';
     };
+
+    networking.firewall.extraCommands =
+      lib.mkIf (config.networking.firewall.enable && !config.networking.nftables.enable)
+        ''
+          for ipt in iptables ip6tables; do
+            "$ipt" -w -N box-browser-out 2> /dev/null || true
+            "$ipt" -w -F box-browser-out
+            "$ipt" -w -A box-browser-out -m owner --uid-owner 0 -j RETURN
+            "$ipt" -w -A box-browser-out -m owner --uid-owner ${machine.user} -j RETURN
+            "$ipt" -w -A box-browser-out -p tcp -j REJECT --reject-with tcp-reset
+            "$ipt" -w -C OUTPUT -o lo -p tcp --syn -m multiport --dports ${toString vncPort},${toString cdpPort} -j box-browser-out 2> /dev/null ||
+              "$ipt" -w -I OUTPUT -o lo -p tcp --syn -m multiport --dports ${toString vncPort},${toString cdpPort} -j box-browser-out
+          done
+        '';
 
     fonts.enableDefaultPackages = lib.mkDefault true;
 
@@ -125,11 +157,7 @@ in
       after = [
         "box-display.service"
       ]
-      ++ sessionEdges
-      ++ lib.optionals (passwordStore == "kwallet6") [
-        "kwallet-pam.service"
-        "plasma-kwallet-pam.service"
-      ];
+      ++ sessionEdges;
       partOf = [ "box-display.service" ] ++ sessionEdges;
       wantedBy = [ sessionTarget ];
       environment = {

@@ -63,6 +63,10 @@ while (($#)); do
   esac
 done
 set -- "${args[@]}"
+[[ -z $on || $on =~ ^[A-Za-z0-9][A-Za-z0-9._@-]*$ ]] || {
+  echo "box-browser: $on is not a host name" >&2
+  exit 2
+}
 
 cdp_port=9344
 box_unit=/etc/systemd/user/box-browser.service
@@ -92,15 +96,17 @@ local_box() {
 }
 
 session_running() {
-  agent-browser session list | awk 'NR > 1 { print $NF }' | grep -qxF -- "$session"
+  local list
+  list=$(agent-browser session list) || return 2
+  awk 'NR > 1 { print $NF }' <<< "$list" | grep -qxF -- "$session"
 }
 
 # agent-browser keeps a session's tab pin after the session ends (`agent-browser tab --help`), so a session whose pinned
 # tab closed fails with tab_gone on its next command until it opens a new tab.
 reopen_pinned_tab() {
   local err
-  if ! err=$(agent-browser get url 2>&1 > /dev/null) && [[ $err == *tab_gone* ]]; then
-    agent-browser tab new > /dev/null
+  if ! err=$(agent-browser "$@" get url 2>&1 > /dev/null) && [[ $err == *tab_gone* ]]; then
+    agent-browser "$@" tab new > /dev/null
   fi
 }
 
@@ -111,8 +117,27 @@ close_session_tab() {
   case $err in
     *tab_gone*) ;;
     *"last tab"*) agent-browser open about:blank > /dev/null ;;
-    *) printf '%s\n' "$err" >&2 ;;
+    *)
+      printf '%s\n' "$err" >&2
+      return 1
+      ;;
   esac
+}
+
+command_name() {
+  local flags arg takes_value=
+  [[ " $* " == *" close "* ]] || return 0
+  flags=$(agent-browser --help | sed -n 's/^  \(--[a-z-]*\) <.*/\1/p')
+  for arg in "$@"; do
+    if [[ -n $takes_value ]]; then
+      takes_value=
+    elif [[ $arg == -* ]]; then
+      if grep -qxF -- "$arg" <<< "$flags"; then takes_value=1; fi
+    else
+      printf '%s\n' "$arg"
+      return 0
+    fi
+  done
 }
 
 box_status() {
@@ -141,7 +166,7 @@ remote_box() {
   for arg in --on local "$@"; do
     quoted+=" '${arg//\'/\'\\\'\'}'"
   done
-  exec ssh -o BatchMode=yes "$host" "box-browser$quoted"
+  exec ssh -o BatchMode=yes -- "$host" "box-browser$quoted"
 }
 
 # Brave Origin writes its debugging port and path to DevToolsActivePort once remote debugging is on; its /json
@@ -161,13 +186,25 @@ if ! $brave; then
     exit
   fi
   need_session
+  [[ $session != brave_* ]] || {
+    echo "box-browser: session names that start with brave_ belong to --brave" >&2
+    exit 2
+  }
   local_box || remote_box --session "$session" "$@"
   export AGENT_BROWSER_SESSION=$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_PIN_TAB=1
-  if (($# == 1)) && [[ $1 == close ]]; then
-    session_running && close_session_tab
-  elif ! session_running; then
-    reopen_pinned_tab
+  if [[ $(command_name "$@") == close ]]; then
+    status=0
+    running=0
+    session_running || running=$?
+    case $running in
+      0) close_session_tab || status=$? ;;
+      1) ;;
+      *) status=1 ;;
+    esac
+    agent-browser "$@" || status=$?
+    exit "$status"
   fi
+  reopen_pinned_tab
   exec agent-browser "$@"
 fi
 
@@ -180,8 +217,7 @@ systemctl --user --quiet is-active graphical-session.target || {
   exit 1
 }
 need_session
-# The box browser on the same PC uses the plain name, and one agent-browser session cannot hold two browsers.
-session=$session-brave
+session=brave_$session
 export AGENT_BROWSER_SESSION=$session
 state=${XDG_RUNTIME_DIR:?}/box-browser
 mkdir -p "$state"
@@ -193,7 +229,7 @@ if ! flock -n 9; then
 fi
 
 # `close` runs without --cdp, because with --cdp a session that has no daemon would attach again and wait for Allow.
-if [[ $1 == close ]]; then
+if [[ $(command_name "$@" 9>&-) == close ]]; then
   status=0
   agent-browser "$@" 9>&- || status=$?
   rm -f "$attached"
@@ -213,10 +249,9 @@ if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! session_running 9>&-; 
   echo "box-browser: waiting for Allow in Brave on $(uname -n)" >&2
   deadline=$((SECONDS + 600))
   until err=$(agent-browser --pin-tab --cdp "$ws" wait --fn true 2>&1 > /dev/null 9>&-); do
-    # agent-browser 0.43.0 keeps a session's tab pin after `close` (`agent-browser tab --help`), so the first attach
-    # after the pinned tab closed fails with tab_gone until the wrapper opens a new tab.
-    if [[ $err == *tab_gone* && -z ${new_tab-} ]] && agent-browser --cdp "$ws" tab new > /dev/null 9>&-; then
+    if [[ $err == *tab_gone* && -z ${new_tab-} ]]; then
       new_tab=1
+      reopen_pinned_tab --cdp "$ws" 9>&-
       continue
     fi
     if [[ $err != *"(os error 11)"* ]] || ((SECONDS >= deadline)); then
@@ -230,4 +265,5 @@ if [[ ! -e $attached || $(< "$attached") != "$ws" ]] || ! session_running 9>&-; 
   printf '%s' "$ws" > "$attached"
 fi
 exec 9>&-
+reopen_pinned_tab --cdp "$ws"
 exec agent-browser --cdp "$ws" "$@"

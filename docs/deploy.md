@@ -167,7 +167,8 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
    its own process, then the ordering-cycle check of the deploy's step 8
    ([What the deploy does](#what-the-deploy-does)) on its units, and the same
    check on its user units from `default.target` and
-   `graphical-session.target`.
+   `graphical-session.target`. Those are the NixOS user units in
+   `/etc/systemd/user`; Home Manager's units are not in it.
    `ci/unit-cycles.nix` builds the unit files without the programs they start,
    so it downloaded about 1.8 GiB instead of the whole system on a GitHub
    runner on 2026-10-13, and `systemd-analyze verify` reads them.

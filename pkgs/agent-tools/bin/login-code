@@ -91,33 +91,54 @@ def sender_matches(from_header: str, sender: str) -> bool:
     return address.endswith(("@" + sender, "." + sender))
 
 
-def fetch(imap: imaplib.IMAP4, number: bytes, items: str) -> tuple[bytes, bytes]:
-    status, parts = imap.fetch(number, items)
-    if status != "OK" or not parts or not isinstance(parts[0], tuple):
-        raise MailboxError(f"fetching mail {number.decode()} failed")
-    return parts[0][0], parts[0][1]
+def receive_times(imap: imaplib.IMAP4, uids: list[bytes]) -> list[tuple[float, int]]:
+    status, parts = imap.uid("FETCH", b",".join(uids), "(INTERNALDATE)")
+    if status != "OK":
+        raise MailboxError("fetching the receive times failed")
+    times = []
+    for part in parts:
+        line = part[0] if isinstance(part, tuple) else part
+        uid = re.search(rb"\bUID (\d+)", line or b"")
+        if uid is None:
+            continue
+        received = imaplib.Internaldate2tuple(line)
+        if received is None:
+            raise MailboxError(f"mail {uid.group(1).decode()} has no receive time")
+        times.append((time.mktime(received), int(uid.group(1))))
+    return sorted(times, reverse=True)
+
+
+def fetch_message(imap: imaplib.IMAP4, uid: int) -> bytes | None:
+    status, parts = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+    if status != "OK":
+        raise MailboxError(f"fetching mail {uid} failed")
+    if not parts or not isinstance(parts[0], tuple):
+        return None
+    return parts[0][1]
+
+
+def from_matches(raw: bytes, sender: str) -> EmailMessage | None:
+    message = email.message_from_bytes(raw, policy=email.policy.default)
+    return message if sender_matches(str(message.get("From", "")), sender) else None
 
 
 def newest_code(imap: imaplib.IMAP4, sender: str, oldest: float, pattern: re.Pattern[str]) -> str:
     imap.noop()
     since = time.strftime("%d-%b-%Y", time.gmtime(oldest - 86400))
-    status, data = imap.search(None, "FROM", f'"{sender}"', "SINCE", since)
+    status, data = imap.uid("SEARCH", None, "FROM", f'"{sender}"', "SINCE", since)
     if status != "OK":
         raise MailboxError("the mailbox search failed")
-    for number in reversed(data[0].split()):
-        meta, header = fetch(imap, number, "(INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM)])")
-        received = imaplib.Internaldate2tuple(meta)
-        if received is None:
-            raise MailboxError(f"mail {number.decode()} has no receive time")
-        if time.mktime(received) < oldest:
+    uids = data[0].split()
+    for received, uid in receive_times(imap, uids) if uids else []:
+        if received < oldest:
             break
+        raw = fetch_message(imap, uid)
         try:
-            from_header = str(email.message_from_bytes(header, policy=email.policy.default).get("From", ""))
-            if not sender_matches(from_header, sender):
-                continue
-            message = email.message_from_bytes(fetch(imap, number, "(BODY.PEEK[])")[1], policy=email.policy.default)
-            code = code_in(message, pattern)
+            message = from_matches(raw, sender) if raw else None
+            code = code_in(message, pattern) if message else None
         except (ValueError, LookupError):
+            continue
+        if message is None:
             continue
         if code:
             return code

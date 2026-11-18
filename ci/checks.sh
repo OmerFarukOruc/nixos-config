@@ -171,8 +171,17 @@ box_browser_host() {
     echo "$host: box-browser.service does not use the display and the -auth file of box-display, so under Plasma it reads KDE's xauth file and cannot open the display." >&2
     return 1
   }
-  jq -e '(.browserCommand | contains("--password-store=basic")) == .passwordPolicy' <<<"$record" >/dev/null || {
-    echo "$host: the box browser saves passwords under Chromium's fixed key, or turns its password manager off while KWallet holds the key." >&2
+  jq -e '.browserTargets == [if .desktop then "graphical-session.target" else "default.target" end]' \
+    <<<"$record" >/dev/null || {
+    echo "$host: box-browser.service must start with the desktop session on a host that has one, and at boot on one without." >&2
+    return 1
+  }
+  jq -e 'if .plasma then
+      (.browserCommand | contains("--password-store=kwallet6")) and (.browserPreStart | contains("box-browser-wallet-open")) and .passwordPolicy == null
+    else
+      (.browserCommand | contains("--password-store=basic")) and .passwordPolicy.PasswordManagerEnabled == false and (.browserPreStart | contains("wallet") | not)
+    end' <<<"$record" >/dev/null || {
+    echo "$host: a box browser on a Plasma host must keep its key in KWallet, wait for the wallet and save passwords; one elsewhere must use Chromium's fixed key and save none." >&2
     return 1
   }
 }
