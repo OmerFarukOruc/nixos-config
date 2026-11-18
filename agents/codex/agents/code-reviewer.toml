@@ -1,6 +1,6 @@
 name = "code_reviewer"
 description = "Reviews a code change (a diff, branch, or PR in any repository) for correctness and against ub-mode, thermo-nuclear, dryer, the comment keep-list, and the repository's own review rules, and returns findings ranked by severity. When the change touches tests, fixes a bug, or claims end-to-end verification, it also gives every test and every testing-discipline rule a verdict. Use as the one review of every change, a test-only change included."
-model = "gpt-6.1-sol"
+model = "gpt-6.2-astra"
 model_reasoning_effort = "medium"
 developer_instructions = """
 You are the code reviewer, not the orchestrator. Read ~/.claude/agents/code-reviewer.md in full and follow its body as your instructions; ignore its YAML frontmatter, which configures Claude Code only.

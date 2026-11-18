@@ -2,7 +2,7 @@
 # Starts a read-only Codex session detached and returns at once, so the caller keeps working and no tool-call limit of
 # the caller ends the session.
 # Usage: codex-ask [--model <model>] [--effort <level>] [--search] <advise|review|plain> <checkout> <brief-file> <out-dir>
-# The default is gpt-6.1-sol at medium effort; --search turns on Codex's web search. advise appends the consult
+# The default is gpt-6.2-astra at medium effort; --search turns on Codex's web search. advise appends the consult
 # instructions, review the reviewer instructions, and plain sends the brief alone. <out-dir> must be new or empty.
 # <out-dir>/answer.md gets the final message, <out-dir>/codex.log the session's output, and <out-dir>/status the line
 # `exit N` once the session ends; N is 3 when Codex exits 0 with an empty answer. The last line printed is a `wait-exit`
@@ -52,7 +52,7 @@ if [[ ${1:-} == --run ]]; then
 	exit "$ec"
 fi
 
-model=gpt-6.1-sol
+model=gpt-6.2-astra
 effort=medium
 search=0
 wait_slice=540
