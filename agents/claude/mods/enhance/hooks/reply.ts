@@ -9,6 +9,8 @@ export type HeadlessResult = { kind: 'answered'; text: string } | { kind: 'faile
 
 export type TurnState = { text: string | null; hasEnded: boolean; isApiError: boolean }
 
+export type TranscriptReader = { offset: number; unfinishedRow: readonly Uint8Array[]; turn: TurnState; sawCommand: boolean }
+
 type Block = { tag: string; body: string; start: number; end: number | null }
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -16,6 +18,9 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(\S*)/
 const OPTION = /^- (.+)$/
 const SLASH_COMMAND = /^(\/[\w:-]+)(?:\s+([\s\S]*))?$/
 const PENDING_COUNTS = ['pendingBackgroundAgentCount', 'pendingWorkflowCount'] as const
+const NO_TURN: TurnState = { text: null, hasEnded: false, isApiError: false }
+const LINE_FEED = 0x0a
+const UTF8 = new TextDecoder()
 
 export function isSessionId(text: string): boolean {
   return SESSION_ID.test(text)
@@ -80,44 +85,71 @@ function isToolResult(row: unknown): boolean {
   return blocksOfRow(row).some(block => textAt(block, ['type']) === 'tool_result')
 }
 
-export function turnOf(jsonl: string): TurnState {
-  return jsonl.split('\n').reduce<TurnState>(
-    (turn, line) => {
-      const row = parseLine(line)
-      const type = textAt(row, ['type'])
-      if (type === 'system') {
-        return isTurnEnd(row) ? { ...turn, hasEnded: true } : turn
-      }
-      if (type === 'user') {
-        return { text: isToolResult(row) ? turn.text : null, hasEnded: false, isApiError: false }
-      }
-      if (type !== 'assistant') {
-        return turn
-      }
-      const texts = blocksOfRow(row).flatMap(block => (textAt(block, ['type']) === 'text' ? [textAt(block, ['text']) ?? ''] : []))
-      const isApiError = valueAt(row, ['isApiErrorMessage']) === true
+function turnStep(turn: TurnState, row: unknown): TurnState {
+  const type = textAt(row, ['type'])
+  if (type === 'system') {
+    return isTurnEnd(row) ? { ...turn, hasEnded: true } : turn
+  }
+  if (type === 'user') {
+    return { text: isToolResult(row) ? turn.text : null, hasEnded: false, isApiError: false }
+  }
+  if (type !== 'assistant') {
+    return turn
+  }
+  const texts = blocksOfRow(row).flatMap(block => (textAt(block, ['type']) === 'text' ? [textAt(block, ['text']) ?? ''] : []))
+  const isApiError = valueAt(row, ['isApiErrorMessage']) === true
 
-      return { ...turn, text: texts.at(-1) ?? turn.text, isApiError }
-    },
-    { text: null, hasEnded: false, isApiError: false },
-  )
+  return { ...turn, text: texts.at(-1) ?? turn.text, isApiError }
+}
+
+function isCommandRow(row: unknown, call: SlashCommand): boolean {
+  const content = textAt(row, ['type']) === 'user' ? textAt(row, ['message', 'content']) : null
+
+  return content !== null && [`<command-name>${call.name}</command-name>`, `<command-args>${call.args}</command-args>`].every(tag => content.includes(tag))
+}
+
+function joined(parts: readonly Uint8Array[]): Uint8Array {
+  const [only] = parts
+  if (parts.length === 1 && only !== undefined) {
+    return only
+  }
+  const all = new Uint8Array(parts.reduce((length, part) => length + part.length, 0))
+  let at = 0
+  for (const part of parts) {
+    all.set(part, at)
+    at += part.length
+  }
+
+  return all
+}
+
+export function readerAt(offset: number): TranscriptReader {
+  return { offset, unfinishedRow: [], turn: NO_TURN, sawCommand: false }
+}
+
+export function foldBytes(reader: TranscriptReader, added: Uint8Array, call: SlashCommand | null): TranscriptReader {
+  let { unfinishedRow, turn, sawCommand } = reader
+  let start = 0
+  for (let end = added.indexOf(LINE_FEED); end !== -1; end = added.indexOf(LINE_FEED, start)) {
+    const row = parseLine(UTF8.decode(joined([...unfinishedRow, added.subarray(start, end)])))
+    turn = turnStep(turn, row)
+    sawCommand ||= call !== null && isCommandRow(row, call)
+    unfinishedRow = []
+    start = end + 1
+  }
+
+  return {
+    offset: reader.offset + added.length,
+    unfinishedRow: start === added.length ? unfinishedRow : [...unfinishedRow, added.subarray(start)],
+    turn,
+    sawCommand,
+  }
 }
 
 export function slashCommandOf(prompt: string): SlashCommand | null {
   const found = SLASH_COMMAND.exec(prompt)
 
   return found === null ? null : { name: found[1] ?? '', args: (found[2] ?? '').trim() }
-}
-
-export function isCommandTurn(jsonl: string, call: SlashCommand): boolean {
-  const tags = [`<command-name>${call.name}</command-name>`, `<command-args>${call.args}</command-args>`]
-
-  return jsonl.split('\n').some(line => {
-    const row = parseLine(line)
-    const content = textAt(row, ['type']) === 'user' ? textAt(row, ['message', 'content']) : null
-
-    return content !== null && tags.every(tag => content.includes(tag))
-  })
 }
 
 function closeOf(lines: readonly string[], start: number, fence: string): number | null {

@@ -1,8 +1,8 @@
 import type { EngineInterface, ProcessRunInit, ProcessRunResult } from 'claude-code'
 
 import type { Seat } from '../types'
-import { isCommandTurn, isSessionId, parseHeadless, slashCommandOf, textAt, turnOf, valueAt } from './reply'
-import type { SlashCommand } from './reply'
+import { foldBytes, isSessionId, parseHeadless, readerAt, slashCommandOf, textAt, valueAt } from './reply'
+import type { SlashCommand, TranscriptReader } from './reply'
 
 export type Turn = { kind: 'reply'; text: string } | { kind: 'failed'; reason: string; notes: string } | { kind: 'cancelled' }
 
@@ -40,7 +40,7 @@ const START_TRIES = 30
 const PROMPT_TRIES = 60
 const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
 const GONE = new Set(['pane_not_found', 'workspace_not_found'])
-const TRANSCRIPT_ROWS = '400'
+const TRANSCRIPT_RANGE_BYTES = 2 * 1024 * 1024
 const TRANSCRIPT_RETRY_MS = 1000
 const TRUST_DIALOG_MARKERS = ['Yes, I trust this folder', 'No, exit']
 
@@ -324,49 +324,67 @@ async function transcriptPath($: EngineInterface, sessionId: string): Promise<st
   return path === '' ? null : path
 }
 
-async function transcriptRows($: EngineInterface, path: string | null): Promise<number> {
-  if (path === null) {
-    return 0
+async function unlessMissing<T>($: EngineInterface, path: string, read: () => Promise<T>, whenMissing: T): Promise<T> {
+  try {
+    return await read()
+  } catch (error) {
+    if (await $.fs.exists(path)) {
+      throw new Error(`could not read the copy transcript ${path}: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    }
+    return whenMissing
   }
-  const counted = await runTool($, ['wc', '-l', path])
-
-  return Number.parseInt(counted.stdout.trim(), 10) || 0
 }
 
-async function commandRows($: EngineInterface, path: string, call: SlashCommand): Promise<string | null> {
-  const rows = await runTool($, ['grep', '-F', '--', `<command-name>${call.name}</command-name>`, path])
-
-  return rows.isStdoutTruncated ? null : rows.stdout
+async function transcriptSize($: EngineInterface, path: string | null): Promise<number> {
+  return path === null ? 0 : unlessMissing($, path, async () => (await $.fs.stat(path)).size, 0)
 }
 
-async function replyAfter($: EngineInterface, sessionId: string, rowsBefore: number, call: SlashCommand | null, cancel: Cancel, deadline: number): Promise<Turn> {
+async function readNewRows($: EngineInterface, path: string, seen: TranscriptReader, call: SlashCommand | null, cancel: Cancel): Promise<TranscriptReader> {
+  const size = await transcriptSize($, path)
+  let reader = size < seen.offset ? readerAt(0) : seen
+  while (reader.offset < size) {
+    checkCancel(cancel)
+    const { offset } = reader
+    const length = Math.min(TRANSCRIPT_RANGE_BYTES, size - offset)
+    const base64 = await unlessMissing($, path, async () => (await $.fs.read(path, { as: 'bytes', offset, length })).base64, '')
+    const added = Uint8Array.from(atob(base64), byte => byte.charCodeAt(0))
+    if (added.length < length) {
+      return readerAt(0)
+    }
+    reader = foldBytes(reader, added, call)
+  }
+
+  return reader
+}
+
+type TurnRange = { bytesBefore: number; isHistoryInRange: boolean }
+
+async function replyAfter($: EngineInterface, sessionId: string, range: TurnRange, call: SlashCommand | null, cancel: Cancel, deadline: number): Promise<Turn> {
   const path = await transcriptPath($, sessionId)
   if (path === null) {
     return { kind: 'failed', reason: 'the copy left no transcript', notes: '' }
   }
 
+  let reader = readerAt(range.bytesBefore)
   for (;;) {
     checkCancel(cancel)
-    const tail = await runTool($, ['sh', '-c', 'tail -n "+$1" "$2" | tail -n "$3"', 'sh', String(rowsBefore + 1), path, TRANSCRIPT_ROWS])
-    if (tail.isStdoutTruncated) {
-      return { kind: 'failed', reason: 'the copy transcript tail is over 4 MiB', notes: '' }
-    }
-    const turn = turnOf(tail.stdout)
-    if (turn.isApiError) {
+    reader = await readNewRows($, path, reader, call, cancel)
+    const { turn } = reader
+    const isCommandMissing = call !== null && !reader.sawCommand
+    const isOwnTurn = !(range.isHistoryInRange && isCommandMissing)
+    if (isOwnTurn && turn.isApiError) {
       return { kind: 'failed', reason: `the copy stopped at an API error: ${turn.text ?? 'no text'}`, notes: '' }
     }
-    if (turn.hasEnded) {
-      const commands = call === null ? null : await commandRows($, path, call)
-      if (commands === null && call !== null) {
-        return { kind: 'failed', reason: 'the copy transcript rows that name the command are over 4 MiB', notes: turn.text ?? '' }
-      }
-      if (call !== null && !isCommandTurn(commands ?? '', call)) {
+    if (isOwnTurn && turn.hasEnded) {
+      if (isCommandMissing) {
         return { kind: 'failed', reason: `the copy did not load ${call.name}`, notes: turn.text ?? '' }
       }
       return turn.text === null ? { kind: 'failed', reason: 'the copy wrote no reply to this turn', notes: '' } : { kind: 'reply', text: turn.text }
     }
     if ((await $.clock.now()) >= deadline) {
-      return { kind: 'failed', reason: `the copy's turn did not end in ${PROMPT_TIMEOUT_MS / 1000} s`, notes: turn.text ?? '' }
+      return isOwnTurn
+        ? { kind: 'failed', reason: `the copy's turn did not end in ${PROMPT_TIMEOUT_MS / 1000} s`, notes: turn.text ?? '' }
+        : { kind: 'failed', reason: `the copy did not load ${call?.name ?? 'the prompt'} in ${PROMPT_TIMEOUT_MS / 1000} s`, notes: '' }
     }
     await $.clock.sleep(TRANSCRIPT_RETRY_MS)
   }
@@ -404,12 +422,13 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
   }
 
   const send = async (text: string): Promise<Turn> => {
+    const isForkStart = state.kind === 'unstarted' && plan.parentId !== null
     const current = state.kind === 'unstarted' ? await start() : state
     if (current.kind === 'headless') {
       return current.copy.send(text)
     }
 
-    const rowsBefore = await transcriptRows($, await transcriptPath($, plan.sessionId))
+    const range = { bytesBefore: await transcriptSize($, await transcriptPath($, plan.sessionId)), isHistoryInRange: isForkStart }
     const deadline = (await $.clock.now()) + PROMPT_TIMEOUT_MS
     const prompted = await promptAgent($, name, text, plan.cancel)
     checkCancel(plan.cancel)
@@ -420,7 +439,7 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
       return { kind: 'failed', reason: 'the copy stopped at a question or approval; Details shows its screen', notes: await screenOf($, name) }
     }
 
-    return replyAfter($, plan.sessionId, rowsBefore, slashCommandOf(text), plan.cancel, deadline)
+    return replyAfter($, plan.sessionId, range, slashCommandOf(text), plan.cancel, deadline)
   }
 
   return {

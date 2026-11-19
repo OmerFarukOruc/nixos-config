@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseHeadless, parseReply, turnOf } from '../hooks/reply'
+import { foldBytes, parseHeadless, parseReply, readerAt } from '../hooks/reply'
 import type { TurnState } from '../hooks/reply'
 import { API_ERROR, HEADLESS_ERROR, HEADLESS_OK, INTERRUPT, SESSION } from './fixtures'
 
@@ -78,8 +78,12 @@ test('a question block gives the question and its options', () => {
 
 const ROWS = SESSION.split('\n')
 
+function turnOf(rows: readonly (string | undefined)[]): TurnState {
+  return foldBytes(readerAt(0), new TextEncoder().encode(rows.map(row => `${row}\n`).join('')), null).turn
+}
+
 function turnAfter(rows: number): TurnState {
-  return turnOf(ROWS.slice(0, rows).join('\n'))
+  return turnOf(ROWS.slice(0, rows))
 }
 
 test('the reply is the last assistant text since the last prompt, once a turn_duration row with no pending work ends the turn', () => {
@@ -93,12 +97,12 @@ test('the reply is the last assistant text since the last prompt, once a turn_du
   expect(turnAfter(14)).toEqual({ text: 'started', hasEnded: false, isApiError: false })
   expect(turnAfter(15)).toEqual({ text: null, hasEnded: false, isApiError: false })
   expect(turnAfter(17)).toEqual({ text: 'The background subagent finished and replied `ok`.', hasEnded: true, isApiError: false })
-  expect(turnOf(`${SESSION}\nnot json`)).toEqual(turnAfter(17))
+  expect(turnOf([...ROWS, 'not json'])).toEqual(turnAfter(17))
 })
 
 test('an interrupted turn has no reply, and an API error row stops the turn with its message', () => {
-  expect(turnOf([...ROWS.slice(0, 5), INTERRUPT, ROWS[6]].join('\n'))).toEqual({ text: null, hasEnded: true, isApiError: false })
-  expect(turnOf([ROWS[0], API_ERROR].join('\n'))).toEqual({
+  expect(turnOf([...ROWS.slice(0, 5), INTERRUPT, ROWS[6]])).toEqual({ text: null, hasEnded: true, isApiError: false })
+  expect(turnOf([ROWS[0], API_ERROR])).toEqual({
     text: "You've hit your 5-hour limit · resets 7:10pm (Europe/Istanbul)",
     hasEnded: false,
     isApiError: true,
