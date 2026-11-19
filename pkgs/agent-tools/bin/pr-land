@@ -1,60 +1,39 @@
 #!/usr/bin/env bash
-# Land a pull request and remove what the merge leaves behind.
-#   pr-land <number> [gh pr merge flags]   squash-merge if open, or have the merge controller merge it (below), confirm
-#                                          MERGED, clean up its head branch, and fast-forward the local base branch
-#                                          (also past local commits that landed, see sync_base)
-#   pr-land --after <m> <number> [flags]   first wait until PR m is MERGED, then land <number> as above. It reads PR m
-#                                          once per 60 s for PR_LAND_AFTER_WAIT seconds of wall-clock time (default 13200,
-#                                          the controller wait below, since PR m may wait on the controller too) and exits 3 when PR m is
-#                                          closed unmerged, or 1 when the wait runs out. A failed read is retried, but
-#                                          a PR that cannot be read at the start, or a <number> that is closed, stops it
-#                                          before the wait. PR_LAND_WAIT does not bound this wait.
-# Run it from the main checkout. A worktree, local branch, or remote branch goes only when its tip equals
-# the head commit of a merged PR (a tip contained in that head counts too), so a reused branch name
-# or a branch with later commits stays. A branch that any PR uses as its base (dev for a release PR), or that an open PR uses
-# as its head, never goes.
-# Exit codes: 0 = done. 1 = a check failed or was cancelled (a required one, or, when no required checks are readable, one of the PR's own), a wait (--after's included) ran out, a read of the PR failed, the PR was not MERGED after the merge command, or the merge or label request failed. 2 = bad usage, a PR that is already closed
-# without a merge, a failed lookup of the repository, or in controller mode a draft PR or gh pr merge flags. 3 = something was kept after the merge (each kept item is printed with its
-# reason), or --after found a PR closed unmerged, or a lookup of the controller workflow failed (in
-# every repository), or the repository has no default branch, or in controller mode nothing will merge the PR now (causes below), or without the controller the PR is
-# a draft when the wait starts or later, or was closed, got a new head, or was retargeted while pr-land waited. Rerunning on a merged PR is safe.
-# An open PR first waits for the base branch's required checks (the contexts of branch protection and of the branch's rulesets), polling for PR_LAND_WAIT seconds of wall-clock time (default 1800; the time of each read counts). The last sleep is cut
-# to the time left, so it ends at the limit; one more read follows, and the wait gives up right after it unless that read shows the checks done. Every
-# 60 s and right before the merge it reads the PR again; a PR merged meanwhile goes on to the cleanup. The merge passes
-# --match-head-commit, so GitHub refuses it when the head moved after the read before the merge.
-# When that list is unreadable or empty, it waits for the PR's own checks instead and stops on a failed or cancelled one;
-# it merges without checks only after three polls in a row list none, and a failed lookup never counts as none.
-# Without a merge controller, a merge that GitHub refuses with 'head branch is not up to date' or 'Head branch is out of date'
-# (the strict policy of branch protection or of a ruleset) makes pr-land call the update-branch API with expected_head_sha,
-# take the new head only when its first parent is the old head, wait for the required checks on it again, and merge again.
-# Each updated head gets its own PR_LAND_WAIT for the checks. At most 3 updates run; a fourth refusal is a failed merge (exit 1),
-# and a PR that gets another head, or is closed, while it waits ends with exit 3. A body given as --body-file - is read once.
-# In controller mode the controller updates branches, so pr-land never does.
-# When the default branch has .github/workflows/merge-controller.yml, an open PR is not merged here. pr-land adds the
-# `automerge` label and waits for the controller to merge it, for PR_LAND_WAIT seconds of wall-clock time. The default is 13200, which is the
-# backend gate job's timeout (115 min), plus the p90 queue wait of the backend runners at busy hours (95 min, measured on
-# 12-10-2026 before the new runner pool), plus the controller's 10-minute schedule. It reads the PR once per 60 s and the
-# merge-pause issues once per 300 s. After 25 minutes it also checks every 10 minutes that the controller workflow completed
-# a successful run after the label. After a merge it cleans up as above, and fetches refs/pull/<n>/head first, in both modes. A repository
-# with delete_branch_on_merge loses the head branch at merge, and a head that a branch update made is then on no
-# other ref; the fetch is harmless in a repository without that setting. When pr-land stops after adding
-# the label, the label stays, so the controller still merges the PR once the cause is gone, and rerunning pr-land resumes the wait.
-# Exit 3 means nothing will merge the PR now. The causes are a changed PR head (the controller updated the branch for an overlap
-# and the gate reruns), a `gate` check on the current head that ended in FAILURE, CANCELLED, TIMED_OUT or ACTION_REQUIRED, an open
-# merge-pause issue on a PR without `fixes-main`, a PR closed unmerged, a removed label, a PR made a draft or retargeted during the
-# wait, a controller workflow with no successful run since the label, a PR that does not target the default branch (the
-# controller skips it, so pr-land adds no label), and a lookup of the workflow that fails for any reason
-# but Not Found, because a direct merge there would skip the controller's gate check. The default branch comes from the
-# API, because origin/HEAD goes stale after a rename.
-# A token without the Checks permission, such as a fine-grained personal access token, is refused the PR's check rollup and
-# `gh pr checks` (gh 2.103.3: the check-runs list answers HTTP 403 and the other two a GraphQL error, each 'Resource not accessible
-# by personal access token'). On that HTTP 403 a required Actions job is read from the newest Actions run of each workflow on the
-# head, with a check run's pending, success and failure meaning; a check an App posts stays unreadable and the wait ends at
-# PR_LAND_WAIT. The controller wait then reads the
-# newest gate.yml run of the head from the Actions API, and the wait for the PR's own checks reads the newest run of every
-# workflow on the head. A run still going is pending, success, neutral and skipped are green, every other conclusion is red,
-# and a failed read is retried and never green. Checks that GitHub Apps post outside Actions, such as Cloudflare
-# builds, stay invisible to such a token.
+# Land a pull request and remove what the merge leaves behind. Run it from the main checkout.
+#   pr-land <number> [gh pr merge flags]   wait for the checks, squash-merge, confirm MERGED, clean up the head branch,
+#                                          and fast-forward the local base branch. Rerunning on a merged PR is safe.
+#   pr-land --after <m> <number> [flags]   first wait until PR m is MERGED, then land <number> as above
+#
+# Checks: an open PR waits for the base branch's required checks, or for its own checks when none are readable. A required
+#   check that failed or was cancelled stops the run, or one of the PR's own when none are readable. GitHub refuses the
+#   merge when the head moved after the last read.
+# Behind its base, without a merge controller, under a strict policy: pr-land updates the branch at most 3 times, waits
+#   for the checks again after each update, and merges again.
+# Merge controller: where the default branch has .github/workflows/merge-controller.yml, pr-land adds the `automerge`
+#   label and waits for that workflow to merge. When pr-land stops, the label stays, so the controller still merges the
+#   PR once the cause is gone; rerun pr-land to wait again.
+# Cleanup: a worktree, local branch, or remote branch goes only when its tip equals the merged PR's head or is contained
+#   in it. A branch that any PR uses as its base, or that an open PR uses as its head, stays.
+#
+# Exit codes:
+#   0  done
+#   1  a required check failed or was cancelled (or, when none are readable, one of the PR's own), a wait ran out,
+#      a read of the PR failed, the PR was not MERGED after the merge command, or the merge or label request failed
+#   2  bad usage, a PR already closed without a merge (without --after), a failed lookup of the repository, or in
+#      controller mode a draft PR or gh pr merge flags
+#   3  something was kept after the merge, or nothing will merge the PR now; the reason is printed. Nothing merges it
+#      when the repository has no default branch, when --after finds PR m or <number> closed unmerged, when without
+#      the controller the PR is a draft as the wait starts, when the PR was closed, became a draft, got a new head, or
+#      was retargeted during a wait, when the controller lookup failed, and in controller mode when the gate check
+#      failed, merges are paused, the label is gone, the PR does not target the default branch, or the controller has
+#      no successful run since the label.
+#
+# Environment:
+#   PR_LAND_WAIT        seconds to wait for the checks (default 1800, once more after each branch update), or for the
+#                       merge controller (default 13200)
+#   PR_LAND_AFTER_WAIT  seconds --after waits for PR m (default 13200); PR_LAND_WAIT does not bound that wait
+#
+# pkgs/agent-tools/README.md in nixos-config (How pr-land decides) gives each rule in full and its reason.
 set -euo pipefail
 
 remote=origin
