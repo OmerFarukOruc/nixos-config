@@ -34,7 +34,10 @@ machine.succeed(f"sshd -T -C user={BOX_USER},host=x,addr=127.0.0.1 | grep -Fix '
 machine.wait_until_succeeds("curl -sf http://127.0.0.1:13133")
 tel_log = "journalctl -u opentelemetry-collector.service -b --no-pager -o cat"
 machine.succeed(f"{tel_log} | grep -F 'Everything is ready'")
-machine.fail(f"{tel_log} | grep -E '[[:space:]]error[[:space:]]'")
+tel_levelled_lines = r"grep -P '^\S+\t(debug|info|warn)\t'"
+tel_failure_lines = r"grep -P '^(\S+\t(error|dpanic|panic|fatal)\t|panic:|fatal error:|Error:)'"
+machine.succeed(f"{tel_log} | {tel_levelled_lines}")
+machine.fail(f"{tel_log} | {tel_failure_lines}")
 
 machine.succeed(r"ss -Htln | grep -E '127\.0\.0\.1:4318 '")
 machine.fail(r"ss -Htln | grep -E '(0\.0\.0\.0|\*|\[::\]):4318 '")
@@ -111,4 +114,6 @@ assert tel_attr("metrics.json", "deployment.environment.name", "dev") > 0, "the 
 
 tel_run = "journalctl _SYSTEMD_INVOCATION_ID=$(systemctl show -p InvocationID --value opentelemetry-collector.service) --no-pager -o cat"
 machine.succeed(f"{tel_run} | grep -F 'Everything is ready'")
-machine.fail(f"{tel_run} | grep -E '[[:space:]]error[[:space:]]'")
+machine.succeed(f"{tel_run} | {tel_levelled_lines}")
+machine.fail(f"{tel_run} | {tel_failure_lines}")
+machine.succeed("systemctl show -p NRestarts --value opentelemetry-collector.service | grep -Fx 0")
