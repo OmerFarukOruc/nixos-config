@@ -729,11 +729,11 @@
     "skills-humanizer": {
       "flake": false,
       "locked": {
-        "lastModified": 1795082863,
-        "narHash": "sha256-ql6zyupIPJaGtzHrVwGe7iqZKfdg/4YItv3FaDeYVe4=",
+        "lastModified": 1795114394,
+        "narHash": "sha256-QlDk018RSGwHeLbPGQXSvtFpQTSsD+3pEVdaigTb3zQ=",
         "owner": "blader",
         "repo": "humanizer",
-        "rev": "a48c60c2a3f7a0f6ecc8f9b8d2b1ef71c7927155",
+        "rev": "a32f24407364c74c812b43c15926d638bee1e072",
         "type": "github"
       },
       "original": {
@@ -1016,16 +1016,16 @@
     "vscode-vibrancy": {
       "flake": false,
       "locked": {
-        "lastModified": 1792659182,
-        "narHash": "sha256-b5PxrMBF/XgqKFbvzjiBEfQNKaBATh9BoLL+u773/5k=",
+        "lastModified": 1795115891,
+        "narHash": "sha256-EpFLVo/Z4tGx/v4sGk/C4OZVZHFetB859m16BX5pOk4=",
         "owner": "illixion",
         "repo": "vscode-vibrancy-continued",
-        "rev": "82720fb0c4a2013dd212468f9ec7f1d61b384019",
+        "rev": "dfea462b5dcd55fbc66222f21262f176794d9ccd",
         "type": "github"
       },
       "original": {
         "owner": "illixion",
-        "ref": "v1.6.0",
+        "ref": "v1.6.2",
         "repo": "vscode-vibrancy-continued",
         "type": "github"
       }
