@@ -9,8 +9,9 @@ nixos-rog and devbox. It reaches two kinds of browser:
   use it by default, because it never waits for Omer, and they act in its
   signed-in sites without asking him. A PC's box browser holds Omer's own
   logins, his Google account among them, and saves passwords in KWallet.
-  devbox's holds the logins agents there need, stays signed out of Google and
-  saves no password, because every process on devbox can drive it.
+  devbox's holds the logins agents there need and stays signed out of Google.
+  It saves the passwords Omer saves in it, so agents there sign in again
+  without him; every process on devbox can drive it and read them.
 - Omer's Brave Origin, on the PC he sits at, for an agent that runs on that
   PC. Brave asks him to click Allow for each new agent session, so agents use
   it only for a site that signs in only with a passkey. No agent on devbox
@@ -81,8 +82,8 @@ folder there.
 - On devbox, `users.users.<user>.linger` keeps them running without a login.
   devbox has no keyring, so Chromium runs with `--password-store=basic`, and
   `/etc/chromium/policies/managed/box-browser.json` turns its password manager
-  off (`PasswordManagerEnabled`), so the profile saves no password
-  ([Security model](#security-model)).
+  on (`PasswordManagerEnabled`), so the profile saves the passwords Omer types
+  there ([Security model](#security-model)).
 - `box-view` (command and menu entry "Box browser", on nixos-desktop and
   nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it
   forwards a socket in `$XDG_RUNTIME_DIR` (mode 0700, so no other local user
@@ -174,17 +175,19 @@ loopback only, so who can drive a box browser is who runs on its host.
   `sl-factory`'s loopback packets other than DNS
   ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
   off the display.
-- **What devbox's holds.** No saved password: the policy turns the password
-  manager off, and passwords live in Infisical, from which agents type them through
-  `eval --stdin`. No mail account and no Google login: Omer gives emailed or
+- **What devbox's holds.** Saved passwords: the policy turns the password
+  manager on, Omer saves the passwords of the sites agents use there, and
+  Chromium fills them on the sign-in page. They sit under the same fixed key as
+  the cookies (devbox's profile at rest, below), so any process running as
+  `omer` can read them. Other passwords live in Infisical, from which agents
+  type them through `eval --stdin`. No mail account and no Google login: Omer gives emailed or
   texted codes, or `login-code` reads them, downloading only the named sender's
   mails and writing only a short code. The From header it matches is not
   authenticated, so a mail that forges the sender reaches the mailbox only if
   Gmail's filter forwards it. The TOTP setup key of the GitHub account
   `statuslantern-tailscale` sits in Infisical `/harness/box-browser`, so any
   process running as `omer` on devbox can compute that account's 2FA code and
-  pass GitHub's sudo mode in the signed-in session; the account's password
-  stays out of devbox's reach
+  pass GitHub's sudo mode in the signed-in session
   ([devbox reference, Browsers](../agents/reference/devbox.md#browsers)).
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
   to read a sign-in code finds no mailbox in devbox's box browser, the attack Brave
@@ -193,15 +196,15 @@ loopback only, so who can drive a box browser is who runs on its host.
   Agents act in signed-in sites without asking, so a page can also steer an
   agent into a change in GitHub, AWS, Cloudflare or Tailscale, such as a new
   token or a changed recovery address. devbox's box browser limits only what
-  such a change reaches there: no mailbox, no saved password and no Google
-  login. A PC's box browser holds Gmail, so there only the agent-browser
+  such a change reaches there: no mailbox and no Google login. A PC's box browser holds Gmail, so there only the agent-browser
   skill's mail rule keeps agents out of the mailbox.
 - **devbox's profile at rest.** Chromium runs with `--password-store=basic`,
-  because devbox has no keyring. Chromium then encrypts cookies with a fixed
+  because devbox has no keyring. Chromium then encrypts cookies and saved
+  passwords with a fixed
   key (`kV10Key`, PBKDF2 of "peanuts", in Chromium's
   [posix_key_provider.cc](https://chromium.googlesource.com/chromium/src/+/main/components/os_crypt/async/browser/posix_key_provider.cc)),
   and devbox's disk has no disk encryption, so anyone with a copy of the disk
-  reads the cookies. A keyring would not stop the agents either, because the
+  reads the cookies and the saved passwords. A keyring would not stop the agents either, because the
   same user unlocks it.
 - **Omer's Brave.** No command forwards a PC's browser to devbox, so nothing
   on devbox reaches it. On the PC, Brave asks Allow for each new session. Omer
@@ -229,7 +232,8 @@ through `ci/box-browser.nix`. It fails when a unit is missing, when the display
 command loses `-localhost` or `-SecurityTypes None`, when the browser unit's
 `DISPLAY` and `XAUTHORITY` are not the display and the `-auth` file of that
 command line, and when a box browser that uses Chromium's fixed key lacks the
-policy that turns its password manager off, or one that uses KWallet has it,
+policy that turns its password manager on, or one that uses KWallet has that
+policy,
 when a Plasma host's browser does not wait for the wallet or keeps its key
 anywhere but KWallet, and when the browser does not start with the desktop
 session on a host that has one, or at boot on one without. Each host job also
@@ -237,7 +241,7 @@ checks the user units for an ordering cycle. devbox's boot test
 (`ci/server-boot/checks/20-services.py`) starts the units, runs `box-browser
 status`, checks that ports 5920 and 9344 listen on loopback only and that its
 user reaches them while `nobody` does not, reads `chrome://prefs-internals` in
-the box browser to check that the policy turns the password manager off, and
+the box browser to check that the policy turns the password manager on, and
 checks that `close` closes only the session's tab, or blanks it when it is the
 browser's last. On the host, `box-browser status` checks that both units
 are active and that DevTools answers.

@@ -119,7 +119,7 @@ in
     fonts.enableDefaultPackages = lib.mkDefault true;
 
     environment.etc."chromium/policies/managed/box-browser.json" = lib.mkIf (passwordStore == "basic") {
-      text = builtins.toJSON { PasswordManagerEnabled = false; };
+      text = builtins.toJSON { PasswordManagerEnabled = true; };
     };
 
     systemd.user.services.box-display = {

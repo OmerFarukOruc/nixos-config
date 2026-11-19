@@ -179,9 +179,9 @@ box_browser_host() {
   jq -e 'if .plasma then
       (.browserCommand | contains("--password-store=kwallet6")) and (.browserPreStart | contains("box-browser-wallet-open")) and .passwordPolicy == null
     else
-      (.browserCommand | contains("--password-store=basic")) and .passwordPolicy.PasswordManagerEnabled == false and (.browserPreStart | contains("wallet") | not)
+      (.browserCommand | contains("--password-store=basic")) and .passwordPolicy.PasswordManagerEnabled == true and (.browserPreStart | contains("wallet") | not)
     end' <<<"$record" >/dev/null || {
-    echo "$host: a box browser on a Plasma host must keep its key in KWallet, wait for the wallet and save passwords; one elsewhere must use Chromium's fixed key and save none." >&2
+    echo "$host: a box browser on a Plasma host must keep its key in KWallet, wait for the wallet and save passwords; one elsewhere must use Chromium's fixed key and save passwords by policy." >&2
     return 1
   }
 }

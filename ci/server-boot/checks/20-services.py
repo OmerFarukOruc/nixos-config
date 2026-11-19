@@ -194,10 +194,10 @@ for box_port in (5920, 9344):
 machine.succeed(f"{box_browser} --session boot-test open chrome://prefs-internals")
 box_password_manager = machine.succeed(
     f"{box_browser} --session boot-test eval "
-    """'(p => p.metadata.includes("managed") && p.value === false ? "managed-off" : "user-set")"""
+    """'(p => p.metadata.includes("managed") && p.value === true ? "managed-on" : "user-set")"""
     """(JSON.parse(document.body.innerText).credentials_enable_service)'"""
 )
-assert "managed-off" in box_password_manager, f"the box browser's password manager is not off by policy: {box_password_manager}"
+assert "managed-on" in box_password_manager, f"the box browser's password manager is not on by policy: {box_password_manager}"
 for box_port in (5920, 9344):
     box_connect = f"-- bash -c 'exec 3<> /dev/tcp/127.0.0.1/{box_port}'"
     machine.succeed(f"runuser -u {BOX_USER} {box_connect}")
