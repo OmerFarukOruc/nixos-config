@@ -181,7 +181,7 @@ box_browser_host() {
     else
       (.browserCommand | test("(^| )--password-store=basic( |$)")) and (.browserPreStart | contains("wallet") | not)
     end' <<<"$record" >/dev/null || {
-    echo "$host: a box browser on a Plasma host must keep its key in KWallet, wait for the wallet and save passwords; one elsewhere must use Chromium's fixed key." >&2
+    echo "$host: a box browser on a Plasma host must keep its key in KWallet and wait for the wallet; one elsewhere must use Chromium's fixed key and not wait for a wallet." >&2
     return 1
   }
 }
