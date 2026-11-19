@@ -191,13 +191,6 @@ for box_port in (5920, 9344):
     assert "127.0.0.1:" + str(box_port) in box_listeners, f"nothing listens on 127.0.0.1:{box_port}: {box_listeners}"
     box_outside = [a for a in box_listeners if not a.startswith(("127.0.0.1:", "[::1]:"))]
     assert not box_outside, f"port {box_port} listens beyond loopback: {box_outside}"
-machine.succeed(f"{box_browser} --session boot-test open chrome://prefs-internals")
-box_password_manager = machine.succeed(
-    f"{box_browser} --session boot-test eval "
-    """'(p => p.metadata.includes("managed") && p.value === true ? "managed-on" : "user-set")"""
-    """(JSON.parse(document.body.innerText).credentials_enable_service)'"""
-)
-assert "managed-on" in box_password_manager, f"the box browser's password manager is not on by policy: {box_password_manager}"
 for box_port in (5920, 9344):
     box_connect = f"-- bash -c 'exec 3<> /dev/tcp/127.0.0.1/{box_port}'"
     machine.succeed(f"runuser -u {BOX_USER} {box_connect}")

@@ -5,7 +5,6 @@ builtins.mapAttrs
     let
       inherit (host) config;
       browser = config.systemd.user.services.box-browser;
-      policy = config.environment.etc."chromium/policies/managed/box-browser.json" or null;
       sessions = import ../machines/sessions.nix { inherit (host.pkgs) lib; };
     in
     {
@@ -17,7 +16,6 @@ builtins.mapAttrs
       browserTargets = browser.wantedBy;
       desktop = sessions.hasAnyDesktop config.oruc.machine;
       plasma = sessions.hasDesktop config.oruc.machine "plasma";
-      passwordPolicy = if policy == null then null else builtins.fromJSON policy.text;
     }
   )
   {

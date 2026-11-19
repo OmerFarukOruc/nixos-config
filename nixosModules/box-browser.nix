@@ -118,10 +118,6 @@ in
 
     fonts.enableDefaultPackages = lib.mkDefault true;
 
-    environment.etc."chromium/policies/managed/box-browser.json" = lib.mkIf (passwordStore == "basic") {
-      text = builtins.toJSON { PasswordManagerEnabled = true; };
-    };
-
     systemd.user.services.box-display = {
       description = "Box browser display: Xvnc ${display}, localhost only, no VNC password, X cookie in ~/.Xauthority";
       wantedBy = [ sessionTarget ];

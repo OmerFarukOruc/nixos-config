@@ -60,7 +60,7 @@ installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
 
 `features.boxBrowser` in a host's record in `machines/inventory.nix` turns it
 on; nixos-desktop, nixos-rog and devbox set it. `nixosModules/box-browser.nix`
-holds the units and the policy, and `home-manager/modules/box-view.nix` the
+holds the units, and `home-manager/modules/box-view.nix` the
 viewer.
 The feature needs no secret and no tailnet policy change. A host that turns it
 off keeps the signed-in profile in `~/.local/share/box-browser`; delete that
@@ -81,12 +81,10 @@ folder there.
   on nixos-rog, and at Omer's first unlock after boot on nixos-desktop, which
   logs in by itself.
 - On devbox, `users.users.<user>.linger` keeps them running without a login.
-  devbox has no keyring, so Chromium runs with `--password-store=basic`, and
-  `/etc/chromium/policies/managed/box-browser.json` turns the password manager
-  on (`PasswordManagerEnabled`) and locks that setting, so the profile offers
-  to save the passwords Omer types there
-  ([Security model](#security-model)). The policy covers every Chromium on
-  devbox, agents' throwaway browsers and the desktop session's included.
+  devbox has no keyring, so Chromium runs with `--password-store=basic`. Its
+  password manager keeps Chromium's default, on, so the profile offers to save
+  the passwords Omer types there, and he can turn that off in its settings
+  ([Security model](#security-model)).
 - `box-view` (command and menu entry "Box browser", on nixos-desktop and
   nixos-rog) opens the viewer on `127.0.0.1::5920`. For another host it
   forwards a socket in `$XDG_RUNTIME_DIR` (mode 0700, so no other local user
@@ -180,10 +178,9 @@ loopback only, so who can drive a box browser is who runs on its host.
   `sl-factory`'s loopback packets other than DNS
   ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
   off the display.
-- **What devbox's holds.** Saved passwords: the policy turns the password
-  manager on, and Omer saves the passwords of the sites agents use there, so
-  Chromium can fill them on the sign-in page. They sit under the same fixed
-  key as the cookies (devbox's profile at rest, below), so any process of
+- **What devbox's holds.** Saved passwords: Omer saves the passwords of the
+  sites agents use there, so Chromium can fill them on the sign-in page. They
+  sit under the same fixed key as the cookies (devbox's profile at rest, below), so any process of
   devbox's user or root can read them from disk, and an agent that drives the
   browser can read a filled password field. Other passwords live in Infisical,
   from which agents type them through `eval --stdin`. No mail account and no
@@ -240,16 +237,13 @@ loopback only, so who can drive a box browser is who runs on its host.
 through `ci/box-browser.nix`. It fails when a unit is missing, when the display
 command loses `-localhost` or `-SecurityTypes None`, when the browser unit's
 `DISPLAY` and `XAUTHORITY` are not the display and the `-auth` file of that
-command line, and when a box browser that uses Chromium's fixed key lacks the
-policy that turns its password manager on, or one that uses KWallet has that
-policy, when a Plasma host's browser does not wait for the wallet or keeps its key
-anywhere but KWallet, and when the browser does not start with the desktop
+command line, when a Plasma host's browser does not wait for the wallet or
+keeps its key anywhere but KWallet, when another host's browser does not use
+Chromium's fixed key, and when the browser does not start with the desktop
 session on a host that has one, or at boot on one without. Each host job also
 checks the user units for an ordering cycle. devbox's boot test
 (`ci/server-boot/checks/20-services.py`) starts the units, runs `box-browser
 status`, checks that ports 5920 and 9344 listen on loopback only and that its
-user reaches them while `nobody` does not, reads `chrome://prefs-internals` in
-the box browser to check that the policy turns the password manager on, and
-checks that `close` closes only the session's tab, or blanks it when it is the
+user reaches them while `nobody` does not, and checks that `close` closes only the session's tab, or blanks it when it is the
 browser's last. On the host, `box-browser status` checks that both units
 are active and that DevTools answers.
