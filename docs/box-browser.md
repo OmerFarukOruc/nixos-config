@@ -9,8 +9,8 @@ nixos-rog and devbox. It reaches two kinds of browser:
   use it by default, because it never waits for Omer, and they act in its
   signed-in sites without asking him. A PC's box browser holds Omer's own
   logins, his Google account among them, and saves passwords in KWallet.
-  devbox's holds the logins agents there need and stays signed out of Google.
-  It keeps the passwords Omer saves in it, so agents there sign in again
+  devbox's box browser holds the logins agents there need and Omer's Google
+  account. It keeps the passwords Omer saves in it, so agents there sign in again
   without him; every process of devbox's user and root can drive it and read
   them.
 - Omer's Brave Origin, on the PC he sits at, for an agent that runs on that
@@ -121,8 +121,8 @@ reads, because its `/json` answers 404.
 
 ## Login codes
 
-devbox's box browser holds no mail account. By default an agent asks Omer for a
-code a site sends. Optionally, a Gmail filter forwards the code mails of each
+By default an agent asks Omer for a code a site sends, because the
+agent-browser skill's mail rule keeps agents out of Gmail. Optionally, a Gmail filter forwards the code mails of each
 named sender to a separate login-code mailbox, and agents fetch the code
 themselves. `login-code`
 (`pkgs/agent-tools/bin/login-code`) reads that mailbox read-only over IMAP,
@@ -183,11 +183,15 @@ loopback only, so who can drive a box browser is who runs on its host.
   sit under the same fixed key as the cookies (devbox's profile at rest,
   below), so any process of devbox's user or root can read them from disk, and
   an agent that drives the browser can read a filled password field. Other passwords live in Infisical,
-  from which agents type them through `eval --stdin`. No mail account and no
-  Google login: Omer gives emailed or texted codes, or `login-code` reads them,
-  downloading only the named sender's mails and writing only a short code. The
-  From header it matches is not authenticated, so a mail that forges the
-  sender reaches the mailbox only if Gmail's filter forwards it. The TOTP setup
+  from which agents type them through `eval --stdin`. The browser also holds
+  Omer's Google account, so any process that drives it or reads a disk copy
+  can use his Google account and his Gmail; only the agent-browser skill's
+  mail rule keeps agents out of Gmail. Omer gives a texted code, and an emailed
+  code comes from him or from `login-code`, which reads the separate
+  login-code mailbox, downloads only the named sender's mails and writes only
+  a short code. The From header it matches is not authenticated, so a mail
+  that forges the sender reaches the login-code mailbox only if Gmail's filter
+  forwards it. The TOTP setup
   key of the GitHub account `statuslantern-tailscale` sits in Infisical
   `/harness/box-browser`, so any process of devbox's user can compute that
   account's 2FA code and pass GitHub's sudo mode in the signed-in session
@@ -195,16 +199,15 @@ loopback only, so who can drive a box browser is who runs on its host.
   Omer saves that account's password here too, devbox holds both of its
   factors, and its 2FA no longer protects it against a process on devbox.
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
-  to read a sign-in code finds no mailbox in devbox's box browser, the attack Brave
-  showed against Perplexity Comet
-  ([brave.com/blog/comet-prompt-injection](https://brave.com/blog/comet-prompt-injection/)).
+  to read a sign-in code or open Gmail, the attack Brave showed against
+  Perplexity Comet
+  ([brave.com/blog/comet-prompt-injection](https://brave.com/blog/comet-prompt-injection/)),
+  meets a browser that holds Gmail, on devbox as on a PC.
   Agents act in signed-in sites without asking, so a page can also steer an
   agent into a change in GitHub, AWS, Cloudflare or Tailscale, such as a new
   token or a changed recovery address, or into reading a saved password from a
-  filled field. devbox's box browser limits only what such a change reaches
-  there: no mailbox and no Google login. A PC's box browser holds Gmail, so
-  there only the agent-browser skill's mail rule keeps agents out of the
-  mailbox.
+  filled field. Only the agent-browser skill's mail rule keeps agents out of
+  Gmail, in every box browser.
 - **devbox's profile at rest.** Chromium runs with `--password-store=basic`,
   because devbox has no Plasma session and so no KWallet. Chromium then encrypts cookies and saved
   passwords with a fixed key (`kV10Key`, PBKDF2 of "peanuts", in Chromium's
