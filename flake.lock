@@ -713,11 +713,11 @@
     "skills-herdr": {
       "flake": false,
       "locked": {
-        "lastModified": 1793278609,
-        "narHash": "sha256-0B58jR/v1vxbK7cwoq++SnOCsED0sHDkgqVMvsrjezE=",
+        "lastModified": 1795126513,
+        "narHash": "sha256-x+DOzoMhorpWTf8yN29g2P6Ha+oSGbaZdV7soxdSmaY=",
         "owner": "herdrdev",
         "repo": "herdr",
-        "rev": "ee5bfb5041bb3e4a49d591c72308aae3c81ecdde",
+        "rev": "e8d7d9705a7a2c89cef4dd42079379f05685af87",
         "type": "github"
       },
       "original": {
@@ -793,11 +793,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1795104054,
-        "narHash": "sha256-Q3mchof35OHcQUR93Pz/WZXK2QcdTijH09fK2OzEeEc=",
+        "lastModified": 1795127816,
+        "narHash": "sha256-rx5FQSFv2wXz62E0yJYaulHa4bnypo9HsjJj3dubYq4=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "27a4492c0022039637d66910e6ef50fb0316b014",
+        "rev": "6c71af70b0f048ed9a29c1f1d2855691ac49db63",
         "type": "github"
       },
       "original": {
