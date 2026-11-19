@@ -108,6 +108,7 @@ let
       deployLogin = "root";
       features = {
         boxBrowser = true;
+        grokBotBox = true;
         streamedDesktop = true;
       };
     };

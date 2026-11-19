@@ -3,6 +3,8 @@
     ./machine.nix
     ./always-on.nix
     ./box-browser.nix
+    ./grok-bot-box.nix
+    ./owner-loopback.nix
     ./kernel.nix
     ./bootloader.nix
     ./recovery.nix

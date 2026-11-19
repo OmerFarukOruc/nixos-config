@@ -2,7 +2,8 @@
 
 Coding agents drive signed-in browsers with agent-browser through one command,
 `box-browser` (`pkgs/agent-tools/bin/box-browser`), installed on nixos-desktop,
-nixos-rog and devbox. It reaches two kinds of browser:
+nixos-rog and devbox. It reaches two kinds of browser, and on devbox the Grok
+Bot app:
 
 - A box browser: one Chromium on each of nixos-desktop, nixos-rog and devbox
   that every agent session on that host shares, each in its own tab. Agents
@@ -17,6 +18,10 @@ nixos-rog and devbox. It reaches two kinds of browser:
   PC. Brave asks him to click Allow for each new agent session, so agents use
   it only for a site that signs in only with a passkey. No agent on devbox
   reaches it.
+- The Grok Bot app on devbox, one instance for each of Omer's two accounts,
+  `personal` and `company` ([Grok Bot app](#grok-bot-app)). Grok Bot has no
+  web chat, so the app is the only way to read a bot's chat, its Pages and its
+  usage. Omer opens either instance from a PC with `box-view --app <account>`.
 
 A page that needs no login opens in a throwaway headless browser
 (`agent-browser --session <name>`) instead. The agent-browser skill
@@ -24,6 +29,7 @@ A page that needs no login opens in a throwaway headless browser
 
 - [The command](#the-command)
 - [Box browser](#box-browser)
+- [Grok Bot app](#grok-bot-app)
 - [Omer's Brave](#omers-brave)
 - [Login codes](#login-codes)
 - [Security model](#security-model)
@@ -34,7 +40,8 @@ A page that needs no login opens in a throwaway headless browser
 ```sh
 box-browser [--session NAME] [--on HOST] COMMAND...                  # box browser
 box-browser [--session NAME] --brave COMMAND...                      # Omer's Brave
-box-browser [--on HOST] status                                       # box browser units and DevTools
+box-browser [--session NAME] [--on HOST] --app ACCOUNT COMMAND...    # Grok Bot app of that account
+box-browser [--on HOST] [--app ACCOUNT] status                       # units and DevTools
 ```
 
 COMMAND is an agent-browser command, such as `open <url>` or `snapshot -i`.
@@ -43,7 +50,7 @@ The session is `--session`, else `AGENT_BROWSER_SESSION`, else
 command exits 2. A session name holds only letters, digits, `-` and `_`.
 Each session keeps its own pinned tab (`AGENT_BROWSER_PIN_TAB=1`). `--brave`
 runs the session as `brave_<session>`, so its tab pin stays apart from the box
-browser's, and a box browser session name that starts with `brave_` exits 2.
+browser's, and a session name that starts with `brave_` exits 2.
 
 Without `--brave`, the command drives this host's box browser when the host
 runs `box-browser.service`, and devbox's over `ssh devbox` otherwise; `--on`
@@ -52,6 +59,14 @@ writes, such as a screenshot, stays on the host that runs it. With `--brave`,
 it drives this host's Brave Origin; it refuses `--on`, and it fails on a host
 with no desktop session, such as devbox. The first `--brave` call of a session
 waits up to 10 minutes for Omer's Allow click.
+
+With `--app ACCOUNT`, the command drives the Grok Bot app that is signed in to
+that account. It finds the app as it finds the box browser: this host's when
+the host runs `grok-bot-box-<account>.service`, else devbox's over SSH. The
+session runs as `app_<account>_<session>`, apart from the same agent's box
+browser session, and a session name that starts with `app_` exits 2. The app has one window and no tabs, so its sessions share that
+window and nothing is pinned, and `close` ends the session and leaves the app
+running. `--app` with `--brave` exits 2.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
 installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
@@ -111,6 +126,68 @@ Omer for it and enters it.
 browser's last, before it ends the session; the agent closes any other tab it
 opened first.
 
+## Grok Bot app
+
+`features.grokBotBox` in a host's record turns it on; devbox sets it.
+`nixosModules/grok-bot-box.nix` holds the units, and the app is the package the
+PCs install (`pkgs/grok-bot.nix`).
+
+Each account gets three user units:
+
+| Unit | Runs | personal | company |
+|---|---|---|---|
+| `grok-bot-display-<account>` | Xvnc, localhost only, no password | display `:21`, VNC `127.0.0.1:5921` | display `:22`, VNC `127.0.0.1:5922` |
+| `grok-bot-wm-<account>` | ratpoison, a window manager | on `:21` | on `:22` |
+| `grok-bot-box-<account>` | the app | DevTools `127.0.0.1:9345` | DevTools `127.0.0.1:9346` |
+
+- `nixosModules/grok-bot-accounts.nix` holds the display and the two ports of
+  each account, for the units and for `box-view`. `/etc/grok-bot-box/<account>.port`
+  holds the DevTools port, which `box-browser --app` reads.
+- Each account has a display of its own, so `box-view` shows one account and
+  the two windows never cover each other. Without a window manager the app's
+  window stays 512x520, so ratpoison stretches it over the 1920x1080 display.
+  Its command key is Ctrl+F12, which leaves Ctrl+T to the app. ratpoison also
+  takes over a window that opened before it started, so the app and the
+  window manager start in either order.
+- The app ignores `--user-data-dir`. It keeps its profile and its
+  single-instance lock in `$XDG_CONFIG_HOME/Grok Bot`, so each app unit sets
+  `XDG_CONFIG_HOME` to `~/.local/share/grok-bot-box/<account>`, and the two
+  instances run side by side, each with its own login. The login survives a
+  restart of the app with `--password-store=basic`, with no keyring.
+- Linger keeps the units running without a login, each restarts on failure,
+  and a restart of a display restarts its window manager and its app.
+- `box-view --app <account>` (and the menu entries "Grok Bot on devbox:
+  personal" and "Grok Bot on devbox: company", on nixos-desktop and
+  nixos-rog) opens the viewer on that account's display on devbox, through the
+  same SSH tunnel as the box browser's. `box-view <host> --app <account>`
+  names another host.
+- A host that turns the feature off keeps both profiles in
+  `~/.local/share/grok-bot-box`; delete that folder there.
+
+To sign an account in, an agent clicks Sign in and then Copy link in the app,
+reads the link with `eval 'navigator.clipboard.readText()'` into a 0600 file,
+and opens it in a browser that is signed in to that account at cursor.com. The
+app polls until that page confirms, so the browser can be on any machine: an
+agent opens the link in devbox's box browser when that browser holds the
+account. Otherwise Omer runs `box-view --app <account>`, clicks Copy link
+there and opens the link in his own browser. The link is a sign-in secret, so
+it goes to a file and never into a report. The first sign-in of an account
+passes cursor.com's "Enable data sharing" page, whose Share Data switch starts
+on; that choice is Omer's.
+
+```sh
+box-browser --app company snapshot -i     # the app's controls
+box-browser --app company status          # the three units and DevTools
+box-view --app company                    # the app's window, on a PC
+```
+
+A routine with a webhook trigger starts work on a bot without the app: a POST
+to the routine's URL with its key as a bearer token and a JSON body, which the
+bot receives with the routine's instruction
+([docs.x.ai](https://docs.x.ai/grok-bot/skills-routines-and-automations)).
+The answer is `200` when the run started, and nothing of the bot's reply, so a
+task that must read the reply uses the app.
+
 ## Omer's Brave
 
 On nixos-desktop and nixos-rog, `box-browser --brave` drives the local Brave
@@ -163,9 +240,13 @@ loopback only, so who can drive a box browser is who runs on its host.
 
 - **A PC's box browser.** Only Omer's user and root on that PC can drive it,
   the same processes that already reach his files, his SSH keys and his
-  Brave: the `box-browser` nftables table rejects other local users, such as
-  the Nix build users, on loopback ports 5920 and 9344. devbox, whose firewall
-  runs on iptables, gets the same rule as its `box-browser-out` chain. No other host reaches
+  Brave: the `owner-loopback` nftables table rejects other local users, such as
+  the Nix build users, on the loopback ports in `oruc.ownerLoopbackPorts`
+  (`nixosModules/owner-loopback.nix`), which are 5920 and 9344 there. devbox,
+  whose firewall runs on iptables, gets the same rule as its
+  `owner-loopback-out` chain. A switch from a system whose chain had another
+  name keeps that chain and its `OUTPUT` jump beside the new one until the
+  next reboot. No other host reaches
   it. It holds his own logins, his Google
   account among them, and its saved passwords and cookies are encrypted with
   a key in KWallet, so a copy of the profile without his login is useless.
@@ -173,7 +254,7 @@ loopback only, so who can drive a box browser is who runs on its host.
   drive the browser. That includes every agent, any session
   that logs in as that user over SSH or Tailscale SSH, the Grok bots'
   tailnet device among them ([devbox](devbox.md#access)), and the herdr web
-  UI on the tailnet. Other local users cannot: the `box-browser-out` chain
+  UI on the tailnet. Other local users cannot: the `owner-loopback-out` chain
   rejects their connections to ports 5920 and 9344, and the firewall rejects
   `sl-factory`'s loopback packets other than DNS
   ([Factory run user](devbox.md#factory-run-user)), and the X cookie keeps it
@@ -198,6 +279,14 @@ loopback only, so who can drive a box browser is who runs on its host.
   ([devbox reference, Browsers](../agents/reference/devbox.md#browsers)). Once
   Omer saves that account's password here too, devbox holds both of its
   factors, and its 2FA no longer protects it against a process on devbox.
+- **devbox's Grok Bot accounts.** The same processes can drive both app
+  instances, so each of them acts as Omer's personal Grok Bot account and as
+  his company's: it can read every bot's chats and Pages, message a bot, and
+  change its routines and connections. The `owner-loopback-out` chain keeps
+  other local users off the VNC ports 5921 and 5922 and the DevTools ports
+  9345 and 9346. Each profile keeps its login without a keyring
+  (`--password-store=basic`), so a copy of the disk holds both logins, as it
+  holds the box browser's.
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
   to read a sign-in code or open Gmail, the attack Brave showed against
   Perplexity Comet
@@ -225,7 +314,8 @@ loopback only, so who can drive a box browser is who runs on its host.
   ([agent-browser.dev/security](https://agent-browser.dev/security)).
   Device-bound sessions have no Linux support.
 - **The display.** Xvnc takes the X cookie in `~/.Xauthority` (`-auth
-  %h/.Xauthority`, a new cookie at each start from `box-display-prepare`).
+  %h/.Xauthority`, a new cookie at each start from `vnc-display-prepare`;
+  `nixosModules/vnc-display.nix` builds this unit and the Grok Bot displays).
   `box-browser.service` sets `XAUTHORITY=%h/.Xauthority`, because Plasma puts
   its own `XAUTHORITY` (`/run/user/<uid>/xauth_*`) into the user manager's
   environment and a unit would otherwise read that file, which has no cookie
@@ -251,3 +341,15 @@ user reaches them while `nobody` does not, and checks that `close` closes only
 the session's tab, or blanks it when it is the browser's last. On the host,
 `box-browser status` checks that both units are active and that DevTools
 answers.
+
+The same evaluation check fails when the box browser's VNC or DevTools port
+is missing from `oruc.ownerLoopbackPorts`, and when a Grok Bot unit takes
+DevTools off `127.0.0.1`, runs on a display that is not its own `-localhost`
+Xvnc with `-SecurityTypes None`, shares a port or its profile folder with the
+other unit, or uses a port that the list or its `/etc/grok-bot-box` file does
+not name. The boot test turns `features.grokBotBox` off
+(`ci/server-boot/modules/grok-bot-box.nix`), because its VM has 1024 MB and
+the processes of the two apps held 1992 MB of resident memory on devbox (the
+sum of `ps -eo rss,args | grep grok-bot/grok-bot`, 2026-11-19), so the Grok Bot units are checked on devbox
+after a deploy: `box-browser --app personal status` and `box-browser --app
+company status`.

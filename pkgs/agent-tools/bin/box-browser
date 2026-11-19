@@ -4,14 +4,17 @@
 #       the box browser: this host's when it runs box-browser.service, else devbox's over SSH; --on names the host
 #   box-browser [--session NAME] --brave COMMAND...
 #       Omer's Brave: this host's Brave Origin
-#   box-browser [--on HOST] status
+#   box-browser [--session NAME] [--on HOST] --app ACCOUNT COMMAND...
+#       the Grok Bot app signed in to ACCOUNT (personal or company), found like the box browser; its sessions share
+#       the app's one window
+#   box-browser [--on HOST] [--app ACCOUNT] status
 # The session is NAME, else AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
 # On the box browser, `close` closes the session's tab, then ends the session.
 # The first --brave call of a session waits up to 10 min for Omer to click Allow in Brave. Write `close` as the first
 # word of COMMAND, so it skips that wait.
 set -euo pipefail
 
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; }
 fail_usage() {
   usage >&2
   exit 2
@@ -19,6 +22,7 @@ fail_usage() {
 
 session=${AGENT_BROWSER_SESSION:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}}
 on=
+app=
 brave=false
 while (($#)); do
   case $1 in
@@ -26,14 +30,22 @@ while (($#)); do
       usage
       exit 0
       ;;
-    --session | --on)
+    --session | --on | --app)
       [[ -n ${2-} && $2 != -* ]] || fail_usage
-      if [[ $1 == --on ]]; then on=$2; else session=$2; fi
+      case $1 in
+        --on) on=$2 ;;
+        --app) app=$2 ;;
+        *) session=$2 ;;
+      esac
       shift 2
       ;;
-    --session=* | --on=*)
+    --session=* | --on=* | --app=*)
       [[ -n ${1#*=} ]] || fail_usage
-      if [[ $1 == --on=* ]]; then on=${1#*=}; else session=${1#*=}; fi
+      case $1 in
+        --on=*) on=${1#*=} ;;
+        --app=*) app=${1#*=} ;;
+        *) session=${1#*=} ;;
+      esac
       shift
       ;;
     --brave)
@@ -68,8 +80,23 @@ set -- "${args[@]}"
   exit 2
 }
 
+[[ -z $app || $app =~ ^[a-z0-9][a-z0-9-]*$ ]] || {
+  echo "box-browser: $app is not an account name" >&2
+  exit 2
+}
+if $brave && [[ -n $app ]]; then fail_usage; fi
+
 cdp_port=9344
-box_unit=/etc/systemd/user/box-browser.service
+box_name="box browser"
+box_units=(box-display box-browser)
+target=()
+if [[ -n $app ]]; then
+  box_name="Grok Bot app for the account $app"
+  box_units=("grok-bot-display-$app" "grok-bot-wm-$app" "grok-bot-box-$app")
+  target=(--app "$app")
+  port_file=/etc/grok-bot-box/$app.port
+fi
+box_unit=/etc/systemd/user/${box_units[-1]}.service
 
 need_session() {
   [[ -n $session ]] || {
@@ -87,12 +114,21 @@ local_box() {
     '') [[ -e $box_unit ]] ;;
     local | "$(uname -n)")
       [[ -e $box_unit ]] || {
-        echo "box-browser: $(uname -n) runs no box browser" >&2
+        echo "box-browser: $(uname -n) runs no $box_name" >&2
         exit 1
       }
       ;;
     *) false ;;
   esac
+}
+
+use_app_port() {
+  [[ -n $app ]] || return 0
+  [[ -r $port_file && $(< "$port_file") =~ ^[0-9]+$ ]] || {
+    echo "box-browser: $port_file does not hold the DevTools port of the $box_name" >&2
+    exit 1
+  }
+  cdp_port=$(< "$port_file")
 }
 
 session_running() {
@@ -142,7 +178,7 @@ command_name() {
 
 box_status() {
   local failed=0 unit
-  for unit in box-display box-browser; do
+  for unit in "${box_units[@]}"; do
     if systemctl --user is-active --quiet "$unit.service"; then
       echo "$unit: active"
     else
@@ -182,15 +218,26 @@ brave_ws() {
 
 if ! $brave; then
   if [[ $1 == status ]]; then
-    if local_box; then box_status; else remote_box status; fi
+    if local_box; then
+      use_app_port
+      box_status
+    else
+      remote_box "${target[@]}" status
+    fi
     exit
   fi
   need_session
-  [[ $session != brave_* ]] || {
-    echo "box-browser: session names that start with brave_ belong to --brave" >&2
+  [[ $session != brave_* && $session != app_* ]] || {
+    echo "box-browser: session names that start with brave_ or app_ belong to --brave and --app" >&2
     exit 2
   }
-  local_box || remote_box --session "$session" "$@"
+  local_box || remote_box "${target[@]}" --session "$session" "$@"
+  if [[ -n $app ]]; then
+    use_app_port
+    unset AGENT_BROWSER_PIN_TAB
+    export AGENT_BROWSER_SESSION=app_${app}_$session AGENT_BROWSER_CDP=$cdp_port
+    exec agent-browser "$@"
+  fi
   export AGENT_BROWSER_SESSION=$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_PIN_TAB=1
   if [[ $(command_name "$@") == close ]]; then
     status=0

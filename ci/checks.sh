@@ -160,9 +160,9 @@ box_browser_host() {
     echo "$host lacks a box browser unit." >&2
     return 1
   }
-  jq -e '.displayCommand | contains(" -localhost ") and contains(" -SecurityTypes None")' \
+  jq -e '.displayCommand | contains(" -localhost ") and contains(" -nolisten tcp ") and contains(" -SecurityTypes None")' \
     <<<"$record" >/dev/null || {
-    echo "$host: the box display no longer runs Xvnc as -localhost with -SecurityTypes None." >&2
+    echo "$host: the box display no longer runs Xvnc as -localhost and -nolisten tcp with -SecurityTypes None." >&2
     return 1
   }
   jq -e '(.displayCommand | capture(" (?<display>:[0-9]+) -auth (?<auth>[^ ]+) ")) as $x
@@ -182,6 +182,37 @@ box_browser_host() {
       (.browserCommand | test("(^| )--password-store=basic( |$)")) and (.browserPreStart | contains("wallet") | not)
     end' <<<"$record" >/dev/null || {
     echo "$host: a box browser on a Plasma host must keep its key in KWallet and wait for the wallet; one elsewhere must use Chromium's fixed key and not wait for a wallet." >&2
+    return 1
+  }
+  jq -e '.ownerLoopbackPorts as $owned
+    | (.displayCommand | capture(" -rfbport (?<port>[0-9]+) ")) as $vnc
+    | (.browserCommand | capture("--remote-debugging-port=(?<port>[0-9]+)")) as $cdp
+    | [$vnc.port, $cdp.port | tonumber] - $owned == []' <<<"$record" >/dev/null || {
+    echo "$host: the VNC port or the DevTools port of the box browser is missing from oruc.ownerLoopbackPorts, so other local users can connect to it." >&2
+    return 1
+  }
+  jq -e '.userUnits as $units | .grokBotAccounts
+    | (map("grok-bot-box-" + .) | sort) == ($ARGS.named.bots | keys)
+      and all(.[]; . as $a | ["display", "wm", "box"] | all(.[]; . as $kind | $units | index("grok-bot-\($kind)-\($a)") != null))' \
+    --argjson bots "$(jq -c '.grokBots' <<<"$record")" <<<"$record" >/dev/null || {
+    echo "$host: a host with features.grokBotBox must have the display, window manager and app unit of each account in nixosModules/grok-bot-accounts.nix, and no other Grok Bot app unit." >&2
+    return 1
+  }
+  jq -e '.ownerLoopbackPorts as $owned | (.grokBots | length) as $units
+    | [.grokBots[]
+        | (.command | capture("--remote-debugging-port=(?<port>[0-9]+)") | .port | tonumber) as $port
+        | (.displayCommand | capture(" (?<display>:[0-9]+) ") | .display) as $display
+        | (.displayCommand | capture(" -auth (?<auth>[^ ]+) ") | .auth) as $auth
+        | (.displayCommand | capture(" -rfbport (?<vnc>[0-9]+) ") | .vnc | tonumber) as $vnc
+        | {$port, $vnc, $display, profile: .environment.XDG_CONFIG_HOME,
+            guarded: ((.command | test("(^| )--remote-debugging-address=127\\.0\\.0\\.1( |$)"))
+              and (.displayCommand | contains(" -localhost ") and contains(" -nolisten tcp ") and contains(" -SecurityTypes None"))
+              and .environment.DISPLAY == $display and .environment.XAUTHORITY == $auth
+              and ([$port, $vnc] - $owned == []) and .portFile == "\($port)\n")}]
+    | length == $units and all(.guarded) and ([.[] | .port, .vnc] | unique | length) == 2 * length
+      and (map(.profile) | unique | length) == length and (map(.display) | unique | length) == length' \
+    <<<"$record" >/dev/null || {
+    echo "$host: each Grok Bot unit must run on an Xvnc display of its own that is -localhost and -nolisten tcp with -SecurityTypes None, keep DevTools on 127.0.0.1, name its VNC and DevTools ports in oruc.ownerLoopbackPorts and its DevTools port in its /etc/grok-bot-box file, and keep a profile folder of its own." >&2
     return 1
   }
 }

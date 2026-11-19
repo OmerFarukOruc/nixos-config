@@ -11,13 +11,21 @@ let
   passwordStore = if sessions.hasDesktop machine "plasma" then "kwallet6" else "basic";
   sessionTarget = if desktop then "graphical-session.target" else "default.target";
   sessionEdges = lib.optional desktop sessionTarget;
-  displayNumber = 20;
-  display = ":${toString displayNumber}";
   vncPort = 5920;
   cdpPort = 9344;
 
-  # Xvnc sends no readiness signal, so the browser waits for its socket. A
-  # Chromium that died hard leaves Singleton* files, and a reused process id
+  boxDisplay = import ./vnc-display.nix { inherit lib pkgs; } {
+    number = 20;
+    inherit vncPort;
+    desktopName = "box-browser";
+    description = "Box browser display: Xvnc :20, localhost only, no VNC password, X cookie in ~/.Xauthority";
+    inherit (machine) user;
+    wantedBy = [ sessionTarget ];
+    inherit sessionEdges;
+  };
+  inherit (boxDisplay) display;
+
+  # A Chromium that died hard leaves Singleton* files, and a reused process id
   # makes the next start refuse the profile as in use.
   browserPrepare = pkgs.writeShellApplication {
     name = "box-browser-prepare";
@@ -26,25 +34,6 @@ let
       profile="$HOME/.local/share/box-browser/profile"
       mkdir -p "$profile"
       rm -f "$profile/SingletonLock" "$profile/SingletonCookie" "$profile/SingletonSocket"
-      for _ in {1..30}; do
-        [[ -S /tmp/.X11-unix/X${toString displayNumber} ]] && exit 0
-        sleep 1
-      done
-      echo "The X socket of display ${display} did not appear." >&2
-      exit 1
-    '';
-  };
-
-  displayPrepare = pkgs.writeShellApplication {
-    name = "box-display-prepare";
-    runtimeInputs = [
-      pkgs.util-linux
-      pkgs.xauth
-    ];
-    text = ''
-      touch "$HOME/.Xauthority"
-      xauth -f "$HOME/.Xauthority" remove ${display}
-      xauth -f "$HOME/.Xauthority" add ${display} . "$(mcookie)"
     '';
   };
 
@@ -88,64 +77,14 @@ in
       '';
     };
 
-    # The ruleset check runs in the build sandbox, which has no such user.
-    networking.nftables.preCheckRuleset = lib.mkIf config.networking.nftables.enable ''
-      sed -i 's/"${machine.user}"/"nobody"/' ruleset.conf
-    '';
-    networking.nftables.tables.box-browser = lib.mkIf config.networking.nftables.enable {
-      family = "inet";
-      content = ''
-        chain output {
-          type filter hook output priority filter; policy accept;
-          oifname "lo" tcp dport { ${toString vncPort}, ${toString cdpPort} } meta skuid != { 0, "${machine.user}" } reject
-        }
-      '';
-    };
-
-    networking.firewall.extraCommands =
-      lib.mkIf (config.networking.firewall.enable && !config.networking.nftables.enable)
-        ''
-          for ipt in iptables ip6tables; do
-            "$ipt" -w -N box-browser-out 2> /dev/null || true
-            "$ipt" -w -F box-browser-out
-            "$ipt" -w -A box-browser-out -m owner --uid-owner 0 -j RETURN
-            "$ipt" -w -A box-browser-out -m owner --uid-owner ${machine.user} -j RETURN
-            "$ipt" -w -A box-browser-out -p tcp -j REJECT --reject-with tcp-reset
-            "$ipt" -w -C OUTPUT -o lo -p tcp --syn -m multiport --dports ${toString vncPort},${toString cdpPort} -j box-browser-out 2> /dev/null ||
-              "$ipt" -w -I OUTPUT -o lo -p tcp --syn -m multiport --dports ${toString vncPort},${toString cdpPort} -j box-browser-out
-          done
-        '';
+    oruc.ownerLoopbackPorts = [
+      vncPort
+      cdpPort
+    ];
 
     fonts.enableDefaultPackages = lib.mkDefault true;
 
-    systemd.user.services.box-display = {
-      description = "Box browser display: Xvnc ${display}, localhost only, no VNC password, X cookie in ~/.Xauthority";
-      wantedBy = [ sessionTarget ];
-      partOf = sessionEdges;
-      after = sessionEdges;
-      unitConfig = {
-        ConditionUser = machine.user;
-        StartLimitIntervalSec = 0;
-      };
-      serviceConfig = {
-        ExecStartPre = lib.getExe displayPrepare;
-        ExecStart = lib.concatStringsSep " " [
-          (lib.getExe' pkgs.tigervnc "Xvnc")
-          display
-          "-auth %h/.Xauthority"
-          "-localhost"
-          "-rfbport ${toString vncPort}"
-          "-nolisten tcp"
-          "-SecurityTypes None"
-          "-desktop box-browser"
-          "-geometry 1920x1080"
-          "-depth 24"
-          "-AlwaysShared"
-        ];
-        Restart = "always";
-        RestartSec = 2;
-      };
-    };
+    systemd.user.services.box-display = boxDisplay.service;
 
     systemd.user.services.box-browser = {
       description = "Box browser: Chromium on ${display}, DevTools on 127.0.0.1:${toString cdpPort}";
@@ -156,10 +95,7 @@ in
       ++ sessionEdges;
       partOf = [ "box-display.service" ] ++ sessionEdges;
       wantedBy = [ sessionTarget ];
-      environment = {
-        DISPLAY = display;
-        XAUTHORITY = "%h/.Xauthority";
-      };
+      inherit (boxDisplay) environment;
       unitConfig = {
         ConditionUser = machine.user;
         StartLimitIntervalSec = 0;
@@ -167,6 +103,7 @@ in
       serviceConfig = {
         ExecStartPre = lib.optional (passwordStore == "kwallet6") (lib.getExe walletOpen) ++ [
           (lib.getExe browserPrepare)
+          boxDisplay.waitCommand
         ];
         TimeoutStartSec = lib.mkIf (passwordStore == "kwallet6") "infinity";
         ExecStart = lib.concatStringsSep " " [

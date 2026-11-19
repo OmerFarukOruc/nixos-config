@@ -427,6 +427,10 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
 - `features.boxBrowser` is on in the host record, so the box browser's two user
   units exist; agents drive it with `box-browser` from agent-tools
   ([box-browser.md](box-browser.md)).
+- `features.grokBotBox` is on, so the Grok Bot app runs once for each of
+  Omer's two accounts, each on a VNC display of its own. Agents drive it with
+  `box-browser --app`, and Omer opens it from a PC with `box-view --app`
+  ([Grok Bot app](box-browser.md#grok-bot-app)).
 - Home Manager gives omer the common layer and `home.nix`, which adds the
   Claude account tools of `pkgs/claude-tools` with their usage timer, and
   `claude-tools-limit-switch.timer` (next bullet).
@@ -1078,6 +1082,11 @@ in daily use:
   configuration. After a deploy, `tailscale debug prefs | jq .CorpDNS` prints
   `true`, `resolvectl status tailscale0` lists the tailnet's suffix, and
   `getent hosts github.com` still answers.
+- **The Grok Bot units.** The boot VM turns `features.grokBotBox` off, because
+  its 1024 MB cannot hold the two apps. After a deploy, `box-browser --app
+  personal status` and `box-browser --app company status` check the three
+  units and DevTools of each account
+  ([Grok Bot app](box-browser.md#grok-bot-app)).
 - **omer's user units.** A root deploy checks only root's own services, so a
   failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner,

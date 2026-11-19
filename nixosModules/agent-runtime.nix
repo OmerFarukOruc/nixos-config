@@ -38,10 +38,9 @@
           (umask 077 && mcookie >"$cookie_file")
         fi
         cookie=$(<"$cookie_file")
-        touch "$HOME/.Xauthority"
         for number in {0..9}; do
-          xauth -f "$HOME/.Xauthority" add ":$number" . "$cookie"
-        done
+          printf 'add :%s . %s\n' "$number" "$cookie"
+        done | xauth -f "$HOME/.Xauthority" source -
         exec ${tigervnc}/bin/Xvnc -auth "$HOME/.Xauthority" "$@"
       '';
     })

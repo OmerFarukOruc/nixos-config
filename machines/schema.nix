@@ -189,6 +189,7 @@ let
           audioEffects = mkFeature "Run EasyEffects as a user service in graphical sessions.";
           alwaysOn = mkFeature "Never sleep, and reboot after a panic or a hang (nixosModules/always-on.nix). It does not mean the machine stays powered on.";
           boxBrowser = mkFeature "Run a signed-in Chromium on a VNC display for coding agents, in the desktop session on a PC with its passwords in KWallet, and at all times on a server with its passwords under Chromium's fixed key, which the box-browser command drives (nixosModules/box-browser.nix, docs/box-browser.md).";
+          grokBotBox = mkFeature "Run the Grok Bot app once per account, each on a VNC display of its own with DevTools on a loopback port, which box-browser --app drives and box-view --app shows (nixosModules/grok-bot-box.nix, docs/box-browser.md).";
           gaming = mkFeature "Run Steam with the Proton builds, ntsync and the themed MangoHud (nixosModules/gaming.nix, home-manager/modules/gaming.nix).";
           lavdScheduler = mkFeature "Run the scx_lavd sched_ext scheduler in its performance mode (nixosModules/lavd-scheduler.nix).";
         };
