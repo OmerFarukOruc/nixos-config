@@ -176,11 +176,16 @@ loopback only, so who can drive a box browser is who runs on its host.
   off the display.
 - **What devbox's holds.** No saved password: the policy turns the password
   manager off, and passwords live in Infisical, from which agents type them through
-  `eval --stdin`. No mail account and no Google login: Omer gives codes, or
-  `login-code` reads them, downloading only the named sender's mails and
-  writing only a short code. The From header it matches is not
+  `eval --stdin`. No mail account and no Google login: Omer gives emailed or
+  texted codes, or `login-code` reads them, downloading only the named sender's
+  mails and writing only a short code. The From header it matches is not
   authenticated, so a mail that forges the sender reaches the mailbox only if
-  Gmail's filter forwards it.
+  Gmail's filter forwards it. The TOTP setup key of the GitHub account
+  `statuslantern-tailscale` sits in Infisical `/harness/box-browser`, so any
+  process running as `omer` on devbox can compute that account's 2FA code and
+  pass GitHub's sudo mode in the signed-in session; the account's password
+  stays out of devbox's reach
+  ([devbox reference, Browsers](../agents/reference/devbox.md#browsers)).
 - **Prompt injection.** Agents read untrusted pages. A page that tells an agent
   to read a sign-in code finds no mailbox in devbox's box browser, the attack Brave
   showed against Perplexity Comet
