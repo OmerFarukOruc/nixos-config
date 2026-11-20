@@ -6,8 +6,8 @@ Omer's organization `personal` on Infisical EU (`https://eu.infisical.com/api`) 
 
 - `personal-secrets` (id in `$INFISICAL_PERSONAL_SECRETS_PROJECT`, env `secrets`) holds host and
   personal folders; list them with `infisical secrets folders get --env secrets --path /`.
-  `/risoluto-fleet` holds the Grok bots' SSH key and Tailscale client, and the URLs and keys of the
-  Lead and Builder routine webhooks. The `.infisical.json` in `~/Desktop/workspace` carries this
+  `/risoluto-fleet` holds the Grok bots' SSH key and the webhook URL and key of the Builder bot's
+  "PR events" routine. The `.infisical.json` in `~/Desktop/workspace` carries this
   workspace id; the recipes below assume that cwd. The EU domain comes from the logged-in user
   config, so no `--domain` flag is needed there. On devbox the CLI has no login: prefix the command
   with `INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token")` and add
