@@ -1,18 +1,17 @@
 """Rows for Podman images, volumes, and containers."""
 
-import dataclasses
 import glob
 import json
 import os
 import shutil
 import time
-from collections.abc import Iterable
 from typing import NamedTuple
 
 from activity import session_mentions
 from config import RECENT
 from docker import Engine, container_group_rows, created, volume_group_rows
 from holders import inside
+from layers import LayerIndex, group_rows, shares
 from rows import CommandError, Row, run
 
 LOCAL_HOST = "localhost"
@@ -73,21 +72,6 @@ def pulled(image: dict) -> bool:
     return any(not d.startswith(f"{LOCAL_HOST}/") for d in image.get("RepoDigests") or [])
 
 
-@dataclasses.dataclass(frozen=True)
-class LayerIndex:
-    """Podman's layer graph, read from the storage index files.
-
-    `podman images --format json` prints SharedSize 0 for every image, so
-    its sizes count base layers once per image that builds on them. size
-    is None for a layer whose `diff-size` is unknown, which c/storage writes
-    as -1 for a partial pull.
-    """
-    parent: dict[str, str | None]
-    size: dict[str, int | None]
-    tops: dict[str, tuple[str, ...]]
-    metadata: dict[str, int]
-
-
 def read_index(path: str, required: bool) -> list[dict]:
     try:
         with open(path) as f:
@@ -108,9 +92,13 @@ def known_size(value: object) -> int | None:
 
 
 def layer_index(store: Store) -> LayerIndex:
-    """Parse the index files once; raise ValueError naming the file when one is missing or inconsistent.
+    """Parse c/storage's index files once; raise ValueError naming the file when one is missing or inconsistent.
 
-    A transient store keeps `volatile-layers.json` under the run root, so both roots are read.
+    `podman images --format json` prints SharedSize 0 for every image, so its
+    sizes count base layers once per image that builds on them; the index
+    holds the layer graph instead. c/storage writes `diff-size` -1 for a
+    layer of a partial pull, which becomes an unknown size. A transient store
+    keeps `volatile-layers.json` under the run root, so both roots are read.
     """
     layers_path = os.path.join(store.root, f"{store.driver}-layers", "layers.json")
     images_path = os.path.join(store.root, f"{store.driver}-images", "images.json")
@@ -128,42 +116,6 @@ def layer_index(store: Store) -> LayerIndex:
     if missing := named - parent.keys():
         raise ValueError(f"{len(missing)} layers that images or layers name are not in `{layers_path}`")
     return LayerIndex(parent, size, tops, metadata)
-
-
-def ancestors(index: LayerIndex, layers: Iterable[str]) -> set[str]:
-    """The layers and every layer below them."""
-    seen, todo = set(), list(layers)
-    while todo:
-        layer = todo.pop()
-        if layer not in seen:
-            seen.add(layer)
-            if below := index.parent[layer]:
-                todo.append(below)
-    return seen
-
-
-def shares(index: LayerIndex, image_ids: Iterable[str]) -> dict[str, int]:
-    """Split the bytes that removing all these images frees among them, so the parts add up to that total.
-
-    A layer is freed when no other image and no container builds on it; each
-    of these images whose chain holds it gets an equal part. Each image also
-    gets its own manifest and config bytes. Raise ValueError when a freed
-    layer's size is unknown.
-    """
-    ids = sorted(set(image_ids))
-    chains = {i: ancestors(index, index.tops[i]) for i in ids}
-    theirs = set().union(*chains.values())
-    others = [t for i, tops in index.tops.items() if i not in chains for t in tops]
-    kept = ancestors(index, [*others, *(layer for layer in index.parent if layer not in theirs)])
-    part = {i: index.metadata[i] for i in ids}
-    for layer in theirs - kept:
-        if (b := index.size[layer]) is None:
-            raise ValueError(f"layer `{layer[:12]}` has no recorded size")
-        holders = [i for i in ids if layer in chains[i]]
-        whole, extra = divmod(b, len(holders))
-        for n, i in enumerate(holders):
-            part[i] += whole + (n < extra)
-    return part
 
 
 def image_rows(store: Store) -> list[Row]:
@@ -195,18 +147,14 @@ def image_rows(store: Store) -> list[Row]:
         look_parts, parts = shares(index, unused), shares(index, [*registry.values(), *builds.values()])
     except ValueError as e:
         return [Row("Podman images", "look", f"the layer index could not be read ({e}); not measured")]
-    rows = [Row(f"Podman image `{ref}`", "look", f"no container uses it; {why}", alloc=look_parts[image_id])
-            for image_id, (ref, why) in look.items()]
-    for group, how, entries, reason in (
-            ("group:podman-images", "podman-image", registry, "unused pulled images; `podman pull` brings each back"),
-            ("group:podman-builds", "podman-build", builds,
-             "unused local builds and untagged images, stored 24+ h ago; the build that made each makes it again, "
-             "but a source that is gone does not come back")):
-        if entries:
-            members = {ref: parts[image_id] for ref, image_id in entries.items()}
-            b = sum(members.values())
-            rows.append(Row(group, "delete", reason, how=how, members=members, alloc=b, frees=b))
-    return rows
+    return [*(Row(f"Podman image `{ref}`", "look", f"no container uses it; {why}", alloc=look_parts[image_id])
+              for image_id, (ref, why) in look.items()),
+            *group_rows(parts, [
+                ("group:podman-images", "podman-image", registry,
+                 "unused pulled images; `podman pull` brings each back"),
+                ("group:podman-builds", "podman-build", builds,
+                 ("unused local builds and untagged images, stored 24+ h ago; the build that made each makes it "
+                  "again, but a source that is gone does not come back"))])]
 
 
 def dangling_volumes() -> set[str]:

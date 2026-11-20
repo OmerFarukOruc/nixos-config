@@ -2,6 +2,7 @@
 
 import datetime
 import functools
+import hashlib
 import json
 import os
 import re
@@ -14,6 +15,7 @@ from typing import NamedTuple
 from activity import session_mentions
 from config import FLOOR, RECENT, SCAN
 from holders import inside
+from layers import LayerIndex, group_rows, shares
 from measure import du_size
 from rows import CommandError, Row, day, run
 
@@ -26,9 +28,10 @@ def si_bytes(text: str) -> int:
 
 # Docker keeps its data in its root directory (`docker info`), whose files belong to root, or to
 # subordinate uids for rootless Docker, so FIEMAP cannot estimate it.
-BOUND_NOTE = ("A Docker or Podman row shows the engine's own size, an upper bound: two Docker build cache "
-              "prunes dropped `df` by 0.58 and 0.67 of it.")
+BOUND_NOTE = ("A Docker or Podman build cache, volume, or container row shows the engine's own size, an upper "
+              "bound: two Docker build cache prunes dropped `df` by 0.58 and 0.67 of it.")
 ANONYMOUS = "com.docker.volume.anonymous"
+CONTENT_STORE = "containerd/daemon/io.containerd.content.v1.content/blobs/sha256"
 # Where the Docker CLI looks with no DOCKER_HOST or context, then where rootless Docker listens:
 # https://docs.docker.com/reference/cli/docker/#environment-variables and
 # https://docs.docker.com/engine/security/rootless/tips/
@@ -77,7 +80,7 @@ def docker() -> Engine:
         root = run(["docker", "info", "--format", "{{.DockerRootDir}}"]).strip()
     except CommandError as e:
         return Engine(host, None, unmeasured(str(e)))
-    return Engine(host, root, docker_rows)
+    return Engine(host, root, lambda: docker_rows(root))
 
 
 def engine_root_rows(sizes: dict[str, int], root: str, engine: str = "Docker") -> list[Row]:
@@ -99,16 +102,70 @@ def engine_root_rows(sizes: dict[str, int], root: str, engine: str = "Docker") -
     return [Row(root, "leave", f"{engine}'s data; the {engine} rows measure it", alloc=b)] if b >= FLOOR else []
 
 
-def docker_rows() -> list[Row]:
+def docker_rows(root: str) -> list[Row]:
     """Rows for Docker images, volumes, build cache, and containers.
 
     The survey reads only local state; remove.py asks each registry before a
     pulled image goes.
     """
-    return [*image_rows(), *volume_rows(), *build_cache_rows(), *container_rows(), *stopped_container_rows()]
+    return [*image_rows(root), *volume_rows(), *build_cache_rows(), *container_rows(), *stopped_container_rows()]
 
 
-def image_rows() -> list[Row]:
+def docker_api(path: str) -> object:
+    return json.loads(run(["curl", "-sf", "--unix-socket", os.environ["DOCKER_HOST"].removeprefix("unix://"),
+                           f"http://docker{path}"]))
+
+
+def blob_sizes(root: str, image: dict, unpacked: list[int]) -> list[int]:
+    """The compressed size of each layer, base first, from the manifest in containerd's content store.
+
+    Under rootful Docker the manifest belongs to root, so each layer's
+    unpacked size is scaled by the image's content to unpacked ratio instead.
+    """
+    manifest = next((m for m in image.get("Manifests") or [] if m["Kind"] == "image" and m["Available"]), None)
+    if manifest is None:
+        return [0] * len(unpacked)
+    try:
+        with open(os.path.join(root, CONTENT_STORE, manifest["ID"].removeprefix("sha256:"))) as f:
+            blobs = [layer["size"] for layer in json.load(f)["layers"]]
+        if len(blobs) == len(unpacked):
+            return blobs
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    ratio = manifest["Size"]["Content"] / max(manifest["ImageData"]["Size"]["Unpacked"], 1)
+    return [round(b * ratio) for b in unpacked]
+
+
+def layer_index(root: str, images: list[dict]) -> LayerIndex:
+    """Docker's layer graph from each image's layers and history; raise ValueError when they do not line up.
+
+    `docker system df` prints an image's UniqueSize, which leaves out every
+    layer two images share, even when both go. The API names an image's
+    layers by diff id, base first, and its history lists the steps newest
+    first, one step with a size above 0 for each layer; that size is the
+    unpacked snapshot. The containerd image store also keeps each layer's
+    compressed blob (blob_sizes). A layer is keyed by the chain of diff ids
+    up to it, as containerd's chain id is.
+    """
+    parent, size, tops = {}, {}, {}
+    try:
+        for i in images:
+            diff_ids = docker_api(f"/images/{i['Id']}/json")["RootFS"].get("Layers") or []
+            unpacked = [h["Size"] for h in reversed(docker_api(f"/images/{i['Id']}/history")) if h["Size"] > 0]
+            if len(unpacked) != len(diff_ids):
+                raise ValueError(f"the history of `{i['Id'][7:19]}` has {len(unpacked)} sized steps "
+                                 f"for {len(diff_ids)} layers")
+            below = None
+            for diff_id, b, blob in zip(diff_ids, unpacked, blob_sizes(root, i, unpacked), strict=True):
+                layer = hashlib.sha256(f"{below} {diff_id}".encode()).hexdigest() if below else diff_id
+                parent[layer], size[layer], below = below, b + blob, layer
+            tops[i["Id"]] = (below,) if below else ()
+    except (CommandError, KeyError, TypeError, AttributeError) as e:
+        raise ValueError(f"the image API answered without the expected fields ({e!r})") from e
+    return LayerIndex(parent, size, tops, dict.fromkeys(tops, 0))
+
+
+def image_rows(root: str) -> list[Row]:
     """Unused pulled and untagged images as delete groups, and every other unused image as a look row.
 
     An image is pulled when its index lists a platform whose content is not
@@ -123,39 +180,42 @@ def image_rows() -> list[Row]:
     goes in group:docker-untagged unless a running agent named it; nothing
     refers to it by name, and remove.py asks the registry for its digest
     first. An untagged image without a digest has no registry copy, so it
-    stays on look.
+    stays on look. A delete entry's size is its share of what removing both
+    groups frees; a look row's size is its share of what removing every
+    unused image frees.
     """
-    use = {i["ID"]: (int(i["Containers"] or 0), si_bytes(i["UniqueSize"])) for i in docker_df()["Images"] or []}
-    images = json.loads(run(["curl", "-sf", "--unix-socket", os.environ["DOCKER_HOST"].removeprefix("unix://"),
-                             "http://docker/images/json?manifests=1"]))
+    containers = {i["ID"]: int(i["Containers"] or 0) for i in docker_df()["Images"] or []}
+    images = docker_api("/images/json?manifests=1")
     pulled, untagged, builds = {}, {}, []
     for i in images:
-        containers, b = use.get(i["Id"], (1, 0))
-        if containers:
+        if containers.get(i["Id"], 1):
             continue
         ref = next(iter(i.get("RepoTags") or i.get("RepoDigests") or []), i["Id"][7:19])
         if untagged_image(i) and i.get("RepoDigests") and 0 < i["Created"] <= time.time() - RECENT:
-            untagged[ref] = (i, b)
+            untagged[ref] = i
         elif any(not m["Available"] for m in i.get("Manifests") or []):
-            pulled[ref] = b
+            pulled[ref] = i["Id"]
         else:
-            builds.append((ref, i, b))
-    rows = [Row("group:docker-images", "delete", "unused pulled images; `docker pull` brings each back",
-                how="docker-image", members=pulled, alloc=sum(pulled.values()), frees=sum(pulled.values()),
-                bound=True)] if pulled else []
-    named = session_mentions([*untagged, *(ref for ref, *_ in builds)])
+            builds.append((ref, i))
+    named = session_mentions([*untagged, *(ref for ref, _ in builds)])
+    old = {ref: i["Id"] for ref, i in untagged.items() if ref not in named}
+    try:
+        index = layer_index(root, images)
+        unused = [*pulled.values(), *(i["Id"] for i in untagged.values()), *(i["Id"] for _, i in builds)]
+        look_parts, parts = shares(index, unused), shares(index, [*pulled.values(), *old.values()])
+    except ValueError as e:
+        return [Row("Docker images", "look", f"the layer graph could not be read ({e}); not measured")]
+    rows = group_rows(parts, [
+        ("group:docker-images", "docker-image", pulled, "unused pulled images; `docker pull` brings each back"),
+        ("group:docker-untagged", "docker-untagged", old,
+         ("untagged images no container uses, made 24+ h ago; nothing names them, "
+          "and a pull by digest brings each back"))])
     rows += [Row(f"Docker image `{ref}`", "look",
-                 f"untagged image made {day(i['Created'])}; no container uses it; {named[ref]}", alloc=b)
-             for ref, (i, b) in untagged.items() if ref in named]
-    old = {ref: b for ref, (_, b) in untagged.items() if ref not in named}
-    if old:
-        rows.append(Row("group:docker-untagged", "delete",
-                        "untagged images no container uses, made 24+ h ago; nothing names them, "
-                        "and a pull by digest brings each back",
-                        how="docker-untagged", members=old, alloc=sum(old.values()), frees=sum(old.values()),
-                        bound=True))
-    for ref, i, b in builds:
-        rows.append(Row(f"Docker image `{ref}`", "look", build_evidence(ref, i, named.get(ref)), alloc=b))
+                 f"untagged image made {day(i['Created'])}; no container uses it; {named[ref]}",
+                 alloc=look_parts[i["Id"]])
+             for ref, i in untagged.items() if ref in named]
+    rows += [Row(f"Docker image `{ref}`", "look", build_evidence(ref, i, named.get(ref)), alloc=look_parts[i["Id"]])
+             for ref, i in builds]
     return rows
 
 
