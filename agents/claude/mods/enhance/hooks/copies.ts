@@ -19,7 +19,7 @@ type CopyPlan = {
 }
 
 const COPY_MODEL = 'claude-sonnet-5-5'
-const DENIED_TOOLS = 'Edit,Write,NotebookEdit,AskUserQuestion'
+const DENIED_TOOLS = 'Edit,Write,NotebookEdit,AskUserQuestion,WebFetch'
 const COPY_PERMISSION_MODE = 'bypassPermissions'
 const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfPrompting":true},"env":{"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS":"1"}}'
 const SCRATCH_ROOT = '/tmp/agents'
