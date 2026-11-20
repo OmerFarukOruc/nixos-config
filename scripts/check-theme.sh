@@ -78,10 +78,11 @@ pointer's spicetify-colors.css fact, that Pywalfox's colors.json lists the schem
 order, and that the Cursor editor's settings.json selects the Oruc Base16
 theme of the scheme's dark or light variant. `oruc-app-settings --check` then
 checks that every settings file the switch sets, such as ~/.codex/config.toml,
-Brave's Preferences or jadx's gui.json, holds the scheme's values; while an
+Chromium's Preferences or jadx's gui.json, holds the scheme's values; while an
 app that writes its own settings runs, the switch leaves them alone, and the
-script prints a skip line for it. A browser waits per profile, so a closed
-profile must hold the values while another profile runs.
+script prints a skip line for it. Chromium waits only on the SingletonLock of
+~/.config/chromium, so its Default profile must hold the values even while a
+Chromium started with another --user-data-dir runs.
 
 It switches back to the scheme that was active, and exits 1 at the first
 failed check, naming it.

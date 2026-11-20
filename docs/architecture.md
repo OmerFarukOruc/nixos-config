@@ -559,21 +559,21 @@ values or a fact's JSON into the app's JSON, TOML, INI or `user.js` file, or
 copies a pack file. A path may hold `{vault}`, each vault in Obsidian's vault
 list, or `{profile}`, the default profile of a Mozilla `profiles.ini`. An app
 that writes its settings file itself would overwrite the change, so the tool
-leaves that file alone while the app runs and prints `theme: <app> runs`;
-an entry marked `live` is a file the app only reads, written at once. It finds
-an app by its executable's package name and path in any store path, or a
-command line pattern for one started by an interpreter, so a process still
-running from an older store path counts too. A Codex `app-server` or opencode
-`serve` process and its children do not count, because such a background
-server writes the file only for a client. A file with a `lock` waits only while
-that Chromium `SingletonLock` names another host or a running process of the
-app, so each browser profile waits on its own lock, and a lock left by a crash
-holds nothing. The tool compares parsed values, so an app that writes the same
-settings in its own layout leaves nothing to change. It reports a file it
-cannot parse and still writes the others. `oruc-app-settings --check` exits 1
-when a file's values differ from what the stored scheme sets. `settings_file.py` holds the TOML merge and the
-write through a temporary file that keeps the file's mode, for this tool and
-herdr's.
+leaves that file alone while the app runs and prints `theme: <app> runs`; an
+entry marked `live` is a file the app only reads, written at once. It finds an
+app by its executable's package name and path in any store path, or a command
+line pattern for one started by an interpreter, so a process still running from
+an older store path counts too. A Codex `app-server` or opencode `serve`
+process and its children do not count, because such a background server writes
+the file only for a client. A file with a `lock` waits only while that Chromium
+`SingletonLock` names another host or a running process of the app, so a
+Chromium started with another `--user-data-dir` does not hold it, and a lock
+left by a crash holds nothing. The tool compares parsed values, so an app that
+writes the same settings in its own layout leaves nothing to change. It reports
+a file it cannot parse and still writes the others. `oruc-app-settings --check`
+exits 1 when a file's values differ from what the stored scheme sets.
+`settings_file.py` holds the TOML merge and the write through a temporary file
+that keeps the file's mode, for this tool and herdr's.
 
 `home-manager/modules/app-themes.nix`, which the personal profile imports,
 themes the desktop apps through the same tool. Konsole's default profile
@@ -618,13 +618,15 @@ switch once it has loaded this one.
 a policy that installs it, and its native host. The reload `pywalfox` writes
 `~/.cache/wal/colors.json` from the pack's `pywal-colors` fact and
 `oruc-wallpaper-path`, sets Pywalfox's dark or light mode and tells a running
-Firefox to read the colours again. Brave and Chromium follow the
-desktop's colours, because their `Preferences` set
-`extensions.theme.system_theme` to Qt (2) on a host with Plasma, whose KDE
-colours they then follow at once, and to GTK (1) elsewhere, whose colours
-apply at their next start; `oruc-app-settings` writes it, with an empty
-`extensions.theme.id`, which Chromium requires for that mode, while the
-browser is closed. In Qt mode Brave Origin 1.98 paints the tab strip with
+Firefox to read the colours again. Chromium follows the desktop's colours,
+because its `Preferences` set `extensions.theme.system_theme` to Qt (2) on a
+host with Plasma, whose KDE colours it then follows at once, and to GTK (1)
+elsewhere, whose colours apply at its next start; `oruc-app-settings` writes
+it, with an empty `extensions.theme.id`, which Chromium requires for that mode,
+while the browser is closed. Brave keeps the theme chosen at
+brave://settings/appearance, and nothing here writes it; a profile that `theme`
+switches set to Qt or GTK earlier keeps that mode until a theme is picked
+there. With its theme set to Qt, Brave Origin 1.98 paints the tab strip with
 the `[WM]` `inactiveBackground` (base00), the toolbar and active tab with the
 Button background, and the active tab title and toolbar icons with the Window
 text. `plasma-looks/kde-color-scheme.nix` therefore mixes base00 toward base05
@@ -694,14 +696,15 @@ These stay fixed on purpose, and the check does not cover them:
   because asusd reads it from a system file (`machines/nixos-rog/asus.nix`).
   nixos-desktop's case lights show the fixed `openrgb-boot` profile. `theme`
   changes neither.
-- Brave on other devices keeps its synced theme colour; on these PCs Brave
-  draws with the desktop's Qt or GTK colours instead. `nixosModules/brave.nix` writes Brave's
-  settings as policies, which Brave Origin reads from `/etc/brave/policies`. The
-  recommended policies set the values a new profile starts with, and the
-  settings page can still change them. Notification permissions and the theme
-  color are managed-only policies, and Brave Sync carries them, so they stay
-  in the profile. The one managed policy, `IdleDetectionAllowedForUrls`, lets
-  Teams use the Idle Detection API, a permission that does not sync.
+- Brave keeps the theme chosen in its settings, and Brave Sync's theme colour,
+  on every device; `theme` does not change it. `nixosModules/brave.nix` writes
+  Brave's settings as policies, which Brave Origin reads from
+  `/etc/brave/policies`. The recommended policies set the values a new profile
+  starts with, and the settings page can still change them. Notification
+  permissions and the theme color are managed-only policies, and Brave Sync
+  carries them, so they stay in the profile. The one managed policy,
+  `IdleDetectionAllowedForUrls`, lets Teams use the Idle Detection API, a
+  permission that does not sync.
 - The ChatGPT app's code view takes the nearest of its built-in code themes,
   so its syntax colors are the built-in theme's, not the scheme's.
 

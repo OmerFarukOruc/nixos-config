@@ -47,17 +47,6 @@ let
   };
   qtMode = 2;
   gtkMode = 1;
-  systemTheme.extensions.theme = {
-    id = "";
-    system_theme = if sessions.hasDesktop osConfig.oruc.machine "plasma" then qtMode else gtkMode;
-  };
-  chromiumPreferences = dir: {
-    path = "${config.xdg.configHome}/${dir}/Default/Preferences";
-    lock = "${config.xdg.configHome}/${dir}/SingletonLock";
-    format = "json";
-    values = systemTheme;
-    create = false;
-  };
 in
 {
   config = lib.mkIf (sessions.hasGraphicalUser osConfig.oruc.machine) {
@@ -67,16 +56,6 @@ in
     oruc.variantReloads.pywalfox = lib.getExe pywalfox;
 
     oruc.appSettings = {
-      brave = {
-        label = "Brave";
-        executables = [
-          {
-            package = "brave-origin";
-            path = "opt/brave.com/brave-origin/brave";
-          }
-        ];
-        files = [ (chromiumPreferences "BraveSoftware/Brave-Origin") ];
-      };
       chromium = {
         label = "Chromium";
         executables = [
@@ -85,7 +64,18 @@ in
             path = "libexec/chromium/chromium";
           }
         ];
-        files = [ (chromiumPreferences "chromium") ];
+        files = [
+          {
+            path = "${config.xdg.configHome}/chromium/Default/Preferences";
+            lock = "${config.xdg.configHome}/chromium/SingletonLock";
+            format = "json";
+            values.extensions.theme = {
+              id = "";
+              system_theme = if sessions.hasDesktop osConfig.oruc.machine "plasma" then qtMode else gtkMode;
+            };
+            create = false;
+          }
+        ];
       };
     };
   };
