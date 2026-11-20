@@ -245,7 +245,8 @@ It runs on a PC, where the Infisical CLI has Omer's login; devbox's
 `/login-code`. `login-code --help` lists the options;
 `--pattern` takes the code's regular expression when it is not 6 digits.
 
-Setup, once:
+Setup, once. Until step 2 has run, the folder `/login-code` does not exist, so the
+`infisical run` above fails and the agent asks Omer for the code:
 
 1. Create the login-code mailbox, a Google account with 2-Step Verification
    on, and an app password for it.
