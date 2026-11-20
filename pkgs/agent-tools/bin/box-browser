@@ -6,15 +6,16 @@
 #       Omer's Brave: this host's Brave Origin
 #   box-browser [--session NAME] [--on HOST] --app ACCOUNT COMMAND...
 #       the Grok Bot app signed in to ACCOUNT (personal or company), found like the box browser; its sessions share
-#       the app's one window
+#       the app's one window. The app starts with the first command and stops after 30 min with no connection.
 #   box-browser [--on HOST] [--app ACCOUNT] status
+#   box-browser [--on HOST] --app ACCOUNT start
 # The session is NAME, else AGENT_BROWSER_SESSION, else CLAUDE_CODE_SESSION_ID, else CODEX_THREAD_ID.
 # On the box browser, `close` closes the session's tab, then ends the session.
 # The first --brave call of a session waits up to 10 min for Omer to click Allow in Brave. Write `close` as the first
 # word of COMMAND, so it skips that wait.
 set -euo pipefail
 
-usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
 fail_usage() {
   usage >&2
   exit 2
@@ -176,8 +177,35 @@ command_name() {
   done
 }
 
+app_devtools() {
+  curl --silent --fail --max-time 1 --output /dev/null "http://127.0.0.1:$cdp_port/json/version"
+}
+
+# Records the use for the idle check, starts the app unless it runs, and waits for DevTools.
+start_app() {
+  local unit=${box_units[-1]}.service
+  grok-bot-box-idle used "$app"
+  if ! systemctl --user is-active --quiet "$unit"; then
+    systemctl --user start "$unit" || {
+      echo "box-browser: the $box_name did not start; read journalctl --user -u $unit" >&2
+      exit 1
+    }
+  fi
+  for _ in {1..150}; do
+    if app_devtools; then return 0; fi
+    sleep 0.2
+  done
+  echo "box-browser: the $box_name runs, but DevTools did not answer on 127.0.0.1:$cdp_port" >&2
+  exit 1
+}
+
 box_status() {
   local failed=0 unit
+  if [[ -n $app ]] && ! systemctl --user is-active --quiet "${box_units[@]/%/.service}" &&
+    ! systemctl --user is-failed --quiet "${box_units[@]/%/.service}"; then
+    echo "$box_name: stopped; the next command for this account starts it"
+    return 0
+  fi
   for unit in "${box_units[@]}"; do
     if systemctl --user is-active --quiet "$unit.service"; then
       echo "$unit: active"
@@ -217,13 +245,10 @@ brave_ws() {
 }
 
 if ! $brave; then
-  if [[ $1 == status ]]; then
-    if local_box; then
-      use_app_port
-      box_status
-    else
-      remote_box "${target[@]}" status
-    fi
+  if [[ $1 == status || (-n $app && $1 == start) ]]; then
+    if ! local_box; then remote_box "${target[@]}" "$1"; fi
+    use_app_port
+    if [[ $1 == start ]]; then start_app; else box_status; fi
     exit
   fi
   need_session
@@ -235,7 +260,12 @@ if ! $brave; then
   if [[ -n $app ]]; then
     use_app_port
     unset AGENT_BROWSER_PIN_TAB
-    export AGENT_BROWSER_SESSION=app_${app}_$session AGENT_BROWSER_CDP=$cdp_port
+    export AGENT_BROWSER_SESSION=app_${app}_$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_IDLE_TIMEOUT_MS=600000
+    if [[ $(command_name "$@") != close ]]; then
+      start_app
+      # DevTools answers before the app has drawn its window.
+      agent-browser wait --fn 'document.querySelector("main") !== null' > /dev/null
+    fi
     exec agent-browser "$@"
   fi
   export AGENT_BROWSER_SESSION=$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_PIN_TAB=1

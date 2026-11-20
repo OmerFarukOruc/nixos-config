@@ -42,6 +42,7 @@ box-browser [--session NAME] [--on HOST] COMMAND...                  # box brows
 box-browser [--session NAME] --brave COMMAND...                      # Omer's Brave
 box-browser [--session NAME] [--on HOST] --app ACCOUNT COMMAND...    # Grok Bot app of that account
 box-browser [--on HOST] [--app ACCOUNT] status                       # units and DevTools
+box-browser [--on HOST] --app ACCOUNT start                          # start that account's app
 ```
 
 COMMAND is an agent-browser command, such as `open <url>` or `snapshot -i`.
@@ -66,7 +67,9 @@ the host runs `grok-bot-box-<account>.service`, else devbox's over SSH. The
 session runs as `app_<account>_<session>`, apart from the same agent's box
 browser session, and a session name that starts with `app_` exits 2. The app has one window and no tabs, so its sessions share that
 window and nothing is pinned, and `close` ends the session and leaves the app
-running. `--app` with `--brave` exits 2.
+running. Every command but `close` starts the app when it is stopped and
+waits for its page ([Grok Bot app](#grok-bot-app)); `start` does only that,
+and `box-view --app` calls it. `--app` with `--brave` exits 2.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
 installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
@@ -132,7 +135,8 @@ opened first.
 `nixosModules/grok-bot-box.nix` holds the units, and the app is the package the
 PCs install (`pkgs/grok-bot.nix`).
 
-Each account gets three user units:
+Each account gets three user units, and an idle check
+(`grok-bot-idle-<account>.timer` and `.service`) beside them:
 
 | Unit | Runs | personal | company |
 |---|---|---|---|
@@ -154,8 +158,27 @@ Each account gets three user units:
   `XDG_CONFIG_HOME` to `~/.local/share/grok-bot-box/<account>`, and the two
   instances run side by side, each with its own login. The login survives a
   restart of the app with `--password-store=basic`, with no keyring.
-- Linger keeps the units running without a login, each restarts on failure,
-  and a restart of a display restarts its window manager and its app.
+- No unit starts at boot. The first `box-browser --app <account>` command or
+  `box-view --app <account>` starts that account's app unit, which pulls in
+  its display, its window manager and `grok-bot-idle-<account>.timer`; a start
+  took under 10 s on devbox on 2026-11-20 and kept the login. Every 5 minutes
+  the timer runs `grok-bot-box-idle check`, which stops the display, and with
+  it the window manager, the app and the timer, once the account has been
+  unused for 30 minutes. `$XDG_RUNTIME_DIR/grok-bot-box/<account>.used` holds
+  the time of the last use: every `box-browser --app` call sets it
+  (`grok-bot-box-idle used`), and so does a check that finds a connection to
+  the VNC port or the DevTools port. A check that stops the display removes
+  the file, and a missing file counts as used now. The check samples the two
+  ports instead of proxying them, because one display has two ports and
+  `systemd-socket-proxyd --exit-idle-time` watches one. A bot and
+  its routines run on the vendor's servers, so a stopped app stops nothing of
+  theirs. An agent's session counts as a connection until `close`, or until
+  agent-browser ends it after 10 idle minutes
+  (`AGENT_BROWSER_IDLE_TIMEOUT_MS`, which the command sets).
+- Linger keeps a started unit running after the SSH login that started it
+  ends. While running, each unit restarts on failure, and a restart of a
+  display restarts its window manager and its app. The app unit stops with
+  `SIGINT`, because the app dumps core on `SIGTERM`.
 - `box-view --app <account>` (and the menu entries "Grok Bot on devbox:
   personal" and "Grok Bot on devbox: company", on nixos-desktop and
   nixos-rog) opens the viewer on that account's display on devbox, through the
@@ -177,7 +200,8 @@ on; that choice is Omer's.
 
 ```sh
 box-browser --app company snapshot -i     # the app's controls
-box-browser --app company status          # the three units and DevTools
+box-browser --app company status          # the three units and DevTools, or "stopped"
+box-browser --app company start           # start it and wait for DevTools, with no session
 box-view --app company                    # the app's window, on a PC
 ```
 
@@ -347,11 +371,13 @@ is missing from `oruc.ownerLoopbackPorts`, and when a Grok Bot unit takes
 DevTools off `127.0.0.1`, runs on a display that is not its own `-localhost`
 Xvnc with `-SecurityTypes None`, shares a port or its profile folder with the
 other unit, or uses a port that the list or its `/etc/grok-bot-box` file does
-not name. The boot test turns `features.grokBotBox` off
+not name, when a target wants one of an account's units or its timer, which
+would start it at boot, or when the app unit does not want its idle timer or
+that timer does not stop with the display. The boot test turns `features.grokBotBox` off
 (`ci/server-boot/modules/grok-bot-box.nix`), because its VM has 1024 MB and
 the two apps held 842 MB while idle on devbox on 2026-11-20 (the `Pss` lines of
 `/proc/<pid>/smaps_rollup` summed over their processes, which counts shared
 memory once; systemd's `MemoryCurrent` showed 182 MB and 191 MB for the two app
 units, with peaks of 350 MB and 282 MB), so the Grok Bot units are checked on devbox
-after a deploy: `box-browser --app personal status` and `box-browser --app
-company status`.
+after a deploy: `box-browser --app <account> start` starts an account, and
+`box-browser --app <account> status` then shows its three units and DevTools.

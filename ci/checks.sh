@@ -193,9 +193,9 @@ box_browser_host() {
   }
   jq -e '.userUnits as $units | .grokBotAccounts
     | (map("grok-bot-box-" + .) | sort) == ($ARGS.named.bots | keys)
-      and all(.[]; . as $a | ["display", "wm", "box"] | all(.[]; . as $kind | $units | index("grok-bot-\($kind)-\($a)") != null))' \
+      and all(.[]; . as $a | ["display", "wm", "box", "idle"] | all(.[]; . as $kind | $units | index("grok-bot-\($kind)-\($a)") != null))' \
     --argjson bots "$(jq -c '.grokBots' <<<"$record")" <<<"$record" >/dev/null || {
-    echo "$host: a host with features.grokBotBox must have the display, window manager and app unit of each account in nixosModules/grok-bot-accounts.nix, and no other Grok Bot app unit." >&2
+    echo "$host: a host with features.grokBotBox must have the display, window manager, app and idle check unit of each account in nixosModules/grok-bot-accounts.nix, and no other Grok Bot app unit." >&2
     return 1
   }
   jq -e '.ownerLoopbackPorts as $owned | (.grokBots | length) as $units
@@ -208,11 +208,11 @@ box_browser_host() {
             guarded: ((.command | test("(^| )--remote-debugging-address=127\\.0\\.0\\.1( |$)"))
               and (.displayCommand | contains(" -localhost ") and contains(" -nolisten tcp ") and contains(" -SecurityTypes None"))
               and .environment.DISPLAY == $display and .environment.XAUTHORITY == $auth
-              and ([$port, $vnc] - $owned == []) and .portFile == "\($port)\n")}]
+              and ([$port, $vnc] - $owned == []) and .portFile == "\($port)\n" and .startedAtBoot == [] and .idleCheckArmed)}]
     | length == $units and all(.guarded) and ([.[] | .port, .vnc] | unique | length) == 2 * length
       and (map(.profile) | unique | length) == length and (map(.display) | unique | length) == length' \
     <<<"$record" >/dev/null || {
-    echo "$host: each Grok Bot unit must run on an Xvnc display of its own that is -localhost and -nolisten tcp with -SecurityTypes None, keep DevTools on 127.0.0.1, name its VNC and DevTools ports in oruc.ownerLoopbackPorts and its DevTools port in its /etc/grok-bot-box file, and keep a profile folder of its own." >&2
+    echo "$host: each Grok Bot unit must run on an Xvnc display of its own that is -localhost and -nolisten tcp with -SecurityTypes None, keep DevTools on 127.0.0.1, name its VNC and DevTools ports in oruc.ownerLoopbackPorts and its DevTools port in its /etc/grok-bot-box file, keep a profile folder of its own, start on demand, with no unit or timer of its account wanted by a target, and want its idle timer, which stops with its display." >&2
     return 1
   }
 }

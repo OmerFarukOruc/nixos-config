@@ -33,6 +33,19 @@ builtins.mapAttrs
           inherit (unit) environment;
           displayCommand = config.systemd.user.services."grok-bot-display-${account}".serviceConfig.ExecStart;
           portFile = config.environment.etc."grok-bot-box/${account}.port".text;
+          startedAtBoot =
+            builtins.concatMap (kind: config.systemd.user.services."grok-bot-${kind}-${account}".wantedBy) [
+              "display"
+              "wm"
+              "box"
+              "idle"
+            ]
+            ++ config.systemd.user.timers."grok-bot-idle-${account}".wantedBy;
+          idleCheckArmed =
+            builtins.elem "grok-bot-idle-${account}.timer" unit.wants
+            &&
+              builtins.elem "grok-bot-display-${account}.service"
+                config.systemd.user.timers."grok-bot-idle-${account}".partOf;
         }
       ) grokBots;
       desktop = sessions.hasAnyDesktop config.oruc.machine;

@@ -23,6 +23,7 @@ let
       pkgs.libnotify
       pkgs.openssh
       pkgs.tigervnc
+      (pkgs.callPackage ../../pkgs/agent-tools.nix { })
     ];
     text = ''
       usage() {
@@ -71,8 +72,18 @@ let
         exit 2
       }
       display="127.0.0.1::$port"
+      remote=false
+      if [[ $host != local && $host != "$(uname -n)" ]]; then remote=true; fi
 
-      if [[ $host != local && $host != "$(uname -n)" ]]; then
+      if [[ -n $app ]]; then
+        box-browser --on "$host" --app "$app" start || {
+          echo "box-view: the Grok Bot app for the account $app did not start on $host." >&2
+          notify-send --app-name=box-view --icon=dialog-error "$title" "The app did not start on $host." || true
+          exit 1
+        }
+      fi
+
+      if $remote; then
         tunnel_dir=$(mktemp -d "''${XDG_RUNTIME_DIR:?}/box-view.XXXXXX")
         display=$tunnel_dir/vnc.sock
         ssh -N -o ExitOnForwardFailure=yes -o BatchMode=yes -o ConnectTimeout=10 \
