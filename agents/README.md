@@ -66,6 +66,18 @@ Private values stay out of these files ([Checks](#checks)). The Infisical projec
 - Retry runs the same draft again, and Details opens the pane with the whole reason, the copy's reply when it sent one, and Retry and Dismiss.
 - `ctrl+x tab` moves the keyboard to the row or the pane, Tab walks the buttons, and Enter presses one.
 
+### Install enhance on another machine
+
+`.claude-plugin/marketplace.json` at the root of this repository lists `enhance`, so anyone installs it in a Claude Code terminal session with one line:
+
+```
+/plugin install enhance --marketplace OmerFarukOruc/nixos-config
+```
+
+Claude Code asks to add the marketplace (`y`), then for a scope (the user scope, Enter). `claude plugin update enhance@oruc` fetches a later version. The mod carries the `enhance-prompt` skill as `skills/enhance-prompt`, a link to `agents/skills/enhance-prompt`, so the install brings the skill and `/enhance-prompt` works without a copy in `~/.claude/skills`.
+
+The mod needs Linux or macOS, an account that can run Sonnet 5.5, and a network path to `platform.claude.com`, where the skill reads the prompting guide. Each `/enhance` starts a `claude -p` copy in bypass permissions mode, as the `enhance` entry above describes.
+
 ## Edit loop
 
 - Edit `agents/` in the main checkout (`~/Desktop/workspace/nixos-config`, the option `oruc.agents.checkout`), commit to `main` there, then run `git pull --rebase` and `git push origin main`. Every other path of this repository still needs a worktree. The pull unit below sets `git config agents.mainCheckoutEditPaths agents/` in the checkout, and Claude Code's edit guard allows the main checkout only for those paths.

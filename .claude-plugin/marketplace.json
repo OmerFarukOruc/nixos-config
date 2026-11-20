@@ -1,0 +1,11 @@
+{
+  "name": "oruc",
+  "owner": { "name": "Omer Faruk Oruc" },
+  "plugins": [
+    {
+      "name": "enhance",
+      "source": "./agents/claude/mods/enhance",
+      "description": "Adds /enhance <draft>, which rewrites a rough request into a prompt with the bundled enhance-prompt skill and puts it in the prompt box"
+    }
+  ]
+}

@@ -184,6 +184,8 @@ deploy.sh              the deploy with build, confirm and rollback
 secrets/  .sops.yaml   sops-encrypted values and their recipients
 docs/                  operating guides and the architecture
 assets/                screenshots and wallpapers
+agents/                the rules, skills, hooks and Claude Code mods of the agent CLIs
+.claude-plugin/        the plugin marketplace file; it lists the enhance mod (/plugin install enhance --marketplace OmerFarukOruc/nixos-config)
 AGENTS.md  GLOSSARY.md agent rules; domain terms and SSH aliases
 ```
 
