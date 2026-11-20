@@ -55,7 +55,9 @@ browser's, and a session name that starts with `brave_` exits 2.
 
 Without `--brave`, the command drives this host's box browser when the host
 runs `box-browser.service`, and devbox's over `ssh devbox` otherwise; `--on`
-names another host, such as `--on devbox` from a PC. A file a box browser
+names another host, such as `--on devbox` from a PC. A command that arrives
+over SSH without `XDG_RUNTIME_DIR` gets `/run/user/<uid>` for its
+`systemctl --user` and `grok-bot-box-idle` calls. A file a box browser
 writes, such as a screenshot, stays on the host that runs it. With `--brave`,
 it drives this host's Brave Origin; it refuses `--on`, and it fails on a host
 with no desktop session, such as devbox. The first `--brave` call of a session
@@ -165,8 +167,8 @@ Each account gets three user units, and an idle check
   the timer runs `grok-bot-box-idle check`, which stops the display, and with
   it the window manager, the app and the timer, once the account has been
   unused for 30 minutes. `$XDG_RUNTIME_DIR/grok-bot-box/<account>.used` holds
-  the time of the last use: every `box-browser --app` call sets it
-  (`grok-bot-box-idle used`), and so does a check that finds a connection to
+  the time of the last use: every `box-browser --app` call but `status` and
+  `close` sets it (`grok-bot-box-idle used`), and so does a check that finds a connection to
   the VNC port or the DevTools port. A check that stops the display removes
   the file, and a missing file counts as used now. The check samples the two
   ports instead of proxying them, because one display has two ports and

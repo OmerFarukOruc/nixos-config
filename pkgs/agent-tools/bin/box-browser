@@ -181,12 +181,25 @@ app_devtools() {
   curl --silent --fail --max-time 1 --output /dev/null "http://127.0.0.1:$cdp_port/json/version"
 }
 
+# A command sent over SSH can arrive without XDG_RUNTIME_DIR, which `systemctl --user` and grok-bot-box-idle need.
+user_env() { XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)} "$@"; }
+
+need_user_manager() {
+  local runtime
+  runtime=$(user_env printenv XDG_RUNTIME_DIR)
+  [[ -S $runtime/systemd/private ]] || {
+    echo "box-browser: $(uname -n) runs no user manager for $(id -un) ($runtime/systemd/private is missing)" >&2
+    exit 1
+  }
+}
+
 # Records the use for the idle check, starts the app unless it runs, and waits for DevTools.
 start_app() {
   local unit=${box_units[-1]}.service
-  grok-bot-box-idle used "$app"
-  if ! systemctl --user is-active --quiet "$unit"; then
-    systemctl --user start "$unit" || {
+  need_user_manager
+  user_env grok-bot-box-idle used "$app"
+  if ! user_env systemctl --user is-active --quiet "$unit"; then
+    user_env systemctl --user start "$unit" || {
       echo "box-browser: the $box_name did not start; read journalctl --user -u $unit" >&2
       exit 1
     }
@@ -200,14 +213,15 @@ start_app() {
 }
 
 box_status() {
+  need_user_manager
   local failed=0 unit
-  if [[ -n $app ]] && ! systemctl --user is-active --quiet "${box_units[@]/%/.service}" &&
-    ! systemctl --user is-failed --quiet "${box_units[@]/%/.service}"; then
+  if [[ -n $app ]] && ! user_env systemctl --user is-active --quiet "${box_units[@]/%/.service}" &&
+    ! user_env systemctl --user is-failed --quiet "${box_units[@]/%/.service}"; then
     echo "$box_name: stopped; the next command for this account starts it"
     return 0
   fi
   for unit in "${box_units[@]}"; do
-    if systemctl --user is-active --quiet "$unit.service"; then
+    if user_env systemctl --user is-active --quiet "$unit.service"; then
       echo "$unit: active"
     else
       echo "$unit: not active" >&2
