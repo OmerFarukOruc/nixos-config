@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
-import { foldBytes, parseHeadless, parseReply, readerAt } from '../hooks/reply'
-import type { TurnState } from '../hooks/reply'
-import { API_ERROR, HEADLESS_ERROR, HEADLESS_OK, INTERRUPT, SESSION } from './fixtures'
+import { HEADLESS_START, headlessResultOf, parseReply, readHeadless } from '../hooks/reply'
+import type { HeadlessResult } from '../hooks/reply'
+import { ERROR_STREAM, FORK_STREAM } from './fixtures'
 
 test('/enhance with no draft starts nothing', async ($, on) => {
   let started = 0
@@ -32,12 +32,30 @@ test('/enhance with no draft starts nothing', async ($, on) => {
   expect(toasts.length).toBe(1)
 })
 
-test('a claude -p result gives its text, and an error result gives its message', () => {
-  expect(parseHeadless(HEADLESS_OK)).toEqual({ kind: 'answered', text: 'ok' })
-  const failed = parseHeadless(`[claude-code:unrecognized_model] noise on stdout\n${HEADLESS_ERROR}`)
-  expect(failed.kind).toBe('failed')
+function resultOf(stream: string, pieceSize: number): HeadlessResult {
+  let reader = HEADLESS_START
+  for (let at = 0; at < stream.length; at += pieceSize) {
+    reader = readHeadless(reader, stream.slice(at, at + pieceSize))
+  }
+
+  return headlessResultOf(reader)
+}
+
+test('the reply is the result of the prompt, not of a task notification before or after it', () => {
+  const lines = FORK_STREAM.split('\n')
+  const [notice, noticeResult] = lines
+  for (const pieceSize of [7, 1000, FORK_STREAM.length + 100]) {
+    expect(resultOf(FORK_STREAM, pieceSize)).toEqual({ kind: 'answered', text: 'ok' })
+    expect(resultOf(`${FORK_STREAM}\n`, pieceSize)).toEqual({ kind: 'answered', text: 'ok' })
+    expect(resultOf([...lines, notice, noticeResult].join('\n'), pieceSize)).toEqual({ kind: 'answered', text: 'ok' })
+    expect(resultOf(lines.slice(0, 3).join('\n'), pieceSize).kind).toBe('failed')
+  }
+})
+
+test('an error result fails the run with its message, and a run with no output fails', () => {
+  const failed = resultOf(`[claude-code:unrecognized_model] noise on stdout\n${ERROR_STREAM}`, 64)
   expect(failed.kind === 'failed' && failed.reason.includes('claude-nonexistent-9')).toBe(true)
-  expect(parseHeadless('').kind).toBe('failed')
+  expect(resultOf('', 64).kind).toBe('failed')
 })
 
 test('the one paste block is the prompt and the rest are notes', () => {
@@ -74,37 +92,4 @@ test('a question block gives the question and its options', () => {
     options: ['inbox', 'threadsift'],
   })
   expect(parseReply('```question\nWhich login page?\n```')).toEqual({ kind: 'question', question: 'Which login page?', options: [] })
-})
-
-const ROWS = SESSION.split('\n')
-
-function turnOf(rows: readonly (string | undefined)[]): TurnState {
-  return foldBytes(readerAt(0), new TextEncoder().encode(rows.map(row => `${row}\n`).join('')), null).turn
-}
-
-function turnAfter(rows: number): TurnState {
-  return turnOf(ROWS.slice(0, rows))
-}
-
-test('the reply is the last assistant text since the last prompt, once a turn_duration row with no pending work ends the turn', () => {
-  expect(turnAfter(3)).toEqual({ text: null, hasEnded: false, isApiError: false })
-  expect(turnAfter(5)).toEqual({ text: 'done', hasEnded: false, isApiError: false })
-  expect(turnAfter(6)).toEqual({ text: 'done', hasEnded: false, isApiError: false })
-  expect(turnAfter(7)).toEqual({ text: 'done', hasEnded: true, isApiError: false })
-  expect(turnAfter(8)).toEqual({ text: null, hasEnded: false, isApiError: false })
-  const retrying = 'The first launch failed because I added `isolation: remote`, which you did not ask for. Retrying without it.'
-  expect(turnAfter(11)).toEqual({ text: retrying, hasEnded: false, isApiError: false })
-  expect(turnAfter(14)).toEqual({ text: 'started', hasEnded: false, isApiError: false })
-  expect(turnAfter(15)).toEqual({ text: null, hasEnded: false, isApiError: false })
-  expect(turnAfter(17)).toEqual({ text: 'The background subagent finished and replied `ok`.', hasEnded: true, isApiError: false })
-  expect(turnOf([...ROWS, 'not json'])).toEqual(turnAfter(17))
-})
-
-test('an interrupted turn has no reply, and an API error row stops the turn with its message', () => {
-  expect(turnOf([...ROWS.slice(0, 5), INTERRUPT, ROWS[6]])).toEqual({ text: null, hasEnded: true, isApiError: false })
-  expect(turnOf([ROWS[0], API_ERROR])).toEqual({
-    text: "You've hit your 5-hour limit · resets 7:10pm (Europe/Istanbul)",
-    hasEnded: false,
-    isApiError: true,
-  })
 })

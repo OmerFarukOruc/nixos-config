@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-code'
 
-import type { Receiver, Run, RunOutcome, RunRecord, Seat, Session } from '../types'
-import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning, withDraftFile, withImagePaths } from './copies'
-import type { Cancel, Copy, CopyPlan } from './copies'
+import type { Receiver, Run, RunOutcome, RunRecord, Session } from '../types'
+import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
+import type { Cancel, Copy } from './copies'
 import { parseReply } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
@@ -40,14 +40,6 @@ async function isCurrent($: EngineInterface, me: ActiveRun): Promise<boolean> {
   return !me.cancel.isCancelled && state.kind === 'running' && state.runId === me.id
 }
 
-async function openCopy($: EngineInterface, plan: CopyPlan): Promise<Copy> {
-  if ((await $.env.get('HERDR_ENV')) === '1') {
-    return herdrCopy($, plan, 'beside-session')
-  }
-
-  return (await isHerdrRunning($)) ? herdrCopy($, plan, 'new-workspace') : headlessCopy($, plan)
-}
-
 async function ask($: EngineInterface, question: string, options: readonly string[]): Promise<string | null> {
   try {
     return options.length >= 2
@@ -82,11 +74,6 @@ async function converse($: EngineInterface, copy: Copy, copyId: string, brief: B
     }
     turn = await copy.send(`Answer: ${answer}`)
   }
-}
-
-async function recordSeat($: EngineInterface, me: ActiveRun, copyId: string, seat: Seat | null): Promise<void> {
-  const seated: Run = { kind: 'running', runId: me.id, copyId, seat }
-  await update($, run, cur => (cur.kind === 'running' && cur.runId === me.id ? seated : cur))
 }
 
 function restoreOf(boxText: string, fallback: string): string {
@@ -142,12 +129,10 @@ async function replyOf($: EngineInterface, me: ActiveRun, copyId: string, sessio
     throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
   }
   const brief = { model: session.model, receiver: session.receiver, draft: await withImagePaths($, session.id, draft) }
-  me.copy = await openCopy($, {
+  me.copy = headlessCopy($, {
     sessionId: copyId,
     parentId: session.receiver === 'this-conversation' ? session.id : null,
-    cwd: session.cwd,
     cancel: me.cancel,
-    onSeat: seat => recordSeat($, me, copyId, seat),
   })
 
   return converse($, me.copy, copyId, brief)
@@ -181,7 +166,7 @@ async function keepRecord($: EngineInterface, run: Finished): Promise<void> {
 async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft: string): Promise<void> {
   const run: Finished = { id: me.id, startedAt: null, session: null, draft, outcome: CANCELLED }
   try {
-    await setRun($, { kind: 'running', runId: me.id, copyId, seat: null })
+    await setRun($, { kind: 'running', runId: me.id, copyId })
     run.startedAt = await $.clock.now()
     run.session = await sessionOf($)
     run.outcome = await settle($, me, draft, await replyOf($, me, copyId, run.session, draft))
@@ -240,14 +225,11 @@ async function cleanUpLeftover($: EngineInterface): Promise<void> {
     return
   }
   try {
-    if (state.seat !== null && !(await closeSeat($, state.seat))) {
-      throw new Error(`herdr could not close the leftover copy's ${state.seat.kind} ${state.seat.id}; close it yourself`)
-    }
     await forgetCopy($, state.copyId)
+    await setRun($, IDLE)
   } catch (error) {
     $.ui.toast(reasonOf(error))
   }
-  await setRun($, IDLE)
 }
 
 async function transition<From extends Run>(

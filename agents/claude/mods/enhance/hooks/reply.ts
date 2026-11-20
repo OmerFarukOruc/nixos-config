@@ -3,37 +3,28 @@ export type Reply =
   | { kind: 'question'; question: string; options: string[] }
   | { kind: 'unusable'; reason: string }
 
-export type SlashCommand = { name: string; args: string }
-
 export type HeadlessResult = { kind: 'answered'; text: string } | { kind: 'failed'; reason: string }
 
-export type TurnState = { text: string | null; hasEnded: boolean; isApiError: boolean }
-
-export type TranscriptReader = { offset: number; unfinishedRow: readonly Uint8Array[]; turn: TurnState; sawCommand: boolean }
+export type HeadlessReader = { rest: string; result: HeadlessResult | null }
 
 type Block = { tag: string; body: string; start: number; end: number | null }
 
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const FENCE = /^ {0,3}(`{3,}|~{3,})[ \t]*(\S*)/
 const OPTION = /^- (.+)$/
-const SLASH_COMMAND = /^(\/[\w:-]+)(?:\s+([\s\S]*))?$/
-const PENDING_COUNTS = ['pendingBackgroundAgentCount', 'pendingWorkflowCount'] as const
-const NO_TURN: TurnState = { text: null, hasEnded: false, isApiError: false }
-const LINE_FEED = 0x0a
-const UTF8 = new TextDecoder()
 
 export function isSessionId(text: string): boolean {
   return SESSION_ID.test(text)
 }
 
-export function valueAt(value: unknown, path: readonly string[]): unknown {
+function valueAt(value: unknown, path: readonly string[]): unknown {
   return path.reduce<unknown>(
     (at, key) => (typeof at === 'object' && at !== null && key in at ? (at as Record<string, unknown>)[key] : undefined),
     value,
   )
 }
 
-export function textAt(value: unknown, path: readonly string[]): string | null {
+function textAt(value: unknown, path: readonly string[]): string | null {
   const found = valueAt(value, path)
 
   return typeof found === 'string' ? found : null
@@ -47,109 +38,45 @@ function parseLine(line: string): unknown {
   }
 }
 
-export function parseHeadless(stdout: string): HeadlessResult {
-  const line = stdout
-    .split('\n')
-    .reverse()
-    .find(candidate => candidate.startsWith('{'))
-  const parsed = line === undefined ? undefined : parseLine(line)
-  if (parsed === undefined) {
-    return { kind: 'failed', reason: 'claude -p printed no JSON result' }
+function isPromptResult(event: unknown): boolean {
+  return textAt(event, ['type']) === 'result' && textAt(event, ['origin', 'kind']) !== 'task-notification'
+}
+
+function promptResultOf(line: string): HeadlessResult | null {
+  const event = parseLine(line)
+  if (!isPromptResult(event)) {
+    return null
   }
 
-  const text = textAt(parsed, ['result'])
-  if (valueAt(parsed, ['is_error']) === true || text === null) {
+  const text = textAt(event, ['result'])
+  if (valueAt(event, ['is_error']) === true || text === null) {
     return { kind: 'failed', reason: `claude -p failed: ${text ?? 'no text'}` }
   }
 
   return { kind: 'answered', text }
 }
 
-function blocksOfRow(row: unknown): unknown[] {
-  const content = valueAt(row, ['message', 'content'])
+export const HEADLESS_START: HeadlessReader = { rest: '', result: null }
 
-  return Array.isArray(content) ? content : []
-}
-
-function isTurnEnd(row: unknown): boolean {
-  return (
-    textAt(row, ['subtype']) === 'turn_duration' &&
-    PENDING_COUNTS.every(key => {
-      const count = valueAt(row, [key])
-      return typeof count !== 'number' || count === 0
-    })
-  )
-}
-
-function isToolResult(row: unknown): boolean {
-  return blocksOfRow(row).some(block => textAt(block, ['type']) === 'tool_result')
-}
-
-function turnStep(turn: TurnState, row: unknown): TurnState {
-  const type = textAt(row, ['type'])
-  if (type === 'system') {
-    return isTurnEnd(row) ? { ...turn, hasEnded: true } : turn
-  }
-  if (type === 'user') {
-    return { text: isToolResult(row) ? turn.text : null, hasEnded: false, isApiError: false }
-  }
-  if (type !== 'assistant') {
-    return turn
-  }
-  const texts = blocksOfRow(row).flatMap(block => (textAt(block, ['type']) === 'text' ? [textAt(block, ['text']) ?? ''] : []))
-  const isApiError = valueAt(row, ['isApiErrorMessage']) === true
-
-  return { ...turn, text: texts.at(-1) ?? turn.text, isApiError }
-}
-
-function isCommandRow(row: unknown, call: SlashCommand): boolean {
-  const content = textAt(row, ['type']) === 'user' ? textAt(row, ['message', 'content']) : null
-
-  return content !== null && [`<command-name>${call.name}</command-name>`, `<command-args>${call.args}</command-args>`].every(tag => content.includes(tag))
-}
-
-function joined(parts: readonly Uint8Array[]): Uint8Array {
-  const [only] = parts
-  if (parts.length === 1 && only !== undefined) {
-    return only
-  }
-  const all = new Uint8Array(parts.reduce((length, part) => length + part.length, 0))
-  let at = 0
-  for (const part of parts) {
-    all.set(part, at)
-    at += part.length
+export function readHeadless(reader: HeadlessReader, text: string): HeadlessReader {
+  if (reader.result !== null) {
+    return reader
   }
 
-  return all
-}
-
-export function readerAt(offset: number): TranscriptReader {
-  return { offset, unfinishedRow: [], turn: NO_TURN, sawCommand: false }
-}
-
-export function foldBytes(reader: TranscriptReader, added: Uint8Array, call: SlashCommand | null): TranscriptReader {
-  let { unfinishedRow, turn, sawCommand } = reader
-  let start = 0
-  for (let end = added.indexOf(LINE_FEED); end !== -1; end = added.indexOf(LINE_FEED, start)) {
-    const row = parseLine(UTF8.decode(joined([...unfinishedRow, added.subarray(start, end)])))
-    turn = turnStep(turn, row)
-    sawCommand ||= call !== null && isCommandRow(row, call)
-    unfinishedRow = []
-    start = end + 1
+  const lines = (reader.rest + text).split('\n')
+  const rest = lines.pop() ?? ''
+  for (const line of lines) {
+    const result = promptResultOf(line)
+    if (result !== null) {
+      return { rest: '', result }
+    }
   }
 
-  return {
-    offset: reader.offset + added.length,
-    unfinishedRow: start === added.length ? unfinishedRow : [...unfinishedRow, added.subarray(start)],
-    turn,
-    sawCommand,
-  }
+  return { rest, result: null }
 }
 
-export function slashCommandOf(prompt: string): SlashCommand | null {
-  const found = SLASH_COMMAND.exec(prompt)
-
-  return found === null ? null : { name: found[1] ?? '', args: (found[2] ?? '').trim() }
+export function headlessResultOf(reader: HeadlessReader): HeadlessResult {
+  return reader.result ?? promptResultOf(reader.rest) ?? { kind: 'failed', reason: 'claude -p printed no result for the prompt' }
 }
 
 function closeOf(lines: readonly string[], start: number, fence: string): number | null {
