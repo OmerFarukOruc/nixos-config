@@ -23,6 +23,7 @@ Each session drives its own **session**, pinned to its own tab, so sessions neve
 |---|---|---|
 | any signed-in page, on a PC | that PC's box browser: Chromium on a hidden display, running while Omer is logged in, signed in to his Google account | `box-browser` |
 | any signed-in page, on devbox, or a login that lives only there | devbox's box browser: running at all times, signed in to his Google account | `box-browser` on devbox, `box-browser --on devbox` from a PC |
+| a Grok Bot chat, Page or usage screen | the Grok Bot app on devbox, one per account (`personal`, `company`), one shared window each | `box-browser --app <account>` on devbox, with `--on devbox` from a PC |
 | a passkey-only site, with Omer at his PC | Omer's Brave Origin on the PC you run on | `box-browser --brave` |
 | a public page only | a throwaway headless browser | `agent-browser --session <name>` |
 
