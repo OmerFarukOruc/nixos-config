@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-code'
 
-import type { Run, Seat } from '../types'
-import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning, withDraftFile } from './copies'
+import type { Receiver, Run, RunOutcome, RunRecord, Seat, Session } from '../types'
+import { closeSeat, forgetCopy, headlessCopy, herdrCopy, isHerdrRunning, withDraftFile, withImagePaths } from './copies'
 import type { Cancel, Copy, CopyPlan } from './copies'
 import { parseReply } from './reply'
 
@@ -14,15 +14,11 @@ const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run
 
 type ActiveRun = { id: string; cancel: Cancel; copy: Copy | null; boxAtStart: string; isBoxTouched: boolean; done: Promise<void> }
 
-type Outcome =
-  | { kind: 'enhanced'; prompt: string; notes: string }
-  | { kind: 'failed'; reason: string; notes: string }
-  | { kind: 'dismissed' }
-  | { kind: 'cancelled' }
-
 const SESSION_END_WAIT_MS = 1200
+const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
+let recordWrite: Promise<void> = Promise.resolve()
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -62,9 +58,11 @@ async function ask($: EngineInterface, question: string, options: readonly strin
   }
 }
 
-async function converse($: EngineInterface, copy: Copy, copyId: string, draft: string): Promise<Outcome> {
-  const model = await $.session.model()
-  let turn = await withDraftFile($, copyId, draft, path => copy.send(`/enhance-prompt for ${model}, destination chat, the file ${path} holds the draft`))
+type Brief = { model: string; receiver: Receiver; draft: string }
+
+async function converse($: EngineInterface, copy: Copy, copyId: string, brief: Brief): Promise<RunOutcome> {
+  const command = `/enhance-prompt for ${brief.model}, destination chat, the receiver is ${RECEIVER_WORDS[brief.receiver]}`
+  let turn = await withDraftFile($, copyId, brief.draft, path => copy.send(`${command}, the file ${path} holds the draft`))
   for (;;) {
     if (turn.kind !== 'reply') {
       return turn
@@ -95,29 +93,34 @@ function restoreOf(boxText: string, fallback: string): string {
   return boxText.trim() === '' ? fallback : boxText
 }
 
-async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome: Outcome): Promise<void> {
+const CANCELLED: RunOutcome = { kind: 'cancelled' }
+
+async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome: RunOutcome): Promise<RunOutcome> {
   if (outcome.kind === 'cancelled') {
-    return
+    return outcome
   }
   if (outcome.kind === 'dismissed') {
     await commit($, me, IDLE)
-    return
+
+    return me.cancel.isCancelled ? CANCELLED : outcome
   }
   if (outcome.kind === 'failed') {
-    await commit($, me, { ...outcome, draft })
-    return
+    return (await commit($, me, { ...outcome, draft })) ? outcome : CANCELLED
   }
 
   const box = await $.prompt.read()
   if (!(await isCurrent($, me))) {
-    return
+    return CANCELLED
   }
   const restore = restoreOf(box.text, draft)
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
   const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
-  if (await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled })) {
-    await openNotes($)
+  if (!(await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled }))) {
+    return CANCELLED
   }
+  await openNotes($)
+
+  return outcome
 }
 
 async function closeCopy($: EngineInterface, copy: Copy): Promise<void> {
@@ -128,25 +131,65 @@ async function closeCopy($: EngineInterface, copy: Copy): Promise<void> {
   }
 }
 
+async function sessionOf($: EngineInterface): Promise<Session> {
+  const [id, cwd, model, turns] = await Promise.all([$.session.id(), $.session.cwd(), $.session.model(), $.session.turns()])
+
+  return { id, cwd, model, receiver: turns > 0 ? 'this-conversation' : 'new-session' }
+}
+
+async function replyOf($: EngineInterface, me: ActiveRun, copyId: string, session: Session, draft: string): Promise<RunOutcome> {
+  if (!(await $.fs.exists(session.cwd))) {
+    throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
+  }
+  const brief = { model: session.model, receiver: session.receiver, draft: await withImagePaths($, session.id, draft) }
+  me.copy = await openCopy($, {
+    sessionId: copyId,
+    parentId: session.receiver === 'this-conversation' ? session.id : null,
+    cwd: session.cwd,
+    cancel: me.cancel,
+    onSeat: seat => recordSeat($, me, copyId, seat),
+  })
+
+  return converse($, me.copy, copyId, brief)
+}
+
+async function recordsDir($: EngineInterface): Promise<string> {
+  return `${(await $.env.get('XDG_STATE_HOME')) || `${(await $.env.get('HOME')) || ''}/.local/state`}/enhance/runs`
+}
+
+type Finished = { id: string; startedAt: number | null; session: Session | null; draft: string; outcome: RunOutcome }
+
+async function keepRecord($: EngineInterface, run: Finished): Promise<void> {
+  try {
+    const endedAt = await $.clock.now()
+    const startedAt = new Date(run.startedAt ?? endedAt).toISOString()
+    const record: RunRecord = {
+      version: 1,
+      id: run.id,
+      startedAt,
+      seconds: Math.round((endedAt - (run.startedAt ?? endedAt)) / 1000),
+      session: run.session,
+      draft: run.draft,
+      outcome: run.outcome,
+    }
+    await $.fs.write(`${await recordsDir($)}/${startedAt.replaceAll(':', '-')}-${run.id}.json`, `${JSON.stringify(record, null, 2)}\n`)
+  } catch (error) {
+    $.ui.toast(`Could not keep the enhance run record: ${reasonOf(error)}`)
+  }
+}
+
 async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft: string): Promise<void> {
+  const run: Finished = { id: me.id, startedAt: null, session: null, draft, outcome: CANCELLED }
   try {
     await setRun($, { kind: 'running', runId: me.id, copyId, seat: null })
-    const cwd = await $.session.cwd()
-    if (!(await $.fs.exists(cwd))) {
-      throw new Error(`this session's folder ${cwd} was deleted; restart Claude Code in an existing folder`)
-    }
-    const parentId = (await $.session.turns()) > 0 ? await $.session.id() : null
-    me.copy = await openCopy($, {
-      sessionId: copyId,
-      parentId,
-      cwd,
-      cancel: me.cancel,
-      onSeat: seat => recordSeat($, me, copyId, seat),
-    })
-    await settle($, me, draft, await converse($, me.copy, copyId, draft))
+    run.startedAt = await $.clock.now()
+    run.session = await sessionOf($)
+    run.outcome = await settle($, me, draft, await replyOf($, me, copyId, run.session, draft))
   } catch (error) {
+    run.outcome = me.cancel.isCancelled ? CANCELLED : { kind: 'failed', reason: reasonOf(error), notes: '' }
     await commit($, me, { kind: 'failed', reason: reasonOf(error), notes: '', draft })
   } finally {
+    recordWrite = keepRecord($, run)
     if (active === me) {
       active = null
     }
@@ -460,9 +503,7 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     const me = await cancelActive()
-    if (me !== null) {
-      await Promise.race([me.done, $.clock.sleep(SESSION_END_WAIT_MS)])
-    }
+    await Promise.race([Promise.all([me?.done, recordWrite]), $.clock.sleep(SESSION_END_WAIT_MS)])
 
     return next(e)
   })

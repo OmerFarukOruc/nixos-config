@@ -42,7 +42,11 @@ const NOT_READY = new Set(['agent_not_ready', 'agent_blocked'])
 const GONE = new Set(['pane_not_found', 'workspace_not_found'])
 const TRANSCRIPT_RANGE_BYTES = 2 * 1024 * 1024
 const TRANSCRIPT_RETRY_MS = 1000
+const CANCEL_POLL_MS = 500
 const TRUST_DIALOG_MARKERS = ['Yes, I trust this folder', 'No, exit']
+const IMAGE_MARK = /\[Image #(\d+)\]/g
+const IMAGE_FILE = /\/(\d+)\.(?:png|jpe?g|gif|webp)$/
+const UID = /^\d+$/
 
 type Herdr = { ok: true; result: unknown } | { ok: false; code: string }
 
@@ -114,6 +118,34 @@ async function forgetDraft($: EngineInterface, sessionId: string): Promise<void>
   if (removed.exitCode !== 0) {
     throw new Error(`could not remove the draft folder ${dir}: ${removed.stderr.trim().slice(0, 200)}`)
   }
+}
+
+async function pastedImages($: EngineInterface, sessionId: string): Promise<string[]> {
+  try {
+    const uid = (await runTool($, ['id', '-u'])).stdout.trim()
+    if (!UID.test(uid)) {
+      return []
+    }
+    const found = await runTool($, ['find', `/tmp/claude-${uid}`, '-mindepth', '4', '-maxdepth', '4', '-type', 'f', '-path', `*/${sessionId}/images/*`])
+
+    return found.stdout.split('\n').filter(path => path !== '')
+  } catch {
+    return []
+  }
+}
+
+export async function withImagePaths($: EngineInterface, sessionId: string, draft: string): Promise<string> {
+  const numbers = [...new Set([...draft.matchAll(IMAGE_MARK)].flatMap(mark => mark[1] ?? []))]
+  if (numbers.length === 0 || !isSessionId(sessionId)) {
+    return draft
+  }
+  const images = await pastedImages($, sessionId)
+  const lines = numbers.flatMap(number => {
+    const path = images.find(image => IMAGE_FILE.exec(image)?.[1] === number)
+    return path === undefined ? [] : [`[Image #${number}] is the file ${path}`]
+  })
+
+  return lines.length === 0 ? draft : `${draft}\n\n${lines.join('\n')}`
 }
 
 export async function withDraftFile<T>($: EngineInterface, sessionId: string, draft: string, use: (path: string) => Promise<T>): Promise<T> {
@@ -390,6 +422,14 @@ async function replyAfter($: EngineInterface, sessionId: string, range: TurnRang
   }
 }
 
+async function untilCancelled($: EngineInterface, cancel: Cancel, sent: { isOver: boolean }): Promise<Turn> {
+  while (!cancel.isCancelled && !sent.isOver) {
+    await $.clock.sleep(CANCEL_POLL_MS)
+  }
+
+  return { kind: 'cancelled' }
+}
+
 type HerdrCopyState = { kind: 'unstarted' } | { kind: 'seated'; seat: Seat } | { kind: 'headless'; copy: Copy }
 
 export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Copy {
@@ -444,13 +484,18 @@ export function herdrCopy($: EngineInterface, plan: CopyPlan, place: Place): Cop
 
   return {
     send: async text => {
+      const sent = { isOver: false }
+      const sending = send(text)
+      sending.catch(() => undefined)
       try {
-        return await send(text)
+        return await Promise.race([sending, untilCancelled($, plan.cancel, sent)])
       } catch (error) {
         if (error instanceof CopyCancelled || plan.cancel.isCancelled) {
           return { kind: 'cancelled' }
         }
         throw error
+      } finally {
+        sent.isOver = true
       }
     },
     stop: async () => {
