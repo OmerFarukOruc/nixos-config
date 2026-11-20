@@ -1,10 +1,13 @@
 """Rows for Podman images, volumes, and containers."""
 
+import dataclasses
 import glob
 import json
 import os
 import shutil
 import time
+from collections.abc import Iterable
+from typing import NamedTuple
 
 from activity import session_mentions
 from config import RECENT
@@ -15,6 +18,12 @@ from rows import CommandError, Row, run
 LOCAL_HOST = "localhost"
 REMOTE_VARIABLES = ("CONTAINER_HOST", "CONTAINER_CONNECTION")
 STOPPED = ("exited", "stopped")
+
+
+class Store(NamedTuple):
+    root: str
+    run_root: str
+    driver: str
 
 
 def podman() -> Engine:
@@ -31,16 +40,17 @@ def podman() -> Engine:
     if remote := [v for v in REMOTE_VARIABLES if os.environ.get(v)]:
         return unmeasured(f"`{remote[0]}` points Podman at another engine; not measured")
     try:
-        root, volumes = run(["podman", "info", "--format", "{{.Store.GraphRoot}} {{.Store.VolumePath}}"]).split()
+        fields = "{{.Store.GraphRoot}} {{.Store.VolumePath}} {{.Store.RunRoot}} {{.Store.GraphDriverName}}"
+        root, volumes, run_root, driver = run(["podman", "info", "--format", fields]).split()
     except (CommandError, ValueError) as e:
         return unmeasured(str(e))
     if not inside(volumes, root):
         return unmeasured(f"its volume path `{volumes}` is outside its graph root `{root}`; not measured")
-    return Engine(None, root, lambda: podman_rows(root))
+    return Engine(None, root, lambda: podman_rows(Store(root, run_root, driver)))
 
 
-def podman_rows(root: str) -> list[Row]:
-    return [*image_rows(root), *volume_rows(), *container_rows(), *stopped_container_rows()]
+def podman_rows(store: Store) -> list[Row]:
+    return [*image_rows(store), *volume_rows(), *container_rows(), *stopped_container_rows()]
 
 
 def stored(root: str, image_id: str) -> float | None:
@@ -63,7 +73,100 @@ def pulled(image: dict) -> bool:
     return any(not d.startswith(f"{LOCAL_HOST}/") for d in image.get("RepoDigests") or [])
 
 
-def image_rows(root: str) -> list[Row]:
+@dataclasses.dataclass(frozen=True)
+class LayerIndex:
+    """Podman's layer graph, read from the storage index files.
+
+    `podman images --format json` prints SharedSize 0 for every image, so
+    its sizes count base layers once per image that builds on them. size
+    is None for a layer whose `diff-size` is unknown, which c/storage writes
+    as -1 for a partial pull.
+    """
+    parent: dict[str, str | None]
+    size: dict[str, int | None]
+    tops: dict[str, tuple[str, ...]]
+    metadata: dict[str, int]
+
+
+def read_index(path: str, required: bool) -> list[dict]:
+    try:
+        with open(path) as f:
+            records = json.load(f) or []
+    except FileNotFoundError:
+        if required:
+            raise ValueError(f"`{path}` is missing") from None
+        return []
+    except (OSError, ValueError) as e:
+        raise ValueError(f"`{path}`: {e}") from e
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise ValueError(f"`{path}` is not a list of records")
+    return records
+
+
+def known_size(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def layer_index(store: Store) -> LayerIndex:
+    """Parse the index files once; raise ValueError naming the file when one is missing or inconsistent.
+
+    A transient store keeps `volatile-layers.json` under the run root, so both roots are read.
+    """
+    layers_path = os.path.join(store.root, f"{store.driver}-layers", "layers.json")
+    images_path = os.path.join(store.root, f"{store.driver}-images", "images.json")
+    volatile = [os.path.join(r, f"{store.driver}-layers", "volatile-layers.json") for r in (store.root, store.run_root)]
+    layers = [*read_index(layers_path, True), *(la for path in volatile for la in read_index(path, False))]
+    images = read_index(images_path, True)
+    try:
+        parent = {la["id"]: la.get("parent") or None for la in layers}
+        size = {la["id"]: known_size(la.get("diff-size")) for la in layers}
+        tops = {i["id"]: tuple(filter(None, (i.get("layer"), *(i.get("mapped-layers") or [])))) for i in images}
+        metadata = {i["id"]: sum((i.get("big-data-sizes") or {}).values()) for i in images}
+    except (KeyError, TypeError, AttributeError) as e:
+        raise ValueError(f"a record in `{layers_path}` or `{images_path}` lacks a field ({e!r})") from e
+    named = {p for p in parent.values() if p} | {t for ts in tops.values() for t in ts}
+    if missing := named - parent.keys():
+        raise ValueError(f"{len(missing)} layers that images or layers name are not in `{layers_path}`")
+    return LayerIndex(parent, size, tops, metadata)
+
+
+def ancestors(index: LayerIndex, layers: Iterable[str]) -> set[str]:
+    """The layers and every layer below them."""
+    seen, todo = set(), list(layers)
+    while todo:
+        layer = todo.pop()
+        if layer not in seen:
+            seen.add(layer)
+            if below := index.parent[layer]:
+                todo.append(below)
+    return seen
+
+
+def shares(index: LayerIndex, image_ids: Iterable[str]) -> dict[str, int]:
+    """Split the bytes that removing all these images frees among them, so the parts add up to that total.
+
+    A layer is freed when no other image and no container builds on it; each
+    of these images whose chain holds it gets an equal part. Each image also
+    gets its own manifest and config bytes. Raise ValueError when a freed
+    layer's size is unknown.
+    """
+    ids = sorted(set(image_ids))
+    chains = {i: ancestors(index, index.tops[i]) for i in ids}
+    theirs = set().union(*chains.values())
+    others = [t for i, tops in index.tops.items() if i not in chains for t in tops]
+    kept = ancestors(index, [*others, *(layer for layer in index.parent if layer not in theirs)])
+    part = {i: index.metadata[i] for i in ids}
+    for layer in theirs - kept:
+        if (b := index.size[layer]) is None:
+            raise ValueError(f"layer `{layer[:12]}` has no recorded size")
+        holders = [i for i in ids if layer in chains[i]]
+        whole, extra = divmod(b, len(holders))
+        for n, i in enumerate(holders):
+            part[i] += whole + (n < extra)
+    return part
+
+
+def image_rows(store: Store) -> list[Row]:
     """Unused images as two delete groups, and the young or named ones as look rows.
 
     `podman images` prints one entry per tag, so entries are merged by id. A
@@ -71,31 +174,38 @@ def image_rows(root: str) -> list[Row]:
     registry first. Every other unused image is a local build or an untagged
     layer, which the build that made it recreates; it goes in
     group:podman-builds unless it is under RECENT old or a running agent
-    named one of its names. A size is the image's own bytes, without layers
-    other images share.
+    named one of its names. A delete entry's size is its share of what
+    removing both groups frees, so the two rows add up to that; a look row's
+    size is its share of what removing every unused image frees.
     """
     unused = {i["Id"]: i for i in json.loads(run(["podman", "images", "--format", "json"])) if not i.get("Containers")}
     named = session_mentions([n for i in unused.values() for n in names_of(i)])
-    registry, builds, rows = {}, {}, []
-    for i in unused.values():
-        ref = names_of(i)[0]
-        b, at = max((i.get("Size") or 0) - (i.get("SharedSize") or 0), 0), stored(root, i["Id"])
+    look, registry, builds = {}, {}, {}
+    for image_id, i in unused.items():
+        ref, at = names_of(i)[0], stored(store.root, image_id)
         mention = next((named[n] for n in names_of(i) if n in named), None)
         if mention or at is None or time.time() - at < RECENT:
-            why = mention or ("not stored here for 24 h yet" if at else "no storage time")
-            rows.append(Row(f"Podman image `{ref}`", "look", f"no container uses it; {why}", alloc=b))
+            look[image_id] = (ref, mention or ("not stored here for 24 h yet" if at else "no storage time"))
         else:
-            (registry if pulled(i) else builds)[ref] = b
-    if registry:
-        rows.append(Row("group:podman-images", "delete", "unused pulled images; `podman pull` brings each back",
-                        how="podman-image", members=registry, alloc=sum(registry.values()),
-                        frees=sum(registry.values()), bound=True))
-    if builds:
-        rows.append(Row("group:podman-builds", "delete",
-                        "unused local builds and untagged images, stored 24+ h ago; the build that made each "
-                        "makes it again, but a source that is gone does not come back",
-                        how="podman-build", members=builds, alloc=sum(builds.values()),
-                        frees=sum(builds.values()), bound=True))
+            (registry if pulled(i) else builds)[ref] = image_id
+    try:
+        index = layer_index(store)
+        if missing := unused.keys() - index.tops.keys():
+            raise ValueError(f"{len(missing)} images that `podman images` lists are not in `images.json`")
+        look_parts, parts = shares(index, unused), shares(index, [*registry.values(), *builds.values()])
+    except ValueError as e:
+        return [Row("Podman images", "look", f"the layer index could not be read ({e}); not measured")]
+    rows = [Row(f"Podman image `{ref}`", "look", f"no container uses it; {why}", alloc=look_parts[image_id])
+            for image_id, (ref, why) in look.items()]
+    for group, how, entries, reason in (
+            ("group:podman-images", "podman-image", registry, "unused pulled images; `podman pull` brings each back"),
+            ("group:podman-builds", "podman-build", builds,
+             "unused local builds and untagged images, stored 24+ h ago; the build that made each makes it again, "
+             "but a source that is gone does not come back")):
+        if entries:
+            members = {ref: parts[image_id] for ref, image_id in entries.items()}
+            b = sum(members.values())
+            rows.append(Row(group, "delete", reason, how=how, members=members, alloc=b, frees=b))
     return rows
 
 

@@ -39,10 +39,10 @@ class Row:
     path is a filesystem path, a group such as "group:stale-cache", or a label such as "Docker images".
     kind is delete, look, or leave. window is the seconds a path must stay unchanged before it goes
     (see config.RECENT). how is a key of remove.COMMANDS or remove.MOVERS. members holds a group's
-    entries with Frees, or size on look, and is None for one path. excl, shared, and frees are set for
-    rows the reclaim estimate ran on, and inodes counts the inodes it counted, for learn.py. rest means
-    alloc excludes rows nested inside this path. changed is the newest ctime under the path, for delete
-    rows. bound means frees is an upper bound, not an estimate.
+    entries with each one's part of Frees, or size on look, and is None for one path. excl, shared,
+    and frees are set for rows the reclaim estimate ran on, and inodes counts the inodes it counted,
+    for learn.py. rest means alloc excludes rows nested inside this path. changed is the newest ctime
+    under the path, for delete rows. bound means frees is an upper bound, not an estimate.
     """
 
     path: str
