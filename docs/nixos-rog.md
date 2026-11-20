@@ -162,8 +162,11 @@ Home Manager also adds `~/.claude/skills/claude-code-home-manager`, a plugin
 that gives Claude Code the `nixos` MCP server from
 `home-manager/modules/applications.nix`. The same
 server list is in `~/.config/mcp/mcp.json`. The plugin also starts the
-`typescript` language server from nixpkgs' `typescript-language-server`
-(`home-manager/modules/agents.nix`).
+`typescript` language server from nixpkgs' `typescript-language-server` and the
+`python` one from nixpkgs' `pyright` (`home-manager/modules/agents.nix`), each by
+its store path. `agents/claude/settings.json` turns off the marketplace plugins
+`typescript-lsp` and `pyright-lsp`, because they start bare commands that are not
+on PATH.
 
 `home-manager/modules/claude-tools.nix`, which `personal.nix` and devbox's `home.nix` import,
 installs the `claude-tools` command of `pkgs/claude-tools` (its README describes

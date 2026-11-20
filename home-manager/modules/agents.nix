@@ -79,6 +79,14 @@ in
             ".cjs" = "javascript";
           };
         };
+        lspServers.python = {
+          command = lib.getExe' pkgs.pyright "pyright-langserver";
+          args = [ "--stdio" ];
+          extensionToLanguage = {
+            ".py" = "python";
+            ".pyi" = "python";
+          };
+        };
         settings = lib.mkMerge [
           (lib.importJSON ../../agents/claude/settings.json)
           {
