@@ -1,8 +1,8 @@
 # Infisical
 
-Contents: the two projects agents use (below), then the `##` sections Rules, Commands, and Descriptions.
+Contents: the three projects agents use (below), then the `##` sections Rules, Commands, and Descriptions.
 
-Omer's organization on Infisical EU (`https://eu.infisical.com/api`) holds four projects, and agents use two of them. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
+Omer's organization `personal` on Infisical EU (`https://eu.infisical.com/api`) holds four projects, and agents use three of them; the fourth, `1`, is unused. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads two of them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
 
 - `personal-secrets` (id in `$INFISICAL_PERSONAL_SECRETS_PROJECT`, env `secrets`) holds host and
   personal folders; list them with `infisical secrets folders get --env secrets --path /`.
@@ -13,6 +13,13 @@ Omer's organization on Infisical EU (`https://eu.infisical.com/api`) holds four 
   with `INFISICAL_TOKEN=$(<"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/infisical-agent/token")` and add
   `--projectId "$INFISICAL_PERSONAL_SECRETS_PROJECT" --domain https://eu.infisical.com`,
   because a machine-identity token ignores `.infisical.json` (`reference/devbox.md`, Accounts and logins).
+- `gastrodili` (env `production`) holds the credentials of the gastrodili site, its CI and its
+  runbooks, one folder per reader (`/ci`, `/operator`) plus `/archive` for keys with no reader.
+  gastrodili `docs/runbooks/secrets.md` lists each record and its reader, and gives the command that
+  finds the project id by name. Reach it from a PC where `infisical login` ran; devbox's machine
+  identity lists only `personal-secrets` and `statuslantern` (checked 21-11-2026). Address it with
+  explicit flags from any cwd:
+  `infisical secrets --projectId <id> --domain https://eu.infisical.com --env production --path /ci -o json --silent | jq -r '.[]?.secretKey'`.
 - `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds only
   `DEVBOX_OMER_SUDO_PASSWORD` under prod `/infra` (`reference/devbox.md`, Sudo). It holds no Status Lantern
   record: Status Lantern keeps every secret in sops in StatusLantern/statuslantern and StatusLantern/inbox
@@ -112,8 +119,38 @@ Delete. Before deleting a record, write a manifest to a 0600 file in the
 task's scratch folder: each record's name, the SHA-256 of its value, and its
 description, read through stdin or a file so no value is printed. Show it as
 the itemized manifest before the delete. A record that only looked unread can
-still be a live credential. The manifest holds hashes, not values, so a deleted
-value comes back through a revert of the folder's commit history in Infisical.
+still be a live credential.
+
+The organization's plan has no point-in-time recovery or secret versioning, so a
+deleted value is gone from Infisical. `GET /api/v1/organizations/<org id>/plan`
+returned `pitRecovery: false` and `secretVersioning: false` on 21-11-2026; read the
+org id from `GET /api/v1/organization` (`.organizations[] | select(.name ==
+"personal") | .id`), and read the plan again before relying on this. So before the
+delete, write a backup that holds each record's env, folder, key, value, and
+description, encrypted to Omer's SSH key with no plaintext file on disk. A failed
+backup blocks the delete. List the keys with `IN(...)`; run it once with `wc -l` in
+place of the `age` step and check the count equals the manifest's:
+
+```bash
+mkdir -p ~/Desktop/archive && infisical user get token --plain | sed 's/^/Authorization: Bearer /' | \
+  curl -sS -H @- "https://eu.infisical.com/api/v3/secrets/raw?workspaceId=<id>&environment=<env>&secretPath=/&recursive=true" | \
+  jq -c --arg env <env> '.secrets[] | select(.secretKey | IN("KEY1", "KEY2"))
+    | {env: $env, path: .secretPath, key: .secretKey, value: .secretValue, comment: .secretComment}' | \
+  nix shell nixpkgs#age -c age -R ~/.ssh/id_ed25519_omer.pub -o ~/Desktop/archive/<project>-infisical-deleted-<DD-MM-YYYY>.jsonl.age
+```
+
+Name the backup's path in the report. The private key has a passphrase, so an agent
+cannot decrypt it: Omer restores one folder with the recipe below, then the agent
+writes each record's `comment` back with `infisical-describe set` (Descriptions).
+`secrets set --file` reads dotenv, so a multi-line value needs the Infisical web UI.
+
+```bash
+( umask 077; f=$(mktemp) && \
+  nix shell nixpkgs#age -c age -d -i ~/.ssh/id_ed25519_omer -o "$f" <backup file> && \
+  jq -r 'select(.env == "<env>" and .path == "/the-folder") | "\(.key)=\(.value)"' "$f" > "$f.env" && \
+  infisical secrets set --file "$f.env" --projectId <id> --env <env> --path /the-folder --type shared --silent > /dev/null; \
+  rm -f "$f" "$f.env" )
+```
 
 The default type is `personal`; everything here is `shared`, so
 without `--type shared` the CLI returns `404 Secret not found`:
