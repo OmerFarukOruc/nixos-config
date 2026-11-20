@@ -73,6 +73,16 @@ let
       path = "skills/diagram-design";
       plugin = true;
     };
+    modern-web-guidance = {
+      src = inputs.skills-modern-web-guidance;
+      path = "skills/modern-web-guidance";
+      plugin = true;
+    };
+    chrome-extensions = {
+      src = inputs.skills-modern-web-guidance;
+      path = "skills/chrome-extensions";
+      plugin = true;
+    };
     codebase-design = matt "skills/engineering/codebase-design";
     diagnosing-bugs = matt "skills/engineering/diagnosing-bugs";
     domain-modeling = matt "skills/engineering/domain-modeling";

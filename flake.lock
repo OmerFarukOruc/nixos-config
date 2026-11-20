@@ -585,6 +585,7 @@
         "skills-impeccable": "skills-impeccable",
         "skills-improve": "skills-improve",
         "skills-mattpocock": "skills-mattpocock",
+        "skills-modern-web-guidance": "skills-modern-web-guidance",
         "skills-oh-my-opencode-slim": "skills-oh-my-opencode-slim",
         "skills-security-audit": "skills-security-audit",
         "skills-stop-slop": "skills-stop-slop",
@@ -787,6 +788,22 @@
       "original": {
         "owner": "mattpocock",
         "repo": "skills",
+        "type": "github"
+      }
+    },
+    "skills-modern-web-guidance": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794841069,
+        "narHash": "sha256-6AKPHsrv7uP0clLZaezrCP8lHXY5EB0hJwQ3gnk4+UI=",
+        "owner": "GoogleChrome",
+        "repo": "modern-web-guidance",
+        "rev": "64a6d708f5a43f2cd3fde5d4d7db3905ba1bdf65",
+        "type": "github"
+      },
+      "original": {
+        "owner": "GoogleChrome",
+        "repo": "modern-web-guidance",
         "type": "github"
       }
     },
