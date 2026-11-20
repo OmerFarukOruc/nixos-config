@@ -35,7 +35,8 @@ The wait for checks:
 
 A PR behind its base, where the repository has no merge controller:
 
-- Under the strict policy of branch protection or of a ruleset, GitHub refuses the merge with 'head branch is not up to date' or 'Head branch is out of date'. `pr-land` then calls the update-branch API with `expected_head_sha`, takes the new head only when its first parent is the old head, waits for the required checks on it, and merges again. It calls the REST endpoint because `gh pr update-branch` has no flag for an expected head, so only the REST call can pin the update to the head that `pr-land` waited on.
+- Under the strict policy of branch protection or of a ruleset, GitHub refuses the merge with 'head branch is not up to date' or 'Head branch is out of date'. Right after another PR merges, `gh pr merge` has failed with a ruleset's 'N of N required status checks are expected' while `mergeStateStatus` read `BEHIND`.
+- On that ruleset message, `pr-land` reads `mergeStateStatus`, up to five times 3 s apart while it reads `UNKNOWN`, and treats `BEHIND` like the out-of-date messages. Any other message or state is a failed merge. For a PR that is behind, `pr-land` calls the update-branch API with `expected_head_sha`, takes the new head only when its first parent is the old head, waits for the required checks on it, and merges again. It calls the REST endpoint because `gh pr update-branch` has no flag for an expected head, so only the REST call can pin the update to the head that `pr-land` waited on.
 - Each updated head gets its own `PR_LAND_WAIT`. At most 3 updates run, and a fourth refusal is a failed merge (exit 1). A PR that gets another head, or is closed, while it waits ends with exit 3. A body given as `--body-file -` is read once for all tries.
 - In controller mode the controller updates branches, so `pr-land` never does.
 

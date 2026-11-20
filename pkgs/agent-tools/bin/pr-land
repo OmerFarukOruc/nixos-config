@@ -7,8 +7,10 @@
 # Checks: an open PR waits for the base branch's required checks, or for its own checks when none are readable. A required
 #   check that failed or was cancelled stops the run, or one of the PR's own when none are readable. GitHub refuses the
 #   merge when the head moved after the last read.
-# Behind its base, without a merge controller, under a strict policy: pr-land updates the branch at most 3 times, waits
-#   for the checks again after each update, and merges again.
+# Behind its base, without a merge controller, under a strict policy: when the merge command fails with an out-of-date
+#   message, or with a ruleset's "required status checks are expected" while the PR's mergeStateStatus reads BEHIND
+#   (read again while it is UNKNOWN), pr-land updates the branch at most 3 times, waits for the checks again after
+#   each update, and merges again.
 # Merge controller: where the default branch has .github/workflows/merge-controller.yml, pr-land adds the `automerge`
 #   label and waits for that workflow to merge. When pr-land stops, the label stays, so the controller still merges the
 #   PR once the cause is gone; rerun pr-land to wait again.
@@ -561,6 +563,22 @@ update_behind() {
   return 1
 }
 
+is_behind() {
+  local n=$1 i state=UNKNOWN
+  grep -qiE 'head branch is (not up to date|out of date)' "$ERR" && return 0
+  grep -qiE 'required status checks? (is|are) expected' "$ERR" || return 1
+  for i in 1 2 3 4 5; do
+    if state=$(pr_json "$n" mergeStateStatus 2>"$ERR.state" | jq -r .mergeStateStatus); then
+      [[ "$state" == UNKNOWN ]] || break
+    else
+      state=UNREADABLE
+    fi
+    (( i < 5 )) && sleep 3
+  done
+  [[ "$state" != UNREADABLE ]] || say "pr-land: could not read the merge state of PR #$n: $(head -n 1 "$ERR.state")" >&2
+  [[ "$state" == BEHIND ]]
+}
+
 merge_direct() {
   local n=$1 sha=$2 base=$3 updates=0 rc a prev=
   local -a flags=()
@@ -578,7 +596,7 @@ merge_direct() {
     gh pr merge "$n" --squash --match-head-commit "$sha" "${flags[@]}" 2>"$ERR" || rc=$?
     cat "$ERR" >&2
     (( rc )) || break
-    if ! grep -qiE 'head branch is (not up to date|out of date)' "$ERR"; then
+    if ! is_behind "$n"; then
       say "pr-land: the merge command for PR #$n failed" >&2
       break
     fi
@@ -586,6 +604,7 @@ merge_direct() {
       say "pr-land: PR #$n was still behind $base after $max_updates updates" >&2
       break
     fi
+    pr_unchanged "$n" "$sha" "$base" || break
     updates=$((updates+1))
     say "PR #$n is behind $base; updating its branch ($updates of $max_updates)"
     update_behind "$n" "$sha" || break
