@@ -263,8 +263,9 @@ if ! $brave; then
     export AGENT_BROWSER_SESSION=app_${app}_$session AGENT_BROWSER_CDP=$cdp_port AGENT_BROWSER_IDLE_TIMEOUT_MS=600000
     if [[ $(command_name "$@") != close ]]; then
       start_app
-      # DevTools answers before the app has drawn its window.
-      agent-browser wait --fn 'document.querySelector("main") !== null' > /dev/null
+      # DevTools answers before the app has drawn its chat or its sign-in screen.
+      agent-browser wait --fn 'document.querySelector("[role=textbox]") !== null ||
+        [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Sign in")' > /dev/null
     fi
     exec agent-browser "$@"
   fi

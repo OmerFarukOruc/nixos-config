@@ -68,7 +68,7 @@ session runs as `app_<account>_<session>`, apart from the same agent's box
 browser session, and a session name that starts with `app_` exits 2. The app has one window and no tabs, so its sessions share that
 window and nothing is pinned, and `close` ends the session and leaves the app
 running. Every command but `close` starts the app when it is stopped and
-waits for its page ([Grok Bot app](#grok-bot-app)); `start` does only that,
+waits for its chat or its sign-in screen ([Grok Bot app](#grok-bot-app)); `start` does only that,
 and `box-view --app` calls it. `--app` with `--brave` exits 2.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
