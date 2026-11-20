@@ -349,7 +349,9 @@ Xvnc with `-SecurityTypes None`, shares a port or its profile folder with the
 other unit, or uses a port that the list or its `/etc/grok-bot-box` file does
 not name. The boot test turns `features.grokBotBox` off
 (`ci/server-boot/modules/grok-bot-box.nix`), because its VM has 1024 MB and
-the processes of the two apps held 1992 MB of resident memory on devbox (the
-sum of `ps -eo rss,args | grep grok-bot/grok-bot`, 2026-11-19), so the Grok Bot units are checked on devbox
+the two apps held 842 MB while idle on devbox on 2026-11-20 (the `Pss` lines of
+`/proc/<pid>/smaps_rollup` summed over their processes, which counts shared
+memory once; systemd's `MemoryCurrent` showed 182 MB and 191 MB for the two app
+units, with peaks of 350 MB and 282 MB), so the Grok Bot units are checked on devbox
 after a deploy: `box-browser --app personal status` and `box-browser --app
 company status`.
