@@ -20,7 +20,6 @@ What each patch keeps, and why:
 - herdr: a two-line note sends agents on devbox to `claude-tools agent start`.
 - implement-spec: implementers follow the Testing rules in `~/.claude/shared/core.md` and `testing-discipline.md` instead of the `tdd` skill, and the final review is one `code-reviewer` agent.
 - improve-codebase-architecture: the report goes to `/tmp/agents/architecture-<session8>/` and comes back as a link; a report-only request ends with the report.
-- security-audit: a pointer to our harness in `agents/skills/security-audit-harness`.
 - standards-spec-review: upstream's `code-review`, renamed because Claude Code ships a built-in `/code-review`; it runs its two reviews in-process in order when the user asks for that order.
 
 ## Skills that borrow ideas
