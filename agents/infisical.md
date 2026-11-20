@@ -2,7 +2,7 @@
 
 Contents: the three projects agents use (below), then the `##` sections Rules, Commands, and Descriptions.
 
-Omer's organization `personal` on Infisical EU (`https://eu.infisical.com/api`) holds four projects, and agents use three of them; the fourth, `1`, is unused. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads two of them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
+Omer's organization `personal` on Infisical EU (`https://eu.infisical.com/api`) holds three projects, and agents use all three. Their IDs stay out of this public repository: each shell on nixos-desktop, nixos-rog and devbox reads two of them into `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids` (nixos-config `nixosModules/agents.nix`).
 
 - `personal-secrets` (id in `$INFISICAL_PERSONAL_SECRETS_PROJECT`, env `secrets`) holds host and
   personal folders; list them with `infisical secrets folders get --env secrets --path /`.
@@ -20,7 +20,7 @@ Omer's organization `personal` on Infisical EU (`https://eu.infisical.com/api`) 
   identity lists only `personal-secrets` and `statuslantern` (checked 21-11-2026). Address it with
   explicit flags from any cwd:
   `infisical secrets --projectId <id> --domain https://eu.infisical.com --env production --path /ci -o json --silent | jq -r '.[]?.secretKey'`.
-- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, envs `dev`, `staging`, `prod`) holds only
+- `statuslantern` (id in `$INFISICAL_STATUSLANTERN_PROJECT`, env `prod`) holds only
   `DEVBOX_OMER_SUDO_PASSWORD` under prod `/infra` (`reference/devbox.md`, Sudo). It holds no Status Lantern
   record: Status Lantern keeps every secret in sops in StatusLantern/statuslantern and StatusLantern/inbox
   (statuslantern `docs/secrets.md`), so change a Status Lantern value in sops, never in Infisical. A one-way
