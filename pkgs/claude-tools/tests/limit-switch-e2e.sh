@@ -414,10 +414,14 @@ h agent prompt "$upane" /exit >/dev/null 2>&1 || true
 
 [[ $mode == settings ]] || ask "Delete every scheduled job with CronDelete. Reply only OK."
 h agent prompt "$name" /exit >/dev/null
-for _ in $(seq 30); do
-  [[ -z "$(claude_in "$pane")" ]] && break
+for ((attempt = 0; attempt < 30; attempt++)); do
+  if [[ -z "$(claude_in "$pane")" ]] && h agent list |
+    jq -e --arg n "$name" 'all(.result.agents[]; .name != $n)' >/dev/null; then
+    break
+  fi
   sleep 1
 done
+((attempt < 30)) || fail "Claude did not exit and leave the herdr agent list within 30 s"
 cls scan || fail "scan after the exit exited $?"
 [[ -z "$(claude_in "$pane")" ]] || fail "scan started an agent that exited on purpose"
 jq -e --arg n "$name" --arg s "$sid" '(.agents | has($n) | not) and .ended[$n].session == $s' \
@@ -456,17 +460,15 @@ echo "resume right after /exit: back in $pane"
 if foreign_available; then
   foreign="$run-foreign"
   start_foreign_agent "$foreign" "$dir"
-  pids=$(foreign_pids)
-  [[ -n "$pids" ]] || fail "no claude process of sl-factory runs"
   cls scan || fail "scan with an agent of another user exited $?"
-  [[ "$(foreign_pids)" == "$pids" ]] || fail "scan changed the claude processes of sl-factory"
+  [[ "$(foreign_pids)" == "$foreign_start_pids" ]] || fail "scan changed the claude processes of sl-factory"
   grep -q "$foreign" "$state/events.log" 2>/dev/null && fail "scan logged the agent of another user: $(grep "$foreign" "$state/events.log")"
   jq -e --arg n "$foreign" '(.agents | has($n) | not) and (.ended | has($n) | not)' "$state/agents.json" >/dev/null ||
     fail "the record holds the agent of another user: $(jq -c . "$state/agents.json")"
   cls resume "$foreign" || fail "resume of an agent of another user exited $?"
-  [[ "$(foreign_pids)" == "$pids" ]] || fail "resume restarted the agent of another user"
+  [[ "$(foreign_pids)" == "$foreign_start_pids" ]] || fail "resume restarted the agent of another user"
   out=$(cls switch "$foreign" 2>&1) && fail "switch of an agent of another user exited 0"
-  [[ "$(foreign_pids)" == "$pids" ]] || fail "switch restarted the agent of another user: $out"
+  [[ "$(foreign_pids)" == "$foreign_start_pids" ]] || fail "switch restarted the agent of another user: $out"
   echo "agent of another user: scan, resume and switch leave it running and unrecorded"
 else
   echo "agent of another user: skipped, sl-factory has no account folder or omer cannot sudo to it on this host"

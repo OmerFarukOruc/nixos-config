@@ -237,7 +237,6 @@ rm "$dir/slow-prompt"
 if foreign_available; then
   step 12 "agent stop ends an agent that runs as another user, though its environment is unreadable"
   start_foreign_agent "$foreign" "$dir"
-  [[ -n "$(foreign_pids)" ]] || fail "no claude process of sl-factory runs"
   "$tools" agent stop --force "$foreign" || fail "agent stop of an agent of another user exited $?"
   wait_for 15 agent_gone "$foreign" || fail "the agent of another user is still listed after agent stop"
   [[ -z "$(foreign_pids)" ]] || fail "a claude process of sl-factory survived agent stop"
