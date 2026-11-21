@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import signal
 import subprocess
 import tempfile
 import time
@@ -180,8 +181,12 @@ class Agents:
         deadline = time.time() + 10
         while not gone(pid, 1) and time.time() < deadline:
             if EXIT_DIALOG in h.screen(name):
-                h("agent", "send-keys", name, "enter", check=False)
-                self.log(f"answered the background-work dialog of {name} with Exit and stop tasks")
+                try:
+                    os.kill(pid, signal.SIGHUP)
+                except OSError as e:
+                    raise Failed(f"could not end claude pid {pid} of {name} at its background-work dialog: {e}") from e
+                self.log(f"answered the background-work dialog of {name} with SIGHUP, which keeps its scheduled "
+                         "tasks for --resume")
                 break
         if not gone(pid, 30):
             h("agent", "send-keys", name, "ctrl+c", check=False)
