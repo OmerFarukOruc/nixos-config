@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 import argparse
+import json
+import socket
 import subprocess
 import time
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
 from claude_tools.accounts import account_of, read_accounts
-from claude_tools.agents import SKIP_PERMISSIONS, Agents
-from claude_tools.commands.rotate import claude_help, parse_help, parsed_flags
+from claude_tools.agents import KINDS, SKIP_PERMISSIONS, Agents
+from claude_tools.commands.rotate import carried_args, claude_help, parse_help, parsed_flags
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
-from claude_tools.limits import recorded_limit
+from claude_tools.limits import last_model, recorded_limit
 from claude_tools.selection import hold_limit, next_account
 from claude_tools.settings import Settings
 from claude_tools.store import locked, read_json, write_json
 
 COOLDOWN = 300
 ENDED_KEEP = 30 * 86400
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
+UNNAMED = "pane-"
 
 
 OWN_PERMISSIONS = {"--settings", "--permission-mode"}
@@ -29,16 +34,71 @@ def own_permissions(argv: list[str], opts: dict[str, str]) -> bool:
     return bool(names & OWN_PERMISSIONS) and ALLOWS_BYPASS not in names
 
 
-def resume_args(argv: list[str], session: str, opts: dict[str, str]) -> list[str]:
-    out, skip = [] if SKIP_PERMISSIONS in argv or own_permissions(argv, opts) else [SKIP_PERMISSIONS], False
+def drop_flags(argv: list[str], valued: tuple[str, ...], bare: tuple[str, ...]) -> list[str]:
+    out, skip = [], False
     for a in argv:
         if skip:
             skip = False
-        elif a in ("--resume", "-r"):
+        elif a in valued:
             skip = True
-        elif a not in ("--continue", "-c") and not a.startswith("--resume="):
+        elif a not in bare and a.split("=", 1)[0] not in valued:
             out.append(a)
-    return [*out, "--resume", session]
+    return out
+
+
+def with_model(argv: list[str], model: str | None, opts: dict[str, str]) -> list[str]:
+    given = [tokens[1] if len(tokens) > 1 else tokens[0].split("=", 1)[-1]
+             for name, tokens in parsed_flags(argv, opts) if name == "--model"]
+    if not model or (given and given[-1].split("[", 1)[0] in model):
+        return argv
+    kept = [t for name, tokens in parsed_flags(argv, opts) if name != "--model" for t in tokens]
+    return [*kept, "--model", model]
+
+
+def resume_args(argv: list[str], session: str, opts: dict[str, str], model: str | None = None,
+                bypass: bool = True) -> list[str]:
+    out = carried_args(argv, opts) if opts else drop_flags(argv, ("--resume", "-r"), ("--continue", "-c"))
+    out = with_model(out, model, opts) if opts else out
+    add = bypass and SKIP_PERMISSIONS not in out and not own_permissions(out, opts)
+    return [*([SKIP_PERMISSIONS] if add else []), *out, "--resume", session]
+
+
+def codex_args(argv: list[str], session: str) -> list[str]:
+    rest = argv[1:] if argv[:1] == ["resume"] else argv
+    rest = rest[1:] if argv[:1] == ["resume"] and rest[:1] and not rest[0].startswith("-") else rest
+    return ["resume", session, *rest]
+
+
+def opencode_args(argv: list[str], session: str) -> list[str]:
+    return [*drop_flags(argv, ("--session", "-s"), ("--continue", "-c")), "--session", session]
+
+
+def key_of(agent: dict) -> str | None:
+    pane = agent.get("pane_id")
+    return agent.get("name") or (UNNAMED + pane.replace(":", "-").lower() if pane else None)
+
+
+def boot_id() -> str:
+    try:
+        return BOOT_ID.read_text().strip()
+    except OSError:
+        return ""
+
+
+def restart_reason(record: dict) -> str:
+    booted = record.get("boot") and record["boot"] != boot_id()
+    return f"{socket.gethostname()} rebooted" if booted else "The herdr server restarted"
+
+
+def resume_message(kind: str, why: str) -> str:
+    lost = "background shell tasks, Monitors, subagents and self-paced loops" if kind == "claude" else \
+        "background shell commands"
+    loops = "A fixed-interval /loop comes back, so run CronList before you start one again. " if kind == "claude" else ""
+    return (f"{why}, so every process this session started has ended: {lost}. This session was resumed in the same "
+            f"pane with the same account and flags. {loops}Before you run a command again that was running when the "
+            "session stopped, check what it already did, such as whether a `git worktree add` already made its "
+            "folder. If your last turn had finished and you were waiting for Omer, stay idle. Otherwise continue "
+            "where you stopped, and start again the background work you still need.")
 
 
 def to_restore(record: dict, live: Callable[[], set[str]], server: str | None) -> list[str]:
@@ -89,12 +149,12 @@ class Switcher:
         msg_file = self.settings.config / "resume" / name
         return msg_file.read_text().strip() if msg_file.is_file() else default
 
-    def resume_args(self, argv: list[str], session: str) -> list[str]:
+    def resume_args(self, argv: list[str], session: str, model: str | None = None, bypass: bool = True) -> list[str]:
         try:
             opts, _ = parse_help(claude_help(self.settings.cache / "rotate"))
         except OSError:
             opts = {}
-        return resume_args(argv, session, opts)
+        return resume_args(argv, session, opts, model, bypass)
 
     def switch(self, name: str, to: str | None, after_limit: bool = False) -> bool:
         agent = self.herdr("agent", "get", name)["result"]["agent"]
@@ -138,7 +198,24 @@ class Switcher:
         return True
 
     def live_names(self) -> set[str]:
-        return {a.get("name") for a in self.herdr.agents()}
+        return {key_of(a) for a in self.herdr.agents()}
+
+    def start_kind(self, pane: str, name: str, r: dict) -> None:
+        kind = r.get("kind", "claude")
+        if kind == "codex":
+            self.agents.start_codex(pane, name, codex_args(r["args"], r["session"]))
+        elif kind == "opencode" and r.get("opencode_agent"):
+            self.agents.start_opencode(pane, name, r["opencode_agent"], ("--session", r["session"]))
+        elif kind == "opencode":
+            self.agents.start_in_pane(pane, name, "opencode", ":", opencode_args(r["args"], r["session"]))
+        elif r.get("rotate"):
+            found = read_accounts(self.settings.accounts_file)
+            account = account_of(r["config_dir"], found.local, self.settings.home)
+            self.agents.start_rotated(pane, name, account, self.resume_args(
+                r["args"], r["session"], r.get("model"), bypass=r.get("named", True)))
+        else:
+            self.agents.start_claude(pane, name, r["config_dir"], self.resume_args(
+                r["args"], r["session"], r.get("model"), bypass=r.get("named", True)))
 
     def start_recorded(self, name: str, r: dict, why: str) -> str:
         panes = {x["pane_id"]: x for x in self.herdr("pane", "list")["result"]["panes"]}
@@ -147,7 +224,7 @@ class Switcher:
             ws = self.herdr("workspace", "create", "--cwd", r["cwd"], "--label", r["workspace"] or name, "--no-focus")
             pane, workspace = ws["result"]["root_pane"]["pane_id"], ws["result"]["workspace"]["workspace_id"]
         try:
-            self.agents.start_claude(pane, name, r["config_dir"], self.resume_args(r["args"], r["session"]))
+            self.start_kind(pane, name, r)
         except Failed:
             if workspace:
                 try:
@@ -155,9 +232,16 @@ class Switcher:
                 except Failed as e:
                     self.log(f"{name}: could not close workspace {workspace} after the failed start: {e}")
             raise
-        self.agents.prompt_when_ready(name, self.resume_message(name, (
-            f"{why}, and this session was resumed with --resume on the same account. "
-            "Continue where you stopped.")))
+        kind = r.get("kind", "claude")
+        text = self.resume_message(name, resume_message(kind, why))
+        try:
+            if kind == "claude":
+                self.agents.prompt_when_ready(name, text)
+            else:
+                self.agents.prompt_until_turn(name, text)
+        finally:
+            if not r.get("named", True):
+                self.herdr("agent", "rename", name, "--clear")
         return pane
 
     def restore(self, record: dict, server: str, wait: bool = True) -> list[str]:
@@ -168,7 +252,7 @@ class Switcher:
                 failed.append(n)
                 continue
             try:
-                pane = self.start_recorded(n, r, "The herdr server restarted")
+                pane = self.start_recorded(n, r, restart_reason(record))
                 tried.pop(n, None)
                 self.log(f"{n}: restored in pane {pane} after a herdr server restart, session {r['session']}")
             except Failed as e:
@@ -186,20 +270,34 @@ class Switcher:
         pane = self.start_recorded(name, r, "This agent had exited")
         self.log(f"{name}: resumed in pane {pane} by hand, session {r['session']}")
 
+    def recorded_agent(self, a: dict, labels: dict) -> dict | None:
+        kind, sid = a.get("agent") or "claude", session_of(a)
+        if kind not in KINDS or not sid:
+            return None
+        try:
+            _, argv, env = self.agents.process(kind, a["pane_id"])
+        except Failed:
+            return None
+        r = {"kind": kind, "named": a.get("name") is not None, "pane": a["pane_id"],
+             "workspace": labels.get(a["workspace_id"]), "cwd": a["cwd"], "session": sid, "args": argv[1:]}
+        if kind == "claude":
+            r |= {"config_dir": env.get("CLAUDE_CONFIG_DIR", ""), "rotate": "CLAUDE_TOOLS_ROTATE_ID" in env,
+                  "model": last_model(self.settings.home / ".claude/projects", sid)}
+        elif kind == "opencode":
+            try:
+                r["opencode_agent"] = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}").get("default_agent")
+            except (ValueError, AttributeError):
+                r["opencode_agent"] = None
+        return r
+
     def snapshot(self, server: str, record: dict, failed: list[str]) -> None:
         labels = {w["workspace_id"]: w.get("label") for w in self.herdr("workspace", "list")["result"]["workspaces"]}
         agents = {}
         for a in self.herdr.agents():
-            name, sid = a.get("name"), session_of(a)
-            if a.get("agent") not in ("claude", None) or name is None or not sid:
-                continue
-            try:
-                _, argv, config_dir = self.agents.claude_process(a["pane_id"])
-            except Failed:
-                continue
-            agents[name] = {"pane": a["pane_id"], "workspace": labels.get(a["workspace_id"]), "cwd": a["cwd"],
-                            "session": sid, "config_dir": config_dir, "args": argv[1:]}
-        self.save("agents.json", next_record(record, agents, server, failed, time.time()))
+            key = key_of(a)
+            if key and (r := self.recorded_agent(a, labels)):
+                agents[key] = r
+        self.save("agents.json", {**next_record(record, agents, server, failed, time.time()), "boot": boot_id()})
 
     def move_limited(self, a: dict, hit: tuple[str, int], local: dict[str, str]) -> None:
         name, (text, said) = a["name"], hit
@@ -276,9 +374,10 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
 
 
 def add_parser(sub: argparse._SubParsersAction) -> None:
-    ap = sub.add_parser("limit-switch", help="keep herdr Claude agents running across usage limits and server restarts",
-                        description="Move herdr Claude agents off accounts that hit a usage limit, and start them "
-                                    "again after the herdr server restarted.")
+    ap = sub.add_parser("limit-switch", help="keep herdr agents running across usage limits and server restarts",
+                        description="Move named herdr Claude agents off accounts that hit a usage limit, and start "
+                                    "every recorded Claude, Codex and opencode agent again after the herdr server "
+                                    "restarted.")
     cmds = ap.add_subparsers(dest="cmd", required=True)
     cmds.add_parser("scan", help="restore, then switch each named idle Claude agent whose transcript ends in a usage limit error")
     cmds.add_parser("restore", help="only the restore step of scan")

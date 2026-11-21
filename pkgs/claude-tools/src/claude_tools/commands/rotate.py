@@ -293,6 +293,8 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
+    if r.settings.start_account in r.dirs:
+        return r.settings.start_account
     if r.settings.pick:
         chosen = r.choose(current)
         if chosen == "":

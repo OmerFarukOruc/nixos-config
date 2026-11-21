@@ -52,5 +52,46 @@ available=$(awk '$1 == "MemAvailable:" { print $2 }' /proc/meminfo)
 if ! $now && ((available < 10485760)); then
   skip "MemAvailable is $((available / 1024)) MiB, below the 10 GiB an evaluation of main needs, so this run skips."
 fi
+in_reboot_window() {
+  local now lower=${REBOOT_WINDOW_LOWER:-} upper=${REBOOT_WINDOW_UPPER:-}
+  [[ -n $lower && -n $upper ]] || return 1
+  now=$(date +%H:%M)
+  if [[ $lower < $upper ]]; then
+    [[ ! $now < $lower && $now < $upper ]]
+  else
+    [[ ! $now < $lower || $now < $upper ]]
+  fi
+}
+
+running_work() {
+  local user=${AGENTS_USER:?} home=${AGENTS_HOME:?} uid herdr pid comm shells
+  uid=$(id -u "$user")
+  herdr=/etc/profiles/per-user/$user/bin/herdr
+  if [[ -x $herdr ]]; then
+    (cd / && runuser -u "$user" -- env -i HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" "$herdr" agent list 2>/dev/null) |
+      jq -r '.result.agents[]? | select(.agent_status == "working" or .agent_status == "blocked")
+        | "herdr agent \(.name // .pane_id) is \(.agent_status)"'
+  fi
+  while read -r pid comm; do
+    shells=$(pgrep -c -P "$pid" -x 'bash|zsh|sh' || true)
+    ((shells == 0)) || echo "$comm pid $pid runs $shells shell commands"
+  done < <(ps -u "$uid" -o pid=,comm= | awk '$2 ~ /^\.?(claude|codex|opencode)(-wrapped|2-wrap)?$/')
+  systemctl --user -M "$user@" list-units --type=service --state=activating --no-legend --plain 2>/dev/null |
+    awk '{print "user unit " $1 " is running"}'
+  busctl --json=short call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager \
+    ListInhibitors 2>/dev/null |
+    jq -r '.data[0][]? | select((.[0] | split(":") | index("shutdown")) and (.[3] | startswith("block")))
+      | "\(.[1]) holds a \(.[3]) shutdown lock: \(.[2])"'
+}
+
+if in_reboot_window; then
+  work=$(running_work 2>/dev/null | paste -sd ';' | sed 's/;/; /g' || true)
+  if [[ -n $work ]]; then
+    echo "reboot-check (log only): a reboot now would cut off: $work"
+  else
+    echo "reboot-check (log only): nothing runs that a reboot would cut off."
+  fi
+fi
+
 echo "$main" >"$state/candidate"
 echo "Installing main at ${main:0:12}."

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -21,7 +22,7 @@ RESET = re.compile(
 )
 
 
-def last_assistant(transcript: Path) -> dict | None:
+def assistant_entries(transcript: Path) -> Iterator[dict]:
     with transcript.open("rb") as f:
         size = f.seek(0, os.SEEK_END)
         f.seek(max(0, size - TRANSCRIPT_TAIL))
@@ -32,7 +33,22 @@ def last_assistant(transcript: Path) -> dict | None:
         except ValueError:
             continue
         if isinstance(entry, dict) and entry.get("type") == "assistant":
-            return entry
+            yield entry
+
+
+def last_assistant(transcript: Path) -> dict | None:
+    return next(assistant_entries(transcript), None)
+
+
+def last_model(projects: Path, session: str) -> str | None:
+    transcript = next(projects.glob(f"*/{session}.jsonl"), None)
+    try:
+        for entry in assistant_entries(transcript) if transcript else ():
+            model = (entry.get("message") or {}).get("model")
+            if isinstance(model, str) and model and not model.startswith("<"):
+                return model
+    except OSError:
+        return None
     return None
 
 

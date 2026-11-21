@@ -9,6 +9,10 @@ let
   cfg = config.oruc.autoUpgrade;
   deployUser = lib.defaultTo config.oruc.machine.user config.oruc.machine.deployLogin;
   state = "/var/lib/nixos-upgrade";
+  rebootWindow = {
+    lower = "03:00";
+    upper = "07:00";
+  };
   condition = pkgs.writeShellApplication {
     name = "nixos-upgrade-condition";
     runtimeInputs = with pkgs; [
@@ -17,6 +21,8 @@ let
       gitMinimal
       gnugrep
       gnused
+      jq
+      procps
       util-linux
       config.systemd.package
     ];
@@ -81,10 +87,7 @@ in
       randomizedDelaySec = "10min";
       persistent = true;
       allowReboot = cfg.reboot;
-      rebootWindow = lib.mkIf cfg.reboot {
-        lower = "03:00";
-        upper = "07:00";
-      };
+      rebootWindow = lib.mkIf cfg.reboot rebootWindow;
     };
 
     systemd.services.nixos-upgrade = {
@@ -94,6 +97,12 @@ in
         REPOSITORY = "https://github.com/OmerFarukOruc/nixos-config.git";
         DEPLOY_HOME = config.users.users.${deployUser}.home;
         RUNNING_REVISION_LIB = "${../scripts/lib/running-revision.sh}";
+      }
+      // lib.optionalAttrs cfg.reboot {
+        REBOOT_WINDOW_LOWER = rebootWindow.lower;
+        REBOOT_WINDOW_UPPER = rebootWindow.upper;
+        AGENTS_USER = config.oruc.machine.user;
+        AGENTS_HOME = config.users.users.${config.oruc.machine.user}.home;
       }
       // lib.optionalAttrs cfg.issueReports reportEnvironment;
       serviceConfig = {

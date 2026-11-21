@@ -38,7 +38,11 @@ let
         StateDirectory = name;
         ExecStopPost = failure.execStopPost;
       };
-      inherit (failure) initContent;
+      rerunService = {
+        StateDirectory = name;
+        ExecStopPost = failure.rerun.execStopPost;
+      };
+      inherit (failure) initContent rerun;
     };
   auditMarker = failureMarker "statuslantern-audit" "journalctl --user -u statuslantern-audit -n 40";
   nightlyMarker = failureMarker "statuslantern-nightly" "journalctl --user -u statuslantern-nightly -n 40; the night's folder is in ~/.local/state/statuslantern-nightly/runs";
@@ -426,8 +430,10 @@ in
       ExecStart = "${lib.getExe pkgs.devenv} shell -- audit-start";
       TimeoutStartSec = "15min";
     }
-    // auditMarker.service;
+    // auditMarker.rerunService;
   };
+  systemd.user.services.statuslantern-audit-rerun = auditMarker.rerun.service;
+  systemd.user.timers.statuslantern-audit-rerun = auditMarker.rerun.timer;
   systemd.user.timers.statuslantern-audit = {
     Unit.Description = "Run the Status Lantern telemetry audit every morning";
     Timer = {
@@ -447,9 +453,11 @@ in
       TimeoutStopSec = "10min";
       StateDirectoryMode = "0700";
     }
-    // nightlyMarker.service;
+    // nightlyMarker.rerunService;
     unit.X-SwitchMethod = "keep-old";
   };
+  systemd.user.services.statuslantern-nightly-rerun = nightlyMarker.rerun.service;
+  systemd.user.timers.statuslantern-nightly-rerun = nightlyMarker.rerun.timer;
   systemd.user.timers.statuslantern-nightly = {
     Unit.Description = "Run the nightly Status Lantern pull request every day";
     Timer = {

@@ -100,7 +100,7 @@ def start_claude_agent(ag: Agents, a: argparse.Namespace, pane: str, config_dir:
 def start_opencode_agent(ag: Agents, a: argparse.Namespace, pane: str, brief: str | None) -> None:
     ag.start_opencode(pane, a.name, a.agent)
     if brief:
-        ag.prompt_opencode(a.name, brief)
+        ag.prompt_until_turn(a.name, brief)
 
 
 def start(settings: Settings, a: argparse.Namespace) -> None:

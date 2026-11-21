@@ -23,6 +23,7 @@ class Settings:
     herdr_pane: str
     config_dir: str
     pick: bool
+    start_account: str
     color: bool
 
     @classmethod
@@ -43,6 +44,7 @@ class Settings:
             herdr_pane=env.get("HERDR_PANE_ID", ""),
             config_dir=env.get("CLAUDE_CONFIG_DIR", ""),
             pick=env.get("CLAUDE_TOOLS_PICK") != "0",
+            start_account=env.get("CLAUDE_TOOLS_START_ACCOUNT", ""),
             color=not env.get("NO_COLOR"),
         )
 

@@ -416,6 +416,24 @@ time switches to its own build and leaves the reboot to the next window. A
 deploy that starts within the minute before the scheduled reboot can be cut
 short, because the reboot takes no deploy lock; the host then boots the boot
 default, the new `main`.
+
+**What a reboot cuts off.** Nothing holds the reboot back for running work.
+Each run inside the window logs one `reboot-check (log only):` line
+(`scripts/upgrade-condition.sh`) that lists what a reboot at that moment would
+cut off: each herdr agent of the machine's user that is `working` or
+`blocked`, each Claude, Codex or opencode process with a shell child (a
+running shell command or background task), each user service in
+`activating` (a running oneshot such as `statuslantern-nightly`), and each
+`block` or `block-weak` shutdown inhibitor lock. Read them with
+`journalctl -u nixos-upgrade -g reboot-check`. The list includes short units,
+such as the minute's `claude-tools-limit-switch` scan. A user's
+`systemd-inhibit --mode=block-weak` fails with "Access denied" without a
+polkit rule, so today only root can take such a lock. After the reboot,
+`claude-tools limit-switch` starts the herdr agents again
+([Limit switch](../pkgs/claude-tools/README.md#limit-switch)), and a shutdown
+restarts the nightly and audit runs at the next boot
+([devbox.md](devbox.md), the failure marker).
+
 Limine counts no boot attempts, so a new kernel that does not boot leaves the
 host down until someone opens the provider's console and picks the previous
 entry from Limine's menu. On devbox, the SigNoz rule `devbox AWS certificate

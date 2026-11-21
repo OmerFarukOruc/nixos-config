@@ -1,8 +1,8 @@
 claude() {
   local tools="@bin@/claude-tools" pin=0 name="" dir a
-  local pick="${CLAUDE_TOOLS_PICK:-}" plain="${CLAUDE_TOOLS_PLAIN:-}"
+  local pick="${CLAUDE_TOOLS_PICK:-}" plain="${CLAUDE_TOOLS_PLAIN:-}" start="${CLAUDE_TOOLS_START_ACCOUNT:-}"
   local -a rest
-  unset CLAUDE_TOOLS_PICK CLAUDE_TOOLS_PLAIN
+  unset CLAUDE_TOOLS_PICK CLAUDE_TOOLS_PLAIN CLAUDE_TOOLS_START_ACCOUNT
   rest=()
   while [ "$#" -gt 0 ]; do
     a=$1
@@ -34,7 +34,7 @@ claude() {
   elif [ -n "${CLAUDE_CONFIG_DIR:-}${CLAUDE_TOOLS_ROTATE_ID:-}$plain" ] || [ ! -t 0 ] || [ ! -t 1 ]; then
     command claude "$@"
   else
-    CLAUDE_TOOLS_PICK="$pick" "$tools" rotate "$@"
+    CLAUDE_TOOLS_PICK="$pick" CLAUDE_TOOLS_START_ACCOUNT="$start" "$tools" rotate "$@"
   fi
 }
 

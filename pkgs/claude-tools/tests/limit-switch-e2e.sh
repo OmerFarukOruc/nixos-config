@@ -23,9 +23,13 @@ cleanup() {
   h server stop >/dev/null 2>&1 || true
   sleep 2
   herdr session delete "$run" >/dev/null 2>&1 || true
+  for p in $(ps -u "$(id -u)" -o pid=); do
+    [[ "$(readlink "/proc/$p/cwd" 2>/dev/null)" == "$dir"* ]] && kill "$p" 2>/dev/null
+  done
   if ((ok)); then rm -rf "$dir"; else echo "kept $dir"; fi
 }
 trap cleanup EXIT
+trap 'exit 130' INT TERM
 source "$(dirname "$0")/foreign-agent.sh"
 fail() {
   echo "FAIL: $*"
@@ -119,6 +123,45 @@ check_move() {
   check_agent "$1"
   echo "$1: moved from $2 to $now"
 }
+
+prompt_to() { h agent prompt "$1" "$2" --wait --timeout 180000 >/dev/null; }
+sid_of() { h agent get "$1" | jq -r '.result.agent.agent_session.value'; }
+name_of() { h agent get "$1" | jq -r '.result.agent.name'; }
+said_in() {
+  local f
+  for _ in $(seq 30); do
+    f=$(ls ~/.claude/projects/*/"$1".jsonl 2>/dev/null) && jq -rs "$2" "$f" | grep -q "${@:3}" && return 0
+    sleep 2
+  done
+  return 1
+}
+proc_in() {
+  local p env
+  for p in $(pgrep -x "$2"); do
+    env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
+    if grep -qx "HERDR_PANE_ID=$1" <<<"$env" && grep -qx "HERDR_SOCKET_PATH=$sock" <<<"$env"; then
+      echo "$p"
+      return
+    fi
+  done
+}
+oc_agent=e2e-restore
+oc_ready=""
+if command -v opencode >/dev/null && [[ -d "$HOME/.config/opencode" ]]; then
+  oc_files="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../agents/opencode/agents" && pwd)"
+  [[ ! -e "$oc_files/$oc_agent.md" ]] || fail "the checkout has an agent file $oc_agent.md, the name of an agent this test writes"
+  mkdir -p "$dir/opencode/agents"
+  for entry in "$HOME/.config/opencode"/*; do
+    [[ "$(basename "$entry")" == agents ]] || ln -s "$entry" "$dir/opencode/"
+  done
+  ln -s "$oc_files"/*.md "$dir/opencode/agents/"
+  export OPENCODE_CONFIG_DIR="$dir/opencode"
+  (cd "$dir" && opencode models --standalone) >"$dir/opencode-models" || fail "opencode models exited $?"
+  oc_model=$(grep -m 1 -v -E '[[:space:]|&\\]' "$dir/opencode-models" || true)
+  [[ -n "$oc_model" ]] || fail "opencode models lists no model"
+  sed "s|^model: .*|model: $oc_model|" "$oc_files/opencode-review.md" >"$dir/opencode/agents/$oc_agent.md"
+  oc_ready=1
+fi
 
 start=${CLS_E2E_ACCOUNT:-}
 if [[ -z $start ]]; then
@@ -234,16 +277,113 @@ rm "$dir/state/limits.json"
 check_agent "scan after an old limit message"
 echo "old limit: scan held nothing and prompted the agent on $first to continue"
 
+uws=$(h workspace create --cwd "$dir" --label "$run-u" --no-focus)
+upane=$(jq -r .result.root_pane.pane_id <<<"$uws")
+h pane run "$upane" "unset CLAUDE_CONFIG_DIR CLAUDE_TOOLS_PLAIN; export CLAUDE_TOOLS_PICK=0" >/dev/null
+out=$(h agent start "$run-u" --kind claude --pane "$upane" --timeout 120000 -- --dangerously-skip-permissions 2>&1) ||
+  { grep -q agent_not_ready <<<"$out" || fail "the rotate agent did not start: $out"; }
+if h agent read "$run-u" --source visible | grep -q "Yes, I trust this folder"; then
+  h agent send-keys "$run-u" down >/dev/null
+  h agent send-keys "$run-u" enter >/dev/null
+fi
+h agent wait "$run-u" --until idle --timeout 120000 >/dev/null
+upid=$(claude_in "$upane" | cut -f3)
+grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") || fail "the pane's claude function did not start rotate"
+uaccount=$(account "$upane")
+h agent rename "$run-u" --clear >/dev/null
+[[ "$(name_of "$upane")" == null ]] || fail "the rotate agent kept a herdr name"
+prompt_to "$upane" "/model haiku"
+prompt_to "$upane" "Remember the code word HERON. Reply only OK."
+usid=$(sid_of "$upane")
+said_in "$usid" '[.[] | select(.type == "assistant") | .message.model] | last' haiku ||
+  fail "the rotate agent's transcript shows no haiku reply after /model haiku"
+claude_in "$upane" | cut -f2 | grep -q -- --model && fail "the rotate agent has --model in its arguments, so the restore of the transcript model proves nothing"
+echo "setup: unnamed rotate agent in $upane on $uaccount, session $usid, model set with /model"
+
+cpane=$(jq -r .result.root_pane.pane_id <<<"$(h workspace create --cwd "$dir" --label "$run-cx" --no-focus)")
+h agent start "$run-cx" --kind codex --pane "$cpane" --timeout 120000 -- -s read-only -a never >/dev/null 2>&1 || true
+h agent wait "$run-cx" --until idle --timeout 120000 >/dev/null
+prompt_to "$run-cx" "Remember the code word OTTER. Reply only OK."
+h agent wait "$run-cx" --until idle --until "done" --timeout 120000 >/dev/null
+csid=$(sid_of "$run-cx")
+[[ -n "$csid" && "$csid" != null ]] || fail "herdr reports no session id for the codex agent"
+echo "setup: codex agent $run-cx in $cpane, session $csid"
+
+if [[ -n $oc_ready ]]; then
+  "$tools" agent start "$run-oc" --kind opencode --agent "$oc_agent" --cwd "$dir" ||
+    fail "agent start of the opencode agent exited $?"
+  prompt_to "$run-oc" "Remember the code word LYNX. Reply only OK."
+  h agent wait "$run-oc" --until idle --until "done" --timeout 180000 >/dev/null
+  osid=$(sid_of "$run-oc")
+  opane=$(h agent get "$run-oc" | jq -r .result.agent.pane_id)
+  [[ -n "$osid" && "$osid" != null ]] || fail "herdr reports no session id for the opencode agent"
+  echo "setup: opencode agent $run-oc in $opane, session $osid"
+fi
+
+rm -f "$state/switched.json"
+cls scan || fail "scan before the server stop exited $?"
+key="pane-$(tr ':' '-' <<<"$upane" | tr '[:upper:]' '[:lower:]')"
+jq -e --arg k "$key" --arg s "$usid" '.agents[$k] | .session == $s and .rotate and .named == false and (.model | test("haiku"))' \
+  "$state/agents.json" >/dev/null || fail "scan did not record the unnamed agent as $key: $(jq -c --arg k "$key" '.agents[$k]' "$state/agents.json")"
+jq -e --arg n "$run-cx" --arg s "$csid" '.agents[$n] | .kind == "codex" and .session == $s' "$state/agents.json" >/dev/null ||
+  fail "scan did not record the codex agent: $(jq -c --arg n "$run-cx" '.agents[$n]' "$state/agents.json")"
+
 h server stop >/dev/null
 for _ in $(seq 30); do
-  [[ -z "$(claude_in "$pane")" ]] && break
+  [[ -z "$(claude_in "$pane")$(claude_in "$upane")" ]] && break
   sleep 1
 done
-[[ -z "$(claude_in "$pane")" ]] || fail "claude outlived the stopped server"
+[[ -z "$(claude_in "$pane")$(claude_in "$upane")" ]] || fail "claude outlived the stopped server"
 cls scan || fail "scan after the server stop exited $?"
 [[ "$(account "$pane")" == "$first" ]] || fail "restore put the agent on $(account "$pane"), not $first"
 check_agent restore
 echo "restore: back in $pane on $first"
+
+h agent wait "$upane" --until idle --until "done" --timeout 180000 >/dev/null
+[[ "$(name_of "$upane")" == null ]] || fail "restore left the unnamed agent with the name $(name_of "$upane")"
+[[ "$(sid_of "$upane")" == "$usid" ]] || fail "restore changed the session of the unnamed agent"
+[[ "$(account "$upane")" == "$uaccount" ]] || fail "restore put the unnamed agent on $(account "$upane"), not $uaccount"
+upid=$(claude_in "$upane" | cut -f3)
+grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") || fail "restore did not start the unnamed agent through rotate"
+ucmd=$(claude_in "$upane" | cut -f2)
+grep -q -- "--model claude-haiku" <<<"$ucmd" || fail "restore did not pin the transcript model: $ucmd"
+grep -q -- "--dangerously-skip-permissions" <<<"$ucmd" || fail "restore dropped the unnamed agent's own flag: $ucmd"
+said_in "$usid" '.[] | select(.type == "user") | .message.content | if type == "string" then . else (.[]?.text? // empty) end' \
+  -F "The herdr server restarted, so every process this session started has ended" ||
+  fail "the unnamed agent did not get the restart message"
+prompt_to "$upane" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
+said_in "$usid" "$last_reply" -i heron7 || fail "the unnamed agent lost its code word after the restore"
+echo "restore: unnamed agent back in $upane on $uaccount through rotate with $(grep -o -- '--model [^ ]*' <<<"$ucmd")"
+
+h agent wait "$run-cx" --until idle --until "done" --timeout 180000 >/dev/null
+[[ "$(sid_of "$run-cx")" == "$csid" ]] || fail "restore changed the codex session"
+cpid=$(proc_in "$cpane" 'codex|\.codex-wrapped')
+[[ -n "$cpid" ]] || fail "restore started no codex in $cpane"
+tr '\0' ' ' <"/proc/$cpid/cmdline" | grep -q -- "resume $csid -s read-only -a never" ||
+  fail "restore did not start codex as resume $csid with its flags: $(tr '\0' ' ' <"/proc/$cpid/cmdline")"
+prompt_to "$run-cx" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
+h agent wait "$run-cx" --until idle --until "done" --timeout 120000 >/dev/null
+h agent read "$run-cx" --source recent-unwrapped --lines 40 | grep -qi otter7 || fail "the codex agent lost its code word after the restore"
+echo "restore: codex agent back in $cpane on session $csid"
+
+if [[ -n $oc_ready ]]; then
+  h agent wait "$run-oc" --until idle --until "done" --timeout 180000 >/dev/null
+  [[ "$(sid_of "$run-oc")" == "$osid" ]] || fail "restore changed the opencode session"
+  opid=$(proc_in "$opane" 'opencode|\.opencode2-wrap')
+  [[ -n "$opid" ]] || fail "restore started no opencode in $opane"
+  grep -qxF "OPENCODE_CONFIG_CONTENT={\"default_agent\": \"$oc_agent\"}" <(tr '\0' '\n' <"/proc/$opid/environ") ||
+    fail "restore did not start opencode in its agent $oc_agent"
+  prompt_to "$run-oc" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
+  h agent wait "$run-oc" --until idle --until "done" --timeout 180000 >/dev/null
+  h agent read "$run-oc" --source recent-unwrapped --lines 40 | grep -qi lynx7 || fail "the opencode agent lost its code word after the restore"
+  echo "restore: opencode agent back in $opane on session $osid"
+else
+  echo "restore of an opencode agent: skipped, opencode or its config is missing on this host"
+fi
+for target in "$upane" "$run-cx" ${oc_ready:+"$run-oc"}; do
+  h agent send-keys "$target" ctrl+c >/dev/null 2>&1 || true
+done
+h agent prompt "$upane" /exit >/dev/null 2>&1 || true
 
 [[ $mode == settings ]] || ask "Delete every scheduled job with CronDelete. Reply only OK."
 h agent prompt "$name" /exit >/dev/null

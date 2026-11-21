@@ -141,15 +141,19 @@ class Agents:
             if proc.get("name") in comms:
                 yield Path(f"/proc/{proc['pid']}")
 
-    def claude_process(self, pane: str) -> tuple[int, list[str], str]:
-        for p in self.in_pane(CLAUDE, pane):
+    def process(self, kind: str, pane: str) -> tuple[int, list[str], dict[str, str]]:
+        for p in self.in_pane(KINDS[kind], pane):
             try:
                 env = environ(p)
                 argv = (p / "cmdline").read_bytes().decode().split("\0")[:-1]
             except OSError:
                 continue
-            return int(p.name), argv, env.get("CLAUDE_CONFIG_DIR", "")
-        raise NoProcess(f"no claude process in pane {pane}")
+            return int(p.name), argv, env
+        raise NoProcess(f"no {kind} process in pane {pane}")
+
+    def claude_process(self, pane: str) -> tuple[int, list[str], str]:
+        pid, argv, env = self.process("claude", pane)
+        return pid, argv, env.get("CLAUDE_CONFIG_DIR", "")
 
     def agent_process(self, pane: str) -> tuple[str, int]:
         procs = self.foreground(pane)
@@ -289,7 +293,7 @@ class Agents:
             time.sleep(1)
         self.press_enter_until_taken(name, text)
 
-    def prompt_opencode(self, name: str, text: str) -> None:
+    def prompt_until_turn(self, name: str, text: str) -> None:
         deadline = time.time() + PROMPT_WAIT_S
         try:
             self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL, "--timeout", str(PROMPT_WAIT_S * 1000))
@@ -313,10 +317,17 @@ class Agents:
         )
         self.start_in_pane(pane, name, "claude", env, args)
 
-    def start_opencode(self, pane: str, name: str, agent: str) -> None:
+    def start_rotated(self, pane: str, name: str, account: str, args: list[str]) -> None:
+        env = f"unset CLAUDE_CONFIG_DIR CLAUDE_TOOLS_PLAIN; export CLAUDE_TOOLS_START_ACCOUNT={shlex.quote(account)}"
+        self.start_in_pane(pane, name, "claude", env, args)
+
+    def start_opencode(self, pane: str, name: str, agent: str, args: tuple[str, ...] = ()) -> None:
         env = " ".join(["unset", *OPENCODE_CONFIG_VARS, ";", "export",
                         *(f"{k}={shlex.quote(v)}" for k, v in opencode_env(agent).items())])
-        self.start_in_pane(pane, name, "opencode", env, ["--standalone"])
+        self.start_in_pane(pane, name, "opencode", env, ["--standalone", *args])
+
+    def start_codex(self, pane: str, name: str, args: list[str]) -> None:
+        self.start_in_pane(pane, name, "codex", ":", args)
 
     def start_in_pane(self, pane: str, name: str, kind: str, env: str, args: list[str]) -> None:
         h = self.herdr

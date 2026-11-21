@@ -607,6 +607,16 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   successful run deletes it. Each new shell prints the marker's line until a
   run succeeds. A run that `systemctl --user stop` cuts short counts
   as a failure too (the result is `signal`).
+- A run that a shutdown cuts short. `statuslantern-nightly` and
+  `statuslantern-audit` use the marker's `rerun` form (`failure-marker.nix`):
+  when a run ends without `success` while `systemctl is-system-running`
+  prints `stopping`, the marker writes `~/.local/state/<unit>/rerun` instead
+  of `failed`. Five minutes after the user manager starts again,
+  `<unit>-rerun.timer` deletes that file and starts the unit once more, so a
+  night reboot that kills the nightly run restarts it after the boot.
+  `statuslantern-factory-run` needs no rerun, because its run moves the event
+  out of the inbox only at its end, and `statuslantern-factory-run.path`
+  starts it again while the inbox holds an event.
 
 ## Factory run user
 
