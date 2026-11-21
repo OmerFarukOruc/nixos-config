@@ -25,6 +25,7 @@ in
 
   nixpkgs.overlays = [
     (import ../overlays/khal.nix)
+    (import ../overlays/iptvnator.nix)
   ];
 
   imports = [ inputs.home-manager.nixosModules.home-manager ];

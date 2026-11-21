@@ -5,7 +5,12 @@ let
   patched = {
     xrdp = nixosConfigurations.devbox.pkgs.xrdp;
     inherit (rog.kdePackages) ksystemstats;
-    inherit (rog) power-profiles-daemon scx-loader sunshine;
+    inherit (rog)
+      iptvnator
+      power-profiles-daemon
+      scx-loader
+      sunshine
+      ;
     vscode = nixosConfigurations.nixos-rog.config.home-manager.users.oruc.programs.vscode.package;
   };
   fixedUp = {
@@ -14,14 +19,25 @@ let
       nixosConfigurations.nixos-rog.config.home-manager.users.oruc.oruc.agents.upstreamSkills;
   };
   patchNeedsTools = [ "vscode" ];
+  patchOnlyDrops = {
+    iptvnator = {
+      pnpmDeps = null;
+      preConfigure = "";
+      preBuild = "";
+    };
+  };
   patchOnly =
     name: pkg:
-    (rog.srcOnly pkg).overrideAttrs (old: {
-      nativeBuildInputs = if lib.elem name patchNeedsTools then old.nativeBuildInputs else [ ];
-      buildInputs = [ ];
-      propagatedBuildInputs = [ ];
-      installPhase = "touch $out";
-    });
+    (rog.srcOnly pkg).overrideAttrs (
+      old:
+      {
+        nativeBuildInputs = if lib.elem name patchNeedsTools then old.nativeBuildInputs else [ ];
+        buildInputs = [ ];
+        propagatedBuildInputs = [ ];
+        installPhase = "touch $out";
+      }
+      // patchOnlyDrops.${name} or { }
+    );
   unchecked = {
     deskflow = "it only drops the patches of libportal, which libportal 0.10.0 already contains";
     nvidia-driver = "it patches the driver version that file pins, which no nixpkgs move changes";
