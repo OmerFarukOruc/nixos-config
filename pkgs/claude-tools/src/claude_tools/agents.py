@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -76,6 +77,34 @@ def gone(pid: int, seconds: float) -> bool:
             return True
         time.sleep(0.5)
     return False
+
+
+def has_stalled_prompt(kind: str, screen: str, text: str) -> bool:
+    if kind == "opencode":
+        frame = re.split(r"^ *╹▀+ *$", screen, flags=re.MULTILINE)
+        if len(frame) < 2 or "ctrl+p commands" not in frame[-1] or "┃" in frame[-1]:
+            return False
+        box = frame[-2].rsplit("\n\n", 1)[-1].splitlines()
+        if len(box) < 4 or box[0].lstrip() != "┃" or box[-2] != box[0]:
+            return False
+        margin = box[0] + "  "
+        if not box[-1].startswith(margin) or any(line != box[0] and not line.startswith(margin) for line in box[1:-2]):
+            return False
+        rows = [line[len(margin):] for line in box[1:-2]]
+    elif kind == "codex":
+        body, gap, footer = screen.rstrip().rpartition("\n\n")
+        if not gap or not footer.startswith("  ") or "›" in footer:
+            return False
+        before, marker, composer = body.rpartition("\n› ")
+        if not marker or not before.endswith("\n"):
+            return False
+        first, *rest = composer.split("\n")
+        if any(not line.startswith("  ") for line in rest):
+            return False
+        rows = [first, *(line[2:] for line in rest)]
+    else:
+        return False
+    return bool(text.strip()) and text in (" ".join(rows), "\n".join(rows), "".join(rows))
 
 
 def opencode_config(env: dict[str, str]) -> dict[str, str]:
@@ -350,7 +379,7 @@ class Agents:
         self.press_enter_until_taken(name, text)
 
     def prompt_until_turn(self, name: str, text: str) -> None:
-        deadline = time.time() + PROMPT_WAIT_S
+        deadline = time.monotonic() + PROMPT_WAIT_S
         try:
             self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL, "--timeout", str(PROMPT_WAIT_S * 1000))
             return
@@ -358,7 +387,12 @@ class Agents:
             if e.code != "agent_prompt_stalled":
                 raise self.no_turn(name, e) from e
         try:
-            left_ms = max(1, int((deadline - time.time()) * 1000))
+            agent = self.herdr("agent", "get", name)["result"]["agent"]
+            if agent["agent_status"] in ("idle", "done") and has_stalled_prompt(
+                agent["agent"], self.herdr.screen(name), text,
+            ) and time.monotonic() < deadline:
+                self.herdr("agent", "send-keys", name, "enter")
+            left_ms = max(1, int((deadline - time.monotonic()) * 1000))
             self.herdr("agent", "wait", name, *SUBMIT_UNTIL, "--timeout", str(left_ms))
         except HerdrError as e:
             raise self.no_turn(name, e) from e
@@ -381,6 +415,7 @@ class Agents:
                        config: dict[str, str] | None = None) -> None:
         exports = [f"{k}={shlex.quote(v)}" for k, v in opencode_env(agent, config).items()]
         env = " ".join(["unset", *OPENCODE_CONFIG_VARS, *(["; export", *exports] if exports else [])])
+        env += """; export OPENCODE_CLI_CONFIG_CONTENT=${OPENCODE_CLI_CONFIG_CONTENT:-'{"prompt":{"paste":"full"}}'}"""
         standalone = ["--standalone"] if agent and "--standalone" not in args else []
         self.start_in_pane(pane, name, "opencode", env, [*standalone, *args])
 
