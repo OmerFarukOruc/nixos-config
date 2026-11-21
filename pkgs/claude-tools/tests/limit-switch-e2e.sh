@@ -47,7 +47,7 @@ fi
 claude_in() {
   local p env
   for p in $(pgrep -x 'claude|\.claude-wrapped'); do
-    env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
+    env=$(tr '\0' '\n' 2>/dev/null <"/proc/$p/environ") || continue
     if grep -qx "HERDR_PANE_ID=$1" <<<"$env" && grep -qx "HERDR_SOCKET_PATH=$sock" <<<"$env"; then
       printf '%s\t%s\t%s\n' "$(sed -n 's/^CLAUDE_CONFIG_DIR=//p' <<<"$env")" "$(tr '\0' ' ' <"/proc/$p/cmdline")" "$p"
       return
@@ -124,8 +124,24 @@ check_move() {
   echo "$1: moved from $2 to $now"
 }
 
-prompt_to() { h agent prompt "$1" "$2" --wait --timeout 180000 >/dev/null; }
-sid_of() { h agent get "$1" | jq -r '.result.agent.agent_session.value'; }
+prompt_to() {
+  local out
+  out=$(h agent prompt "$1" "$2" --wait --timeout 180000 2>&1) && return 0
+  grep -q agent_prompt_stalled <<<"$out" || fail "prompt to $1 failed: $out"
+  echo "setup: the prompt to $1 stayed in its input box, so Enter is pressed"
+  h agent send-keys "$1" enter >/dev/null
+  h agent wait "$1" --until working --until blocked --timeout 30000 >/dev/null 2>&1 || true
+  h agent wait "$1" --until idle --until "done" --timeout 180000 >/dev/null
+}
+sid_of() {
+  local s
+  for _ in $(seq 30); do
+    s=$(h agent get "$1" | jq -r '.result.agent.agent_session.value')
+    [[ -n $s && $s != null ]] && break
+    sleep 1
+  done
+  echo "$s"
+}
 name_of() { h agent get "$1" | jq -r '.result.agent.name'; }
 said_in() {
   local f
@@ -136,14 +152,9 @@ said_in() {
   return 1
 }
 proc_in() {
-  local p env
-  for p in $(pgrep -x "$2"); do
-    env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
-    if grep -qx "HERDR_PANE_ID=$1" <<<"$env" && grep -qx "HERDR_SOCKET_PATH=$sock" <<<"$env"; then
-      echo "$p"
-      return
-    fi
-  done
+  h pane process-info --pane "$1" |
+    jq -r --arg re "$2" '.result.process_info.foreground_processes[] | select(.name | test("^(" + $re + ")$")) | .pid' |
+    head -n 1
 }
 oc_agent=e2e-restore
 oc_ready=""
@@ -279,7 +290,7 @@ echo "old limit: scan held nothing and prompted the agent on $first to continue"
 
 uws=$(h workspace create --cwd "$dir" --label "$run-u" --no-focus)
 upane=$(jq -r .result.root_pane.pane_id <<<"$uws")
-h pane run "$upane" "unset CLAUDE_CONFIG_DIR CLAUDE_TOOLS_PLAIN; export CLAUDE_TOOLS_PICK=0" >/dev/null
+h pane run "$upane" "unset CLAUDE_CONFIG_DIR CLAUDE_TOOLS_PLAIN; export CLAUDE_TOOLS_PICK=0 ANTHROPIC_MODEL=haiku" >/dev/null
 out=$(h agent start "$run-u" --kind claude --pane "$upane" --timeout 120000 -- --dangerously-skip-permissions 2>&1) ||
   { grep -q agent_not_ready <<<"$out" || fail "the rotate agent did not start: $out"; }
 if h agent read "$run-u" --source visible | grep -q "Yes, I trust this folder"; then
@@ -292,13 +303,12 @@ grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") 
 uaccount=$(account "$upane")
 h agent rename "$run-u" --clear >/dev/null
 [[ "$(name_of "$upane")" == null ]] || fail "the rotate agent kept a herdr name"
-prompt_to "$upane" "/model haiku"
 prompt_to "$upane" "Remember the code word HERON. Reply only OK."
 usid=$(sid_of "$upane")
 said_in "$usid" '[.[] | select(.type == "assistant") | .message.model] | last' haiku ||
-  fail "the rotate agent's transcript shows no haiku reply after /model haiku"
+  fail "the rotate agent's transcript shows no haiku reply under ANTHROPIC_MODEL=haiku"
 claude_in "$upane" | cut -f2 | grep -q -- --model && fail "the rotate agent has --model in its arguments, so the restore of the transcript model proves nothing"
-echo "setup: unnamed rotate agent in $upane on $uaccount, session $usid, model set with /model"
+echo "setup: unnamed rotate agent in $upane on $uaccount, session $usid, model from the pane shell's ANTHROPIC_MODEL, which the restarted server's shells lack"
 
 cpane=$(jq -r .result.root_pane.pane_id <<<"$(h workspace create --cwd "$dir" --label "$run-cx" --no-focus)")
 h agent start "$run-cx" --kind codex --pane "$cpane" --timeout 120000 -- -s read-only -a never >/dev/null 2>&1 || true
@@ -408,7 +418,7 @@ check_agent resume
 jq -e --arg n "$name" '(.agents | has($n)) and (.ended | has($n) | not)' "$state/agents.json" >/dev/null ||
   fail "the record still holds $name as ended after resume"
 pid=$(for p in $(pgrep -x 'claude|\.claude-wrapped'); do
-  env=$(tr '\0' '\n' <"/proc/$p/environ" 2>/dev/null) || continue
+  env=$(tr '\0' '\n' 2>/dev/null <"/proc/$p/environ") || continue
   if grep -qx "HERDR_PANE_ID=$pane" <<<"$env" && grep -qx "HERDR_SOCKET_PATH=$sock" <<<"$env"; then echo "$p"; fi
 done)
 cls resume "$name" || fail "resume of the running agent exited $?"
