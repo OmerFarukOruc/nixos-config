@@ -352,10 +352,12 @@ class Switcher:
         return failed
 
     def resume(self, state: State, name: str) -> None:
-        r, live = recorded(state, name), self.herdr.agents()
-        if (agent := running_as(name, r, live)) and self.agents.running(agent.get("name") or agent["pane_id"]):
+        r, live = state.agents.get(name) or state.ended.get(name), self.herdr.agents()
+        agent = running_as(name, r, live) if r else next((a for a in live if a.get("name") == name), None)
+        if agent and self.agents.running(agent.get("name") or agent["pane_id"]):
             self.log(f"{name} is running already in pane {agent['pane_id']}")
             return
+        r = recorded(state, name)
         pane = self.start_recorded(name, r, "This agent had exited", live)
         self.log(f"{name}: resumed in pane {pane} by hand, session {r.session}")
 
