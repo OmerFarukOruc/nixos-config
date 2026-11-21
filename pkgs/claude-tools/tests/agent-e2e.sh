@@ -9,6 +9,7 @@ name="$run-a"
 foreign="$run-foreign"
 slow="$run-slow"
 oc="$run-oc"
+cx="$run-cx"
 work="$dir/work"
 watch_pid=""
 watch_deadline_s=3600
@@ -27,6 +28,7 @@ cleanup() {
   "$tools" agent stop --force "$foreign" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$slow" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$oc" >/dev/null 2>&1 || true
+  "$tools" agent stop --force "$cx" >/dev/null 2>&1 || true
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
@@ -99,6 +101,15 @@ if command -v opencode >/dev/null && [[ -d "$HOME/.config/opencode" ]]; then
   sed "s|^model: .*|model: $oc_model|" "$oc_files/opencode-review.md" >"$dir/opencode/agents/$oc_agent.md"
   sed 's|^model: .*|model: e2e/no-such-model|' "$oc_files/opencode-review.md" >"$dir/opencode/agents/e2e-no-model.md"
   oc_ready=1
+fi
+codex_ready=""
+codex_src="${CODEX_HOME:-$HOME/.codex}"
+if command -v codex >/dev/null && [[ -s "$codex_src/auth.json" && -s "$codex_src/models_cache.json" ]]; then
+  mkdir -p "$dir/codex"
+  ln -s "$codex_src/auth.json" "$codex_src/models_cache.json" "$dir/codex/"
+  read -r codex_model codex_effort < <(jq -r '[.models[] | select(.visibility == "list")][0] | "\(.slug) \(.supported_reasoning_levels[0].effort)"' "$codex_src/models_cache.json")
+  [[ -n "$codex_model" && "$codex_model" != null && -n "$codex_effort" ]] || fail "$codex_src/models_cache.json lists no codex model with an effort"
+  codex_ready=1
 fi
 export SHELL="$dir/shell"
 
@@ -268,6 +279,40 @@ if [[ -n "$oc_ready" ]]; then
   tab_labelled "$oc" && fail "the opencode agent's tab is still open after agent stop"
 else
   echo "step 13: skipped, opencode or ~/.config/opencode is missing on this host"
+fi
+
+if [[ -n "$codex_ready" ]]; then
+  step 14 "a Codex agent starts in a git folder it has not trusted, with the CODEX_HOME, model, effort and sandbox of the caller and the brief, answers the brief and stops; a Claude-only flag, --agent, an unknown model, an unsupported effort and --effort without --model are refused before any tab opens"
+  export CODEX_HOME="$dir/codex"
+  git init -q "$dir/codex-work"
+  refused "of --account with Codex" "--account: it picks a Claude account" --cwd "$work" --kind codex --account "$account"
+  refused "of --permission-mode with Codex" "--permission-mode: it is a Claude mode" --cwd "$work" --kind codex --permission-mode plan
+  refused "of --agent with Codex" "--agent names an opencode agent" --cwd "$work" --kind codex --agent "$oc_agent"
+  refused "of an unknown Codex model" "lists no codex model no-such-model" --cwd "$work" --kind codex --model no-such-model
+  refused "of a Codex effort the model does not list" "--effort no-such-effort is not one of" --cwd "$work" --kind codex --model "$codex_model" --effort no-such-effort
+  refused "of a Codex effort without a model" "--effort needs --model with --kind codex" --cwd "$work" --kind codex --effort "$codex_effort"
+  printf 'Reply with the single word ready and do nothing else.\n' >"$dir/codex-brief.md"
+  "$tools" agent start "$cx" --kind codex --cwd "$dir/codex-work" --model "$codex_model" --effort "$codex_effort" --brief "$dir/codex-brief.md" || fail "agent start --kind codex exited $?"
+  [[ "$(h agent get "$cx" | jq -r '.result.agent.agent')" == codex ]] || fail "herdr does not list $cx as a codex agent"
+  [[ "$(tab_count "$cx")" == 1 ]] || fail "wanted one tab named $cx"
+  cx_pane=$(h agent get "$cx" | jq -r '.result.agent.pane_id')
+  cx_pids=$(h pane process-info --pane "$cx_pane" | jq -r '.result.process_info.foreground_processes[] | select(.name == "codex" or .name == ".codex-wrapped") | .pid')
+  [[ -n "$cx_pids" ]] || fail "no codex process runs in pane $cx_pane"
+  for pid in $cx_pids; do
+    cx_argv=$(tr '\0' ' ' <"/proc/$pid/cmdline")
+    grep -qF -- "codex -m $codex_model -c model_reasoning_effort=$codex_effort -s workspace-write -c sandbox_workspace_write.network_access=true -a never" <<<"$cx_argv" ||
+      fail "codex started with other arguments: $cx_argv"
+    tr '\0' '\n' <"/proc/$pid/environ" | grep -qxF "CODEX_HOME=$CODEX_HOME" || fail "codex runs without the caller's CODEX_HOME=$CODEX_HOME"
+  done
+  grep -qF -- "[projects.\"$dir/codex-work\"]" "$CODEX_HOME/config.toml" || fail "answering Codex's trust question saved no trust for $dir/codex-work in $CODEX_HOME/config.toml"
+  wait_for 90 bash -c "\"$real_herdr\" --session \"$run\" agent read \"$cx\" --source recent-unwrapped | grep -q '^• ready'" ||
+    fail "the codex agent did not answer its brief; its pane: $(h agent read "$cx" --source visible 2>&1 | grep -v '^\s*$' | tail -n 15)"
+  h agent wait "$cx" --until idle --until "done" --timeout 60000 >/dev/null || fail "the codex agent did not settle after its brief"
+  "$tools" agent stop "$cx" || fail "agent stop of the codex agent exited $?"
+  agent_listed "$cx" && fail "the codex agent is still listed after agent stop"
+  tab_labelled "$cx" && fail "the codex agent's tab is still open after agent stop"
+else
+  echo "step 14: skipped, codex, its auth.json or its models_cache.json is missing on this host"
 fi
 
 echo PASS

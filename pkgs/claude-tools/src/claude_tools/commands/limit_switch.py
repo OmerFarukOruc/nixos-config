@@ -45,6 +45,7 @@ class Record:
     rotate: bool = False
     model: str | None = None
     opencode_config: dict[str, str] = field(default_factory=dict)
+    codex_home: str = ""
     ended_at: float | None = None
 
     @classmethod
@@ -280,7 +281,7 @@ class Switcher:
 
     def start_kind(self, pane: str, name: str, r: Record) -> None:
         if r.kind == "codex":
-            self.agents.start_codex(pane, name, self.codex_args(r.args, r.session))
+            self.agents.start_codex(pane, name, r.codex_home, self.codex_args(r.args, r.session))
         elif r.kind == "opencode":
             self.agents.start_opencode(pane, name, opencode_agent_of(r.opencode_config),
                                        opencode_args(r.args, r.session), r.opencode_config)
@@ -373,7 +374,7 @@ class Switcher:
                            model=last_model(self.settings.home / ".claude/projects", sid))
         if kind == "opencode":
             return replace(r, opencode_config=opencode_config(env))
-        return r
+        return replace(r, codex_home=env.get("CODEX_HOME", ""))
 
     def snapshot(self, server: str, state: State, failed: list[str]) -> None:
         labels = {w["workspace_id"]: w.get("label") for w in self.herdr("workspace", "list")["result"]["workspaces"]}

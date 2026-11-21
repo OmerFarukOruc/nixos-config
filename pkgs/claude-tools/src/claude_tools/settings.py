@@ -22,6 +22,7 @@ class Settings:
     herdr_socket: str
     herdr_pane: str
     config_dir: str
+    codex_home: str
     pick: bool
     start_account: str
     color: bool
@@ -43,6 +44,7 @@ class Settings:
             herdr_socket=env.get("HERDR_SOCKET_PATH", ""),
             herdr_pane=env.get("HERDR_PANE_ID", ""),
             config_dir=env.get("CLAUDE_CONFIG_DIR", ""),
+            codex_home=env.get("CODEX_HOME", ""),
             pick=env.get("CLAUDE_TOOLS_PICK") != "0",
             start_account=env.get("CLAUDE_TOOLS_START_ACCOUNT", ""),
             color=not env.get("NO_COLOR"),
@@ -59,6 +61,10 @@ class Settings:
     @property
     def usage_cache(self) -> Path:
         return self.cache / "usage.json"
+
+    @property
+    def codex_models(self) -> Path:
+        return Path(self.codex_home or self.home / ".codex") / "models_cache.json"
 
     @property
     def read_key(self) -> Path:

@@ -34,7 +34,10 @@ PROMPT_WAIT_S = 60
 SUBMIT_WAIT_MS = 5000
 SUBMIT_UNTIL = ("--until", "working", "--until", "blocked")
 COMPOSER_RULE = "─"
-TRUST_QUESTION = "Yes, I trust this folder"
+TRUST_SCREENS = {
+    "claude": (("Yes, I trust this folder",), ("down", "enter")),
+    "codex": (("Trust this folder?", "› 1. Trust and continue"), ("enter",)),
+}
 EXIT_DIALOG = "❯ 1. Exit and stop tasks"
 
 
@@ -131,6 +134,31 @@ def check_opencode_agent(cwd: Path, agent: str) -> None:
     if name not in opencode(cwd, agent, "models").splitlines():
         raise Failed(f"`opencode models` in {cwd} does not list {name}, the model of agent {agent}, "
                      "and opencode would run the agent on another model")
+
+
+def codex_efforts(cache: Path) -> dict[str, tuple[str, ...]]:
+    try:
+        models = json.loads(cache.read_text())["models"]
+        efforts = {m["slug"]: tuple(level["effort"] for level in m["supported_reasoning_levels"]) for m in models}
+        if not all(isinstance(slug, str) and all(isinstance(e, str) for e in levels) for slug, levels in efforts.items()):
+            raise TypeError("a model slug or a reasoning effort is not a string")
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise Failed(f"cannot read the codex model list {cache}: {e}; run codex once to write it") from e
+    return efforts
+
+
+def check_codex_choice(cache: Path, model: str | None, effort: str | None) -> None:
+    if effort and not model:
+        raise Failed("--effort needs --model with --kind codex, because the efforts a model supports differ and "
+                     "Codex would otherwise apply it to its configured model")
+    if not model:
+        return
+    efforts = codex_efforts(cache)
+    if model not in efforts:
+        raise Failed(f"{cache} lists no codex model {model}; it lists {', '.join(efforts)}")
+    if effort and effort not in efforts[model]:
+        raise Failed(f"--effort {effort} is not one of {', '.join(efforts[model])}, "
+                     f"the reasoning efforts {cache} lists for {model}")
 
 
 def event_log(settings: Settings) -> Callable[[str], None]:
@@ -264,14 +292,15 @@ class Agents:
             wait_ms = min(wait_ms * 2, PROBE_LONGEST_WAIT_MS)
         raise Failed(f"the shell in pane {pane} ran no typed command in {READY_WAIT_S} s")
 
-    def answer_trust(self, name: str, screen: str) -> bool:
-        if TRUST_QUESTION not in screen:
+    def answer_trust(self, kind: str, name: str, screen: str) -> bool:
+        marks, keys = TRUST_SCREENS.get(kind, ((), ()))
+        if not marks or not all(m in screen for m in marks):
             return False
-        self.herdr("agent", "send-keys", name, "down", "enter")
+        self.herdr("agent", "send-keys", name, *keys)
         return True
 
-    def blocked_at_startup(self, name: str, screen: str) -> Failed:
-        return Failed(f"{name} is blocked at startup by something other than Claude's folder trust question; "
+    def blocked_at_startup(self, name: str, screen: str, code: str) -> Failed:
+        return Failed(f"{name} is blocked at startup ({code}) by something other than a folder trust question; "
                       f"its screen ended: {screen[-400:]}")
 
     def composer_text(self, name: str) -> str:
@@ -314,9 +343,9 @@ class Agents:
             if time.time() >= deadline:
                 raise Failed(f"{name} stayed blocked at startup for {PROMPT_WAIT_S} s; "
                              f"its screen ended: {screen[-400:]}")
-            answered = self.answer_trust(name, screen)
+            answered = self.answer_trust("claude", name, screen)
             if code == "agent_blocked" and not answered:
-                raise self.blocked_at_startup(name, screen)
+                raise self.blocked_at_startup(name, screen, code)
             time.sleep(1)
         self.press_enter_until_taken(name, text)
 
@@ -355,8 +384,9 @@ class Agents:
         standalone = ["--standalone"] if agent and "--standalone" not in args else []
         self.start_in_pane(pane, name, "opencode", env, [*standalone, *args])
 
-    def start_codex(self, pane: str, name: str, args: list[str]) -> None:
-        self.start_in_pane(pane, name, "codex", ":", args)
+    def start_codex(self, pane: str, name: str, codex_home: str, args: list[str]) -> None:
+        env = f"export CODEX_HOME={shlex.quote(codex_home)}" if codex_home else "unset CODEX_HOME"
+        self.start_in_pane(pane, name, "codex", env, args)
 
     def start_in_pane(self, pane: str, name: str, kind: str, env: str, args: list[str]) -> None:
         h = self.herdr
@@ -374,7 +404,7 @@ class Agents:
                 if e.code != "agent_not_ready":
                     raise
             screen = h.screen(name)
-            if not self.answer_trust(name, screen):
-                raise self.blocked_at_startup(name, screen)
+            if not self.answer_trust(kind, name, screen):
+                raise self.blocked_at_startup(name, screen, "agent_not_ready")
             h("agent", "wait", name, "--until", "idle", "--timeout", "60000")
             return
