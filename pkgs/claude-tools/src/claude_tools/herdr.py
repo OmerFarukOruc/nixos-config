@@ -15,6 +15,13 @@ SERVER_WAIT_S = 30
 REQUEST_TIMEOUT_S = 30
 
 
+def remaining_seconds(deadline: float) -> float:
+    seconds = deadline - time.monotonic()
+    if seconds <= 0:
+        raise HerdrError("herdr deadline expired", "timeout")
+    return seconds
+
+
 def session_of(agent: dict) -> str | None:
     return (agent.get("agent_session") or {}).get("value")
 
@@ -98,10 +105,13 @@ class Herdr:
             raise
         return stream
 
-    def __call__(self, *args: str, check: bool = True) -> dict:
+    def __call__(self, *args: str, check: bool = True, deadline: float | None = None) -> dict:
         try:
-            p = subprocess.run([*self.cmd, *args], capture_output=True, text=True, timeout=300, check=False)
-        except (OSError, subprocess.TimeoutExpired) as e:
+            p = subprocess.run([*self.cmd, *args], capture_output=True, text=True,
+                               timeout=remaining_seconds(deadline) if deadline is not None else 300, check=False)
+        except subprocess.TimeoutExpired as e:
+            raise HerdrError(f"herdr {' '.join(args[:2])}: timed out", "timeout" if deadline is not None else None) from e
+        except OSError as e:
             raise HerdrError(f"herdr {' '.join(args[:2])}: {e}") from e
         try:
             data = json.loads(p.stdout or p.stderr or "{}")
@@ -112,11 +122,13 @@ class Herdr:
             raise HerdrError(f"herdr {args[0]} {args[1]}: {code or p.stderr.strip()[:200]}", code)
         return data
 
-    def screen(self, name: str, source: str = "visible", lines: int = 0) -> str:
+    def screen(self, name: str, source: str = "visible", lines: int = 0, *, deadline: float | None = None) -> str:
         args = [*self.cmd, "agent", "read", name, "--source", source, *(["--lines", str(lines)] if lines else [])]
         try:
-            return subprocess.run(args, capture_output=True, text=True, timeout=60, check=False).stdout
-        except (OSError, subprocess.TimeoutExpired):
+            return subprocess.run(args, capture_output=True, text=True,
+                                  timeout=remaining_seconds(deadline) if deadline is not None else 60,
+                                  check=False).stdout
+        except (OSError, subprocess.TimeoutExpired, HerdrError):
             return ""
 
     def agents(self) -> list[dict]:

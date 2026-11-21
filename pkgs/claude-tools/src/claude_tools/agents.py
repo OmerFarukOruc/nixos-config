@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shlex
 import signal
 import subprocess
@@ -12,8 +11,9 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from claude_tools.accounts import normalize
+from claude_tools.composer import composer_holds
 from claude_tools.errors import Failed, HerdrError, NoProcess
-from claude_tools.herdr import Herdr
+from claude_tools.herdr import Herdr, remaining_seconds
 from claude_tools.settings import Settings
 from claude_tools.store import append_event
 
@@ -24,6 +24,7 @@ KINDS = {"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE}
 OPENCODE_AGENT_FIELDS = ("mode", "model", "permissions", "system")
 OPENCODE_CONFIG_VARS = (
     "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_PROJECT_DISABLE",
+    "OPENCODE_CLI_CONFIG_CONTENT",
 )
 SKIP_PERMISSIONS = "--dangerously-skip-permissions"
 UNNAMED = "pane-"
@@ -34,7 +35,6 @@ FREED_WAIT_S = 30
 PROMPT_WAIT_S = 60
 SUBMIT_WAIT_MS = 5000
 SUBMIT_UNTIL = ("--until", "working", "--until", "blocked")
-COMPOSER_RULE = "─"
 TRUST_SCREENS = {
     "claude": (("Yes, I trust this folder",), ("down", "enter")),
     "codex": (("Trust this folder?", "› 1. Trust and continue"), ("enter",)),
@@ -79,34 +79,6 @@ def gone(pid: int, seconds: float) -> bool:
     return False
 
 
-def has_stalled_prompt(kind: str, screen: str, text: str) -> bool:
-    if kind == "opencode":
-        frame = re.split(r"^ *╹▀+ *$", screen, flags=re.MULTILINE)
-        if len(frame) < 2 or "ctrl+p commands" not in frame[-1] or "┃" in frame[-1]:
-            return False
-        box = frame[-2].rsplit("\n\n", 1)[-1].splitlines()
-        if len(box) < 4 or box[0].lstrip() != "┃" or box[-2] != box[0]:
-            return False
-        margin = box[0] + "  "
-        if not box[-1].startswith(margin) or any(line != box[0] and not line.startswith(margin) for line in box[1:-2]):
-            return False
-        rows = [line[len(margin):] for line in box[1:-2]]
-    elif kind == "codex":
-        body, gap, footer = screen.rstrip().rpartition("\n\n")
-        if not gap or not footer.startswith("  ") or "›" in footer:
-            return False
-        before, marker, composer = body.rpartition("\n› ")
-        if not marker or not before.endswith("\n"):
-            return False
-        first, *rest = composer.split("\n")
-        if any(not line.startswith("  ") for line in rest):
-            return False
-        rows = [first, *(line[2:] for line in rest)]
-    else:
-        return False
-    return bool(text.strip()) and text in (" ".join(rows), "\n".join(rows), "".join(rows))
-
-
 def opencode_config(env: dict[str, str]) -> dict[str, str]:
     return {k: env[k] for k in OPENCODE_CONFIG_VARS if k in env}
 
@@ -121,6 +93,14 @@ def opencode_agent_of(config: dict[str, str]) -> str | None:
 
 def opencode_env(agent: str | None, config: dict[str, str] | None = None) -> dict[str, str]:
     env = opencode_config(dict(os.environ) if config is None else config)
+    inline = env.get("OPENCODE_CLI_CONFIG_CONTENT") or "{}"
+    try:
+        cli = json.loads(inline)
+    except ValueError:
+        cli = None
+    if isinstance(cli, dict) and isinstance(prompt := cli.setdefault("prompt", {}), dict) and "paste" not in prompt:
+        prompt["paste"] = "full"
+        env["OPENCODE_CLI_CONFIG_CONTENT"] = json.dumps(cli)
     if agent:
         env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"default_agent": agent})
     return env
@@ -321,85 +301,64 @@ class Agents:
             wait_ms = min(wait_ms * 2, PROBE_LONGEST_WAIT_MS)
         raise Failed(f"the shell in pane {pane} ran no typed command in {READY_WAIT_S} s")
 
-    def answer_trust(self, kind: str, name: str, screen: str) -> bool:
+    def answer_trust(self, kind: str, name: str, screen: str, deadline: float | None = None) -> bool:
         marks, keys = TRUST_SCREENS.get(kind, ((), ()))
         if not marks or not all(m in screen for m in marks):
             return False
-        self.herdr("agent", "send-keys", name, *keys)
+        self.herdr("agent", "send-keys", name, *keys, deadline=deadline)
         return True
 
     def blocked_at_startup(self, name: str, screen: str, code: str) -> Failed:
         return Failed(f"{name} is blocked at startup ({code}) by something other than a folder trust question; "
                       f"its screen ended: {screen[-400:]}")
 
-    def composer_text(self, name: str) -> str:
-        screen = self.herdr.screen(name)
-        rules = [i for i, line in enumerate(screen.splitlines()) if line.startswith(COMPOSER_RULE)]
-        if len(rules) < 2:
-            raise Failed(f"could not find the input box of {name} on its screen: {screen[-400:]}")
-        return "".join(screen.splitlines()[rules[-2] + 1:rules[-1]])
-
-    def press_enter_until_taken(self, name: str, text: str) -> None:
-        wanted = "".join(text.split())
-        deadline = time.time() + PROMPT_WAIT_S
-        while time.time() < deadline:
-            status = self.herdr("agent", "get", name)["result"]["agent"]["agent_status"]
-            if status not in ("idle", "done") or wanted not in "".join(self.composer_text(name).split()):
-                return
-            self.herdr("agent", "send-keys", name, "enter")
-            self.log(f"pressed Enter again for {name}, whose input box kept the prompt")
-            try:
-                self.herdr("agent", "wait", name, *SUBMIT_UNTIL, "--timeout", str(SUBMIT_WAIT_MS))
-                return
-            except HerdrError as e:
-                if e.code != "timeout":
-                    raise
-        raise Failed(f"{name} kept the prompt in its input box for {PROMPT_WAIT_S} s")
-
     def prompt_when_ready(self, name: str, text: str) -> None:
-        deadline = time.time() + PROMPT_WAIT_S
-        while True:
-            try:
-                self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL, "--timeout", str(SUBMIT_WAIT_MS))
-                return
-            except HerdrError as e:
-                if e.code == "timeout":
-                    break
-                if e.code not in ("agent_not_ready", "agent_blocked"):
-                    raise
-                code = e.code
-            screen = self.herdr.screen(name)
-            if time.time() >= deadline:
-                raise Failed(f"{name} stayed blocked at startup for {PROMPT_WAIT_S} s; "
-                             f"its screen ended: {screen[-400:]}")
-            answered = self.answer_trust("claude", name, screen)
-            if code == "agent_blocked" and not answered:
-                raise self.blocked_at_startup(name, screen, code)
-            time.sleep(1)
-        self.press_enter_until_taken(name, text)
+        self.prompt_until_turn(name, text, claude_startup=True)
 
-    def prompt_until_turn(self, name: str, text: str) -> None:
+    def prompt_until_turn(self, name: str, text: str, *, claude_startup: bool = False) -> None:
         deadline = time.monotonic() + PROMPT_WAIT_S
+        screen = ""
         try:
-            self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL, "--timeout", str(PROMPT_WAIT_S * 1000))
-            return
-        except HerdrError as e:
-            if e.code != "agent_prompt_stalled":
-                raise self.no_turn(name, e) from e
-        try:
-            agent = self.herdr("agent", "get", name)["result"]["agent"]
-            if agent["agent_status"] in ("idle", "done") and has_stalled_prompt(
-                agent["agent"], self.herdr.screen(name), text,
-            ) and time.monotonic() < deadline:
-                self.herdr("agent", "send-keys", name, "enter")
-            left_ms = max(1, int((deadline - time.monotonic()) * 1000))
-            self.herdr("agent", "wait", name, *SUBMIT_UNTIL, "--timeout", str(left_ms))
-        except HerdrError as e:
-            raise self.no_turn(name, e) from e
+            while True:
+                wait_ms = int(remaining_seconds(deadline) * 1000)
+                if claude_startup:
+                    wait_ms = min(wait_ms, SUBMIT_WAIT_MS)
+                try:
+                    self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL,
+                               "--timeout", str(max(1, wait_ms)), deadline=deadline)
+                    return
+                except HerdrError as e:
+                    if e.code == "agent_prompt_stalled" or (claude_startup and e.code == "timeout"):
+                        break
+                    if not claude_startup or e.code not in ("agent_not_ready", "agent_blocked"):
+                        raise
+                    code = e.code
+                screen = self.herdr.screen(name, deadline=deadline)
+                if not self.answer_trust("claude", name, screen, deadline) and code == "agent_blocked":
+                    raise self.blocked_at_startup(name, screen, code)
+                time.sleep(min(1, remaining_seconds(deadline)))
 
-    def no_turn(self, name: str, e: HerdrError) -> Failed:
-        return Failed(f"{name} did not start a turn on its brief within {PROMPT_WAIT_S} s ({e.code}); "
-                      f"its screen ended: {self.herdr.screen(name)[-400:]}")
+            agent = self.herdr("agent", "get", name, deadline=deadline)["result"]["agent"]
+            if agent["agent_status"] in ("working", "blocked"):
+                return
+            if agent["agent_status"] in ("idle", "done"):
+                columns = 0
+                if agent["agent"] == "codex":
+                    pane = agent["pane_id"]
+                    layout = self.herdr("pane", "layout", "--pane", pane, check=False, deadline=deadline)
+                    panes = layout.get("result", {}).get("layout", {}).get("panes", [])
+                    columns = next((p["rect"]["width"] for p in panes if p["pane_id"] == pane), 0)
+                screen = self.herdr.screen(name, deadline=deadline)
+                if composer_holds(agent["agent"], screen, text, columns):
+                    self.herdr("agent", "send-keys", name, "enter", deadline=deadline)
+                    self.log(f"pressed Enter once for {name}, whose input box kept the prompt")
+            wait_ms = max(1, int(remaining_seconds(deadline) * 1000))
+            self.herdr("agent", "wait", name, *SUBMIT_UNTIL, "--timeout", str(wait_ms), deadline=deadline)
+        except HerdrError as e:
+            if not screen and time.monotonic() < deadline:
+                screen = self.herdr.screen(name, deadline=deadline)
+            tail = f"; last visible screen: {screen[-400:]}" if screen else ""
+            raise Failed(f"{name} did not start a turn on its brief within {PROMPT_WAIT_S} s ({e.code}){tail}") from e
 
     def start_claude(self, pane: str, name: str, config_dir: str, args: list[str]) -> None:
         env = "export CLAUDE_TOOLS_PLAIN=1; " + (
@@ -415,7 +374,6 @@ class Agents:
                        config: dict[str, str] | None = None) -> None:
         exports = [f"{k}={shlex.quote(v)}" for k, v in opencode_env(agent, config).items()]
         env = " ".join(["unset", *OPENCODE_CONFIG_VARS, *(["; export", *exports] if exports else [])])
-        env += """; export OPENCODE_CLI_CONFIG_CONTENT=${OPENCODE_CLI_CONFIG_CONTENT:-'{"prompt":{"paste":"full"}}'}"""
         standalone = ["--standalone"] if agent and "--standalone" not in args else []
         self.start_in_pane(pane, name, "opencode", env, [*standalone, *args])
 
