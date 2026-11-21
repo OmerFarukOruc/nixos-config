@@ -424,7 +424,9 @@ cut off: each herdr agent of the machine's user that is `working` or
 `blocked`, each Claude, Codex or opencode process with a shell child (a
 running shell command or background task), each user service in
 `activating` (a running oneshot such as `statuslantern-nightly`), and each
-`block` or `block-weak` shutdown inhibitor lock. Read them with
+`block` or `block-weak` shutdown inhibitor lock. A probe that fails or
+takes more than 10 s is named after `Not checked:`. The line shows the
+state when the run starts, before the build and the reboot. Read them with
 `journalctl -u nixos-upgrade -g reboot-check`. The list includes short units,
 such as the minute's `claude-tools-limit-switch` scan. A user's
 `systemd-inhibit --mode=block-weak` fails with "Access denied" without a

@@ -25,6 +25,7 @@ OPENCODE_CONFIG_VARS = (
     "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_PROJECT_DISABLE",
 )
 SKIP_PERMISSIONS = "--dangerously-skip-permissions"
+UNNAMED = "pane-"
 READY_WAIT_S = 180
 PROBE_FIRST_WAIT_MS = 3000
 PROBE_LONGEST_WAIT_MS = 30000
@@ -74,9 +75,22 @@ def gone(pid: int, seconds: float) -> bool:
     return False
 
 
-def opencode_env(agent: str) -> dict[str, str]:
-    env = {k: os.environ[k] for k in OPENCODE_CONFIG_VARS if k in os.environ}
-    env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"default_agent": agent})
+def opencode_config(env: dict[str, str]) -> dict[str, str]:
+    return {k: env[k] for k in OPENCODE_CONFIG_VARS if k in env}
+
+
+def opencode_agent_of(config: dict[str, str]) -> str | None:
+    try:
+        agent = json.loads(config.get("OPENCODE_CONFIG_CONTENT") or "{}").get("default_agent")
+    except (ValueError, AttributeError):
+        return None
+    return agent if isinstance(agent, str) else None
+
+
+def opencode_env(agent: str | None, config: dict[str, str] | None = None) -> dict[str, str]:
+    env = opencode_config(dict(os.environ) if config is None else config)
+    if agent:
+        env["OPENCODE_CONFIG_CONTENT"] = json.dumps({"default_agent": agent})
     return env
 
 
@@ -181,12 +195,7 @@ class Agents:
         deadline = time.time() + 10
         while not gone(pid, 1) and time.time() < deadline:
             if EXIT_DIALOG in h.screen(name):
-                try:
-                    os.kill(pid, signal.SIGHUP)
-                except OSError as e:
-                    raise Failed(f"could not end claude pid {pid} of {name} at its background-work dialog: {e}") from e
-                self.log(f"answered the background-work dialog of {name} with SIGHUP, which keeps its scheduled "
-                         "tasks for --resume")
+                self.leave_exit_dialog(name, pid)
                 break
         if not gone(pid, 30):
             h("agent", "send-keys", name, "ctrl+c", check=False)
@@ -195,6 +204,19 @@ class Agents:
             if not gone(pid, 15):
                 raise Failed(f"claude pid {pid} of {name} did not exit")
         self.wait_freed(name)
+
+    def leave_exit_dialog(self, name: str, pid: int) -> None:
+        try:
+            os.kill(pid, signal.SIGHUP)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            self.herdr("agent", "send-keys", name, "enter", check=False)
+            self.log(f"answered the background-work dialog of {name} with Enter on Exit and stop tasks, because "
+                     f"claude pid {pid} belongs to another user; its session loops end with it")
+            return
+        self.log(f"answered the background-work dialog of {name} with SIGHUP, which keeps its scheduled tasks "
+                 "for --resume")
 
     def exit_by_ctrl_c(self, name: str, kind: str, pid: int) -> None:
         for _ in range(3):
@@ -326,10 +348,12 @@ class Agents:
         env = f"unset CLAUDE_CONFIG_DIR CLAUDE_TOOLS_PLAIN; export CLAUDE_TOOLS_START_ACCOUNT={shlex.quote(account)}"
         self.start_in_pane(pane, name, "claude", env, args)
 
-    def start_opencode(self, pane: str, name: str, agent: str, args: tuple[str, ...] = ()) -> None:
-        env = " ".join(["unset", *OPENCODE_CONFIG_VARS, ";", "export",
-                        *(f"{k}={shlex.quote(v)}" for k, v in opencode_env(agent).items())])
-        self.start_in_pane(pane, name, "opencode", env, ["--standalone", *args])
+    def start_opencode(self, pane: str, name: str, agent: str | None, args: list[str],
+                       config: dict[str, str] | None = None) -> None:
+        exports = [f"{k}={shlex.quote(v)}" for k, v in opencode_env(agent, config).items()]
+        env = " ".join(["unset", *OPENCODE_CONFIG_VARS, *(["; export", *exports] if exports else [])])
+        standalone = ["--standalone"] if agent and "--standalone" not in args else []
+        self.start_in_pane(pane, name, "opencode", env, [*standalone, *args])
 
     def start_codex(self, pane: str, name: str, args: list[str]) -> None:
         self.start_in_pane(pane, name, "codex", ":", args)

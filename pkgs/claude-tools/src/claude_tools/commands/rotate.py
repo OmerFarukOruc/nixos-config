@@ -144,31 +144,35 @@ def when(t: float) -> str:
     return datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
 
 
-def claude_help(cache: Path) -> str:
-    real = Path(shutil.which("claude") or "claude").resolve()
-    key = re.sub(r"[^\w.-]", "_", f"{real}-{int(real.stat().st_mtime)}")
-    f = cache / f"help-{key}.txt"
+def help_text(cache: Path, cmd: list[str], section: str) -> str:
+    real = Path(shutil.which(cmd[0]) or cmd[0]).resolve()
+    key = re.sub(r"[^\w.-]", "_", f"{' '.join(cmd[1:])}-{real}-{int(real.stat().st_mtime)}")
+    f = cache / f"help-{cmd[0]}-{key}.txt"
     if not f.exists():
         cache.mkdir(parents=True, exist_ok=True)
         tmp = f.with_suffix(f".{os.getpid()}")
         with tmp.open("w") as out:
-            subprocess.run(["claude", "--help"], stdout=out, stderr=subprocess.DEVNULL, check=False)
-        if "Commands:" not in tmp.read_text():
+            subprocess.run(cmd, stdout=out, stderr=subprocess.DEVNULL, check=False)
+        if section not in tmp.read_text():
             tmp.unlink(missing_ok=True)
-            raise OSError("claude --help printed no command list")
-        for old in cache.glob("help-*.txt"):
+            raise OSError(f"{' '.join(cmd)} printed no {section!r} section")
+        for old in cache.glob(f"help-{cmd[0]}-*.txt"):
             old.unlink(missing_ok=True)
         tmp.replace(f)
     return f.read_text()
 
 
-def parse_help(text: str) -> tuple[dict[str, str], set[str]]:
+def claude_help(cache: Path) -> str:
+    return help_text(cache, ["claude", "--help"], "Commands:")
+
+
+def parse_help(text: str, option_line: re.Pattern = OPTION_LINE) -> tuple[dict[str, str], set[str]]:
     opts, cmds, section = {}, set(), None
     for line in text.splitlines():
         if re.match(r"^\S", line):
             section = line.strip().rstrip(":").lower()
             continue
-        if section == "options" and (m := OPTION_LINE.match(line)):
+        if section == "options" and (m := option_line.match(line)):
             kind = "" if not m[2] else "variadic" if m[3] else "required" if m[2] == "<" else "optional"
             for o in m[1].split(", "):
                 opts[o] = kind
@@ -283,9 +287,14 @@ def plain(args: list[str]) -> None:
 
 
 def first_account(r: Rotation, args: list[str]) -> str | None:
+    start = r.settings.start_account
     try:
         r.accounts = read_accounts(r.settings.accounts_file)
         r.dirs = r.accounts.usable
+        if start in r.dirs:
+            return start
+        if start:
+            r.say(f"the start account {start} is not usable; starting on the account with the most room")
         if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
         data = locked_refresh(r.settings, [], CACHE_MAX_AGE)
@@ -293,9 +302,7 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
-    if r.settings.start_account in r.dirs:
-        return r.settings.start_account
-    if r.settings.pick:
+    if r.settings.pick and not start:
         chosen = r.choose(current)
         if chosen == "":
             raise SystemExit(0)

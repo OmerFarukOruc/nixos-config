@@ -16,6 +16,8 @@ name="$run"
 h() { herdr --session "$run" "$@"; }
 
 ok=0
+csid=""
+osid=""
 cleanup() {
   h agent prompt "$name" /exit >/dev/null 2>&1 || true
   h agent prompt "$run-foreign" /exit >/dev/null 2>&1 || true
@@ -26,7 +28,13 @@ cleanup() {
   for p in $(ps -u "$(id -u)" -o pid=); do
     [[ "$(readlink "/proc/$p/cwd" 2>/dev/null)" == "$dir"* ]] && kill "$p" 2>/dev/null
   done
-  if ((ok)); then rm -rf "$dir"; else echo "kept $dir"; fi
+  if [[ -n $csid ]]; then find "$HOME/.codex/sessions" -name "rollout-*-$csid.jsonl" -delete 2>/dev/null; fi
+  if [[ -n $osid ]]; then (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode session delete "$osid" >/dev/null 2>&1); fi
+  if ((ok)); then
+    rm -rf "$dir" "${HOME:?}/.claude/projects/$(tr '/.' '--' <<<"$dir")"
+  else
+    echo "kept $dir"
+  fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM
@@ -166,8 +174,8 @@ if command -v opencode >/dev/null && [[ -d "$HOME/.config/opencode" ]]; then
     [[ "$(basename "$entry")" == agents ]] || ln -s "$entry" "$dir/opencode/"
   done
   ln -s "$oc_files"/*.md "$dir/opencode/agents/"
-  export OPENCODE_CONFIG_DIR="$dir/opencode"
-  (cd "$dir" && opencode models --standalone) >"$dir/opencode-models" || fail "opencode models exited $?"
+  (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode models --standalone) >"$dir/opencode-models" ||
+    fail "opencode models exited $?"
   oc_model=$(grep -m 1 -v -E '[[:space:]|&\\]' "$dir/opencode-models" || true)
   [[ -n "$oc_model" ]] || fail "opencode models lists no model"
   sed "s|^model: .*|model: $oc_model|" "$oc_files/opencode-review.md" >"$dir/opencode/agents/$oc_agent.md"
@@ -251,7 +259,7 @@ if [[ $mode != settings ]]; then
     fail "switch did not answer the background-work dialog"
   answered=$(date -d "$(grep -m1 "answered the background-work dialog of $name" "$state/events.log" | cut -d' ' -f1)" +%s)
   moved=$(date -d "$(grep -m1 "$name: moved from" "$state/events.log" | cut -d' ' -f1)" +%s)
-  ((moved - answered < 25)) || fail "the move came $((moved - answered)) s after the dialog answer, so Enter did not end claude"
+  ((moved - answered < 25)) || fail "the move came $((moved - answered)) s after the dialog answer, so the SIGHUP did not end claude"
 fi
 check_loop switch
 
@@ -311,16 +319,15 @@ claude_in "$upane" | cut -f2 | grep -q -- --model && fail "the rotate agent has 
 echo "setup: unnamed rotate agent in $upane on $uaccount, session $usid, model from the pane shell's ANTHROPIC_MODEL, which the restarted server's shells lack"
 
 cpane=$(jq -r .result.root_pane.pane_id <<<"$(h workspace create --cwd "$dir" --label "$run-cx" --no-focus)")
-h agent start "$run-cx" --kind codex --pane "$cpane" --timeout 120000 -- -s read-only -a never >/dev/null 2>&1 || true
-h agent wait "$run-cx" --until idle --timeout 120000 >/dev/null
-prompt_to "$run-cx" "Remember the code word OTTER. Reply only OK."
-h agent wait "$run-cx" --until idle --until "done" --timeout 120000 >/dev/null
+h agent start "$run-cx" --kind codex --pane "$cpane" --timeout 120000 -- -s read-only -a never \
+  "Remember the code word OTTER. Reply only OK." >/dev/null 2>&1 || true
+h agent wait "$run-cx" --until "done" --until idle --timeout 120000 >/dev/null
 csid=$(sid_of "$run-cx")
 [[ -n "$csid" && "$csid" != null ]] || fail "herdr reports no session id for the codex agent"
 echo "setup: codex agent $run-cx in $cpane, session $csid"
 
 if [[ -n $oc_ready ]]; then
-  "$tools" agent start "$run-oc" --kind opencode --agent "$oc_agent" --cwd "$dir" ||
+  OPENCODE_CONFIG_DIR="$dir/opencode" "$tools" agent start "$run-oc" --kind opencode --agent "$oc_agent" --cwd "$dir" ||
     fail "agent start of the opencode agent exited $?"
   prompt_to "$run-oc" "Remember the code word LYNX. Reply only OK."
   h agent wait "$run-oc" --until idle --until "done" --timeout 180000 >/dev/null
@@ -337,6 +344,8 @@ jq -e --arg k "$key" --arg s "$usid" '.agents[$k] | .session == $s and .rotate a
   "$state/agents.json" >/dev/null || fail "scan did not record the unnamed agent as $key: $(jq -c --arg k "$key" '.agents[$k]' "$state/agents.json")"
 jq -e --arg n "$run-cx" --arg s "$csid" '.agents[$n] | .kind == "codex" and .session == $s' "$state/agents.json" >/dev/null ||
   fail "scan did not record the codex agent: $(jq -c --arg n "$run-cx" '.agents[$n]' "$state/agents.json")"
+[[ -z $oc_ready ]] || jq -e --arg n "$run-oc" --arg d "$dir/opencode" '.agents[$n].opencode_config.OPENCODE_CONFIG_DIR == $d' \
+  "$state/agents.json" >/dev/null || fail "scan did not record the config folder of the opencode agent"
 
 h server stop >/dev/null
 for _ in $(seq 30); do
@@ -364,13 +373,19 @@ said_in "$usid" '.[] | select(.type == "user") | .message.content | if type == "
 prompt_to "$upane" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
 said_in "$usid" "$last_reply" -i heron7 || fail "the unnamed agent lost its code word after the restore"
 echo "restore: unnamed agent back in $upane on $uaccount through rotate with $(grep -o -- '--model [^ ]*' <<<"$ucmd")"
+workspaces=$(h workspace list | jq '.result.workspaces | length')
+cls resume "$key" || fail "resume of the running unnamed agent exited $?"
+grep -q "$key is running already in pane $upane" "$state/events.log" || fail "resume did not find the running unnamed agent $key"
+(($(h workspace list | jq '.result.workspaces | length') == workspaces)) || fail "resume of the running unnamed agent opened a workspace"
+echo "resume: the running unnamed agent $key stays the only copy"
 
 h agent wait "$run-cx" --until idle --until "done" --timeout 180000 >/dev/null
 [[ "$(sid_of "$run-cx")" == "$csid" ]] || fail "restore changed the codex session"
 cpid=$(proc_in "$cpane" 'codex|\.codex-wrapped')
 [[ -n "$cpid" ]] || fail "restore started no codex in $cpane"
-tr '\0' ' ' <"/proc/$cpid/cmdline" | grep -q -- "resume $csid -s read-only -a never" ||
-  fail "restore did not start codex as resume $csid with its flags: $(tr '\0' ' ' <"/proc/$cpid/cmdline")"
+ccmd=$(tr '\0' ' ' <"/proc/$cpid/cmdline")
+grep -q -- "resume $csid -s read-only -a never *$" <<<"$ccmd" ||
+  fail "restore did not start codex as resume $csid with its options and without its first prompt: $ccmd"
 prompt_to "$run-cx" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
 h agent wait "$run-cx" --until idle --until "done" --timeout 120000 >/dev/null
 h agent read "$run-cx" --source recent-unwrapped --lines 40 | grep -qi otter7 || fail "the codex agent lost its code word after the restore"
@@ -383,6 +398,8 @@ if [[ -n $oc_ready ]]; then
   [[ -n "$opid" ]] || fail "restore started no opencode in $opane"
   grep -qxF "OPENCODE_CONFIG_CONTENT={\"default_agent\": \"$oc_agent\"}" <(tr '\0' '\n' <"/proc/$opid/environ") ||
     fail "restore did not start opencode in its agent $oc_agent"
+  grep -qxF "OPENCODE_CONFIG_DIR=$dir/opencode" <(tr '\0' '\n' <"/proc/$opid/environ") ||
+    fail "restore did not give opencode the config folder it ran with, although the scanner lacks it"
   prompt_to "$run-oc" "What was the code word I gave you? Reply with only the code word followed directly by the digit 7, no space."
   h agent wait "$run-oc" --until idle --until "done" --timeout 180000 >/dev/null
   h agent read "$run-oc" --source recent-unwrapped --lines 40 | grep -qi lynx7 || fail "the opencode agent lost its code word after the restore"

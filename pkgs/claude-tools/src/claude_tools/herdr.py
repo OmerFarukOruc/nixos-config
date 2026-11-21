@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import time
@@ -125,7 +126,7 @@ class Herdr:
         want = ["--session", self.session, "server"] if self.session else ["server"]
         for p in Path("/proc").iterdir():
             try:
-                if not p.name.isdigit():
+                if not p.name.isdigit() or p.stat().st_uid != os.getuid():
                     continue
                 argv = (p / "cmdline").read_bytes().decode().split("\0")[:-1]
                 if argv and Path(argv[0]).name == "herdr" and argv[1:] == want:

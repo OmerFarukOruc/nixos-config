@@ -24,8 +24,8 @@ in
       Service = {
         Type = "oneshot";
         ExecStart = [
-          "${pkgs.coreutils}/bin/rm -f %S/${name}/rerun"
           "${pkgs.systemd}/bin/systemctl --user start --no-block ${name}.service"
+          "${pkgs.coreutils}/bin/rm -f %S/${name}/rerun"
         ];
       };
     };

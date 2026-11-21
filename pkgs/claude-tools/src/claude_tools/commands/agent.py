@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from claude_tools.accounts import accounts, config_dir_of
-from claude_tools.agents import SKIP_PERMISSIONS, Agents, check_opencode_agent
+from claude_tools.agents import SKIP_PERMISSIONS, UNNAMED, Agents, check_opencode_agent
 from claude_tools.errors import Failed, NoProcess
 from claude_tools.herdr import Herdr
 from claude_tools.settings import Settings
@@ -25,6 +25,9 @@ BUSY = ("working", "blocked")
 def agent_name(text: str) -> str:
     if not NAME.fullmatch(text):
         raise argparse.ArgumentTypeError(f"NAME {text!r} must match {NAME.pattern}")
+    if text.startswith(UNNAMED):
+        raise argparse.ArgumentTypeError(f"NAME {text!r} starts with {UNNAMED}, which limit-switch keeps for "
+                                         "agents without a name")
     return text
 
 
@@ -98,7 +101,7 @@ def start_claude_agent(ag: Agents, a: argparse.Namespace, pane: str, config_dir:
 
 
 def start_opencode_agent(ag: Agents, a: argparse.Namespace, pane: str, brief: str | None) -> None:
-    ag.start_opencode(pane, a.name, a.agent)
+    ag.start_opencode(pane, a.name, a.agent, [])
     if brief:
         ag.prompt_until_turn(a.name, brief)
 

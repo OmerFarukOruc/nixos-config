@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 marker=${STATE_DIRECTORY:?}/failed
 if [ "${SERVICE_RESULT:?}" = success ]; then
-  rm -f "$marker"
+  rm -f "$marker" "$STATE_DIRECTORY/rerun"
   exit 0
 fi
 if [ "${2:-}" = --rerun ] && [ "$(systemctl is-system-running 2>/dev/null)" = stopping ]; then

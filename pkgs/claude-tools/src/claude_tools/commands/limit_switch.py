@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import argparse
-import json
+import re
 import socket
 import subprocess
 import time
-from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime
 from pathlib import Path
 
 from claude_tools.accounts import account_of, read_accounts
-from claude_tools.agents import KINDS, SKIP_PERMISSIONS, Agents
-from claude_tools.commands.rotate import carried_args, claude_help, parse_help, parsed_flags
+from claude_tools.agents import KINDS, SKIP_PERMISSIONS, UNNAMED, Agents, opencode_agent_of, opencode_config
+from claude_tools.commands.rotate import carried_args, claude_help, help_text, parse_help, parsed_flags
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
 from claude_tools.limits import last_model, recorded_limit
@@ -22,11 +22,69 @@ from claude_tools.store import locked, read_json, write_json
 COOLDOWN = 300
 ENDED_KEEP = 30 * 86400
 BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
-UNNAMED = "pane-"
+CODEX_OPTION_LINE = re.compile(r"^\s+((?:-\w, )?--[\w-]+)(?: ([<\[])[^>\]]*?(\.\.\.)?[>\]])?")
+CODEX_SELECTORS = {"--last", "--all"}
+OPENCODE_SELECTORS = ("--session", "-s", "--prompt")
+OPENCODE_CONTINUE = ("--continue", "-c")
 
 
 OWN_PERMISSIONS = {"--settings", "--permission-mode"}
 ALLOWS_BYPASS = "--allow-dangerously-skip-permissions"
+
+
+@dataclass(frozen=True)
+class Record:
+    pane: str
+    workspace: str | None
+    cwd: str
+    session: str
+    args: list[str]
+    kind: str = "claude"
+    named: bool = True
+    config_dir: str = ""
+    rotate: bool = False
+    model: str | None = None
+    opencode_config: dict[str, str] = field(default_factory=dict)
+    ended_at: float | None = None
+
+    @classmethod
+    def parse(cls, name: str, data: dict) -> Record:
+        known = {f.name for f in fields(cls)}
+        try:
+            return cls(**{k: v for k, v in data.items() if k in known})
+        except TypeError as e:
+            raise Failed(f"the record of {name} in agents.json is incomplete: {e}") from e
+
+    def json(self) -> dict:
+        return {k: v for k, v in asdict(self).items() if not (k == "ended_at" and v is None)}
+
+
+@dataclass(frozen=True)
+class State:
+    server: str | None = None
+    boot: str = ""
+    agents: dict[str, Record] = field(default_factory=dict)
+    ended: dict[str, Record] = field(default_factory=dict)
+
+    @classmethod
+    def parse(cls, data: dict) -> State:
+        return cls(data.get("server"), data.get("boot", ""),
+                   {n: Record.parse(n, r) for n, r in data.get("agents", {}).items()},
+                   {n: Record.parse(n, r) for n, r in data.get("ended", {}).items()})
+
+    def json(self) -> dict:
+        return {"server": self.server, "boot": self.boot, "agents": {n: r.json() for n, r in self.agents.items()},
+                "ended": {n: r.json() for n, r in self.ended.items()}}
+
+
+@dataclass(frozen=True)
+class Try:
+    at: float
+    started: bool
+
+
+class PromptFailed(Failed):
+    pass
 
 
 def own_permissions(argv: list[str], opts: dict[str, str]) -> bool:
@@ -63,19 +121,29 @@ def resume_args(argv: list[str], session: str, opts: dict[str, str], model: str 
     return [*([SKIP_PERMISSIONS] if add else []), *out, "--resume", session]
 
 
-def codex_args(argv: list[str], session: str) -> list[str]:
-    rest = argv[1:] if argv[:1] == ["resume"] else argv
-    rest = rest[1:] if argv[:1] == ["resume"] and rest[:1] and not rest[0].startswith("-") else rest
-    return ["resume", session, *rest]
+def codex_args(argv: list[str], session: str, opts: dict[str, str]) -> list[str]:
+    kept = [t for name, tokens in parsed_flags(argv, opts) if name not in CODEX_SELECTORS for t in tokens]
+    return ["resume", session, *kept]
 
 
 def opencode_args(argv: list[str], session: str) -> list[str]:
-    return [*drop_flags(argv, ("--session", "-s"), ("--continue", "-c")), "--session", session]
+    return [*drop_flags(argv, OPENCODE_SELECTORS, OPENCODE_CONTINUE), "--session", session]
 
 
 def key_of(agent: dict) -> str | None:
     pane = agent.get("pane_id")
     return agent.get("name") or (UNNAMED + pane.replace(":", "-").lower() if pane else None)
+
+
+def running_as(name: str, r: Record, live: list[dict]) -> dict | None:
+    return next((a for a in live if session_of(a) == r.session or (r.named and a.get("name") == name)), None)
+
+
+def free_name(name: str, live: list[dict]) -> str:
+    taken = {a.get("name") for a in live}
+    while name in taken:
+        name += "-r"
+    return name
 
 
 def boot_id() -> str:
@@ -85,43 +153,39 @@ def boot_id() -> str:
         return ""
 
 
-def restart_reason(record: dict) -> str:
-    booted = record.get("boot") and record["boot"] != boot_id()
+def restart_reason(state: State) -> str:
+    booted = state.boot and state.boot != boot_id()
     return f"{socket.gethostname()} rebooted" if booted else "The herdr server restarted"
 
 
-def resume_message(kind: str, why: str) -> str:
-    lost = "background shell tasks, Monitors, subagents and self-paced loops" if kind == "claude" else \
+def resume_message(r: Record, why: str, moved: bool) -> str:
+    claude = r.kind == "claude"
+    lost = "background shell tasks, Monitors, subagents and self-paced loops" if claude else \
         "background shell commands"
-    loops = "A fixed-interval /loop comes back, so run CronList before you start one again. " if kind == "claude" else ""
-    return (f"{why}, so every process this session started has ended: {lost}. This session was resumed in the same "
-            f"pane with the same account and flags. {loops}Before you run a command again that was running when the "
-            "session stopped, check what it already did, such as whether a `git worktree add` already made its "
-            "folder. If your last turn had finished and you were waiting for Omer, stay idle. Otherwise continue "
-            "where you stopped, and start again the background work you still need.")
+    where = "in a new workspace, because its pane was gone or held another agent" if moved else "in the same pane"
+    how = "on the same account with the same flags and model" if claude else "with the same flags"
+    loops = "A fixed-interval /loop comes back, so run CronList before you start one again. " if claude else ""
+    return (f"{why}, so every process this session started has ended: {lost}. This session was resumed {where} "
+            f"{how}. {loops}Before you run a command again that was running when the session stopped, check what "
+            "it already did, such as whether a `git worktree add` already made its folder. If your last turn had "
+            "finished and you were waiting for Omer, stay idle. Otherwise continue where you stopped, and start "
+            "again the background work you still need.")
 
 
-def to_restore(record: dict, live: Callable[[], set[str]], server: str | None) -> list[str]:
-    if not server or not record or record.get("server") == server:
-        return []
-    running = live()
-    return [n for n in record.get("agents", {}) if n not in running]
-
-
-def next_record(record: dict, agents: dict, server: str, failed: list[str], now: float) -> dict:
-    old = record.get("agents", {})
+def next_state(state: State, agents: dict[str, Record], server: str, failed: list[str], now: float) -> State:
     for n in failed:
-        agents.setdefault(n, old[n])
-    ended = {n: {**r, "ended_at": r.get("ended_at", now)} for n, r in record.get("ended", {}).items()
-             if n not in agents and r.get("ended_at", now) > now - ENDED_KEEP}
-    ended.update({n: {**r, "ended_at": now} for n, r in old.items() if n not in agents})
-    return {"server": record.get("server") if failed else server, "agents": agents, "ended": ended}
+        agents.setdefault(n, state.agents[n])
+    ended = {n: r if r.ended_at else replace(r, ended_at=now) for n, r in state.ended.items()
+             if n not in agents and (r.ended_at or now) > now - ENDED_KEEP}
+    ended.update({n: replace(r, ended_at=now) for n, r in state.agents.items() if n not in agents})
+    pending = bool(failed)
+    return State(state.server if pending else server, state.boot if pending else boot_id(), agents, ended)
 
 
-def recorded(record: dict, name: str) -> dict:
-    found = record.get("agents", {}).get(name) or record.get("ended", {}).get(name)
+def recorded(state: State, name: str) -> Record:
+    found = state.agents.get(name) or state.ended.get(name)
     if found is None:
-        known = sorted({*record.get("agents", {}), *record.get("ended", {})})
+        known = sorted({*state.agents, *state.ended})
         raise Failed(f"no record of {name}; recorded: {', '.join(known) or 'none'}")
     return found
 
@@ -145,6 +209,15 @@ class Switcher:
         if data != self.load(name):
             write_json(self.state / name, data)
 
+    def load_state(self) -> State:
+        return State.parse(self.load("agents.json"))
+
+    def load_tries(self) -> dict[str, Try]:
+        return {n: Try(**t) for n, t in self.load("restore-failed.json").items() if isinstance(t, dict)}
+
+    def save_tries(self, tries: dict[str, Try]) -> None:
+        self.save("restore-failed.json", {n: asdict(t) for n, t in tries.items()})
+
     def resume_message(self, name: str, default: str) -> str:
         msg_file = self.settings.config / "resume" / name
         return msg_file.read_text().strip() if msg_file.is_file() else default
@@ -155,6 +228,14 @@ class Switcher:
         except OSError:
             opts = {}
         return resume_args(argv, session, opts, model, bypass)
+
+    def codex_args(self, argv: list[str], session: str) -> list[str]:
+        try:
+            text = help_text(self.settings.cache / "rotate", ["codex", "resume", "--help"], "Options:")
+        except OSError as e:
+            raise Failed(f"could not read codex resume --help, so the recorded codex options cannot be parsed: {e}") \
+                from e
+        return codex_args(argv, session, parse_help(text, CODEX_OPTION_LINE)[0])
 
     def switch(self, name: str, to: str | None, after_limit: bool = False) -> bool:
         agent = self.herdr("agent", "get", name)["result"]["agent"]
@@ -197,34 +278,40 @@ class Switcher:
         self.log(f"{name}: moved from {current} to {to}, session {session}")
         return True
 
-    def live_names(self) -> set[str]:
-        return {key_of(a) for a in self.herdr.agents()}
-
-    def start_kind(self, pane: str, name: str, r: dict) -> None:
-        kind = r.get("kind", "claude")
-        if kind == "codex":
-            self.agents.start_codex(pane, name, codex_args(r["args"], r["session"]))
-        elif kind == "opencode" and r.get("opencode_agent"):
-            self.agents.start_opencode(pane, name, r["opencode_agent"], ("--session", r["session"]))
-        elif kind == "opencode":
-            self.agents.start_in_pane(pane, name, "opencode", ":", opencode_args(r["args"], r["session"]))
-        elif r.get("rotate"):
+    def start_kind(self, pane: str, name: str, r: Record) -> None:
+        if r.kind == "codex":
+            self.agents.start_codex(pane, name, self.codex_args(r.args, r.session))
+        elif r.kind == "opencode":
+            self.agents.start_opencode(pane, name, opencode_agent_of(r.opencode_config),
+                                       opencode_args(r.args, r.session), r.opencode_config)
+        elif r.rotate:
             found = read_accounts(self.settings.accounts_file)
-            account = account_of(r["config_dir"], found.local, self.settings.home)
-            self.agents.start_rotated(pane, name, account, self.resume_args(
-                r["args"], r["session"], r.get("model"), bypass=r.get("named", True)))
+            account = account_of(r.config_dir, found.local, self.settings.home)
+            self.agents.start_rotated(pane, name, account, self.resume_args(r.args, r.session, r.model, r.named))
         else:
-            self.agents.start_claude(pane, name, r["config_dir"], self.resume_args(
-                r["args"], r["session"], r.get("model"), bypass=r.get("named", True)))
+            self.agents.start_claude(pane, name, r.config_dir, self.resume_args(r.args, r.session, r.model, r.named))
 
-    def start_recorded(self, name: str, r: dict, why: str) -> str:
-        panes = {x["pane_id"]: x for x in self.herdr("pane", "list")["result"]["panes"]}
-        pane, workspace = r["pane"], None
-        if pane not in panes or panes[pane].get("agent"):
-            ws = self.herdr("workspace", "create", "--cwd", r["cwd"], "--label", r["workspace"] or name, "--no-focus")
-            pane, workspace = ws["result"]["root_pane"]["pane_id"], ws["result"]["workspace"]["workspace_id"]
+    def finish_restore(self, name: str, r: Record, pane: str, temporary: str | None, why: str, moved: bool) -> None:
+        text = self.resume_message(name, resume_message(r, why, moved))
         try:
-            self.start_kind(pane, name, r)
+            if temporary:
+                self.herdr("agent", "rename", temporary, "--clear")
+            if r.kind == "claude":
+                self.agents.prompt_when_ready(pane, text)
+            else:
+                self.agents.prompt_until_turn(pane, text)
+        except Failed as e:
+            raise PromptFailed(f"started, but the resume message did not arrive: {e}") from e
+
+    def start_recorded(self, name: str, r: Record, why: str, live: list[dict]) -> str:
+        panes = {x["pane_id"]: x for x in self.herdr("pane", "list")["result"]["panes"]}
+        pane, workspace = r.pane, None
+        if pane not in panes or panes[pane].get("agent"):
+            ws = self.herdr("workspace", "create", "--cwd", r.cwd, "--label", r.workspace or name, "--no-focus")
+            pane, workspace = ws["result"]["root_pane"]["pane_id"], ws["result"]["workspace"]["workspace_id"]
+        start_as = name if r.named else free_name(name, live)
+        try:
+            self.start_kind(pane, start_as, r)
         except Failed:
             if workspace:
                 try:
@@ -232,72 +319,84 @@ class Switcher:
                 except Failed as e:
                     self.log(f"{name}: could not close workspace {workspace} after the failed start: {e}")
             raise
-        kind = r.get("kind", "claude")
-        text = self.resume_message(name, resume_message(kind, why))
-        try:
-            if kind == "claude":
-                self.agents.prompt_when_ready(name, text)
-            else:
-                self.agents.prompt_until_turn(name, text)
-        finally:
-            if not r.get("named", True):
-                self.herdr("agent", "rename", name, "--clear")
+        self.finish_restore(name, r, pane, None if r.named else start_as, why, workspace is not None)
         return pane
 
-    def restore(self, record: dict, server: str, wait: bool = True) -> list[str]:
-        failed, tried = [], self.load("restore-failed.json")
-        for n in to_restore(record, self.live_names, server):
-            r = record["agents"][n]
-            if wait and tried.get(n, 0) > time.time() - COOLDOWN:
+    def restore(self, state: State, server: str, wait: bool = True) -> list[str]:
+        if not server or not state.agents or state.server == server:
+            return []
+        failed, tries, live = [], self.load_tries(), self.herdr.agents()
+        why = restart_reason(state)
+        for n, r in state.agents.items():
+            agent, last = running_as(n, r, live), tries.get(n)
+            if agent and not (last and last.started):
+                tries.pop(n, None)
+                continue
+            if wait and last and last.at > time.time() - COOLDOWN:
                 failed.append(n)
                 continue
             try:
-                pane = self.start_recorded(n, r, restart_reason(record))
-                tried.pop(n, None)
-                self.log(f"{n}: restored in pane {pane} after a herdr server restart, session {r['session']}")
+                if agent:
+                    temporary = None if r.named else agent.get("name")
+                    self.finish_restore(n, r, agent["pane_id"], temporary, why, agent["pane_id"] != r.pane)
+                    self.log(f"{n}: sent the resume message again in pane {agent['pane_id']}, session {r.session}")
+                else:
+                    pane = self.start_recorded(n, r, why, live)
+                    self.log(f"{n}: restored in pane {pane} after a herdr server restart, session {r.session}")
+                tries.pop(n, None)
             except Failed as e:
                 failed.append(n)
-                tried[n] = time.time()
+                tries[n] = Try(time.time(), isinstance(e, PromptFailed))
                 self.log(f"{n}: restore failed, next try in {COOLDOWN // 60} min: {e}")
-        self.save("restore-failed.json", tried)
+        self.save_tries(tries)
         return failed
 
-    def resume(self, record: dict, name: str) -> None:
-        if self.agents.running(name):
-            self.log(f"{name} is running already; `herdr agent get {name}` shows its pane")
+    def resume(self, state: State, name: str) -> None:
+        r, live = recorded(state, name), self.herdr.agents()
+        if (agent := running_as(name, r, live)) and self.agents.running(agent.get("name") or agent["pane_id"]):
+            self.log(f"{name} is running already in pane {agent['pane_id']}")
             return
-        r = recorded(record, name)
-        pane = self.start_recorded(name, r, "This agent had exited")
-        self.log(f"{name}: resumed in pane {pane} by hand, session {r['session']}")
+        pane = self.start_recorded(name, r, "This agent had exited", live)
+        self.log(f"{name}: resumed in pane {pane} by hand, session {r.session}")
 
-    def recorded_agent(self, a: dict, labels: dict) -> dict | None:
+    def recorded_agent(self, a: dict, labels: dict) -> Record | None:
         kind, sid = a.get("agent") or "claude", session_of(a)
         if kind not in KINDS or not sid:
             return None
-        try:
-            _, argv, env = self.agents.process(kind, a["pane_id"])
-        except Failed:
-            return None
-        r = {"kind": kind, "named": a.get("name") is not None, "pane": a["pane_id"],
-             "workspace": labels.get(a["workspace_id"]), "cwd": a["cwd"], "session": sid, "args": argv[1:]}
+        _, argv, env = self.agents.process(kind, a["pane_id"])
+        r = Record(kind=kind, named=a.get("name") is not None, pane=a["pane_id"],
+                   workspace=labels.get(a["workspace_id"]), cwd=a["cwd"], session=sid, args=argv[1:])
         if kind == "claude":
-            r |= {"config_dir": env.get("CLAUDE_CONFIG_DIR", ""), "rotate": "CLAUDE_TOOLS_ROTATE_ID" in env,
-                  "model": last_model(self.settings.home / ".claude/projects", sid)}
-        elif kind == "opencode":
-            try:
-                r["opencode_agent"] = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}").get("default_agent")
-            except (ValueError, AttributeError):
-                r["opencode_agent"] = None
+            return replace(r, config_dir=env.get("CLAUDE_CONFIG_DIR", ""), rotate="CLAUDE_TOOLS_ROTATE_ID" in env,
+                           model=last_model(self.settings.home / ".claude/projects", sid))
+        if kind == "opencode":
+            return replace(r, opencode_config=opencode_config(env))
         return r
 
-    def snapshot(self, server: str, record: dict, failed: list[str]) -> None:
+    def snapshot(self, server: str, state: State, failed: list[str]) -> None:
         labels = {w["workspace_id"]: w.get("label") for w in self.herdr("workspace", "list")["result"]["workspaces"]}
-        agents = {}
+        agents: dict[str, Record] = {}
         for a in self.herdr.agents():
             key = key_of(a)
-            if key and (r := self.recorded_agent(a, labels)):
+            if not key:
+                continue
+            if (a.get("name") or "").startswith(UNNAMED):
+                self.log(f"{key}: not recorded, because names that start with {UNNAMED} are kept for agents "
+                         "without a name")
+                continue
+            old = state.agents.get(key)
+            try:
+                r = self.recorded_agent(a, labels)
+            except Failed as e:
+                if old and old.session == session_of(a):
+                    agents[key] = old
+                    self.log(f"{key}: kept its last record, because its process could not be read: {e}")
+                continue
+            if r and old and old.session == r.session and r.model is None:
+                r = replace(r, model=old.model)
+            if r:
                 agents[key] = r
-        self.save("agents.json", {**next_record(record, agents, server, failed, time.time()), "boot": boot_id()})
+        self.save("agents.json", next_state(state, agents, server, failed, time.time()).json())
 
     def move_limited(self, a: dict, hit: tuple[str, int], local: dict[str, str]) -> None:
         name, (text, said) = a["name"], hit
@@ -312,8 +411,8 @@ class Switcher:
 
     def scan(self) -> int:
         server = self.herdr.ensure_server(self.log)
-        record = self.load("agents.json")
-        lost = self.restore(record, server)
+        state = self.load_state()
+        lost = self.restore(state, server)
         switched = self.load("switched.json")
         local, failed = None, len(lost)
         for a in self.herdr.agents():
@@ -334,18 +433,18 @@ class Switcher:
                 self.log(f"{name}: switch failed: {e}")
             switched[name] = time.time()
             self.save("switched.json", switched)
-        self.snapshot(server, record, lost)
+        self.snapshot(server, state, lost)
         return 1 if failed else 0
 
     def restore_or_resume(self, name: str | None) -> int:
         server = self.herdr.ensure_server(self.log)
-        record = self.load("agents.json")
-        lost = self.restore(record, server, wait=False)
+        state = self.load_state()
+        lost = self.restore(state, server, wait=False)
         try:
             if name is not None and name not in lost:
-                self.resume(record, name)
+                self.resume(state, name)
         finally:
-            self.snapshot(server, record, lost)
+            self.snapshot(server, state, lost)
         return 1 if lost else 0
 
     def switch_now(self, name: str, to: str | None) -> int:

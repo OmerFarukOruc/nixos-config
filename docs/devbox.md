@@ -612,8 +612,9 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   when a run ends without `success` while `systemctl is-system-running`
   prints `stopping`, the marker writes `~/.local/state/<unit>/rerun` instead
   of `failed`. Five minutes after the user manager starts again,
-  `<unit>-rerun.timer` deletes that file and starts the unit once more, so a
-  night reboot that kills the nightly run restarts it after the boot.
+  `<unit>-rerun.timer` starts the unit once more and then deletes that file,
+  so a night reboot that kills the nightly run restarts it after the boot. A
+  run that succeeds deletes the file too.
   `statuslantern-factory-run` needs no rerun, because its run moves the event
   out of the inbox only at its end, and `statuslantern-factory-run.path`
   starts it again while the inbox holds an event.
