@@ -248,14 +248,14 @@ the same folder holds the trust anchor and profile ARNs. The SigNoz rule
 Slack 30 days before the certificate expires, or when its metric stops for 2
 hours.
 
-To renew it, first copy the CA key to the box from nixos-desktop or nixos-rog,
-whose Infisical CLI is signed in; the box's CLI has no login
-([agents/reference/devbox.md](../agents/reference/devbox.md#accounts-and-logins)):
+To renew it, first copy the CA key to the box. It lives as `AWS_AGENT_CA_KEY`
+in the `operator` profile of Status Lantern's sops (StatusLantern/statuslantern
+`docs/secrets.md`), which only Omer's PC age keys open, so run this from a
+`statuslantern` checkout on nixos-desktop or nixos-rog:
 
 ```bash
-infisical secrets get ROLES_ANYWHERE_CA_KEY_B64 --plain --silent --projectId "$INFISICAL_STATUSLANTERN_PROJECT" \
-  --domain https://eu.infisical.com --env prod --path /agent-aws |
-  ssh devbox 'umask 077; base64 -d > ~/.aws/rolesanywhere/ca.key'
+secretspec get AWS_AGENT_CA_KEY --profile operator --reason "renew the devbox AWS certificate" |
+  ssh devbox 'umask 077; cat > ~/.aws/rolesanywhere/ca.key'
 ```
 
 Then run this on the box as omer. It stops at the first failed step, replaces
