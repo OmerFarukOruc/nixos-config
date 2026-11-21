@@ -23,6 +23,14 @@ Ask from the command line, not `oracle tui`: in Oracle 0.23.1 the TUI takes its 
    - the exact question, what was tried, how each attempt failed, and the verbatim errors;
    - the constraints: files that must not change, compatibility, performance budgets;
    - the answer shape, such as ranked hypotheses with the evidence that would confirm each, a patch plan, or a decision with its trade-offs.
+
+   Then check the brief for the phrases Oracle reads as a ChatGPT error, such as "sign in", "rate limit", "cloudflare", and "challenge":
+
+   ```sh
+   p=$(grep -o 'warningPattern = /[^/]*/' "$(dirname "$(dirname "$(readlink -f "$(command -v oracle)")")")"/lib/node_modules/oracle-cli/node_modules/@steipete/oracle/dist/src/browser/uiWarnings.js | cut -d/ -f2) && tr '_-' '  ' < <dir>/brief.md | grep -inoE "$p"
+   ```
+
+   Done when it prints nothing. Oracle 0.23.1 scans the ChatGPT page for these phrases while it waits, the page shows the brief, and `_` and `-` count as spaces, so a brief that holds one exits 1 with "ChatGPT displayed a authentication/challenge warning" although ChatGPT showed none. Reword each line the check prints, such as "log in" for "sign in" and "bot check" for "challenge", and run it again.
 2. Pick the smallest file set that still holds the truth. `--file` takes files, directories, and globs, and `!pattern` excludes. Attach no `.env` file, key, token, or other secret. Oracle rejects a file over 1 MB.
 3. From the repository root, preview the bundle: `oracle --dry-run summary -s <slug> -p - --file <paths> < <dir>/brief.md`. Its `with ~N tokens` line gives the total, files included, even when the line ends in `prompt only; N attachments excluded`; keep it under about 196k tokens, the limit Oracle's own skill gives. The browser preview prints no per-file sizes, so find the large files with `wc -c` and drop them until the total fits.
 4. Write the run to `<dir>/run.sh` and start it detached, because a Pro answer can take minutes (Oracle prints "usually ~10 minutes"), and a detached run survives the tool call's time limit in Claude Code, its subagents, and Codex alike:
