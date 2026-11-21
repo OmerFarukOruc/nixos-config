@@ -7,7 +7,7 @@ This page covers Claude agents left running in herdr's default session while Ome
 Terms used below:
 
 - **Orchestrator**: an agent that prompts other agents and keeps their state in a board file, such as `~/handoffs/orchestrator/BOARD.md`.
-- **Named agent**: a Claude agent that has a herdr name (`herdr agent list` shows it). `claude-tools limit-switch` acts only on named agents.
+- **Named agent**: a Claude agent that has a herdr name (`herdr agent list` shows it). `claude-tools limit-switch` moves only named agents at a usage limit, and restores every recorded agent after a herdr restart, named or not.
 - **Resume message**: the first prompt `claude-tools limit-switch` sends to an agent after it starts the agent again (switch, restore, and `resume`). It is the text of `~/.config/claude-tools/resume/NAME` when that file exists, else "... Continue where you stopped."
 
 ## An agent waits forever after its turn ends
@@ -28,7 +28,7 @@ An orchestrator that prompts only idle agents holds back a notice an agent is wa
 
 ## A restart keeps some loops and drops others
 
-`claude --resume` restores a fixed-interval `/loop` (`/loop 10m ...`) that has not reached its 7-day expiry. It does not restore a self-paced `/loop` (one without an interval) or a Monitor (https://code.claude.com/docs/en/scheduled-tasks, Limitations). On Claude Code 2.1.300 a probe saw a `/loop 10m` job listed by `CronList` again after `/exit` and a resume in a new process.
+`claude --resume` restores a fixed-interval `/loop` (`/loop 10m ...`) that has not reached its 7-day expiry. It does not restore a self-paced `/loop` (one without an interval) or a Monitor (https://code.claude.com/docs/en/scheduled-tasks, Limitations). On Claude Code 2.1.329 a probe saw a `/loop 6h` job listed by `CronList` again after a SIGHUP ended Claude and a resume started a new process; the SIGHUP also ended the session's background Bash task. A reboot ends Claude with SIGTERM, which the 2.1.329 probe did not cover.
 
 - **Handled by:** the resume message. For an agent that runs a loop or a Monitor, write a resume message that checks before it starts anything, because a message that starts the fixed-interval `/loop` again leaves two copies running. Example: "Run CronList. If no job runs the orchestrator round, start `/loop 10m <round prompt>`. Start the agent Monitor again." The orchestrator's message is in `~/.config/claude-tools/resume/orchestrator` and needs the same check-first form.
 - **Check:** after changing a loop, update the resume message to match, and after a restart run `CronList` once to see exactly one job per loop.
@@ -36,9 +36,9 @@ An orchestrator that prompts only idle agents holds back a notice an agent is wa
 
 ## `/exit` waits on a dialog while a loop is scheduled
 
-When the session has a scheduled task, `/exit` opens "Background work is running" with the choices "Exit and stop tasks", "Move to background and exit", and "Stay", and Claude keeps running until someone answers (seen on Claude Code 2.1.300). In that probe, "Exit and stop tasks" still let `claude --resume` restore the `/loop 10m` job.
+When the session has a scheduled task, `/exit` opens "Background work is running" with the choices "Exit and stop tasks", "Move to background and exit", and "Stay", and Claude keeps running until someone answers (seen on Claude Code 2.1.300). On Claude Code 2.1.329, "Exit and stop tasks" deletes the session's `/loop`, so `claude --resume` no longer finds it.
 
-- **Handled by:** `claude-tools limit-switch`. After it types `/exit`, it watches the pane for 10 s and presses Enter on "Exit and stop tasks" when the dialog shows; `claude --resume` then brings the `/loop` back (the switch's e2e checks both). When the process is still there 30 s after that watch, it sends `ctrl+c` twice, which also closes the dialog (same 2.1.300 probe), and fails with `claude pid ... did not exit` after another 15 s.
+- **Handled by:** `claude-tools limit-switch`. After it types `/exit`, it watches the pane for 10 s and, when the dialog shows, sends SIGHUP to the Claude process, which ends it and keeps the `/loop` for `claude --resume` (the switch's e2e checks both). A Claude process of another user gets Enter on "Exit and stop tasks" instead, and its loop ends. When the process is still there 30 s after that watch, it sends `ctrl+c` twice, which also closes the dialog (2.1.300 probe), and fails with `claude pid ... did not exit` after another 15 s.
 - **Check:** `grep -E 'background-work dialog|did not exit' ~/.local/state/claude-tools/limit-switch/events.log`.
 - **Who sees a failure:** `events.log` (next section). The agent stays on its old account.
 
@@ -62,9 +62,12 @@ herdr's own restore starts a Claude pane as plain `claude --resume <id>`. That c
 
 - **Handled by:**
   - `[session] resume_agents_on_restore = false` in `~/.config/herdr/config.toml` turns herdr's own restore off, so the panes come back as shells. nixos-config `home-manager/modules/herdr.nix` writes it at each switch on every host that runs `claude-tools limit-switch`.
-  - `claude-tools limit-switch scan` records each named agent (pane, session, account, arguments) in `~/.local/state/claude-tools/limit-switch/agents.json`. When the scan finds a new server process, it starts each missing agent like `clauded --resume <session>` on its recorded account and sends it its resume message.
+  - `claude-tools limit-switch scan` records each Claude, Codex and opencode agent that reports a session, named or not, in `~/.local/state/claude-tools/limit-switch/agents.json`, with its pane, session and arguments, and the boot ID. An unnamed agent is recorded as `pane-<pane id>`, such as `pane-w34-p1`. A Claude record also keeps the account, whether `rotate` started it, and the model of its last transcript entry, because the Home Manager switch at boot resets the default model that a `/model` choice changed. When the scan finds a new server process, it starts each missing agent again in its pane: Claude like `clauded --resume <session>` on its recorded account and model (through `rotate` when `rotate` started it), Codex like `codex resume <session>` with its options but without its first prompt, opencode like `opencode --session <session>` with its options and its `OPENCODE_CONFIG*` variables. It clears the herdr name of an unnamed agent again, so the usage-limit switch still skips it, and sends the resume message; when the message does not arrive, the next scan after 5 minutes sends only the message.
+  - The default resume message says whether the box rebooted or only the herdr server restarted, that every background task, Monitor, subagent and self-paced loop has ended, and that the agent checks what a cut-off command already did before it runs it again. An agent with its own resume message needs the same text.
+  - `statuslantern-nightly` and `statuslantern-audit` start again 5 minutes after a boot when a shutdown cut their run short (nixos-config `docs/devbox.md`, the failure marker).
+  - Inside the reboot window, each `nixos-upgrade` run logs a `reboot-check (log only):` line that names what a reboot at that moment would cut off; nothing holds the reboot back yet (nixos-config `docs/deploy.md`, "What a reboot cuts off").
   - When no server runs, the scan starts `herdr-default.service`. Lingering is on for `omer`, and the timer is enabled, so this also happens after a reboot.
-- **Check:** `grep -A1 '^\[session\]' ~/.config/herdr/config.toml` shows the setting, and `events.log` has a `restored in pane` line for each agent.
+- **Check:** `grep -A1 '^\[session\]' ~/.config/herdr/config.toml` shows the setting, `jq '.agents | keys' ~/.local/state/claude-tools/limit-switch/agents.json` lists the agents the last scan recorded (it leaves out agents of other users and agents that report no session), `events.log` has a `restored in pane` line for each agent, and `journalctl -u nixos-upgrade -g reboot-check` shows what was running when each upgrade run in the reboot window started.
 - **Who sees a failure:** the log only. An agent whose restore failed stays in the record, and a scan tries again after 5 minutes (`COOLDOWN`); `claude-tools limit-switch restore` or `resume NAME` tries again at once.
 
 ## An agent exits by accident
