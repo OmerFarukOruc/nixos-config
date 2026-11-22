@@ -1,8 +1,8 @@
 {
   "name": "openchamber-web-cli",
-  "version": "2.7.2",
+  "version": "2.8.0",
   "private": true,
   "dependencies": {
-    "@openchamber/web": "2.7.2"
+    "@openchamber/web": "2.8.0"
   }
 }
