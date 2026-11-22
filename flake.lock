@@ -260,11 +260,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795340038,
-        "narHash": "sha256-RtgZbV+4BDtJqMImbiPJri3fmVDbCbrz/B0cuPQUJQY=",
+        "lastModified": 1795366757,
+        "narHash": "sha256-Tp4Kh4R7ID1f2mMCDlb2PiFQ/DZZsnXB2u2juWN+TT4=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "03885bcd0b477bdecebebc57b213b0f8f0826d51",
+        "rev": "3b8140d21fa0a70b1b38c2ed29853dfe686234a6",
         "type": "github"
       },
       "original": {
@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1795355689,
-        "narHash": "sha256-RPjEcxvqjtbqVbyIHviPV8IDiMnMitu0VlowFnd8pXw=",
+        "lastModified": 1795366837,
+        "narHash": "sha256-ma3B+5J/HvCIFTc60drm9AklCHJbIA2qPyzlPv2BFhg=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "63d305102e15a499ae19e54cbbff715382590a1c",
+        "rev": "0cde3970ab62414aaba209787c74b11b951ec7e8",
         "type": "github"
       },
       "original": {
@@ -601,11 +601,11 @@
     "skills-archify": {
       "flake": false,
       "locked": {
-        "lastModified": 1795222200,
-        "narHash": "sha256-yfwNYkrozcmS6nk19YTKs15OPv5Qq3o7fR7jIzPggrc=",
+        "lastModified": 1795370997,
+        "narHash": "sha256-X54WPzEFd1GobI+Mnz7mBYSu+Mm9U8kXXloKPXyN8LU=",
         "owner": "tt-a1i",
         "repo": "archify",
-        "rev": "8509a3d63e763b4d454ea9aafa1f939545fcb1ea",
+        "rev": "6cafc5a9875a795c6932ac0c196dacf3097fafe6",
         "type": "github"
       },
       "original": {
