@@ -43,7 +43,7 @@ const IMAGE_FILE = /\/(\d+)\.(?:png|jpe?g|gif|webp)$/
 const TYPED_IMAGE = /"([^"\n]+\.(?:png|jpe?g|gif|webp))"|'([^'\n]+\.(?:png|jpe?g|gif|webp))'|(?<![^\s(])@?([^\s"'()]+\.(?:png|jpe?g|gif|webp))(?!\w)/gi
 const UID = /^\d+$/
 
-function runTool($: EngineInterface, argv: readonly string[], init: Omit<ProcessRunInit, 'cwd'> = {}): Promise<ProcessRunResult> {
+export function runTool($: EngineInterface, argv: readonly string[], init: Omit<ProcessRunInit, 'cwd'> = {}): Promise<ProcessRunResult> {
   return $.process.run(argv, { ...init, cwd: TOOL_CWD })
 }
 
@@ -65,8 +65,8 @@ function readerFlags(plan: CopyPlan, readerId: string): string[] {
   return [...sharedFlags(plan.writer), '--tools', '', ...forkFlags(readerId, plan.parentId)]
 }
 
-async function projectsDir($: EngineInterface): Promise<string> {
-  return `${(await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`}/projects`
+export async function configDir($: EngineInterface): Promise<string> {
+  return (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
 }
 
 function draftDirOf(sessionId: string): string {
@@ -138,7 +138,7 @@ export async function withDraftFile<T>($: EngineInterface, sessionId: string, dr
 }
 
 async function forgetSessionFiles($: EngineInterface, sessionId: string): Promise<void> {
-  const projects = await projectsDir($)
+  const projects = `${await configDir($)}/projects`
   const removed = await runTool($, [
     'find',
     '-H',

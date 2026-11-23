@@ -20,9 +20,17 @@ export type Tokens = { input: number; output: number; cacheRead: number; cacheCr
 
 export type Spent = { costUsd: number | null; turns: number; tokens: Tokens }
 
+export type Guide = { url: string; sha256: string; isDownloaded: boolean }
+
+export type Sent = 'as-is' | 'edited' | 'own-draft' | 'dropped'
+
 export type RunRecord<Outcome extends RunOutcome = RunOutcome> = Spent & {
   version: 2
   model: string | null
+  skillSha256: string | null
+  guides: Guide[]
+  case: string | null
+  sent: Sent | null
   id: string
   startedAt: string
   seconds: number
@@ -31,8 +39,10 @@ export type RunRecord<Outcome extends RunOutcome = RunOutcome> = Spent & {
   outcome: Outcome
 }
 
+export type RunSummary = { startedAt: string; outcome: string; draft: string; prompt: string | null }
+
 declare module 'claude-code' {
   interface PluginState {
-    enhance: { run: Shaped<Run> }
+    enhance: { run: Shaped<Run>; lastDraft: Shaped<string | null>; recent: Shaped<RunSummary[]> }
   }
 }

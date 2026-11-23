@@ -30,7 +30,7 @@ function valueAt(value: unknown, path: readonly string[]): unknown {
   )
 }
 
-function textAt(value: unknown, path: readonly string[]): string | null {
+export function textAt(value: unknown, path: readonly string[]): string | null {
   const found = valueAt(value, path)
 
   return typeof found === 'string' ? found : null
@@ -86,7 +86,7 @@ function toolOf(event: unknown): string | null {
   return typeof argument === 'string' ? `${name} ${argument.replace(/\s+/g, ' ').trim().slice(0, TOOL_ARGUMENT_CHARS)}` : name
 }
 
-function parseLine(line: string): unknown {
+export function parseLine(line: string): unknown {
   try {
     return JSON.parse(line)
   } catch {
