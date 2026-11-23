@@ -28,12 +28,12 @@ These are our own text in this folder. Each row names the upstream file and the 
 
 | Skill | Upstream (owner/repo:path) | Commit read | What we took |
 | --- | --- | --- | --- |
-| crystal-plan | tobihagemann/turbo:claude/skills/draft-plan | d56f17f0ba88ead3a4a77fcdc884f80cd3d10d2f | List every path that references a deleted, renamed, or re-signed symbol; a proof drives an input the old code handles wrongly and never asserts through a test double |
-| crystal-plan | tobihagemann/turbo:claude/skills/create-test-plan | d56f17f0ba88ead3a4a77fcdc884f80cd3d10d2f | A control run that differs only in the behavior under test |
-| crystal-plan | humanlayer/humanlayer:.claude/commands/implement_plan.md | 77c7fe99ee2b5016f897437ef70c9726efc86092 | The Expected and Found shape of the executor's stop report (upstream deleted the file later) |
-| crystal-plan | github/spec-kit:templates/commands/analyze.md | 7370e592f3cd9c06e5b698983957e227c75b30e2 | Coverage checked both ways, and vague words as a failed check |
-| crystal-plan | bmad-code-org/BMAD-METHOD:skills/bmad-build/step-02-plan.md | 61e01f82644c4bb533750cfa0d6d61ab61d2cc9b | Re-check a claim with `git diff --stat <commit> -- <path>` before relying on it |
-| crystal-plan | obra/superpowers:skills/writing-plans/SKILL.md | 2ce8aa15d05bd57213e6f746f953aafb7ded7a8b | Review Focus: the inputs a requirement implies but no test exercises |
+| crystal-plan | tobihagemann/turbo:claude/skills/draft-plan | f9d9a5b34c7f9bbddd4760c45dec21bb57dcd562 | List every path that references a deleted, renamed, or re-signed symbol; a proof drives an input the old code handles wrongly and never asserts through a test double; a check that is not a test reports differently, in output or exit status, when its property is absent |
+| crystal-plan | tobihagemann/turbo:claude/skills/create-test-plan | f9d9a5b34c7f9bbddd4760c45dec21bb57dcd562 | A control run that differs only in the behavior under test |
+| crystal-plan | humanlayer/humanlayer:.claude/commands/implement_plan.md | 99abe673498cf8bdcd5f989aebe9406a27185b3b | The Expected and Found shape of the executor's stop report; the row records the last commit that holds the file, because upstream deleted it in d8197bab07 |
+| crystal-plan | github/spec-kit:templates/commands/analyze.md | a4d571229e164e440f8950cac034607bae7b7518 | Coverage checked both ways, and vague words as a failed check; its constrained-field check is left out, because it needs a `data-model.md`, which our plans do not have |
+| crystal-plan | bmad-code-org/BMAD-METHOD:skills/method/bmad-build/step-02-plan.md | e435a22574fe55722841086e5566420178b98df3 | Re-check a claim with `git diff --stat <commit> -- <path>` before relying on it |
+| crystal-plan | obra/superpowers:skills/writing-plans/SKILL.md | 22f0b463e7a5e579904dd6211a520321035526f7 | Review Focus: the inputs a requirement implies but no test exercises |
 | plan-review | tobihagemann/turbo:claude/skills/review-plan | 4b9f4cf74321a7ac4dddfe9298f8472bea74b9dc | Structure and scope checks |
 | plan-review | tobihagemann/turbo:claude/skills/evaluate-findings | 4b9f4cf74321a7ac4dddfe9298f8472bea74b9dc | Verify each finding against the code; added machinery and reversed decisions go to the owner |
 | plan-review | EveryInc/compound-engineering-plugin:skills/ce-doc-review | 67035e931c5cb26e80f198a7019a4502a9788273 | Finding format, confidence levels, admit by consequence, single-reviewer rule, earlier-round rules, assumption checks |
