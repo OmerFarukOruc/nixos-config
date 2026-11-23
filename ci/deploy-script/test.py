@@ -75,6 +75,7 @@ as_user(
     " && install -m 0755 /tmp/deploy.sh deploy.sh"
     " && echo '{\"nodes\":{\"root\":{}},\"root\":\"root\",\"version\":7}' > flake.lock"
     " && echo first > notes.txt"
+    " && mkdir sub && echo inside > sub/file && ln -s sub link"
 )
 publish("good")
 as_user(f"git clone -q {checkout} {other}")
@@ -161,7 +162,10 @@ assert_on_good("back to good after unsigned")
 print("phase: a checkout that lacks a file of the running release")
 status, out = deploy("switch", other)
 assert status == 78, f"a deploy that drops a file gave exit {status}, not 78"
-assert "  notes.txt" in out, "the deploy does not name the file it would drop"
+dropped = out.split("so this deploy would drop them:\n", 1)[-1].splitlines()
+assert [line for line in dropped if line.startswith("  ")] == ["  notes.txt"], (
+    "the deploy does not name exactly the file it would drop"
+)
 assert_on_good("drop")
 status, out = deploy("switch", other, "--replace")
 assert status == 0, "the deploy with --replace failed"

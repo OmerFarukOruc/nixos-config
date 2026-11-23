@@ -741,7 +741,8 @@ makes the deploy exit 78. The check compares the candidate files first and
 reads Git history only for files that differ.
 
 A system with no release record, such as one built by hand, is reported and not
-checked. `--replace` skips the check.
+checked, and so is a release whose `.blobs` file has a line without a blob.
+`--replace` skips the check.
 
 The last line says how to continue. It compares this checkout with its local
 `origin/main`, so run `git fetch` first when the clone may be old:
@@ -775,8 +776,10 @@ When the deploy promotes the release, it adds the system it built as a
 `system=` line matches `readlink -f /run/current-system`.
 
 A release that built also has `<release>.blobs` beside its record. It lists
-the Git blob of every uploaded file, and the deploy uses it to find files that
-a new deploy would drop.
+the Git blob of every uploaded file, the one `git add` would store, so a
+symbolic link gets the blob that holds its link text. A path with a tab, a
+newline, `"` or `\` appears quoted, as `git ls-files` prints it. The deploy
+uses it to find files that a new deploy would drop.
 
 Release cleanup is explicit. This command deletes old releases:
 

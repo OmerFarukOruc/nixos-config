@@ -131,7 +131,8 @@ REMOTE
 fi
 
 dirty=false
-[[ -n $(git -C "$repo_dir" status --porcelain=v1 --untracked-files=normal) ]] && dirty=true
+tree_status=$(git -C "$repo_dir" status --porcelain=v1 --untracked-files=normal)
+[[ -n $tree_status ]] && dirty=true
 if [[ $dirty == true && $allow_dirty == false ]]; then
   printf '%s\n' \
     'Refusing to deploy a dirty source tree.' \
@@ -143,17 +144,18 @@ deploy_state_dir=$(mktemp -d)
 trap 'rm -rf -- "$deploy_state_dir"' EXIT
 manifest="$deploy_state_dir/manifest"
 
-while IFS= read -r -d '' path; do
-  if [[ -f "$repo_dir/$path" || -L "$repo_dir/$path" ]]; then
-    printf '%s\0' "$path"
-  fi
-done < <(git -C "$repo_dir" ls-files -co --exclude-standard -z) |
+git -C "$repo_dir" ls-files -co --exclude-standard -z |
+  while IFS= read -r -d '' path; do
+    if [[ -f "$repo_dir/$path" || -L "$repo_dir/$path" ]]; then
+      printf '%s\0' "$path"
+    fi
+  done |
   LC_ALL=C sort -zu >"$manifest"
 
 blobs="$deploy_state_dir/blobs"
-tr '\0' '\n' <"$manifest" >"$deploy_state_dir/paths"
-paste <(cd "$repo_dir" && git hash-object --stdin-paths <"$deploy_state_dir/paths") \
-  "$deploy_state_dir/paths" >"$blobs"
+GIT_INDEX_FILE="$deploy_state_dir/index" git -C "$repo_dir" update-index --add --info-only -z --stdin <"$manifest"
+GIT_INDEX_FILE="$deploy_state_dir/index" git -C "$repo_dir" -c core.quotepath=off \
+  ls-files --format='%(objectname)%x09%(path)' >"$blobs"
 
 revision=$(git -C "$repo_dir" rev-parse HEAD)
 release_id="$(date -u +%Y%m%dT%H%M%SZ)-${revision:0:12}-$$"
@@ -332,6 +334,11 @@ REMOTE
     record_file="$deploy_state_dir/$id.source"
     "${rsync_cmd[@]}" "${release_target%/*}/$id.source" "${release_target%/*}/$id.blobs" "$deploy_state_dir/" ||
       return $?
+    if grep -q $'^\t' -- "$deploy_state_dir/$id.blobs"; then
+      printf 'The %s system on %s comes from release %s, whose blob list lacks hashes, so this deploy cannot check it.\n' \
+        "$role" "$host" "$id" >&2
+      continue
+    fi
     dropped=$(dropped_paths "$deploy_state_dir/$id.blobs") || return $?
     [[ -z $dropped ]] && continue
     if pr=$(merged_pr_of_release "$record_file"); then
@@ -794,7 +801,7 @@ deploy() {
   build_candidate || return $?
   "${rsync_cmd[@]}" "$release_target/flake.lock" "$deploy_state_dir/flake.lock" || return $?
   local lock_blob
-  lock_blob=$(git -C "$repo_dir" hash-object -- "$deploy_state_dir/flake.lock") || return $?
+  lock_blob=$(git -C "$repo_dir" hash-object --path=flake.lock --stdin <"$deploy_state_dir/flake.lock") || return $?
   awk -F '\t' -v lock="$lock_blob" \
     'BEGIN { OFS = FS } $2 == "flake.lock" { $1 = lock } { print }' "$blobs" >"$blobs.final" || return $?
   "${rsync_cmd[@]}" "$blobs.final" "$release_target.blobs" || return $?
