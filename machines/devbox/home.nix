@@ -198,7 +198,20 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
+  services.gnome-keyring = {
+    enable = true;
+    components = [ "secrets" ];
+  };
+
   systemd.user.services = {
+    gnome-keyring = {
+      Unit.PartOf = lib.mkForce [ ];
+      Service = {
+        Type = "dbus";
+        BusName = "org.freedesktop.secrets";
+      };
+      Install.WantedBy = lib.mkForce [ "default.target" ];
+    };
     amp-runner = {
       Unit = {
         Description = "Amp runner for Omer's threads (outbound connection only)";
@@ -243,8 +256,14 @@ in
     cursor-worker = {
       Unit = {
         Description = "Cursor Cloud Agent worker for Omer's My Machines (outbound connection only)";
-        After = [ "network-online.target" ];
-        Wants = [ "network-online.target" ];
+        After = [
+          "network-online.target"
+          "gnome-keyring.service"
+        ];
+        Wants = [
+          "network-online.target"
+          "gnome-keyring.service"
+        ];
         X-SwitchMethod = "keep-old";
       };
       Service = {

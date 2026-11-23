@@ -432,10 +432,27 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   xkbcommon libraries the module adds; the runner's journal says "Desktop
   sharing is unavailable" when one is missing. The XFCE module
   also turns on udisks2, accounts-daemon, gvfs, tumbler, colord, polkit and
-  gnome-keyring. Its screensaver is off, because it would lock the Cursor
+  gnome-keyring. XFCE's screensaver is off, because it would lock the Cursor
   worker's session; the Debian box had none installed (`dpkg-query` for
   xfce4-screensaver, light-locker and xscreensaver on 2026-10-28). The boot
   test shows that these tools exist, not that an XFCE or labwc session starts.
+- One gnome-keyring daemon serves omer's Secret Service, on the user bus that
+  agents use. The Cursor worker's desktop runs XFCE on a D-Bus session bus of
+  its own, and the keyring daemon that its autostart entry starts would take
+  the keyring control socket in `$XDG_RUNTIME_DIR/keyring`; a daemon that D-Bus
+  activation then starts for the user bus would find that socket, hand off to
+  the desktop's daemon and exit, so `org.freedesktop.secrets` would get no
+  owner on the user bus. Home Manager's `gnome-keyring.service` therefore
+  starts the daemon on the user bus at login, and `cursor-worker.service` wants
+  it and starts once it owns that name. Every desktop on a bus of its own (the
+  Cursor worker's, each RDP desktop, the Amp runner's labwc) then has no Secret
+  Service: its daemon hands off to the user bus's daemon and exits, and a
+  Secret Service call there finds no owner and times out (`busctl` waited 25 s
+  in a scratch run). A deploy does not restart the worker (`X-SwitchMethod =
+  "keep-old"`), so when `gnome-keyring.service` has failed because the
+  desktop's daemon still holds the socket, run `systemctl --user restart
+  cursor-worker.service`: it stops that daemon with the desktop and starts the
+  user bus's daemon first.
 - `features.boxBrowser` is on in the host record, so the box browser's two user
   units exist; agents drive it with `box-browser` from agent-tools
   ([box-browser.md](box-browser.md)).
