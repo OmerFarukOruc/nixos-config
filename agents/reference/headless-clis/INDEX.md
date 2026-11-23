@@ -1,17 +1,22 @@
 # Headless CLI docs
 
-Each vendor copy's header comments name its `markdown-url` and its `fetched` date. On 03-11-2026 every copy was compared with the page at its `markdown-url`: the Claude Code, Codex non-interactive, Codex subagents, Antigravity, and OpenCode pages had changed and were replaced, and the cursor-agent and Grok pages matched. Full vendor markdown; do not shorten, because these are copies of the vendor text.
+Before composing a headless command for one of these CLIs, save its live docs page to a file and read the sections the command needs, then confirm each flag with the installed binary's `--help`, because the docs lag the binaries:
 
-| File | Page | Title |
+```sh
+curl -fsSL <docs page> -o /tmp/agents/<task>-<session8>/<cli>.md
+```
+
+| CLI | Command on this host | Docs page |
 | --- | --- | --- |
-| `claude-code-headless.md` | https://code.claude.com/docs/en/headless | Run Claude Code programmatically |
-| `grok-cli-headless-scripting.md` | https://docs.x.ai/build/cli/headless-scripting | Headless & Scripting |
-| `chatgpt-non-interactive-mode.md` | https://learn.chatgpt.com/docs/non-interactive-mode | Non-interactive mode (Codex `codex exec`) |
-| `chatgpt-subagents.md` | https://learn.chatgpt.com/docs/agent-configuration/subagents | Subagents (Codex `[agents]`, parallel, per-agent model) |
-| `cursor-cli-headless.md` | https://cursor.com/docs/cli/headless | Using Headless CLI (box binary `cursor-agent`, also `agent`) |
-| `antigravity-cli-headless.md` | https://antigravity.google/docs/cli/headless/ | Headless mode |
-| `opencode-cli.md` | https://opencode.ai/docs/cli/ | OpenCode CLI |
-| `operational-notes.md` | (written here, not a vendor page) | Headless CLI operational notes |
-| `herdr.md` | (written here, from `herdr 0.9.5` on devbox, not a vendor page) | herdr on devbox: install, sessions, starting and reading Claude agents, gotchas |
+| Claude Code | `claude` | https://code.claude.com/docs/en/headless.md |
+| Grok | `grok` | https://docs.x.ai/build/cli/headless-scripting.md |
+| Codex `codex exec` | `codex` | https://learn.chatgpt.com/docs/non-interactive-mode.md |
+| Codex subagents (`[agents]`, per-agent model) | `codex` | https://learn.chatgpt.com/docs/agent-configuration/subagents.md |
+| Cursor | `cursor-agent`; `agent` starts Grok's launcher here | https://cursor.com/docs/cli/headless.md |
+| Antigravity | `agy` | https://antigravity.google/docs/cli/headless.md |
+| OpenCode | `opencode` | https://opencode.ai/docs/cli/commands.md |
 
-Read the matching file before launching that CLI headless.
+Two files here are written from live sessions, not vendor pages:
+
+- `operational-notes.md`: what the docs pages omit or get wrong, per CLI.
+- `herdr.md`: herdr on devbox: install, sessions, starting and reading Claude agents, gotchas.

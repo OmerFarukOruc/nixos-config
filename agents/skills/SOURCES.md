@@ -24,7 +24,7 @@ What each patch keeps, and why:
 
 ## Skills that borrow ideas
 
-These are our own text in this folder. Each row names the upstream file and the commit it was compared with last. No job watches them: to compare again, read the upstream diff from that commit and update the row.
+These are our own text in this folder. Each row names the upstream file and the commit it was compared with last. No job watches them: to compare again, read the upstream diff from that commit and update the row. A skill with no row here borrows from no upstream.
 
 | Skill | Upstream (owner/repo:path) | Commit read | What we took |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ These are our own text in this folder. Each row names the upstream file and the 
 | enhance-prompt | luv-jeri/nonlu-skill:skills/boost/references/red-flags.md | a65738dbbe7c28c81c8e5ca99a8ed362d0cdf00d | A ready, structured draft passes through unchanged; an unknown stays unknown, never guessed |
 | enhance-prompt | cursor/plugins:pstack/skills/in-your-own-words/SKILL.md | dbf49813a39c1a5389c5e28cb8e4c1c2379e2454 | The reply opens with the caller's goal and problem restated in the skill's own words |
 | retro | mattpocock/skills:skills/engineering/retro | a7d038f6bf7f01b516408e95e2fb56e0b338fa6f | The categories and the implementation-versus-review reference; the verify, refute, and apply steps, the session digest, and the escapes, containment, orchestration, and outputs categories are local |
-| test-audit | openclaw/openclaw:.agents/skills/test-audit (SKILL.md, CAMPAIGN.md, references/audit.md) and docs/help/testing/writing-tests.md | 1fc5296cba84c80cfe23321cba053caf3bcda75f | The campaign order of work and the junk and retention rules; `agents/reference/test-audit-openclaw.md` records each rule as adopted, adapted or rejected |
+| test-audit | openclaw/openclaw:.agents/skills/test-audit (SKILL.md, CAMPAIGN.md, references/audit.md) and docs/help/testing/writing-tests.md | 1fc5296cba84c80cfe23321cba053caf3bcda75f | The campaign order of work and the junk and retention rules |
 | testing-discipline (agents/shared/) | caldoai/skills:skills/prune-tests/SKILL.md | d5b68dace378219890d821adb3685538e2c69b04 | The tombstone test and the platform test |
 | testing-discipline (agents/shared/) | obra/superpowers:skills/test-driven-development/writing-good-tests.md | 22f0b463e7a5e579904dd6211a520321035526f7 | A regression is a break, not a decision; case data stays visible in the test |
 | testing-discipline (agents/shared/) | spiceai/spiceai:AGENTS.md | a77dc5838607d192f104fa320f008b6ca66d874d | Exact outcomes, proof that the path under test ran, bounded polls in place of fixed sleeps |

@@ -36,7 +36,7 @@ check, so it never goes stale:
 ```
 
 When the host lacks it, clone KyaniteHQ/linctl there and check out the tag of
-the installed binary (`linctl --version`, such as `v0.27.0`), so the skill
+the installed binary (`linctl --version`, such as `v0.28.0`), so the skill
 matches the commands you run. Read that for commands, flags, guarded-write
 rules, and smoke tests. Per-domain
 guidance also lives in the binary: `linctl issue usage`, `linctl <domain> --help`.
@@ -94,9 +94,9 @@ release build and check it against the published checksums:
 
 ```
 cd "$(mktemp -d)" && \
-  gh release download v0.27.0 --repo KyaniteHQ/linctl -p 'linctl_0.27.0_linux_amd64.tar.gz' -p 'checksums.txt' && \
-  grep ' linctl_0.27.0_linux_amd64.tar.gz$' checksums.txt | sha256sum -c - && \
-  tar -xzf linctl_0.27.0_linux_amd64.tar.gz && install -m 0755 linctl ~/.local/bin/linctl && linctl --version
+  gh release download v0.28.0 --repo KyaniteHQ/linctl -p 'linctl_0.28.0_linux_amd64.tar.gz' -p 'checksums.txt' && \
+  grep ' linctl_0.28.0_linux_amd64.tar.gz$' checksums.txt | sha256sum -c - && \
+  tar -xzf linctl_0.28.0_linux_amd64.tar.gz && install -m 0755 linctl ~/.local/bin/linctl && linctl --version
 ```
 
 ## Linear's own documentation
