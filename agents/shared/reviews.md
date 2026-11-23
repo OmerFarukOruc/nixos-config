@@ -8,7 +8,7 @@
 - When a change adds a step or a check to an unattended path (a timer, a bot's commit, a hook that runs on such a commit, agents left running while Omer is away), its review names what happens when that step fails and who sees the failure. Before leaving agents running on devbox while Omer is away, read `~/.claude/reference/unattended-agents.md` for each known failure point and what handles it.
 - When a change hardens one copy of a repeated pattern, search for the other copies. An unhardened copy is a finding in the same review.
 - A change gets one review, on the diff in its final landing shape. When review fixes change the landing shape, check only what `git range-diff` shows changed yourself. When Omer asks for a new scope or design after the review, the rewritten diff is a new change and gets its own review.
-- A many-agent adversarial review of a diff that already passed a normal review chain has so far found proof gaps and doc drift, not bugs. Run one only when Omer asks.
+- Run a many-agent adversarial review only when Omer asks; one `code-reviewer` review is the default.
 - Confirm a check-then-act race across two connections or transactions as a bug only when a feasible interleaving produces an invalid state or unintended side effect and no structural guard prevents it. Treat idempotence as counterevidence only when it prevents that specific outcome. Without a demonstrated invalid outcome, report the unresolved concern as a design smell.
 
 ## Closing issues
