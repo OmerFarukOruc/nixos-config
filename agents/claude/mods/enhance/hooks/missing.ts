@@ -4,9 +4,10 @@ const PATH =
   /(?<![\w./~+-])@?((?:~|\.{1,2})\/[\w.@+-]+(?:\/[\w.@+-]+)*|\/[\w.@+-]+(?:\/[\w.@+-]+)+|[\w.@+-]+(?:\/[\w.@+-]+)+\.\w+|[\w+-]*[A-Za-z][\w+-]+\.[A-Za-z]{1,5}(?![\w.]))/g
 const TRAILING_MARKS = /[.,;:!?]+$/
 const REGEXP_MARKS = /[.*+?^${}()|[\]\\]/g
+const CURRENT_FOLDER = /^(?:\.\/)+/
 
 function holdsPath(prompt: string, path: string): boolean {
-  return new RegExp(`${path.replace(REGEXP_MARKS, '\\$&')}(?![\\w-]|\\.\\w)`).test(prompt)
+  return new RegExp(`${path.replace(CURRENT_FOLDER, '').replace(REGEXP_MARKS, '\\$&')}(?![\\w-]|\\.\\w)`).test(prompt)
 }
 
 export function missingFrom(draft: string, prompt: string): string[] {

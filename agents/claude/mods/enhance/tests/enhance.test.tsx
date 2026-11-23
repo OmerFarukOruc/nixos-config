@@ -161,12 +161,12 @@ test('a second unusable reply fails the run', async ($, on) => {
 
 test('the notes name each path, URL and code span of the draft that the prompt leaves out', async ($, on) => {
   const seen = stubSession(on, {
-    replies: [resultLine('```paste\nFix the login in src/app/login.ts. Read lib/util.ts and lib/old.ts.bak.\n```\n- Target: test'), resultLine('reading')],
+    replies: [resultLine('```paste\nFix the login in src/app/login.ts. Read lib/util.ts, /repo/docs/guide.md and lib/old.ts.bak.\n```\n- Target: test'), resultLine('reading')],
   })
 
   await $.command.run({
     ...TYPED,
-    args: 'fix src/app/login.ts like ~/notes/plan.md says, see https://example.com/issue/7. and keep `retryCount`, check @lib/util.ts and README.md, not lib/old.ts',
+    args: 'fix src/app/login.ts like ~/notes/plan.md says, see https://example.com/issue/7. and keep `retryCount`, check @lib/util.ts, ./docs/guide.md and README.md, not lib/old.ts',
   })
   await seen.clock.settle()
 
