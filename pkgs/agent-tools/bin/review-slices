@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+	cat <<'EOF'
+usage: review-slices [--max <head lines>] <checkout> <base> <head> <out-dir>
+       review-slices [--max <head lines>] --worktree <checkout> <base> <out-dir>
+
+Cuts the files that <base>...<head> changes into review slices of whole files, in byte order of their paths, each
+under a budget of head lines, so one reviewer per slice can read every file of its slice in full. The default budget
+is 11000 head lines. A deleted file, a binary file and a submodule count 0 lines. <out-dir>/slice-N.txt lists the
+paths of slice N, one per line; <out-dir> must hold no slice file yet.
+
+With --worktree, the head is a commit of the checkout's working tree, tracked and untracked files that .gitignore
+does not exclude, made without touching the checkout's index; its parent is the checkout's HEAD.
+
+Prints `head <sha>` first, then one line per slice, an `over budget: <path>` line for each file that alone exceeds
+the budget (it gets a slice of its own), `total <lines> head lines`, and last `slices N`.
+
+Exit codes: 0 when every slice fits the budget, 3 when a file alone exceeds it, 2 on a usage error, a revision
+that does not resolve, a git failure, an out-dir that already holds slice files, or a path that holds a newline.
+EOF
+}
+
+fail() {
+	echo "review-slices: $*" >&2
+	exit 2
+}
+
+if [[ ${1-} == -h || ${1-} == --help ]]; then
+	usage
+	exit 0
+fi
+max=11000
+if [[ ${1-} == --max ]]; then
+	max=${2-}
+	shift 2 || true
+fi
+worktree=false
+if [[ ${1-} == --worktree ]]; then
+	worktree=true
+	shift
+	(($# == 3)) && set -- "$1" "$2" WORKTREE "$3"
+fi
+if [[ $# -ne 4 || ! $max =~ ^[1-9][0-9]*$ ]]; then
+	usage >&2
+	exit 2
+fi
+checkout=$1 out=$4
+resolve() {
+	git -C "$checkout" rev-parse --verify --quiet --end-of-options "$1^{commit}" ||
+		fail "$1 is not a commit in $checkout"
+}
+snapshot() {
+	local tree
+	index=$(mktemp) || fail "cannot create a scratch index"
+	trap 'rm -f -- "$index"' EXIT
+	cp -- "$(git -C "$checkout" rev-parse --path-format=absolute --git-path index)" "$index" ||
+		fail "cannot read the index of $checkout"
+	GIT_INDEX_FILE=$index git -C "$checkout" add --all || fail "cannot stage the working tree of $checkout"
+	tree=$(GIT_INDEX_FILE=$index git -C "$checkout" write-tree) || fail "cannot write the working tree of $checkout"
+	GIT_AUTHOR_NAME=review-slices GIT_AUTHOR_EMAIL=review-slices@localhost \
+		GIT_COMMITTER_NAME=review-slices GIT_COMMITTER_EMAIL=review-slices@localhost \
+		git -C "$checkout" commit-tree -p HEAD -m "review-slices snapshot" "$tree" ||
+		fail "cannot commit the working tree of $checkout"
+}
+base=$(resolve "$2")
+if $worktree; then
+	head=$(snapshot)
+else
+	head=$(resolve "$3")
+fi
+fork=$(git -C "$checkout" merge-base "$base" "$head") || fail "$2 and $3 share no history in $checkout"
+
+mapfile -d '' -t raw < <(git -C "$checkout" diff -O/dev/null --raw -z --no-renames --no-abbrev "$fork" "$head")
+wait $! || fail "git diff $fork $head failed in $checkout"
+mapfile -d '' -t numstat < <(git -C "$checkout" diff -O/dev/null --numstat -z --no-renames "$fork" "$head")
+wait $! || fail "git diff --numstat $fork $head failed in $checkout"
+
+declare -A binary=()
+for entry in "${numstat[@]}"; do
+	[[ $entry == -$'\t'-$'\t'* ]] && binary[${entry#-$'\t'-$'\t'}]=1
+done
+
+declare -A lines=()
+for ((k = 0; k < ${#raw[@]}; k += 2)); do
+	read -r _ mode _ blob _ <<<"${raw[k]#:}"
+	path=${raw[k + 1]}
+	[[ $path != *$'\n'* ]] || fail "a changed path holds a newline, which a slice file cannot list: ${path@Q}"
+	count=0
+	if [[ $mode =~ ^(100644|100755|120000)$ && -z ${binary[$path]-} ]]; then
+		count=$(git -C "$checkout" cat-file blob "$blob" | awk 'END { print NR }') || fail "cannot read $path at $3"
+	fi
+	lines[$path]=$count
+done
+
+if ((${#lines[@]})); then
+	mapfile -d '' -t paths < <(printf '%s\0' "${!lines[@]}" | LC_ALL=C sort -z)
+else
+	paths=()
+fi
+
+mkdir -p -- "$out" 2>/dev/null || fail "cannot create $out"
+shopt -s nullglob
+existing=("$out"/slice-*.txt)
+shopt -u nullglob
+((${#existing[@]} == 0)) || fail "$out already holds slice files"
+
+echo "head $head"
+n=0 size=0 total=0 files=0 over=0
+for path in "${paths[@]}"; do
+	count=${lines[$path]}
+	if ((n == 0 || (files > 0 && size + count > max))); then
+		((n == 0)) || echo "slice $n: $files files, $size head lines"
+		n=$((n + 1)) size=0 files=0
+	fi
+	if ((count > max)); then
+		echo "over budget: $path ($count head lines)"
+		over=1
+	fi
+	printf '%s\n' "$path" >>"$out/slice-$n.txt"
+	size=$((size + count)) total=$((total + count)) files=$((files + 1))
+done
+((n == 0)) || echo "slice $n: $files files, $size head lines"
+echo "total $total head lines"
+echo "slices $n"
+((over == 0)) || exit 3
