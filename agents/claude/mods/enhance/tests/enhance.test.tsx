@@ -3,6 +3,10 @@ import { expect, test } from 'claude-code/testing'
 import { HEADLESS_START, headlessResultOf, parseReply, readHeadless } from '../hooks/reply'
 import type { HeadlessResult } from '../hooks/reply'
 import { ERROR_STREAM, FORK_STREAM } from './fixtures'
+import { resultLine, stubSession } from './session'
+
+const TYPED = { command: 'enhance', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const
+const DRAFT_FILE = /^\/tmp\/agents\/enhance-copy-[0-9a-f-]+\/draft\.md$/
 
 test('/enhance with no draft starts nothing', async ($, on) => {
   let started = 0
@@ -92,4 +96,17 @@ test('a question block gives the question and its options', () => {
     options: ['inbox', 'threadsift'],
   })
   expect(parseReply('```question\nWhich login page?\n```')).toEqual({ kind: 'question', question: 'Which login page?', options: [] })
+})
+
+test('a typed image path that exists gets a path line in the draft file, and one that does not gets none', async ($, on) => {
+  const seen = stubSession(on, {
+    replies: [resultLine('```paste\nprompt\n```'), resultLine('reading')],
+    exists: path => path === '/work' || path === '/work/shots/login.png' || path === '/home/t/a b.jpg',
+  })
+
+  await $.command.run({ ...TYPED, args: 'what is wrong in shots/login.png, @missing.png and "~/a b.jpg"?' })
+  await seen.clock.settle()
+
+  const [draft] = [...seen.written].flatMap(([path, text]) => (DRAFT_FILE.test(path) ? [text] : []))
+  expect(draft?.split('\n').slice(2)).toEqual(['shots/login.png is the image file /work/shots/login.png', '~/a b.jpg is the image file /home/t/a b.jpg'])
 })

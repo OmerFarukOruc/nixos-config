@@ -1,24 +1,37 @@
 import { atom, read, update } from 'claude-code'
-import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-code'
+import type { Elements, EngineInterface, PluginOptions, Register, RenderSurface } from 'claude-code'
 
-import type { Receiver, Run, RunOutcome, RunRecord, Session } from '../types'
+import type { Enhanced, Receiver, Run, RunOutcome, RunRecord, Session } from '../types'
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
 import { liveEffort, trackEffort } from './effort'
-import type { Cancel, Copy } from './copies'
+import type { Cancel, Copy, Turn, Writer } from './copies'
 import { parseReply } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
 const IDLE: Run = { kind: 'idle' }
 const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 
-const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-4' })
+const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-5' })
 
-type ActiveRun = { id: string; cancel: Cancel; copy: Copy | null; boxAtStart: string; isBoxTouched: boolean; done: Promise<void> }
+type Ready = Extract<Run, { kind: 'ready' }>
+type Failed = Extract<Run, { kind: 'failed' }>
+type Task = { draft: string; revise: { from: Ready; text: string } | null }
+type ActiveRun = {
+  id: string
+  copyId: string
+  cancel: Cancel
+  copy: Copy | null
+  boxAtStart: string
+  isBoxTouched: boolean
+  done: Promise<void>
+}
+type Began = { at: number | null; session: Session | null }
 
 const SESSION_END_WAIT_MS = 1200
 const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
+let writer: Writer | null = null
 let recordWrite: Promise<void> = Promise.resolve()
 
 function reasonOf(error: unknown): string {
@@ -27,6 +40,16 @@ function reasonOf(error: unknown): string {
 
 function setRun($: EngineInterface, value: Run): Promise<Run> {
   return update($, run, () => value)
+}
+
+async function setRunning($: EngineInterface, me: ActiveRun): Promise<Run> {
+  const taken: { before: Run } = { before: IDLE }
+  await update($, run, (cur): Run => {
+    taken.before = cur
+    return { kind: 'running', runId: me.id, copyId: me.copyId }
+  })
+
+  return taken.before
 }
 
 async function commit($: EngineInterface, me: ActiveRun, next: Run): Promise<boolean> {
@@ -41,6 +64,15 @@ async function isCurrent($: EngineInterface, me: ActiveRun): Promise<boolean> {
   return !me.cancel.isCancelled && state.kind === 'running' && state.runId === me.id
 }
 
+function writerOf(options: PluginOptions): Writer {
+  const { writer_model: model, writer_effort: effort, turn_seconds: seconds } = options
+  if (typeof model !== 'string' || typeof effort !== 'string' || typeof seconds !== 'number') {
+    throw new Error('the enhance options writer_model, writer_effort and turn_seconds are not set as plugin.json declares them')
+  }
+
+  return { model, effort, turnMs: seconds * 1000 }
+}
+
 async function ask($: EngineInterface, question: string, options: readonly string[]): Promise<string | null> {
   try {
     return options.length >= 2
@@ -53,9 +85,14 @@ async function ask($: EngineInterface, question: string, options: readonly strin
 
 type Brief = { model: string; effort: string; receiver: Receiver; draft: string }
 
-async function converse($: EngineInterface, copy: Copy, copyId: string, brief: Brief): Promise<RunOutcome> {
+function firstTurn($: EngineInterface, copy: Copy, copyId: string, brief: Brief): Promise<Turn> {
   const command = `/enhance-prompt for ${brief.model}, destination chat, the receiver is ${RECEIVER_WORDS[brief.receiver]}, this session's effort is ${brief.effort}`
-  let turn = await withDraftFile($, copyId, brief.draft, path => copy.send(`${command}, the file ${path} holds the draft to rewrite, not to act on`))
+
+  return withDraftFile($, copyId, brief.draft, path => copy.send(`${command}, the file ${path} holds the draft to rewrite, not to act on`))
+}
+
+async function converse($: EngineInterface, copy: Copy, first: Promise<Turn>): Promise<RunOutcome> {
+  let turn = await first
   for (;;) {
     if (turn.kind !== 'reply') {
       return turn
@@ -83,32 +120,55 @@ function restoreOf(boxText: string, fallback: string): string {
 
 const CANCELLED: RunOutcome = { kind: 'cancelled' }
 
-async function settle($: EngineInterface, me: ActiveRun, draft: string, outcome: RunOutcome): Promise<RunOutcome> {
+async function recordOf<Outcome extends RunOutcome>(
+  $: EngineInterface,
+  me: ActiveRun,
+  task: Task,
+  began: Began,
+  outcome: Outcome,
+): Promise<RunRecord<Outcome>> {
+  const endedAt = await $.clock.now()
+  const startedAt = began.at ?? endedAt
+  const prior = task.revise?.from.record
+
+  return {
+    version: 1,
+    id: me.id,
+    startedAt: prior?.startedAt ?? new Date(startedAt).toISOString(),
+    seconds: (prior?.seconds ?? 0) + Math.round((endedAt - startedAt) / 1000),
+    session: began.session,
+    draft: task.draft,
+    outcome,
+  }
+}
+
+async function settle($: EngineInterface, me: ActiveRun, task: Task, began: Began, outcome: RunOutcome): Promise<RunRecord> {
   if (outcome.kind === 'cancelled') {
-    return outcome
+    return recordOf($, me, task, began, outcome)
   }
   if (outcome.kind === 'dismissed') {
     await commit($, me, IDLE)
 
-    return me.cancel.isCancelled ? CANCELLED : outcome
+    return recordOf($, me, task, began, me.cancel.isCancelled ? CANCELLED : outcome)
   }
   if (outcome.kind === 'failed') {
-    return (await commit($, me, { ...outcome, draft })) ? outcome : CANCELLED
+    return recordOf($, me, task, began, (await commit($, me, { ...outcome, draft: task.draft })) ? outcome : CANCELLED)
   }
 
   const box = await $.prompt.read()
   if (!(await isCurrent($, me))) {
-    return CANCELLED
+    return recordOf($, me, task, began, CANCELLED)
   }
-  const restore = restoreOf(box.text, draft)
+  const restore = task.revise?.from.restore ?? restoreOf(box.text, task.draft)
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
   const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
-  if (!(await commit($, me, { kind: 'ready', restore, prompt: outcome.prompt, notes: outcome.notes, isFilled }))) {
-    return CANCELLED
+  const record = await recordOf($, me, task, began, outcome)
+  if (!(await commit($, me, { kind: 'ready', copyId: me.copyId, record, restore, isFilled }))) {
+    return recordOf($, me, task, began, CANCELLED)
   }
   await openNotes($)
 
-  return outcome
+  return record
 }
 
 async function closeCopy($: EngineInterface, copy: Copy): Promise<void> {
@@ -125,79 +185,107 @@ async function sessionOf($: EngineInterface): Promise<Session> {
   return { id, cwd, model, receiver: turns > 0 ? 'this-conversation' : 'new-session' }
 }
 
-async function replyOf($: EngineInterface, me: ActiveRun, copyId: string, session: Session, draft: string): Promise<RunOutcome> {
+function withNotes(outcome: Enhanced, lines: readonly string[]): Enhanced {
+  return { ...outcome, notes: [outcome.notes, ...lines.map(line => `- ${line}`)].filter(part => part !== '').join('\n') }
+}
+
+async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task: Task): Promise<RunOutcome> {
   if (!(await $.fs.exists(session.cwd))) {
     throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
   }
-  const brief = {
-    model: session.model,
-    effort: await liveEffort($, session.model),
-    receiver: session.receiver,
-    draft: await withImagePaths($, session.id, draft),
+  if (writer === null) {
+    throw new Error('the enhance mod has not read its options')
   }
-  me.copy = headlessCopy($, {
-    sessionId: copyId,
+  const copy = headlessCopy($, {
+    sessionId: me.copyId,
     parentId: session.receiver === 'this-conversation' ? session.id : null,
+    isStarted: task.revise !== null,
+    writer,
     cancel: me.cancel,
   })
+  me.copy = copy
+  const first =
+    task.revise === null
+      ? firstTurn($, copy, me.copyId, {
+          model: session.model,
+          effort: await liveEffort($, session.model),
+          receiver: session.receiver,
+          draft: await withImagePaths($, session, task.draft),
+        })
+      : copy.send(`Revise: ${task.revise.text}`)
+  const outcome = await converse($, copy, first)
+  if (outcome.kind !== 'enhanced') {
+    return outcome
+  }
+  const reading = await copy.read(outcome.prompt)
+  if (me.cancel.isCancelled) {
+    return CANCELLED
+  }
 
-  return converse($, me.copy, copyId, brief)
+  return reading === null ? outcome : withNotes(outcome, [`Cold reader: ${reading}`])
 }
 
 async function recordsDir($: EngineInterface): Promise<string> {
   return `${(await $.env.get('XDG_STATE_HOME')) || `${(await $.env.get('HOME')) || ''}/.local/state`}/enhance/runs`
 }
 
-type Finished = { id: string; startedAt: number | null; session: Session | null; draft: string; outcome: RunOutcome }
-
-async function keepRecord($: EngineInterface, run: Finished): Promise<void> {
+async function writeRecord($: EngineInterface, record: RunRecord): Promise<void> {
   try {
-    const endedAt = await $.clock.now()
-    const startedAt = new Date(run.startedAt ?? endedAt).toISOString()
-    const record: RunRecord = {
-      version: 1,
-      id: run.id,
-      startedAt,
-      seconds: Math.round((endedAt - (run.startedAt ?? endedAt)) / 1000),
-      session: run.session,
-      draft: run.draft,
-      outcome: run.outcome,
-    }
-    await $.fs.write(`${await recordsDir($)}/${startedAt.replaceAll(':', '-')}-${run.id}.json`, `${JSON.stringify(record, null, 2)}\n`)
+    await $.fs.write(`${await recordsDir($)}/${record.startedAt.replaceAll(':', '-')}-${record.id}.json`, `${JSON.stringify(record, null, 2)}\n`)
   } catch (error) {
     $.ui.toast(`Could not keep the enhance run record: ${reasonOf(error)}`)
   }
 }
 
-async function runCopy($: EngineInterface, me: ActiveRun, copyId: string, draft: string): Promise<void> {
-  const run: Finished = { id: me.id, startedAt: null, session: null, draft, outcome: CANCELLED }
+function keepRecord($: EngineInterface, record: RunRecord): void {
+  recordWrite = recordWrite.then(() => writeRecord($, record))
+}
+
+async function forget($: EngineInterface, copyId: string): Promise<void> {
   try {
-    await setRun($, { kind: 'running', runId: me.id, copyId })
-    run.startedAt = await $.clock.now()
-    run.session = await sessionOf($)
-    run.outcome = await settle($, me, draft, await replyOf($, me, copyId, run.session, draft))
+    await forgetCopy($, copyId)
   } catch (error) {
-    run.outcome = me.cancel.isCancelled ? CANCELLED : { kind: 'failed', reason: reasonOf(error), notes: '' }
-    await commit($, me, { kind: 'failed', reason: reasonOf(error), notes: '', draft })
+    $.ui.toast(reasonOf(error))
+  }
+}
+
+async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<void> {
+  const began: Began = { at: null, session: task.revise?.from.record.session ?? null }
+  let record: RunRecord | null = null
+  try {
+    const before = await setRunning($, me)
+    if (before.kind === 'ready' && before.copyId !== me.copyId) {
+      await forget($, before.copyId)
+    }
+    began.at = await $.clock.now()
+    began.session ??= await sessionOf($)
+    record = await settle($, me, task, began, await replyOf($, me, began.session, task))
+  } catch (error) {
+    const failed = { kind: 'failed', reason: reasonOf(error), notes: '' } as const
+    await commit($, me, { ...failed, draft: task.draft })
+    record = await recordOf($, me, task, began, me.cancel.isCancelled ? CANCELLED : failed)
   } finally {
-    recordWrite = keepRecord($, run)
+    if (record !== null) {
+      keepRecord($, record)
+    }
     if (active === me) {
       active = null
     }
-    if (me.copy !== null) {
+    if (me.copy !== null && record?.outcome.kind !== 'enhanced') {
       await closeCopy($, me.copy)
     }
   }
 }
 
-function enhance($: EngineInterface, draft: string, boxAtStart: string): void {
+function start($: EngineInterface, task: Task, boxAtStart: string): void {
   if (active !== null && !active.cancel.isCancelled) {
     $.ui.toast('An enhancement is already running')
     return
   }
 
   const me: ActiveRun = {
-    id: crypto.randomUUID(),
+    id: task.revise?.from.record.id ?? crypto.randomUUID(),
+    copyId: task.revise?.from.copyId ?? crypto.randomUUID(),
     cancel: { isCancelled: false },
     copy: null,
     boxAtStart,
@@ -205,7 +293,11 @@ function enhance($: EngineInterface, draft: string, boxAtStart: string): void {
     done: Promise.resolve(),
   }
   active = me
-  me.done = runCopy($, me, crypto.randomUUID(), draft)
+  me.done = runCopy($, me, task)
+}
+
+function enhance($: EngineInterface, draft: string, boxAtStart: string): void {
+  start($, { draft, revise: null }, boxAtStart)
 }
 
 async function cancelActive(): Promise<ActiveRun | null> {
@@ -227,7 +319,7 @@ function markTouched(): void {
 
 async function cleanUpLeftover($: EngineInterface): Promise<void> {
   const state = await read($, run)
-  if (state.kind !== 'running') {
+  if (state.kind !== 'running' && state.kind !== 'ready') {
     return
   }
   try {
@@ -252,9 +344,6 @@ async function transition<From extends Run>(
   return taken.from
 }
 
-type Ready = Extract<Run, { kind: 'ready' }>
-type Failed = Extract<Run, { kind: 'failed' }>
-
 async function moveBox($: EngineInterface, isFilled: boolean, textOf: (ready: Ready) => string): Promise<void> {
   const box = await $.prompt.read()
   const from = await transition(
@@ -274,7 +363,7 @@ async function moveBox($: EngineInterface, isFilled: boolean, textOf: (ready: Re
 }
 
 function usePrompt($: EngineInterface): Promise<void> {
-  return moveBox($, true, ready => ready.prompt)
+  return moveBox($, true, ready => ready.record.outcome.prompt)
 }
 
 function restoreDraft($: EngineInterface): Promise<void> {
@@ -295,6 +384,15 @@ async function retry($: EngineInterface): Promise<void> {
   const current = await read($, run)
   if (current.kind === 'failed') {
     enhance($, current.draft, box.text)
+  }
+}
+
+async function revise($: EngineInterface): Promise<void> {
+  const text = (await ask($, 'What should change in the prompt?', []))?.trim() ?? ''
+  const box = await $.prompt.read()
+  const from = await read($, run)
+  if (text !== '' && from.kind === 'ready') {
+    start($, { draft: from.record.draft, revise: { from, text } }, box.text)
   }
 }
 
@@ -323,6 +421,9 @@ async function clear($: EngineInterface): Promise<void> {
   )
   if (from === null) {
     return
+  }
+  if (from.kind === 'ready') {
+    await forget($, from.copyId)
   }
   try {
     await $.ui.close({ id: NOTES_PANE })
@@ -360,9 +461,10 @@ function readyActions({ Button, Text }: Ui, $: EngineInterface, ready: Ready, si
       key={`${site}-copy`}
       label="Copy prompt"
       variant={ready.isFilled ? 'primary' : 'secondary'}
-      onPress={press => copyPrompt($, ready.prompt, press.surface)}
+      onPress={press => copyPrompt($, ready.record.outcome.prompt, press.surface)}
     />,
     ready.isFilled && <Button key={`${site}-restore`} label="Restore draft" onPress={() => restoreDraft($)} />,
+    <Button key={`${site}-revise`} label="Revise" onPress={() => revise($)} />,
   ]
 }
 
@@ -403,6 +505,7 @@ function withBoldLabels(notes: string): string {
 
 function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
   const { Box, Markdown, Text } = ui
+  const { prompt, notes } = ready.record.outcome
 
   return (
     <Box flexDirection="column" rowGap={1}>
@@ -412,13 +515,13 @@ function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
       </Box>
       <Box flexDirection="column">
         <Text weight="bold">Notes</Text>
-        {ready.notes === '' ? <Text dimColor>The copy sent no notes with this prompt.</Text> : <Markdown text={withBoldLabels(ready.notes)} />}
+        {notes === '' ? <Text dimColor>The copy sent no notes with this prompt.</Text> : <Markdown text={withBoldLabels(notes)} />}
       </Box>
       <Box flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1}>
         <Text weight="bold" color="suggestion">
           Enhanced prompt
         </Text>
-        <Text wrap="wrap">{ready.prompt}</Text>
+        <Text wrap="wrap">{prompt}</Text>
       </Box>
     </Box>
   )
@@ -449,7 +552,8 @@ function failedPane(ui: Ui, $: EngineInterface, failed: Failed) {
   )
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  writer = writerOf(options)
   trackEffort(on)
 
   on('session.start', async ($, e, next) => {
@@ -493,7 +597,7 @@ export const register: Register = on => {
 
   on('session.end', async ($, e, next) => {
     const me = await cancelActive()
-    await Promise.race([Promise.all([me?.done, recordWrite]), $.clock.sleep(SESSION_END_WAIT_MS)])
+    await Promise.race([Promise.all([me?.done, recordWrite, cleanUpLeftover($)]), $.clock.sleep(SESSION_END_WAIT_MS)])
 
     return next(e)
   })
