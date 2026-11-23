@@ -58,7 +58,7 @@ freshly fetched `origin/main`:
    scripts/prepare-update.sh apps nixos-rog /tmp/apps-changes
    if test -s /tmp/apps-changes; then
      git add -u -- pkgs
-     printf '%s\n\n' 'chore(pkgs): update apps to their newest releases' | cat - /tmp/apps-changes | git commit -F -
+     printf '%s\n\n' 'chore(pkgs): update apps to their newest releases' | cat - /tmp/apps-changes | git commit -F - -- pkgs
    fi
    git status --short
    ```
@@ -76,7 +76,7 @@ freshly fetched `origin/main`:
    scripts/prepare-update.sh inputs nixos-rog /tmp/inputs-changes
    if test -s /tmp/inputs-changes; then
      git add -u -- flake.nix flake.lock devenv.lock pkgs
-     printf '%s\n\n' 'chore(flake): update inputs to their newest releases' | cat - /tmp/inputs-changes | git commit -F -
+     printf '%s\n\n' 'chore(flake): update inputs to their newest releases' | cat - /tmp/inputs-changes | git commit -F - -- flake.nix flake.lock devenv.lock pkgs
    fi
    git status --short
    ```
