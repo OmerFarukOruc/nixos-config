@@ -9,9 +9,11 @@ allowed-tools: Bash(agent-browser:*), Bash(box-browser:*), Bash(login-code:*), B
 agent-browser is a browser CLI: `open <url>`, `snapshot -i` (the page's controls as `@e1`, `@e2` refs), `click @e2`, `fill @e3 "text"`, `get text`, `eval <js>`, `screenshot`. Learn the commands from the installed version first:
 
 ```bash
-agent-browser skills get core          # workflows, patterns, troubleshooting
-agent-browser skills get core --full   # every command and template
+agent-browser skills get core                  # the loop, waits, common tasks, troubleshooting
+agent-browser skills get core --ref commands   # one reference from the table in the core guide
 ```
+
+Load a reference with `--ref` when the core guide's table names one the task needs. `--full` prints every reference at once, several times the size of the core guide.
 
 `agent-browser skills list` names the specialised guides, such as `electron` and `slack`.
 
