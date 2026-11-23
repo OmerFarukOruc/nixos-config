@@ -40,7 +40,28 @@ in
 
   hardware.nvidia = {
     open = true;
-    package = config.boot.kernelPackages.nvidiaPackages.mkDriver (import ./nvidia-driver.nix);
+    package =
+      let
+        base = config.boot.kernelPackages.nvidiaPackages.stable;
+      in
+      base.overrideAttrs (old: {
+        passthru = old.passthru // {
+          open = base.open.overrideAttrs (open: {
+            patches = open.patches ++ [
+              # Defer the NVPCF ACPI notifications that wake a runtime-suspended
+              # GPU on each battery drop.
+              # https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299
+              ./nvidia-patches/nvidia-nvpcf-refcount.patch
+              ./nvidia-patches/nvidia-nvpcf-defer.patch
+              # Linux 7.3 starts kernel threads in an empty root, so the probe
+              # cannot open the GPU's sysfs config file and the driver turns
+              # runtime D3 off.
+              # https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1512
+              ./nvidia-patches/nvidia-sysfs-init-root.patch
+            ];
+          });
+        };
+      });
 
     prime = {
       offload = {

@@ -156,7 +156,7 @@ The cache holds a host's kernel only while the host builds it as upstream does:
 - `flake.nix` does not let the input follow our nixpkgs.
 
 Each host compiles the modules it builds against the kernel: the NVIDIA open
-module (`machines/nixos-rog/nvidia-driver.nix`), ryzen-smu, turbostat and
+module (`machines/nixos-rog/graphics.nix`), ryzen-smu, turbostat and
 v4l2loopback on nixos-rog, and nct6687d on nixos-desktop. On 2026-10-30,
 `scripts/build.sh` on nixos-desktop built the NVIDIA open module, ryzen-smu,
 turbostat and nct6687d for kernel 7.3.0 in 155 s together.

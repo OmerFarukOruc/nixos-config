@@ -4,6 +4,7 @@ let
   inherit (rog) lib;
   patched = {
     xrdp = nixosConfigurations.devbox.pkgs.xrdp;
+    graphics = nixosConfigurations.nixos-rog.config.hardware.nvidia.package.open;
     inherit (rog.kdePackages) ksystemstats;
     inherit (rog)
       iptvnator
@@ -40,7 +41,6 @@ let
     );
   unchecked = {
     deskflow = "it only drops the patches of libportal, which libportal 0.10.0 already contains";
-    nvidia-driver = "it patches the driver version that file pins, which no nixpkgs move changes";
   };
   patchingFiles =
     lib.filter

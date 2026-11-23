@@ -478,6 +478,25 @@ architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when anot
   no client, because ksystemstats kept sensors that a client had subscribed
   to twice, or had subscribed to as it left. `overlays/ksystemstats.nix`
   patches both.
+- The driver is the `stable` release of the nixpkgs that `nix-cachyos-kernel`
+  locks, so it moves with that input. `machines/nixos-rog/graphics.nix` adds
+  three patches to its open module, and the `patches` check of `ci/checks.sh`
+  applies them, so a release that breaks one fails the check before the
+  laptop builds it.
+- On Linux 7.3 the stock driver never lets the card sleep.
+  `/proc/driver/nvidia/gpus/0000:65:00.0/power` then reads
+  `Runtime D3 status: Not supported`, where a working setup reads
+  `Enabled (fine-grained)`. Kernel threads start in an empty root since 7.3,
+  so the driver's probe cannot open the card's sysfs `config` file and turns
+  runtime power management off
+  ([NVIDIA issue 1507](https://github.com/NVIDIA/open-gpu-kernel-modules/issues/1507)).
+  Driver 620.73.04 still has the fault. The patch of
+  [NVIDIA pull request 1512](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1512)
+  fixes it; drop it when a driver release includes that pull request.
+  Measured 2026-11-24 on driver 620.73.04 with the patch, kernel 7.3.5, on AC
+  with no display on the HDMI port: the file read `Enabled (fine-grained)`,
+  and 4 minutes after boot the card had been suspended for 206 s and read
+  `suspended` in 30 of 30 readings one second apart.
 - To see whether it sleeps, read
   `/sys/bus/pci/devices/0000:65:00.0/power/runtime_status` once a second. It
   reads `suspended`, `resuming` or `active`. Never poll with `nvidia-smi`, which
@@ -487,10 +506,9 @@ architecture (sm_89), as `media.nix` does for whisper-cpp. It exits 75 when anot
   2026-10-11 on driver 615.78.08, BIOS 316, idle on battery: 4 of 4 drops from
   100 to 96 % woke it with the stock driver, and 0 of 4 with the two patches of
   [NVIDIA pull request 1299](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1299)
-  that `patchesOpen` in `machines/nixos-rog/nvidia-driver.nix` lists, which
-  `machines/nixos-rog/graphics.nix` imports. Both commits are kept in
-  `machines/nixos-rog/nvidia-patches/`, so a rewritten pull request cannot break
-  a rebuild.
+  that `machines/nixos-rog/graphics.nix` adds to the open module. Both commits
+  are kept in `machines/nixos-rog/nvidia-patches/`, so a rewritten pull request
+  cannot break a rebuild.
   Repeat the count after a driver update, and drop the patches when a driver
   release includes that pull request.
 - The patches do not cover unplugging the charger or switching the platform
