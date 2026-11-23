@@ -211,8 +211,9 @@ in a repository, it still sweeps the others, then fails the unit, so
 `nixosModules/codex-hooks.nix` writes `/etc/codex/hooks.json`, Codex's system
 hook layer. Codex runs a system hook without the trust prompt that a hook in
 `~/.codex/hooks.json` needs. The hook sends each `apply_patch` to
-`guard-main-edit.py` (`agents/claude/hooks/`), which refuses an edit in a repository's main checkout, as
-it does for Claude Code. A user without that file in `~/.claude/hooks` edits
+`guard-main-edit.py` (`agents/claude/hooks/`), which refuses an edit in a
+repository's main checkout unless the repository opts out (the worktrees skill
+names the two git config keys), as it does for Claude Code. A user without that file in `~/.claude/hooks` edits
 freely.
 
 ## Inbox browser tests
