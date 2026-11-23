@@ -64,7 +64,7 @@ Cleanup:
 A token without the Checks permission, such as a fine-grained personal access token:
 
 - GitHub refuses it the PR's check rollup, `gh pr checks`, and the check-runs list (gh 2.103.3: the check-runs list answers HTTP 403 and the other two a GraphQL error, each 'Resource not accessible by personal access token').
-- On that HTTP 403, `pr-land` reads a required Actions job from the newest Actions run of each workflow on the head, with a check run's pending, success and failure meaning. The controller wait reads the newest `gate.yml` run of the head, and the wait for the PR's own checks reads the newest run of every workflow on the head. A run still going is pending; success, neutral and skipped are green; every other conclusion is red; a failed read is retried and never green.
+- On that HTTP 403, `pr-land` reads the newest Actions run of each workflow on the head and the jobs of those runs, because a job's check run carries the job's name. A required check is the job of its name that started last, the controller wait's gate is the job named `gate` that started last, and the wait for the PR's own checks takes every run and every job, so a run still going keeps it waiting. A failed required check names the job's conclusion. Each read costs one request for the runs and one per workflow, once per poll. A run or job still going is pending; success, neutral and skipped are green; every other conclusion is red; a failed read is retried and never green.
 - A check that a GitHub App posts outside Actions, such as a Cloudflare build, stays invisible to such a token, and a wait for a required one ends at `PR_LAND_WAIT`.
 
 ## Build and check
