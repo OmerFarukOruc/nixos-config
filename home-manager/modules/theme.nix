@@ -12,6 +12,7 @@ let
   isPlasma = sessions.hasDesktop cfg "plasma";
   isNiri = sessions.hasDesktop cfg "niri";
   hasFonts = sessions.hasGraphicalUser cfg;
+  atuinTheme = "oruc-base16";
 
   warmBurnout = import ./warm-burnout.nix { inherit inputs pkgs; };
 
@@ -61,7 +62,7 @@ in
 
   oruc.vscodeSettings."terminal.integrated.minimumContrastRatio" = 1;
 
-  programs.atuin.settings.theme.name = "Oruc Base16";
+  programs.atuin.settings.theme.name = atuinTheme;
 
   oruc.themeFiles = lib.mkMerge [
     {
@@ -112,7 +113,7 @@ in
       ".config/kdeglobals" = args: kdeColorScheme args false + "\n[Icons]\nTheme=${args.theme.icons}\n";
     })
     (lib.mkIf config.programs.atuin.enable {
-      ".config/atuin/themes/oruc-base16.toml" =
+      ".config/atuin/themes/${atuinTheme}.toml" =
         { scheme, ... }:
         lib.concatLines (
           [ "[colors]" ]
@@ -129,7 +130,7 @@ in
           ++ [
             ""
             "[theme]"
-            "name = \"Oruc Base16\""
+            "name = \"${atuinTheme}\""
           ]
         );
     })
