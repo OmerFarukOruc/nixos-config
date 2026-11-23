@@ -9,7 +9,7 @@ Write each finding as one block:
 - Confidence: <50 | 75 | 100>
 - Class: <fix | decision>
 - Consequence: <what goes wrong for the builder or the system if the plan stays as it is>
-- Evidence: <a short quote from the plan, and the path:line or command output that shows the problem>
+- Evidence: <a short quote from the plan, and the path:line or command output that shows the problem; for an absence, such as no caller left, the search, the paths it covered, and its match count>
 - Change: <the one change that resolves it; for a decision, each option and the recommended one>
 ```
 
@@ -36,3 +36,9 @@ Below 50 is not a finding.
 ## Change
 
 The change commits to one action, or to one named combination of actions. A list of options to pick from later belongs to a decision, never a fix.
+
+When a decision would reverse a settled decision that accepted a limit to avoid a cost, look for an option that still avoids that cost, such as a state or signal the code already holds, and list it marked unverified, or say that none was found.
+
+## Absence
+
+An absence, such as no caller left or a symbol nobody reads, counts only from a search whose every match you read. Output that was cut off or capped proves nothing about the matches it left out, so run the search again uncapped, split into several runs when the full output is too long to read.

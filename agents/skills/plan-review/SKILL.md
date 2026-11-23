@@ -13,16 +13,16 @@ Inputs: the plan, a checkout of the repository it changes, and, from a later rou
 ## Review
 
 1. **Bind the plan.** Read it in full. Write down its outcome, its acceptance criteria, its bounds (users, operators, concurrent writers, how much failure is acceptable), and its settled decisions. Done when each one is quoted from the plan or recorded as missing; missing bounds or criteria are findings.
-2. **Check the plan's facts.** Open every file, symbol, command, and interface the plan names, at the revision it names. Done when each one is marked as matching, different, or absent, with the path and line you read.
+2. **Check the plan's facts.** Open every file, symbol, command, and interface the plan names, at the revision it names. Done when each one is marked as matching, different, or absent, with the path and line you read; mark a thing absent only as [findings.md](findings.md), Absence, says.
 3. **Attack the plan.** Apply every check in [rubric.md](rubric.md). Trace each step's happy, empty-input, missing-input, and failure paths through the code you read. Done when every check has been run against every step.
-4. **Admit by consequence.** Keep a finding only when following the plan as written gives a wrong result, a failed step, or real rework. Shape each kept finding as [findings.md](findings.md) defines, with its confidence. Drop anything under confidence 50.
+4. **Admit by consequence.** Keep a finding only when following the plan as written gives a wrong result, a failed step, or real rework. A finding whose change only makes the plan more thorough, by adding a guard, retry, step, or test, passes only when the plan goes wrong without that addition in a way nobody catches in time, or when adding it later is costly because it touches stored data, a shared interface, money, or security. More thorough or more explicit is not a consequence, and the missing bounds and criteria that step 1 names are findings whatever this bar says. A plan step that adds such work without that need is a finding on the same terms. Shape each kept finding as [findings.md](findings.md) defines, with its confidence. Drop anything under confidence 50.
 5. **Write the review** in the output format below.
 
 ## Merge
 
 Use this when two or more reviews of the same plan exist. The reviews are evidence; the verdict is yours.
 
-1. **Verify each finding yourself** against the plan and the code. A reviewer's confidence, severity, or agreement with another reviewer proves nothing. Done when each finding is marked confirmed, refuted with the evidence, or unverified.
+1. **Verify each finding yourself** against the plan and the code. A reviewer's confidence, severity, or agreement with another reviewer proves nothing. A finding that carries a defect from one code path to another path that shares code with it holds only when you trace the flagged path to the point where the defect would fire and find the state it needs already in place there. Done when each finding is marked confirmed, refuted with the evidence, or unverified.
 2. **Merge duplicates.** Two findings are one when a single fix resolves both. Keep the higher severity and confidence and both reviewers' evidence. When unsure, keep them apart.
 3. **Weigh single-reviewer findings.** A finding only one reviewer raised keeps its level only when your own check in step 1 confirmed it; otherwise it moves to FYI.
 4. **Respect earlier rounds.** Drop a finding that repeats one already rejected, unless the plan or code changed since. Re-raise one marked as fixed when its evidence is still there.

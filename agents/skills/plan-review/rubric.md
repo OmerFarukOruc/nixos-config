@@ -9,7 +9,8 @@ Run every check against every step of the plan. Judge each one against the plan'
 - **Ordered.** Each step's prerequisites come before it; no dependency is circular or missing.
 - **Accurate.** What the plan says about the current code (paths, symbols, signatures, data shapes, module boundaries, interfaces) matches what you read. A wrong claim about the code misleads a builder most.
 - **Consistent.** No two sections disagree: steps and verification describe the same behaviour, and one thing keeps one name.
-- **Verified for real.** Verification names the command or check and the result it expects. A test it proposes or keeps fails when the behaviour it guards breaks: it reads a surface the code writes, no other mechanism produces the same result, and it does not replace the code under test with a double.
+- **Verified for real.** Verification names the command or check and the result it expects. A test it proposes or keeps fails when the behaviour it guards breaks: it reads a surface the code writes, no other mechanism produces the same result, and it does not replace the code under test with a double. A check that is not a test, such as a lint rule, a script, or a search, reports differently, in its output or its exit status, when the property it proves is absent; output or status it gives either way, such as silence with exit 0, proves nothing.
+- **Algorithms hold.** A rule or algorithm the plan specifies with stated postconditions holds when you trace it by hand on concrete inputs it can receive, degenerate ones included: empty, equal values, a value just beside a boundary. An input where a postcondition fails or the rule is ambiguous is a finding.
 - **Gates read what they gate.** A step that waits for a signal (a green run, a passed check, a quiet period) names the check and what that check reads. A check that never reads the environment or data the step changes cannot release the step.
 - **Follows the codebase.** The approach uses the patterns and helpers the repository already has, or says why not.
 - **Side effects.** Changes to shared code (helpers, hooks, globals, schemas) name the other callers they affect.
@@ -18,6 +19,7 @@ Run every check against every step of the plan. Judge each one against the plan'
 ## Right size
 
 - **In scope.** Every step serves an acceptance criterion or a bound. A step nothing asks for is a finding: an unrequested feature, an abstraction with one user, or scaffolding for later work.
+- **Consumed.** A capability the plan builds for code outside the change, such as a caller or another project, has a user there or a plan that takes it up. Read that code and its plan. A capability with no user and no plan that takes it up is a decision even when an acceptance criterion names it, with deferral as one option.
 - **Proportionate.** Machinery (a lock, lease, queue, retry policy, state machine, version scheme, or new stored entity) matches the failures the bounds admit. Adding such machinery is an owner decision.
 - **Not self-justified.** A mechanism justified only by a failure that the mechanism itself creates is a finding; cut it and see what falls away with it.
 - **Simplest safe approach.** When a simpler or safer approach gives the same outcome, name it and its concrete advantage.
