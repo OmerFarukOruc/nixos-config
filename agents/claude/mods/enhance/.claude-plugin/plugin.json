@@ -21,9 +21,7 @@
       "type": "number",
       "title": "Turn time limit (seconds)",
       "description": "How long one turn of the copy may take before the run fails",
-      "default": 570,
-      "min": 30,
-      "max": 3600
+      "default": 570
     }
   }
 }

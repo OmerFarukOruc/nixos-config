@@ -9,7 +9,7 @@ export const RUNS_DIR = '/home/t/.local/state/enhance/runs'
 export type Script = {
   replies: readonly string[]
   box?: string
-  turns?: number
+  isSubmitRefused?: boolean
   answers?: readonly (string | null)[]
   exists?: (path: string) => boolean
   files?: Readonly<Record<string, string>>
@@ -18,6 +18,7 @@ export type Script = {
 export type Seen = {
   spawned: { argv: readonly string[]; input: string | undefined }[]
   ran: (readonly string[])[]
+  opened: string[]
   copied: string[]
   written: Map<string, string>
   toasts: string[]
@@ -37,6 +38,7 @@ export function stubSession(on: On, script: Script): Seen {
   const seen: Seen = {
     spawned: [],
     ran: [],
+    opened: [],
     copied: [],
     written: new Map(Object.entries(script.files ?? {})),
     toasts: [],
@@ -51,7 +53,7 @@ export function stubSession(on: On, script: Script): Seen {
   on('session.id', () => ({ value: SESSION_ID }))
   on('session.cwd', () => ({ value: '/work' }))
   on('session.model', () => ({ value: 'claude-test-1' }))
-  on('session.turns', () => ({ value: script.turns ?? 0 }))
+  on('session.turns', () => ({ value: 0 }))
   on('settings.read', () => ({ value: {} }))
   on('fs.exists', (_, e) => ({ value: script.exists?.(e.path) ?? (e.path === '/work' || e.path === RUNS_DIR) }))
   on('fs.write', (_, e) => {
@@ -71,6 +73,11 @@ export function stubSession(on: On, script: Script): Seen {
   }))
   on('process.run', (_, e) => {
     seen.ran.push(e.argv)
+    if (e.argv[0] === 'rm') {
+      for (const path of e.argv.slice(e.argv.indexOf('--') + 1)) {
+        seen.written.delete(path)
+      }
+    }
 
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -87,11 +94,18 @@ export function stubSession(on: On, script: Script): Seen {
     return { isFilled: true }
   })
   on('prompt.submit', (_, e) => {
+    if (script.isSubmitRefused === true) {
+      return { drop: 'refused' }
+    }
     seen.submitted.push(e.text)
 
     return { text: e.text }
   })
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', (_, e) => {
+    seen.opened.push(e.id)
+
+    return { value: { isPlaced: true } }
+  })
   on('ui.close', () => ({ value: undefined }))
   on('ui.toast', (_, e) => {
     seen.toasts.push(e.text)

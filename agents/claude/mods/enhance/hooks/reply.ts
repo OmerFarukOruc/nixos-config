@@ -75,7 +75,7 @@ function spentOf(event: unknown): Spent {
 }
 
 function toolOf(event: unknown): string | null {
-  const content = textAt(event, ['type']) === 'assistant' ? valueAt(event, ['message', 'content']) : null
+  const content = valueAt(event, ['message', 'content'])
   const use = Array.isArray(content) ? content.findLast(block => textAt(block, ['type']) === 'tool_use') : undefined
   if (use === undefined) {
     return null
@@ -120,10 +120,12 @@ function withLine(reader: HeadlessReader, line: string): HeadlessReader {
     return { ...reader, rest: '', result, spent: spentOf(event) }
   }
 
+  const type = textAt(event, ['type'])
+
   return {
     ...reader,
     model: reader.model ?? (textAt(event, ['subtype']) === 'init' ? textAt(event, ['model']) : null),
-    tool: toolOf(event) ?? reader.tool,
+    tool: type === 'assistant' ? toolOf(event) : type === 'user' ? null : reader.tool,
   }
 }
 
@@ -206,7 +208,7 @@ export function parseReply(text: string): Reply {
   const lines = text.split(/\r\n?|\n/)
   const blocks = blocksOf(lines)
   const prompt = blocks.at(-1)
-  if (blocks.some(block => block.end === null && block.tag !== 'paste')) {
+  if (blocks.some(block => block.end === null) && blocks.some(block => block.tag !== 'paste')) {
     return { kind: 'unusable', reason: 'the skill replied with a fenced block that never closes' }
   }
 

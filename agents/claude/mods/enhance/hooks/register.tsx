@@ -12,11 +12,12 @@ import { NOTHING_SPENT, parseReply, plus } from './reply'
 const NOTES_PANE = 'enhance-notes'
 const RUNS_PANE = 'enhance-runs'
 const IDLE: Run = { kind: 'idle', isDraftBack: false }
-const NO_DRAFT = 'Type a draft in the prompt box, or after /enhance'
+const NO_DRAFT = 'Type the draft after /enhance'
 const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
 const BIND_ACTION = 'app:cycleDiffBase'
 const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 const BULLET = /^[-*+] \*{0,2}([^:*\n]{1,40}):/
+const NEXT_BULLET = /^[-*+] /
 
 const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-6' })
 const lastDraft = atom({ plugin: 'enhance', key: 'lastDraft' } as const, null, { shape: 'draft-1' })
@@ -43,7 +44,8 @@ const TICK_MS = 1000
 const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
-let writer: Writer | null = null
+let writer!: Writer
+let isSending = false
 let recordWrite: Promise<void> = Promise.resolve()
 
 function reasonOf(error: unknown): string {
@@ -150,8 +152,10 @@ async function fail($: EngineInterface, me: ActiveRun, failed: Extract<RunOutcom
   if (revise === null) {
     return commit($, me, { ...failed, draft: me.task.draft, isDraftBack: await refill($, me) })
   }
-  const isBack = await commit($, me, revise.from)
+  const earlier = { ...revise.from, record: { ...revise.from.record, ...plus(revise.from.record, me.copy?.spent() ?? NOTHING_SPENT) } }
+  const isBack = await commit($, me, earlier)
   if (isBack) {
+    keepRecord($, earlier.record)
     $.ui.toast(`Revise failed, and the earlier prompt stays: ${failed.reason.replace(/\s+/g, ' ')}`)
   }
 
@@ -189,7 +193,7 @@ async function recordOf<Outcome extends RunOutcome>(
     model: turns.model ?? prior?.model ?? null,
     skillSha256: await skillSha256($),
     guides: [...(prior?.guides ?? []).filter(old => !guides.some(guide => guide.url === old.url)), ...guides],
-    case: bulletOf(notes, 'Case'),
+    case: bulletOf(notes, 'Case') ?? prior?.case ?? null,
     sent: null,
     id: me.id,
     startedAt: prior?.startedAt ?? new Date(startedAt).toISOString(),
@@ -213,9 +217,10 @@ async function settle($: EngineInterface, me: ActiveRun, task: Task, began: Bega
     return recordOf($, me, task, began, CANCELLED)
   }
   const restore = task.revise?.from.restore ?? restoreOf(box.text, task.draft)
+  const record = await recordOf($, me, task, began, outcome)
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
-  const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
-  const record = withCost(await recordOf($, me, task, began, outcome))
+  const isFilled = isUntouched && (await isCurrent($, me)) && (await $.prompt.fill({ text: outcome.prompt })).isFilled
+  keepRecord($, record)
   if (!(await commit($, me, { kind: 'ready', copyId: me.copyId, record, restore, isFilled }))) {
     return recordOf($, me, task, began, CANCELLED)
   }
@@ -248,18 +253,27 @@ function withNotes(outcome: Enhanced, lines: readonly string[]): Enhanced {
   return { ...outcome, notes: [outcome.notes, ...lines.map(line => `- ${line}`)].filter(part => part !== '').join('\n') }
 }
 
-function withCost(record: RunRecord<Enhanced>): RunRecord<Enhanced> {
+function withReading(outcome: Enhanced, reading: string): Enhanced {
+  const lines = outcome.notes.split('\n')
+  const goal = lines.findIndex(line => BULLET.exec(line)?.[1] === 'Understood goal')
+  if (goal === -1) {
+    return withNotes(outcome, [`Cold reader: ${reading}`])
+  }
+  const after = lines.findIndex((line, at) => at > goal && (line.trim() === '' || NEXT_BULLET.test(line)))
+  const at = after === -1 ? lines.length : after
+
+  return { ...outcome, notes: [...lines.slice(0, at), `- Cold reader: ${reading}`, ...lines.slice(at)].join('\n') }
+}
+
+function shownNotes(record: RunRecord<Enhanced>): string {
   const cost = record.costUsd === null ? 'not reported' : `$${record.costUsd.toFixed(2)}`
 
-  return { ...record, outcome: withNotes(record.outcome, [`Cost: ${cost}, time: ${record.seconds} s`]) }
+  return withNotes(record.outcome, [`Cost: ${cost}, time: ${record.seconds} s`]).notes
 }
 
 async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task: Task): Promise<RunOutcome> {
   if (!(await $.fs.exists(session.cwd))) {
     throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
-  }
-  if (writer === null) {
-    throw new Error('the enhance mod has not read its options')
   }
   const copy = headlessCopy($, {
     sessionId: me.copyId,
@@ -270,10 +284,14 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
     onProgress: progress => whileRunning($, me, running => ({ ...running, progress })),
   })
   me.copy = copy
-  const draft = await withImagePaths($, session, task.draft)
   const first =
     task.revise === null
-      ? firstTurn($, copy, me.copyId, { model: session.model, effort: await liveEffort($, session.model), receiver: session.receiver, draft })
+      ? firstTurn($, copy, me.copyId, {
+          model: session.model,
+          effort: await liveEffort($, session.model),
+          receiver: session.receiver,
+          draft: await withImagePaths($, session, task.draft),
+        })
       : copy.send(`Revise: ${task.revise.text}`)
   const outcome = await converse($, copy, first)
   if (outcome.kind !== 'enhanced') {
@@ -284,10 +302,10 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
     return CANCELLED
   }
 
-  return withNotes(outcome, [
-    ...missingFrom(draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
-    ...(reading === null ? [] : [`Cold reader: ${reading}`]),
-  ])
+  return withNotes(
+    reading === null ? outcome : withReading(outcome, reading),
+    missingFrom(task.draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
+  )
 }
 
 function keepRecord($: EngineInterface, record: RunRecord): void {
@@ -336,7 +354,7 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
 async function finish($: EngineInterface, me: ActiveRun, record: RunRecord | null): Promise<void> {
   const isReady = record?.outcome.kind === 'enhanced'
   const isEarlierKept = !isReady && me.task.revise !== null
-  if (record !== null && !isEarlierKept) {
+  if (record !== null && !isReady && !isEarlierKept) {
     keepRecord($, record)
   }
   if (me.copy !== null && !isReady && !isEarlierKept) {
@@ -347,10 +365,10 @@ async function finish($: EngineInterface, me: ActiveRun, record: RunRecord | nul
   }
 }
 
-function start($: EngineInterface, task: Task, boxAtStart: string): void {
+function start($: EngineInterface, task: Task, boxAtStart: string): boolean {
   if (active !== null && !active.cancel.isCancelled) {
     $.ui.toast('An enhancement is already running')
-    return
+    return false
   }
 
   const me: ActiveRun = {
@@ -365,11 +383,14 @@ function start($: EngineInterface, task: Task, boxAtStart: string): void {
   }
   active = me
   me.done = runCopy($, me, task)
+
+  return true
 }
 
 function enhance($: EngineInterface, draft: string, boxAtStart: string): void {
-  void update($, lastDraft, () => draft).catch(() => undefined)
-  start($, { draft, revise: null }, boxAtStart)
+  if (start($, { draft, revise: null }, boxAtStart)) {
+    void update($, lastDraft, () => draft).catch((error: unknown) => $.ui.toast(`Could not keep the draft for the runs pane: ${reasonOf(error)}`))
+  }
 }
 
 async function cancelActive(): Promise<ActiveRun | null> {
@@ -401,18 +422,25 @@ async function enhanceBox($: EngineInterface): Promise<void> {
 
 async function send($: EngineInterface): Promise<void> {
   const ready = await read($, run)
-  if (ready.kind !== 'ready') {
+  if (ready.kind !== 'ready' || isSending) {
     return
   }
+  isSending = true
   try {
-    const box = await $.prompt.read()
-    await $.prompt.submit({ text: ready.record.outcome.prompt, asUser: true })
+    const { prompt } = ready.record.outcome
+    const entered = await $.prompt.submit({ text: prompt, asUser: true })
+    if ('drop' in entered) {
+      $.ui.toast(`The enhanced prompt was not sent: ${entered.drop}`)
+      return
+    }
     await clear($, () => 'as-is')
-    if (box.text === ready.record.outcome.prompt) {
+    if ((await $.prompt.read()).text === prompt) {
       await $.prompt.fill({ text: '' })
     }
   } catch (error) {
     $.ui.toast(`Could not send the enhanced prompt: ${reasonOf(error)}`)
+  } finally {
+    isSending = false
   }
 }
 
@@ -507,7 +535,7 @@ async function cancel($: EngineInterface): Promise<void> {
   const isDraftBack = me !== null && earlier === null && (await refill($, me))
   await transition(
     $,
-    cur => (cur.kind === 'running' ? cur : null),
+    cur => (cur.kind === 'running' && (me === null || cur.runId === me.id) ? cur : null),
     () => earlier ?? { kind: 'idle', isDraftBack },
   )
 }
@@ -710,7 +738,8 @@ function withBoldLabels(notes: string): string {
 
 function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
   const { Box, Markdown, Text } = ui
-  const { prompt, notes } = ready.record.outcome
+  const { prompt } = ready.record.outcome
+  const notes = shownNotes(ready.record)
 
   return (
     <Box flexDirection="column" rowGap={1}>
@@ -749,7 +778,7 @@ function failedPane(ui: Ui, $: EngineInterface, failed: Failed) {
       </Box>
       {failed.notes !== '' && (
         <Box flexDirection="column">
-          <Text weight="bold">Reply from the copy</Text>
+          <Text weight="bold">Details</Text>
           <Text wrap="wrap">{failed.notes}</Text>
         </Box>
       )}
@@ -809,12 +838,15 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    const entered = await next(e)
     if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') {
-      await clear($, record => (e.command === undefined ? sentOf(record, e.text) : 'dropped'))
+      if (e.command === undefined && !('drop' in entered)) {
+        await clear($, record => sentOf(record, e.text))
+      }
       await markTouched($)
     }
 
-    return next(e)
+    return entered
   })
 
   on('ui.render', { component: 'Pane', requestId: NOTES_PANE }, async ($, e) => {

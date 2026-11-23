@@ -24,7 +24,7 @@ type CopyPlan = {
   isStarted: boolean
   writer: Writer
   cancel: Cancel
-  onProgress: (progress: string) => void
+  onProgress: (progress: string | null) => void
 }
 
 type Place = { id: string; cwd: string }
@@ -35,12 +35,12 @@ const COPY_SETTINGS = '{"disableAllHooks":true,"permissions":{"denyInsteadOfProm
 const SCRATCH_ROOT = '/tmp/agents'
 const TOOL_CWD = '/'
 const STDERR_TAIL_CHARS = 300
-const READING_CHARS = 300
+const READER_TURN_MS = 120_000
 const READER_ASK =
   'Do not carry out the prompt between the tags. Reply with one sentence that says what you would do if you received it as your next message.'
 const IMAGE_MARK = /\[Image #(\d+)\]/g
 const IMAGE_FILE = /\/(\d+)\.(?:png|jpe?g|gif|webp)$/
-const TYPED_IMAGE = /"([^"\n]+\.(?:png|jpe?g|gif|webp))"|'([^'\n]+\.(?:png|jpe?g|gif|webp))'|(?<![^\s(])@?([^\s"'()]+\.(?:png|jpe?g|gif|webp))(?!\w)/gi
+const TYPED_IMAGE = /"([^"\n]+\.(?:png|jpe?g|gif|webp))"|'([^'\n]+\.(?:png|jpe?g|gif|webp))'|(?<![^\s(])@?([^\s"'()]+\.(?:png|jpe?g|gif|webp))(?!\.?\w)/gi
 const UID = /^\d+$/
 
 export function runTool($: EngineInterface, argv: readonly string[], init: Omit<ProcessRunInit, 'cwd'> = {}): Promise<ProcessRunResult> {
@@ -51,18 +51,18 @@ function sharedFlags(writer: Writer): string[] {
   return ['--model', writer.model, '--effort', writer.effort, '--permission-mode', COPY_PERMISSION_MODE, '--settings', COPY_SETTINGS]
 }
 
-function forkFlags(sessionId: string, parentId: string | null): string[] {
-  return ['--session-id', sessionId, ...(parentId === null ? [] : ['--resume', parentId, '--fork-session'])]
+function forkFlags(parentId: string | null): string[] {
+  return parentId === null ? [] : ['--resume', parentId, '--fork-session']
 }
 
 function copyFlags(plan: CopyPlan, isFirstTurn: boolean): string[] {
   const shared = [...sharedFlags(plan.writer), '--disallowedTools', DENIED_TOOLS]
 
-  return isFirstTurn ? [...shared, ...forkFlags(plan.sessionId, plan.parentId)] : ['--resume', plan.sessionId, ...shared]
+  return isFirstTurn ? [...shared, '--session-id', plan.sessionId, ...forkFlags(plan.parentId)] : ['--resume', plan.sessionId, ...shared]
 }
 
-function readerFlags(plan: CopyPlan, readerId: string): string[] {
-  return [...sharedFlags(plan.writer), '--tools', '', ...forkFlags(readerId, plan.parentId)]
+function readerFlags(plan: CopyPlan): string[] {
+  return [...sharedFlags(plan.writer), '--tools', '', '--no-session-persistence', ...forkFlags(plan.parentId)]
 }
 
 export async function configDir($: EngineInterface): Promise<string> {
@@ -182,7 +182,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
   let spent = NOTHING_SPENT
   let model: string | null = null
 
-  async function turnOf(flags: readonly string[], text: string, input?: string): Promise<Turn> {
+  async function turnOf(flags: readonly string[], text: string, limitMs: number, input?: string): Promise<Turn> {
     if (plan.cancel.isCancelled) {
       return { kind: 'cancelled' }
     }
@@ -192,7 +192,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
     const deadline = new AbortController()
     let isLate = false
     void $.clock
-      .sleep(plan.writer.turnMs, { signal: deadline.signal })
+      .sleep(limitMs, { signal: deadline.signal })
       .then(() => {
         isLate = true
         return running.return({ code: null, signal: 'SIGTERM' })
@@ -206,7 +206,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
         if (piece.stream === 'stdout') {
           const before = reader.tool
           reader = readHeadless(reader, piece.text)
-          if (reader.tool !== null && reader.tool !== before) {
+          if (reader.tool !== before) {
             plan.onProgress(reader.tool)
           }
         } else {
@@ -229,7 +229,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
       return { kind: 'reply', text: parsed.text }
     }
     if (isLate) {
-      return { kind: 'failed', reason: `the copy's turn did not end in ${plan.writer.turnMs / 1000} s`, notes: stderrTail.trim() }
+      return { kind: 'failed', reason: `the copy's turn did not end in ${limitMs / 1000} s`, notes: stderrTail.trim() }
     }
     const ended = await running.result
     const why = ended.code === 0 ? parsed.reason : `${parsed.reason} (exit ${ended.code ?? ended.signal}: ${stderrTail.trim()})`
@@ -243,19 +243,16 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
       const flags = copyFlags(plan, isFirstTurn)
       isFirstTurn = false
 
-      return turnOf(flags, text)
+      return turnOf(flags, text, plan.writer.turnMs)
     },
     read: async prompt => {
-      const readerId = crypto.randomUUID()
       plan.onProgress('cold reader')
       try {
-        const turn = await turnOf(readerFlags(plan, readerId), '', `${READER_ASK}\n\n<prompt>\n${prompt}\n</prompt>\n`)
+        const turn = await turnOf(readerFlags(plan), '', READER_TURN_MS, `${READER_ASK}\n\n<prompt>\n${prompt}\n</prompt>\n`)
 
-        return turn.kind === 'reply' ? turn.text.replace(/\s+/g, ' ').trim().slice(0, READING_CHARS) || null : null
+        return turn.kind === 'reply' ? turn.text.replace(/\s+/g, ' ').trim() || null : null
       } catch {
         return null
-      } finally {
-        await forgetCopy($, readerId).catch(() => undefined)
       }
     },
     stop: async () => {

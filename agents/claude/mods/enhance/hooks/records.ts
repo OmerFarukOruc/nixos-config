@@ -70,7 +70,8 @@ export async function guidesOf($: EngineInterface, since: number, notes: string)
     )
 
     return guides.flat()
-  } catch {
+  } catch (error) {
+    $.ui.toast(`Could not read the guide cache for the enhance run record: ${error instanceof Error ? error.message : String(error)}`)
     return []
   }
 }

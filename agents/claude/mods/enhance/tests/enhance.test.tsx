@@ -126,10 +126,10 @@ test('a question block gives the question and its options', () => {
 test('a typed image path that exists gets a path line in the draft file, and one that does not gets none', async ($, on) => {
   const seen = stubSession(on, {
     replies: [resultLine('```paste\nprompt\n```'), resultLine('reading')],
-    exists: path => path === '/work' || path === '/work/shots/login.png' || path === '/home/t/a b.jpg',
+    exists: path => ['/work', '/work/shots/login.png', '/work/old.png', '/home/t/a b.jpg'].includes(path),
   })
 
-  await $.command.run({ ...TYPED, args: 'what is wrong in shots/login.png, @missing.png and "~/a b.jpg"?' })
+  await $.command.run({ ...TYPED, args: 'what is wrong in shots/login.png, @missing.png, old.png.bak and "~/a b.jpg"?' })
   await seen.clock.settle()
 
   const [draft] = [...seen.written].flatMap(([path, text]) => (DRAFT_FILE.test(path) ? [text] : []))
@@ -161,10 +161,13 @@ test('a second unusable reply fails the run', async ($, on) => {
 
 test('the notes name each path, URL and code span of the draft that the prompt leaves out', async ($, on) => {
   const seen = stubSession(on, {
-    replies: [resultLine('```paste\nFix the login in src/app/login.ts.\n```\n- Target: test'), resultLine('reading')],
+    replies: [resultLine('```paste\nFix the login in src/app/login.ts. Read lib/util.ts and lib/old.ts.bak.\n```\n- Target: test'), resultLine('reading')],
   })
 
-  await $.command.run({ ...TYPED, args: 'fix src/app/login.ts like ~/notes/plan.md says, see https://example.com/issue/7. and keep `retryCount`' })
+  await $.command.run({
+    ...TYPED,
+    args: 'fix src/app/login.ts like ~/notes/plan.md says, see https://example.com/issue/7. and keep `retryCount`, check @lib/util.ts and README.md, not lib/old.ts',
+  })
   await seen.clock.settle()
 
   const outcome = lastRecord(seen).outcome
@@ -172,6 +175,8 @@ test('the notes name each path, URL and code span of the draft that the prompt l
     '- Not in the prompt: https://example.com/issue/7',
     '- Not in the prompt: retryCount',
     '- Not in the prompt: ~/notes/plan.md',
+    '- Not in the prompt: README.md',
+    '- Not in the prompt: lib/old.ts',
   ])
 })
 
@@ -192,6 +197,10 @@ async function shown($: Engine, site: Site, text: RegExp): Promise<string | unde
   return found?.text
 }
 
+function draftsOf(seen: Seen): string[] {
+  return [...seen.written].flatMap(([path, text]) => (DRAFT_FILE.test(path) ? [text] : []))
+}
+
 async function typed($: Engine, seen: Seen, draft: string): Promise<void> {
   await $.command.run({ ...TYPED, args: draft })
   await seen.clock.settle()
@@ -202,8 +211,9 @@ test('the Enhance button runs on the text of the box and puts the prompt there',
 
   await press($, seen, BAND, 'enhance')
 
-  expect([...seen.written].flatMap(([path, text]) => (DRAFT_FILE.test(path) ? [text] : []))).toEqual(['fix the login'])
+  expect(draftsOf(seen)).toEqual(['fix the login'])
   expect(seen.box.text).toBe('prompt')
+  expect(seen.notified).toEqual(['Enhanced prompt is ready'])
 })
 
 test('the Enhance button on an empty box starts nothing', async ($, on) => {
@@ -212,7 +222,7 @@ test('the Enhance button on an empty box starts nothing', async ($, on) => {
   await press($, seen, BAND, 'enhance')
 
   expect(seen.spawned).toEqual([])
-  expect(seen.toasts).toEqual(['Type a draft in the prompt box, or after /enhance'])
+  expect(seen.toasts).toEqual(['Type the draft after /enhance'])
 })
 
 for (const site of ['band', 'pane'] as const) {
@@ -260,6 +270,7 @@ for (const site of ['band', 'pane'] as const) {
     await press($, seen, SITES[site], `${site}-retry`)
 
     expect(lastRecord(seen).outcome).toMatchObject({ kind: 'enhanced', prompt: 'prompt' })
+    expect(draftsOf(seen)).toEqual(['a draft', 'a draft'])
     expect(seen.box.text).toBe('prompt')
   })
 }
@@ -271,6 +282,7 @@ test('a failed run puts the draft back in an empty box and says so', async ($, o
 
   expect(seen.box.text).toBe('a draft')
   expect(await shown($, BAND, /Enhance failed/)).toMatch(/The draft is back in the box$/)
+  expect(seen.notified).toEqual(['Enhance failed'])
 })
 
 test('a failed run leaves a box that holds text alone', async ($, on) => {
@@ -292,9 +304,9 @@ test('the ready row shows the goal and the effort of the notes', async ($, on) =
 })
 
 test('a prompt equal to the draft says that nothing changed', async ($, on) => {
-  const seen = stubSession(on, { replies: [PROMPT, READING] })
+  const seen = stubSession(on, { replies: [resultLine('```paste\nprompt\n\n```'), READING] })
 
-  await typed($, seen, ' prompt')
+  await typed($, seen, 'prompt')
 
   expect(await shown($, BAND, /Enhanced prompt|nothing changed/)).toBe('Draft already clear, nothing changed')
 })
@@ -328,6 +340,7 @@ test('the Runs button lists the recent runs, newest first, and copies the prompt
   const seen = stubSession(on, { replies: [], files: RECORDS })
 
   await press($, seen, BAND, 'runs')
+  expect(seen.opened).toEqual(['enhance-runs'])
 
   const ui = await $.ui.mount(RUNS)
   expect((await ui.findAll({ type: 'Text', text: /^2026-/ })).map(row => row.text).slice(0, 2)).toEqual([
@@ -345,7 +358,11 @@ test('a session start deletes the records that started more than 30 days ago', a
 
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
 
-  expect(seen.ran.filter(argv => argv[0] === 'rm')).toEqual([['rm', '-f', '--', `${RUNS_DIR}/2026-10-24T11-59-59.000Z-cccc.json`]])
+  expect([...seen.written.keys()].map(path => path.slice(RUNS_DIR.length + 1)).sort()).toEqual([
+    '2026-10-24T12-00-01.000Z-dddd.json',
+    '2026-11-20T10-00-00.000Z-aaaa.json',
+    '2026-11-21T09-30-00.000Z-bbbb.json',
+  ])
 })
 
 test("the runs pane's first row puts the session's last draft back in the box", async ($, on) => {
@@ -355,6 +372,7 @@ test("the runs pane's first row puts the session's last draft back in the box", 
   seen.box.text = ''
 
   await press($, seen, BAND, 'runs')
+  expect(seen.opened.at(-1)).toBe('enhance-runs')
   await press($, seen, RUNS, 'put-back')
 
   expect(seen.box.text).toBe('my draft')
@@ -377,8 +395,38 @@ test('a Revise turn that fails keeps the earlier prompt and its record', async (
 
   await press($, seen, BAND, 'band-revise')
 
+  const [first] = seen.spawned.map(spawn => spawn.argv)
+  const copyId = first?.[first.indexOf('--session-id') + 1] ?? ''
   expect(seen.spawned.length).toBe(3)
   expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
   expect(lastRecord(seen).outcome).toMatchObject({ kind: 'enhanced', prompt: 'prompt' })
-  expect(seen.toasts).toEqual(['Revise failed, and the earlier prompt stays: claude -p printed no result for the prompt'])
+  expect(seen.ran.filter(argv => argv.includes(`${copyId}.jsonl`))).toEqual([])
+  expect(seen.toasts.length).toBe(1)
+  expect(seen.toasts[0]).toMatch(/^Revise failed/)
+})
+
+test('a Send that is refused keeps the result and records nothing as sent', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING], isSubmitRefused: true })
+  await typed($, seen, 'a draft')
+
+  await press($, seen, BAND, 'band-send')
+
+  expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
+  expect(seen.box.text).toBe('prompt')
+  expect(lastRecord(seen).sent).toBeNull()
+})
+
+test('a slash command leaves a ready result in place', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING] })
+  await typed($, seen, 'a draft')
+
+  await $.prompt.submit({ text: '/effort high', command: { name: 'effort', args: 'high' }, wait: false, origin: { kind: 'composer' } })
+  await seen.clock.settle()
+
+  expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
+  expect(lastRecord(seen).sent).toBeNull()
+})
+
+test('a question block before an unclosed paste block is unusable', () => {
+  expect(parseReply('```question\nWhich page?\n```\n```paste\ncut off').kind).toBe('unusable')
 })
