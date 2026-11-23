@@ -449,10 +449,11 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   Service: its daemon hands off to the user bus's daemon and exits, and a
   Secret Service call there finds no owner and times out (`busctl` waited 25 s
   in a scratch run). A deploy does not restart the worker (`X-SwitchMethod =
-  "keep-old"`), so when `gnome-keyring.service` has failed because the
-  desktop's daemon still holds the socket, run `systemctl --user restart
-  cursor-worker.service`: it stops that daemon with the desktop and starts the
-  user bus's daemon first.
+  "keep-old"`). When the desktop's daemon still holds the socket,
+  `gnome-keyring.service` hands off to it and stops as `inactive`, not
+  `failed`, so the failed-unit list stays empty while the Ping on the user bus
+  times out. Then run `systemctl --user restart cursor-worker.service`: it
+  stops that daemon with the desktop and starts the user bus's daemon first.
 - The module masks `xfce4-notifyd.service` in the user manager. Chromium asks
   the user bus for `org.freedesktop.Notifications` when it starts; a headless
   Chromium that omer ran on 2026-11-23 made D-Bus activation start the unit,
