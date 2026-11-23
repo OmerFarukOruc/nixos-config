@@ -28,7 +28,7 @@ The [Astra guide](https://developers.openai.com/api/docs/guides/latest-model) re
 ## Controls outside the CLI
 
 The 2.6 models take `complexity` (`low`, `medium`, `high`; omitted means `high`), `markup` on edits, `output_format` `svg` and `gif` (with `frame_count` and `frame_duration_ms`), and `output_compression` for JPEG and WebP.
-The prompting guide and the [image generation guide](https://developers.openai.com/api/docs/guides/image-generation) place SVG, GIF, and markup on `POST /v1/images/generations` and `POST /v1/images/edits`, the Images API, which needs an API key.
+The [image generation guide](https://developers.openai.com/api/docs/guides/image-generation) places SVG output on `POST /v1/images/generations` only, GIF output on generations and `POST /v1/images/edits`, and markup on edits. These endpoints are the Images API, which needs an API key. On the OAuth route, the probes below show SVG and GIF requests failing with HTTP 400.
 Public Responses supports continuation through previous response IDs or image outputs supplied in context.
 The script implements neither form of stored conversation continuation.
 Reusing a saved image supplies visual context only.
