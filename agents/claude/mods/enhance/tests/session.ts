@@ -4,6 +4,7 @@ import type { On } from 'claude-code'
 import type { RunRecord } from '../types'
 
 export const SESSION_ID = '11111111-1111-4111-8111-111111111111'
+export const RUNS_DIR = '/home/t/.local/state/enhance/runs'
 
 export type Script = {
   replies: readonly string[]
@@ -16,6 +17,8 @@ export type Script = {
 
 export type Seen = {
   spawned: { argv: readonly string[]; input: string | undefined }[]
+  ran: (readonly string[])[]
+  copied: string[]
   written: Map<string, string>
   toasts: string[]
   notified: string[]
@@ -33,6 +36,8 @@ export function stubSession(on: On, script: Script): Seen {
   const answers = [...(script.answers ?? [])]
   const seen: Seen = {
     spawned: [],
+    ran: [],
+    copied: [],
     written: new Map(Object.entries(script.files ?? {})),
     toasts: [],
     notified: [],
@@ -48,12 +53,27 @@ export function stubSession(on: On, script: Script): Seen {
   on('session.model', () => ({ value: 'claude-test-1' }))
   on('session.turns', () => ({ value: script.turns ?? 0 }))
   on('settings.read', () => ({ value: {} }))
-  on('fs.exists', (_, e) => ({ value: script.exists?.(e.path) ?? e.path === '/work' }))
+  on('fs.exists', (_, e) => ({ value: script.exists?.(e.path) ?? (e.path === '/work' || e.path === RUNS_DIR) }))
   on('fs.write', (_, e) => {
     seen.written.set(e.path, e.text)
     return { value: undefined }
   })
-  on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('fs.read', (_, e) => {
+    const text = seen.written.get(e.path)
+
+    return text === undefined ? { deny: `no file ${e.path}` } : { value: text }
+  })
+  on('fs.list', (_, e) => ({
+    value: [...seen.written.keys()].flatMap(path => {
+      const name = path.startsWith(`${e.path}/`) ? path.slice(e.path.length + 1) : '/'
+      return name.includes('/') ? [] : [{ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }]
+    }),
+  }))
+  on('process.run', (_, e) => {
+    seen.ran.push(e.argv)
+
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('process.spawn', async function* (_, e) {
     seen.spawned.push({ argv: e.argv, input: e.input })
     yield { stream: 'stdout', text: replies.shift() ?? '' }
@@ -83,7 +103,11 @@ export function stubSession(on: On, script: Script): Seen {
 
     return { value: { isSent: true, channel: 'terminal_bell' } }
   })
-  on('ui.copy', () => ({ value: { isCopied: true } }))
+  on('ui.copy', (_, e) => {
+    seen.copied.push(e.text)
+
+    return { value: { isCopied: true } }
+  })
   on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
     const answer = answers.shift() ?? null
     if (answer === null) {
