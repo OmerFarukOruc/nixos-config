@@ -617,11 +617,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1794986399,
-        "narHash": "sha256-cL7N/P2JsdZiDX7egDlChn6SHWMVHD0opVpUjTdCnrM=",
+        "lastModified": 1795463097,
+        "narHash": "sha256-ASjPAJOCjli+Y1baIyqR8ob1ID4s5B7cqiHxXh55zVw=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "a5d6bae7c0d762dbcff74ca86c17a7ac9fee4151",
+        "rev": "cd5573a185f3ab468b094fc2cf2fa193fcaeaf53",
         "type": "github"
       },
       "original": {
@@ -649,11 +649,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1795203927,
-        "narHash": "sha256-ROnQEZncUMuf28BwBUBzhbWvjmjXZvY2vWizEgvhuvg=",
+        "lastModified": 1795463805,
+        "narHash": "sha256-xA4MPWAPXLwTSWqkWArAg2sHGrQ41Itkcm7tm5sYweY=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "58d1a83d9207c96c9fb4934589b8b5967849dfdb",
+        "rev": "880c9a36fe5e7ccfce48a4cc50b090cb0b1c156b",
         "type": "github"
       },
       "original": {
