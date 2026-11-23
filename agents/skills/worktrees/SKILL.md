@@ -49,7 +49,7 @@ Done when `git worktree list` no longer shows the path, the folder is gone, and 
 
 When the task ends with work that will not land now, because it was abandoned, superseded, or ran out of time:
 
-1. Commit every uncommitted file on the branch. The worktree is yours alone, so `git -C <path> add -A` takes nothing from another session: `git -C <path> add -A && git -C <path> commit -m "wip: <the state it is in>"`.
+1. Commit every uncommitted file on the branch. `git -C <path> status --short` lists them; stage the new ones by name and commit them all by name, because the guard hook refuses `git add -A` and a commit without a pathspec: `git -C <path> add -- <new path>... && git -C <path> commit -m "wip: <the state it is in>" -- <path>...`.
 2. Tag the commit locally: `git -C <path> tag archive/<branch>`. The tag stays on this host; never push it.
 3. Remove the worktree and the branch: `wt -C <main checkout> remove --reap --foreground -D <branch>`.
 4. Name the tag in the final message.
