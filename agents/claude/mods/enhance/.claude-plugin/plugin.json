@@ -1,6 +1,27 @@
 {
   "name": "enhance",
-  "version": "0.1.1",
-  "description": "Runs /enhance-prompt on Sonnet 5.5 in a copy of the session through claude -p, and puts the enhanced prompt in the prompt box",
-  "types": "./types/index.d.ts"
+  "version": "0.2.0",
+  "description": "Runs /enhance-prompt in a copy of the session through claude -p, and puts the enhanced prompt in the prompt box",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "writer_model": {
+      "type": "string",
+      "title": "Writer model",
+      "description": "The model the copy that writes the prompt runs on",
+      "default": "claude-sonnet-5-5"
+    },
+    "writer_effort": {
+      "type": "string",
+      "title": "Writer effort",
+      "description": "The effort level the copy runs at",
+      "options": ["low", "medium", "high", "xhigh", "max"],
+      "default": "high"
+    },
+    "turn_seconds": {
+      "type": "number",
+      "title": "Turn time limit (seconds)",
+      "description": "How long one turn of the copy may take before the run fails",
+      "default": 570
+    }
+  }
 }
