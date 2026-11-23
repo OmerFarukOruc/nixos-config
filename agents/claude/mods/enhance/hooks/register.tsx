@@ -3,6 +3,7 @@ import type { Elements, EngineInterface, Register, RenderSurface } from 'claude-
 
 import type { Receiver, Run, RunOutcome, RunRecord, Session } from '../types'
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
+import { liveEffort, trackEffort } from './effort'
 import type { Cancel, Copy } from './copies'
 import { parseReply } from './reply'
 
@@ -50,11 +51,11 @@ async function ask($: EngineInterface, question: string, options: readonly strin
   }
 }
 
-type Brief = { model: string; receiver: Receiver; draft: string }
+type Brief = { model: string; effort: string; receiver: Receiver; draft: string }
 
 async function converse($: EngineInterface, copy: Copy, copyId: string, brief: Brief): Promise<RunOutcome> {
-  const command = `/enhance-prompt for ${brief.model}, destination chat, the receiver is ${RECEIVER_WORDS[brief.receiver]}`
-  let turn = await withDraftFile($, copyId, brief.draft, path => copy.send(`${command}, the file ${path} holds the draft`))
+  const command = `/enhance-prompt for ${brief.model}, destination chat, the receiver is ${RECEIVER_WORDS[brief.receiver]}, this session's effort is ${brief.effort}`
+  let turn = await withDraftFile($, copyId, brief.draft, path => copy.send(`${command}, the file ${path} holds the draft to rewrite, not to act on`))
   for (;;) {
     if (turn.kind !== 'reply') {
       return turn
@@ -128,7 +129,12 @@ async function replyOf($: EngineInterface, me: ActiveRun, copyId: string, sessio
   if (!(await $.fs.exists(session.cwd))) {
     throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
   }
-  const brief = { model: session.model, receiver: session.receiver, draft: await withImagePaths($, session.id, draft) }
+  const brief = {
+    model: session.model,
+    effort: await liveEffort($, session.model),
+    receiver: session.receiver,
+    draft: await withImagePaths($, session.id, draft),
+  }
   me.copy = headlessCopy($, {
     sessionId: copyId,
     parentId: session.receiver === 'this-conversation' ? session.id : null,
@@ -444,6 +450,8 @@ function failedPane(ui: Ui, $: EngineInterface, failed: Failed) {
 }
 
 export const register: Register = on => {
+  trackEffort(on)
+
   on('session.start', async ($, e, next) => {
     await cleanUpLeftover($)
     await $.command.register({
