@@ -1,6 +1,6 @@
 # Spec gate
 
-An external adversarial reviewer grades the published campaign before any writer runs. Its question is "can these plans execute safely as written"; defect reality was settled in reconcile. A plan set that looks complete can still hide contradictory Done criteria, missing dependency edges, and acceptance checks that prove syntax instead of behavior. In the live trial the gate found blockers in 8 of 33 plans that three review models and a full verification pass had all missed.
+An external adversarial reviewer grades the published campaign before any writer runs. Its question is "can these plans execute safely as written"; defect reality was settled in reconcile. A plan set that looks complete can still hide contradictory `Done when:` conditions, missing dependency edges, and acceptance checks that prove syntax instead of behavior. In the live trial the gate found blockers in 8 of 33 plans that three review models and a full verification pass had all missed.
 
 ## 1. Brief
 
@@ -9,12 +9,12 @@ Write a self-contained brief to a file. The reviewer sees nothing else. It carri
 The campaign passes only when:
 
 1. Every child issue has one unambiguous implementation contract.
-2. Every Done criterion is simultaneously satisfiable.
+2. Every `Done when:` condition is simultaneously satisfiable.
 3. Every prerequisite exists as native dependency metadata; body text is descriptive only.
 4. No blocked issue carries the ready label.
 5. Every claimed edge is necessary and every necessary edge exists, across write, read, drift, fixture, generated-artifact, public-contract, and persisted-format dependencies.
 6. No child knowingly leaves another instance of its parent user story's defect untracked.
-7. Every behavioral change has positive and negative proof.
+7. Every behavioral change has positive and negative proof in its `Behavior:` lines.
 8. No acceptance gate rests only on line numbers, grep counts, total test counts, or manual observation where semantic automation is feasible.
 9. No issue prescribes a deliberately broken intermediate state.
 10. No issue performs unsafe deletion, live deployment, secret exposure, or cloud mutation.

@@ -4,8 +4,8 @@ Outcome: every slice implemented, reviewed, and merged into an integration branc
 
 ## 1. Preflight
 
-- Read the parent issue and every subissue.
-- Rebuild the dependency graph from native blocked-by metadata. Then recompute same-file collisions from each subissue's declared file lists. Re-derive; do not just trust: the live trial found a real edge the metadata never had.
+- Read the parent issue and every subissue. Every subissue must read `Readiness: READY`; send one that does not back to the create route's spec gate.
+- Rebuild the dependency graph from native blocked-by metadata. Then recompute same-file collisions from each subissue's `Touch set:` line. Re-derive; do not just trust: the live trial found a real edge the metadata never had.
 - Check the writer binding with `--help`. Measure machine headroom: cores, free RAM, disk.
 - Create the integration branch off the default branch. Record the baseline SHA.
 - Write the dispatch and resume wrapper scripts once. Never vary the invocation shape afterward: a cosmetic `cd` plus `set -e` wrapper around the same command once stalled a writer for six hours on stdin, with no error.
@@ -21,8 +21,9 @@ One slice: one worktree, one branch off the integration head, one writer.
   - You are already in the worktree on the right branch.
   - Never push, merge, rebase, or open a PR.
   - Never comment on GitHub; the orchestrator posts there.
-  - Commit with the plan's subject when done.
-  - Your final message states the commit SHA, the files changed, and the actual output of every Done-criteria command.
+  - Commit with the slice's `Commit:` subject when done.
+  - Capture the `Red:` output before you change anything.
+  - Your final message states the commit SHA, the files changed, and the actual output of `Red:`, `Green:` and the Final gate rungs marked `worktree`.
 - Stagger launches. Before each new batch, measure free RAM, load, and per-writer memory. Hold dispatch while the machine is saturated.
 - Point writer caches and long verification runs at real disk, not tmpfs. Track what writers leave under `/tmp` and clean it: in the live trial, leftover caches exhausted the tmpfs quota and broke `git push` and the orchestrator's own shell at once.
 - Comment the writer's session id on the subissue immediately: model, effort, sandbox, worktree, branch.
@@ -30,13 +31,13 @@ One slice: one worktree, one branch off the integration head, one writer.
 
 ## 3. Review loop, per slice
 
-1. Re-run the issue's Done-criteria commands yourself in the worktree, with every result cache off, as "The artifact" in `~/.claude/shared/testing-discipline.md` says. Never merge on the writer's self-report.
+1. Re-run the plan's `Green:` and the Final gate rungs marked `worktree` yourself in the worktree, with every result cache off, and check the output against every `Behavior:` line and the `Done when:` condition, as "The artifact" in `~/.claude/shared/testing-discipline.md` says. Never merge on the writer's self-report.
 2. Load the standards-spec-review skill and run it on the slice branch against its merge base with integration, judged against the subissue. Review subagents work read-only and run no builds while writers run.
 3. On failure: write a verdict file with the findings and resume the writer with it. When it reports, check its fixes yourself with `git range-diff` between the reviewed and the fixed branch; start no second review.
-4. On a STOP condition or scope exception: verify the writer's claim independently. Override only with evidence, recorded in a verdict file, expanding scope by the minimum, normally a single file.
+4. On one of the plan's Stop conditions or a scope exception: verify the writer's claim independently. Override only with evidence, recorded in a verdict file, expanding scope by the minimum, normally a single file.
 5. Regression fixes follow the "Bug fixes" rule in `~/.claude/shared/testing-discipline.md`, so a writer repairs the existing test that should have caught the bug before adding one. Then apply the mutation bar: revert the fix, confirm the test's assertion fails after setup succeeded, restore, confirm it passes. A green suite alone is not proof.
 6. Merge `--no-ff` into integration with a commit message that lists what you verified. Then confirm the branch tip actually advanced: a merge on a detached HEAD succeeds silently.
-7. Run the full test and policy suite on integration after every merge. Slice-local gates missed three cross-cutting breaks in the live trial.
+7. Run the full test and policy suite and the slice's Final gate rungs marked `integration` on integration after every merge. Slice-local gates missed three cross-cutting breaks in the live trial.
 8. Close the subissue with a Check, Command, Result table.
 
 Failure attribution: before blaming a failure on the campaign, reproduce it in a same-commit baseline worktree of the default branch. Re-run transient infrastructure failures, such as port collisions between concurrent test runs, serially before any verdict, then report the collision as a finding under "A test owns its resources" (`testing-discipline.md`).
@@ -49,7 +50,7 @@ Escalate to the user when a fix trades one failure mode for another. Abandoning 
 
 After the last slice merges:
 
-1. Full verification sweep on integration: every suite the repo has.
+1. Full verification sweep on integration: every suite the repo has. Each slice's Final gate rungs marked `PR` run in step 5 and those marked `post-merge` in step 6.
 2. If the repo has an end-to-end verification script, run it. Attribute every failure through the baseline worktree; file a fresh issue for each pre-existing defect. Watch for scripts that mutate the invoking clone's git state: a shallow fetch inside a verify script truncated the dev clone's history in the live trial.
 3. If any slice restructured build inputs, build the container images too. Unit gates do not cover image builds.
 4. Run the hardening passes over the full campaign diff when the request asked for them: the internal deep review, then `/tidy`. Otherwise name them as available in step 5's question. Every finding takes the necessity test; accepted fixes follow the slice cycle.
