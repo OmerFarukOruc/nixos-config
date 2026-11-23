@@ -555,33 +555,55 @@ poll_target() {
   printf '%s\n' "$result"
 }
 
+unit_ended() {
+  case $(systemctl is-active "$1") in
+    inactive | failed) return 0 ;;
+  esac
+  return 1
+}
+
 target_state() {
-  poll_target "$((SECONDS + activation_seconds))" <<'REMOTE'
-if systemctl is-active --quiet deploy-rollback.service; then
+  {
+    declare -f recorded_status unit_ended
+    printf 'release=%q\n' "$release_id"
+    cat <<'REMOTE'
+timer=$(systemctl is-active deploy-rollback.timer)
+if ! unit_ended deploy-rollback.service || [[ $timer != active && $timer != inactive ]]; then
   echo running
 else
-  printf '%s %s\n' "$(readlink -f /run/current-system)" "$(systemctl is-active deploy-rollback.timer)"
+  ran=$(recorded_status "$release" deploy-rollback)
+  printf '%s %s %s\n' "$(readlink -f /run/current-system)" "$timer" "${ran:-none}"
 fi
 REMOTE
+  } | poll_target "$((SECONDS + activation_seconds))"
 }
 
 roll_back_now() {
+  local result state
   on_target <<'REMOTE' || true
-sudo systemctl start --wait deploy-rollback.service || exit 1
+sudo systemctl start deploy-rollback.service
+REMOTE
+  result=$(wait_unit deploy-rollback "$((SECONDS + activation_seconds))")
+  if [[ $result == 0 ]]; then
+    on_target <<'REMOTE' || true
 sudo systemctl stop deploy-rollback.timer
 REMOTE
-  case $(target_state) in
-    "$previous_system active")
-      printf '%s\n' 'The previous system is back, but the rollback timer would not stop. Stop deploy-rollback.timer on the target.' >&2
-      ;;
-    "$previous_system "*) ;;
-    *)
-      printf '%s\n' \
-        'THE ROLLBACK FAILED. The target may still run the candidate system.' \
-        'The boot default is unchanged, because the deploy never made the candidate the boot default.' \
-        'A reboot restores the previous system. The rollback timer stays armed and repeats the restore at its deadline.' >&2
-      ;;
-  esac
+    state=$(target_state)
+    case $state in
+      "$previous_system inactive "*) ;;
+      "$previous_system active "* | running)
+        printf '%s\n' 'deploy-rollback.service recorded status 0, so the previous system is back, but the rollback timer still reads active, or its state could not be read. Stop deploy-rollback.timer on the target.' >&2
+        ;;
+      *)
+        printf 'deploy-rollback.service recorded status 0, but the target runs %s. A reboot restores the previous system, because the deploy never made the candidate the boot default.\n' "${state%% *}" >&2
+        ;;
+    esac
+    return 0
+  fi
+  printf '%s\n' \
+    "THE ROLLBACK FAILED (deploy-rollback.service result: $result). The target may still run the candidate system." \
+    'The boot default is unchanged, because the deploy never made the candidate the boot default.' \
+    'A reboot restores the previous system. The rollback timer stays armed and repeats the restore at its deadline.' >&2
 }
 
 recorded_status() {
@@ -591,11 +613,11 @@ recorded_status() {
 wait_unit() {
   local unit=$1 deadline=$2 result
   result=$({
-    declare -f recorded_status
+    declare -f recorded_status unit_ended
     printf 'release=%q unit=%q\n' "$release_id" "$unit"
     cat <<'REMOTE'
 status=$(recorded_status "$release" "$unit")
-if [[ -z $status ]] && systemctl is-active --quiet "$unit.service"; then
+if [[ -z $status ]] && ! unit_ended "$unit.service"; then
   echo running
   exit 0
 fi
@@ -607,15 +629,27 @@ REMOTE
   printf '%s\n' "$result"
 }
 
+recorded_unit() {
+  local unit=$1 release=$2 script=$3
+  local -a options=()
+  shift 3
+  while (($#)) && [[ $1 != -- ]]; do
+    options+=("$1")
+    shift
+  done
+  shift || return 64
+  sudo systemd-run --quiet --no-ask-password --collect --unit="$unit" --expand-environment=no "${options[@]}" \
+    "$BASH" -c "$script"'
+status=$?
+printf "%s %s\n" "$0" "$status" >/run/'"$unit"'.status
+exit "$status"' "$release" "$@"
+}
+
 run_in_unit() {
   local unit=$1 release=$2 script=$3 started recorded
   shift 3
   started=$(date +%s)
-  sudo systemd-run --quiet --no-ask-password --collect --unit="$unit" \
-    --service-type=exec --expand-environment=no --wait "$BASH" -c "$script"'
-status=$?
-printf "%s %s\n" "$0" "$status" >/run/'"$unit"'.status
-exit "$status"' "$release" "$@"
+  recorded_unit "$unit" "$release" "$script" --service-type=exec --wait -- "$@"
   sudo journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit.service" --since "@$started" | tail -n 30 >&2
   recorded=$(recorded_status "$release" "$unit")
   [[ -n $recorded ]] || return 1
@@ -625,24 +659,28 @@ exit "$status"' "$release" "$@"
 # A Tailscale SSH session that a tailscaled restart hangs up can end with exit
 # status 1, so the transport's exit code cannot tell a failed unit from a
 # dropped connection; only the status the unit recorded can.
-# https://github.com/tailscale/tailscale/blob/v1.104.4/ssh/tailssh/tailssh.go (sshSession.run)
+# https://github.com/tailscale/tailscale/blob/v1.104.6/ssh/tailssh/tailssh.go (sshSession.run)
 run_unit() {
   local unit=$1 deadline=$((SECONDS + $2)) script=$3 output result
   shift 3
   output=$({
-    declare -f recorded_status run_in_unit
+    declare -f recorded_status recorded_unit run_in_unit
     printf '%s\n' 'run_in_unit "$@"'
   } | on_target "$unit" "$release_id" "$script" "$@") || true
   result=$(awk -v release="$release_id" \
     '$1 == "deploy-unit-result" && $2 == release && $3 ~ /^[0-9]+$/ && $4 == "end" && NF == 4 { print $3 }' \
     <<<"$output")
   if [[ -z $result ]]; then
-    printf 'The connection dropped while %s ran. Waiting for its result.\n' "$unit" >&2
+    printf '%s gave no result over the connection. Waiting for the status it records.\n' "$unit" >&2
     result=$(wait_unit "$unit" "$deadline")
     case $result in
       running) return "$unit_running" ;;
-      lost) return "$unit_lost" ;;
+      lost)
+        printf '%s recorded no status.\n' "$unit" >&2
+        return "$unit_lost"
+        ;;
     esac
+    printf '%s recorded status %s.\n' "$unit" "$result" >&2
   fi
   return "$result"
 }
@@ -661,11 +699,12 @@ activate_with_rollback() {
   }
   [[ -z $session_list ]] || mapfile -t session <<<"$session_list"
   # AccuracySec defaults to one minute, which would delay the rollback.
-  on_target "$previous_system" "$rollback_seconds" <<'REMOTE' || {
-sudo systemd-run --quiet --no-ask-password --collect --unit=deploy-rollback \
-  --on-active="$2" --timer-property=AccuracySec=1s \
-  "$1/bin/switch-to-configuration" test
+  {
+    declare -f recorded_unit
+    cat <<'REMOTE'
+recorded_unit deploy-rollback "$1" "$2" --on-active="$3" --timer-property=AccuracySec=1s -- "$4"
 REMOTE
+  } | on_target "$release_id" "$(declare -f activate); activate \"\$@\"" "$rollback_seconds" "$previous_system" || {
     printf '%s\n' 'The rollback timer could not be armed, so nothing was activated.' >&2
     return 71
   }
@@ -704,25 +743,33 @@ REMOTE
 
 stop_rollback_timer() {
   local stop_status=0
-  on_target "$new_system" <<'REMOTE' || stop_status=$?
+  {
+    declare -f recorded_status unit_ended
+    cat <<'REMOTE'
 set -euo pipefail
 
-new=$1
+new=$1 release=$2
 
 running_candidate() {
-  [[ $(readlink -f /run/current-system) == "$new" ]] && ! systemctl is-active --quiet deploy-rollback.service
+  [[ $(readlink -f /run/current-system) == "$new" ]] && unit_ended deploy-rollback.service &&
+    [[ -z $(recorded_status "$release" deploy-rollback) ]]
 }
 
 running_candidate || { printf '%s\n' 'The rollback already ran. The target is not on the candidate.' >&2; exit 72; }
 sudo systemctl stop deploy-rollback.timer
 running_candidate || { printf '%s\n' 'The rollback ran during confirmation.' >&2; exit 72; }
 REMOTE
+  } | on_target "$new_system" "$release_id" || stop_status=$?
   if ((stop_status == 0 || stop_status == 72)); then
     return "$stop_status"
   fi
   case $(target_state) in
-    "$new_system active") return "$stop_status" ;;
-    "$new_system "*) return 0 ;;
+    "$new_system inactive none") return 0 ;;
+    "$new_system active none") return "$stop_status" ;;
+    running)
+      printf '%s\n' 'The state of the rollback timer could not be read, so it may still be armed. The candidate does not become the boot default.' >&2
+      return "$stop_status"
+      ;;
     *)
       printf '%s\n' 'The rollback ran during confirmation.' >&2
       return 72

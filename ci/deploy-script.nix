@@ -82,10 +82,22 @@ in
           session-test = sleeper;
           ignored-test = sleeper;
         };
+        systemd.services.restore-blocker = {
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = "test ! -e /run/deploy-test-restore-fails";
+        };
 
         specialisation = lib.mapAttrs (_: configuration: { inherit configuration; }) {
           good = { };
           broken.systemd.services.sshd.preStart = lib.mkAfter "exit 1";
+          restorefail.systemd.services = {
+            sshd.preStart = lib.mkAfter "exit 1";
+            restore-blocker.enable = false;
+          };
           session.systemd.services.session-breaker = {
             wantedBy = [ "multi-user.target" ];
             serviceConfig.Type = "oneshot";
@@ -98,9 +110,13 @@ in
             path = [ pkgs.procps ];
             serviceConfig.Type = "oneshot";
             script = ''
-              for pid in $(pgrep -x systemd-run); do
-                kill -s TERM "$pid"
+              ended=0
+              for pid in $(pgrep -x systemd-run || true); do
+                if kill -s TERM "$pid"; then
+                  ended=$((ended + 1))
+                fi
               done
+              echo "client-ender: ended $ended clients"
               sleep 5
             '';
           };

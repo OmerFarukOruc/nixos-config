@@ -319,8 +319,8 @@ while a hand deploy holds the lock
 
 `scripts/affected-hosts.sh --running` lists each host whose running system
 differs from `main`, such as one that was offline at the last deploy, and each
-host whose hourly install skips, so run it before you end a session that
-deployed. For a host that is behind, it lists the commits the host lacks. A
+host whose hourly install skips because of the release it runs, so run it
+before you end a session that deployed. For a host that is behind, it lists the commits the host lacks. A
 host that is behind only by commits that another session or the `update`
 workflow pushed is left to its timer: report it and leave it.
 
@@ -590,13 +590,26 @@ When a step after the build fails, the deploy acts as follows:
   is not 0 or the unit ended without one. When no status arrives in time, the
   deploy exits 1 and the rollback timer restores the previous system, at most
   420 seconds after the deploy armed it.
-- **The restore fails.** The deploy judges the restore, and the stop of the
-  rollback timer after a confirmed switch, by the system the target runs and
-  the state of the timer, read over a fresh login, not by the exit code of the
-  SSH session. When the target still runs the candidate, the deploy prints
-  that, leaves the rollback timer armed, and the timer repeats the restore at
-  its deadline. The boot default did not change, so a reboot also restores the
-  previous system.
+- **The restore fails.** The deploy restores the previous system by starting
+  `deploy-rollback.service`, the unit the rollback timer runs, which records
+  its exit status in `/run/deploy-rollback.status`. The deploy reads that
+  status over fresh logins, until 180 seconds after the start, not the exit
+  code of the SSH session. When the status is not 0, or no status arrives, the
+  deploy prints `THE ROLLBACK FAILED` with the result, leaves the rollback
+  timer armed, and the timer repeats the restore at its deadline. The boot
+  default did not change, so a reboot also restores the previous system.
+  After a restore with status 0, the deploy stops the timer and checks that
+  the target runs the previous system and the timer reads `inactive`. It
+  names the running system when that differs, and asks for a stop of
+  `deploy-rollback.timer` by hand when the timer still reads `active` or its
+  state cannot be read.
+- **The stop of the rollback timer after a confirmed switch fails.** The
+  deploy reads the running system, the timer state, and the status the
+  rollback unit recorded for this release, over fresh logins. Only the
+  candidate, an `inactive` timer and no recorded status count as stopped, so a
+  timer that fired and left a failed restore exits 72. When the state cannot
+  be read within 180 seconds, the deploy says the timer may still be armed
+  and does not make the candidate the boot default.
 - **The target stops answering.** The rollback timer restores the previous
   system after 420 seconds. It needs no command from the machine that runs the
   deploy.
@@ -635,10 +648,10 @@ such as 1.
 | 65 | The Git tree is dirty, and the command has no `--allow-dirty`. | Unchanged. |
 | 70 | A rollback timer from an earlier deploy is still pending. | System unchanged; the candidate release stays. |
 | 71 | The deploy could not arm the rollback timer. | Nothing activated. |
-| 72 | The rollback ran before the deploy stopped the rollback timer, so the target is not on the candidate. | Previous system restored by the rollback timer. |
+| 72 | The rollback ran before the deploy stopped the rollback timer. | The rollback timer's restore ran; `/run/deploy-rollback.status` holds its status. Boot default unchanged. |
 | 73 | Installing the boot entries failed, or a boot loader that the candidate names as signed did not verify after the install. | System profile and boot entries set back to the previous generation, unless the output names a restore step that failed. After `switch`, the candidate still runs and no rollback timer is armed. |
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
-| 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored. |
+| 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored, unless the output says `THE ROLLBACK FAILED`. |
 | 76 | The boot entry install reported no result, after a dropped connection or a unit that ended without one. | Unknown: the system profile and boot default point at the candidate or the previous system. After `switch`, the candidate runs and no rollback timer is armed. |
 | 77 | Another deploy holds the lock on the host, or `nixos-upgrade.service` is installing main there. | Unchanged. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
@@ -662,13 +675,17 @@ directly, and the VM's specialisations are the candidates; each phase of
 `ci/deploy-script/test.py` commits a `flake.nix` whose system is one of them
 and checks the exit code, the running system and the boot default. The phases
 cover a good switch, the lock, a pending rollback timer, an ordering cycle,
-the rollback after a failed activation or a broken user service,
-`oruc.deploy.sessionIgnore`, a failed boot entry install, an install that
-leaves a boot loader unsigned, a checkout that would drop a file of the
-running release, and a deploy that loses its wait for a working activation,
-which it then reads from the recorded status. Every install in the VM signs
-Limine with a key that the test makes, and the `unsigned` candidate drops that
-step.
+the rollback after a failed activation or a broken user service, a restore
+that fails, `oruc.deploy.sessionIgnore`, a failed boot entry install, an
+install that leaves a boot loader unsigned, a checkout that would drop a file
+of the running release, and a deploy that loses its wait for a working activation,
+which it then reads from the recorded status. In that last phase, the
+`client-ender` unit of the candidate ends the `systemd-run` clients, and the
+test reads from its journal that it ended at least one. The `restorefail`
+phase breaks `sshd` and makes the restore exit 4, and checks that the deploy
+prints `THE ROLLBACK FAILED` and leaves the rollback timer armed. Every
+install in the VM signs Limine with a key that the test makes, and the
+`unsigned` candidate drops that step.
 
 The check does not cover a deploy over SSH, a real SSH disconnect, a boot
 entry install that reports no result (exit 76), exits 71, 72, 74, 79 and 81,

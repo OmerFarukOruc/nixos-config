@@ -116,9 +116,23 @@ publish("broken")
 status, out = deploy("switch")
 assert status == 4, f"a system that breaks sshd gave exit {status}, not 4"
 assert "Restoring the previous system now" in out, "the deploy did not roll back"
-assert "THE ROLLBACK FAILED" not in out, "the deploy reported a working rollback as failed"
-assert "would not stop" not in out, "the deploy reported a stopped rollback timer as armed"
+assert "THE ROLLBACK FAILED" not in out, "the deploy reported a working restore as failed"
 assert_on_good("broken")
+machine.wait_for_unit("sshd.service")
+
+print("phase: a system that breaks sshd, and a restore that fails")
+publish("restorefail")
+machine.succeed("touch /run/deploy-test-restore-fails")
+status, out = deploy("switch")
+assert status == 4, f"a system that breaks sshd gave exit {status}, not 4"
+assert "THE ROLLBACK FAILED (deploy-rollback.service result: 4)" in out, "the deploy did not report the failed restore"
+recorded = machine.succeed("cat /run/deploy-rollback.status").split()
+assert recorded[1:] == ["4"], f"the restore recorded {recorded}, not status 4"
+machine.succeed("systemctl is-active --quiet deploy-rollback.timer")
+machine.succeed("unlink /run/deploy-test-restore-fails")
+machine.succeed("systemctl stop deploy-rollback.timer")
+machine.succeed("systemctl start restore-blocker.service")
+assert_on_good("restorefail")
 machine.wait_for_unit("sshd.service")
 
 print("phase: a system that breaks a session service")
@@ -127,6 +141,7 @@ status, out = deploy("switch")
 assert status == 75, f"a broken session service gave exit {status}, not 75"
 assert "These session services broke after the switch: session-test.service" in out
 assert "ignored-test" not in out, "the session check did not ignore ignored-test.service"
+assert "THE ROLLBACK FAILED" not in out, "the deploy reported a working restore as failed"
 assert_on_good("session")
 machine.succeed(f"systemctl --user -M {USER}@ restart session-test.service ignored-test.service")
 
@@ -175,7 +190,9 @@ print("phase: the deploy loses its wait for the activation, which then succeeds"
 publish("dropped")
 status, out = deploy("switch")
 assert status == 0, f"a lost wait for a working activation gave exit {status}, not 0"
-assert "The connection dropped while deploy-activate ran. Waiting for its result." in out
+ended = machine.succeed("journalctl -b -u client-ender.service -o cat | sed -n 's/^client-ender: ended \\([0-9]*\\) clients$/\\1/p'")
+assert ended.split() and all(int(n) >= 1 for n in ended.split()), f"client-ender ended no client: {ended!r}"
+assert "deploy-activate recorded status 0." in out, "the deploy did not read the status the activation recorded"
 assert "Restoring the previous system" not in out, "the deploy rolled back a working activation"
 assert running() == systems["dropped"], "the candidate does not keep running"
 assert boot_default() == systems["dropped"], "the candidate is not the boot default"
