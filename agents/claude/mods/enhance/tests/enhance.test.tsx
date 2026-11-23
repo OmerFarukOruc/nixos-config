@@ -338,30 +338,87 @@ for (const [sent, text] of [
   })
 }
 
-const PAST = { startedAt: '2026-11-20T10:00:00.000Z', draft: 'an old draft\nsecond line', outcome: { kind: 'enhanced', prompt: 'an old prompt' } }
-const FAILED = { startedAt: '2026-11-21T09:30:00.000Z', draft: 'a failed draft', outcome: { kind: 'failed', reason: 'no result' } }
+const PAST = {
+  startedAt: '2026-11-20T10:00:00.000Z',
+  draft: 'an old draft\nsecond line',
+  seconds: 71,
+  costUsd: 0.479,
+  outcome: { kind: 'enhanced', prompt: 'an old prompt' },
+}
+const FAILED = { startedAt: '2026-11-21T09:30:00.000Z', draft: 'a failed draft', seconds: 3, costUsd: 0, outcome: { kind: 'failed', reason: 'no result' } }
 const RECORDS = {
   [`${RUNS_DIR}/2026-11-20T10-00-00.000Z-aaaa.json`]: JSON.stringify(PAST),
   [`${RUNS_DIR}/2026-11-21T09-30-00.000Z-bbbb.json`]: JSON.stringify(FAILED),
   [`${RUNS_DIR}/2026-10-24T11-59-59.000Z-cccc.json`]: JSON.stringify({ ...PAST, startedAt: '2026-10-24T11:59:59.000Z' }),
   [`${RUNS_DIR}/2026-10-24T12-00-01.000Z-dddd.json`]: JSON.stringify({ ...PAST, startedAt: '2026-10-24T12:00:01.000Z' }),
 }
+const CANCELLED = { startedAt: '2026-11-23T11:20:00.000Z', draft: 'a cancelled draft', outcome: { kind: 'cancelled' } }
+const AHEAD = { startedAt: '2026-11-24T12:00:00.000Z', draft: 'a draft from a fast clock', seconds: 5, costUsd: 0.004, outcome: { kind: 'enhanced', prompt: 'p' } }
+const EDGE_RECORDS = {
+  [`${RUNS_DIR}/2026-11-23T11-20-00.000Z-eeee.json`]: JSON.stringify(CANCELLED),
+  [`${RUNS_DIR}/2026-11-23T11-59-30.000Z-ffff.json`]: JSON.stringify({ ...PAST, startedAt: '2026-11-23T11:59:30.000Z' }),
+  [`${RUNS_DIR}/2026-11-23T09-00-00.000Z-gggg.json`]: JSON.stringify({ ...PAST, startedAt: '2026-11-23T09:00:00.000Z' }),
+  [`${RUNS_DIR}/2026-11-24T12-00-00.000Z-hhhh.json`]: JSON.stringify(AHEAD),
+}
 
-test('/enhance-runs lists the recent runs, newest first, and copies the prompt of one', async ($, on) => {
+test('/enhance-runs lists the recent runs, newest first, with age, seconds and cost, and copies the prompt of one', async ($, on) => {
   const seen = stubSession(on, { replies: [], files: RECORDS })
 
   await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened).toEqual(['enhance-runs'])
 
   const ui = await $.ui.mount(RUNS)
-  expect((await ui.findAll({ type: 'Text', text: /^2026-/ })).map(row => row.text).slice(0, 2)).toEqual([
-    '2026-11-21 09:30 failed: a failed draft',
-    '2026-11-20 10:00 enhanced: an old draft',
+  const texts = (await ui.findAll({ type: 'Text' })).map(row => row.text)
+  expect(texts.slice(0, 8)).toEqual([
+    'Recent runs',
+    'newest first',
+    '✗ failed',
+    '2 d ago · 3 s',
+    'a failed draft',
+    '✓ enhanced',
+    '3 d ago · 71 s · $0.48',
+    'an old draft',
   ])
+  expect(await ui.find({ key: 'put-back' })).toBeUndefined()
   expect(await ui.find({ key: 'copy-0' })).toBeUndefined()
   await ui.press({ key: 'copy-1' })
   await ui.unmount()
   expect(seen.copied).toEqual(['an old prompt'])
+})
+
+test('a run row leaves out each fact its record lacks, and marks an outcome that is neither enhanced nor failed with a ring', async ($, on) => {
+  stubSession(on, { replies: [], files: EDGE_RECORDS })
+
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
+
+  const ui = await $.ui.mount(RUNS)
+  const texts = (await ui.findAll({ type: 'Text' })).map(row => row.text)
+  await ui.unmount()
+  expect(texts.slice(2)).toEqual([
+    '✓ enhanced',
+    '5 s · <$0.01',
+    'a draft from a fast clock',
+    '✓ enhanced',
+    'just now · 71 s · $0.48',
+    'an old draft',
+    '○ cancelled',
+    '40 min ago',
+    'a cancelled draft',
+    '✓ enhanced',
+    '3 h ago · 71 s · $0.48',
+    'an old draft',
+  ])
+})
+
+test('with no record, the runs pane says so', async ($, on) => {
+  stubSession(on, { replies: [] })
+
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
+
+  const ui = await $.ui.mount(RUNS)
+  const texts = (await ui.findAll({ type: 'Text' })).map(row => row.text)
+  await ui.unmount()
+  expect(texts).toEqual(['Recent runs', 'No enhance run has left a record yet.'])
 })
 
 test('a session start lists both commands and deletes the records that started more than 30 days ago', async ($, on) => {
@@ -380,7 +437,7 @@ test('a session start lists both commands and deletes the records that started m
   ])
 })
 
-test("the runs pane's first row puts the session's last draft back in the box", async ($, on) => {
+test("the runs pane's card shows the session's last draft and puts it back in the box", async ($, on) => {
   const seen = stubSession(on, { replies: [PROMPT, READING] })
   await typed($, seen, 'my draft')
   await press($, seen, BAND, 'band-dismiss')
@@ -388,6 +445,10 @@ test("the runs pane's first row puts the session's last draft back in the box", 
 
   await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened.at(-1)).toBe('enhance-runs')
+  const ui = await $.ui.mount(RUNS)
+  const texts = (await ui.findAll({ type: 'Text' })).map(row => row.text)
+  await ui.unmount()
+  expect(texts.slice(0, 2)).toEqual(['Last draft of this session', 'my draft'])
   await press($, seen, RUNS, 'put-back')
 
   expect(seen.box.text).toBe('my draft')

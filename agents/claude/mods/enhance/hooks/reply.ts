@@ -30,16 +30,22 @@ function valueAt(value: unknown, path: readonly string[]): unknown {
   )
 }
 
-export function textAt(value: unknown, path: readonly string[]): string | null {
+function foundAt<Kind>(value: unknown, path: readonly string[], isKind: (found: unknown) => found is Kind): Kind | null {
   const found = valueAt(value, path)
 
-  return typeof found === 'string' ? found : null
+  return isKind(found) ? found : null
+}
+
+export function textAt(value: unknown, path: readonly string[]): string | null {
+  return foundAt(value, path, (found): found is string => typeof found === 'string')
+}
+
+export function numberOrNullAt(value: unknown, path: readonly string[]): number | null {
+  return foundAt(value, path, (found): found is number => typeof found === 'number')
 }
 
 function numberAt(value: unknown, path: readonly string[]): number {
-  const found = valueAt(value, path)
-
-  return typeof found === 'number' ? found : 0
+  return numberOrNullAt(value, path) ?? 0
 }
 
 function valuesOf(value: unknown): unknown[] | null {

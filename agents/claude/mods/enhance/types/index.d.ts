@@ -38,7 +38,7 @@ export type RunRecord<Outcome extends RunOutcome = RunOutcome> = Spent & {
   outcome: Outcome
 }
 
-export type RunSummary = { startedAt: string; outcome: string; draft: string; prompt: string | null }
+export type RunSummary = { startedAt: string; outcome: string; draft: string; prompt: string | null; seconds: number | null; costUsd: number | null }
 
 declare module 'claude-code' {
   interface PluginState {

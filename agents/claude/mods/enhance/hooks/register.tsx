@@ -4,6 +4,7 @@ import type { Elements, EngineInterface, PluginOptions, Register, RenderSurface 
 import type { Enhanced, Receiver, Run, RunOutcome, RunRecord, RunSummary, Sent, Session } from '../types'
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
 import { liveEffort, trackEffort } from './effort'
+import { dollars, factsOf, markOf } from './facts'
 import type { Cancel, Copy, Turn, Writer } from './copies'
 import { missingFrom } from './missing'
 import { guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
@@ -21,7 +22,7 @@ const NEXT_BULLET = /^[-*+] /
 
 const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-6' })
 const lastDraft = atom({ plugin: 'enhance', key: 'lastDraft' } as const, null, { shape: 'draft-1' })
-const recent = atom({ plugin: 'enhance', key: 'recent' } as const, [], { shape: 'recent-1' })
+const recent = atom({ plugin: 'enhance', key: 'recent' } as const, [], { shape: 'recent-2' })
 
 type Running = Extract<Run, { kind: 'running' }>
 type Ready = Extract<Run, { kind: 'ready' }>
@@ -266,7 +267,7 @@ function withReading(outcome: Enhanced, reading: string): Enhanced {
 }
 
 function shownNotes(record: RunRecord<Enhanced>): string {
-  const cost = record.costUsd === null ? 'not reported' : `$${record.costUsd.toFixed(2)}`
+  const cost = record.costUsd === null ? 'not reported' : dollars(record.costUsd)
 
   return withNotes(record.outcome, [`Cost: ${cost}, time: ${record.seconds} s`]).notes
 }
@@ -705,30 +706,61 @@ function firstLine(text: string): string {
   return text.trim().split('\n', 1)[0] ?? ''
 }
 
-function runsPane({ Box, Button, Text }: Ui, $: EngineInterface, draft: string | null, runs: readonly RunSummary[]) {
+function lastDraftCard({ Box, Button, Text }: Ui, $: EngineInterface, draft: string) {
   return (
-    <Box flexDirection="column">
-      {draft !== null && (
-        <Box columnGap={1}>
-          <Box flexShrink={1}>
-            <Text wrap="truncate-end">This session's last draft: {firstLine(draft)}</Text>
-          </Box>
-          <Button key="put-back" label="Put draft in box" variant="primary" onPress={() => putBack($, draft)} />
+    <Box flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1}>
+      <Text weight="bold" color="suggestion">
+        Last draft of this session
+      </Text>
+      <Text wrap="truncate-end">{firstLine(draft)}</Text>
+      <Box>
+        <Button key="put-back" label="Put draft in box" variant="primary" onPress={() => putBack($, draft)} />
+      </Box>
+    </Box>
+  )
+}
+
+function runRow({ Box, Button, Text }: Ui, $: EngineInterface, past: RunSummary, at: number, now: number) {
+  const mark = markOf(past.outcome)
+
+  return (
+    <Box key={`run-${at}`} flexDirection="column">
+      <Box columnGap={1}>
+        <Box flexShrink={0}>
+          <Text weight="bold" color={mark.color} wrap="truncate-end">
+            {mark.glyph} {past.outcome}
+          </Text>
         </Box>
-      )}
+        <Box flexGrow={1} flexShrink={1}>
+          <Text dimColor wrap="truncate-end">
+            {factsOf(past, now)}
+          </Text>
+        </Box>
+        {past.prompt !== null && (
+          <Button key={`copy-${at}`} label="Copy prompt" onPress={press => copyPrompt($, past.prompt ?? '', press.surface)} />
+        )}
+      </Box>
+      <Box paddingLeft={2}>
+        <Text wrap="truncate-end" dimColor={past.prompt === null}>
+          {firstLine(past.draft)}
+        </Text>
+      </Box>
+    </Box>
+  )
+}
+
+function runsPane(ui: Ui, $: EngineInterface, draft: string | null, runs: readonly RunSummary[], now: number) {
+  const { Box, Text } = ui
+
+  return (
+    <Box flexDirection="column" rowGap={1}>
+      {draft !== null && lastDraftCard(ui, $, draft)}
+      <Box columnGap={1}>
+        <Text weight="bold">Recent runs</Text>
+        {runs.length > 0 && <Text dimColor>newest first</Text>}
+      </Box>
       {runs.length === 0 && <Text dimColor>No enhance run has left a record yet.</Text>}
-      {runs.map((past, at) => (
-        <Box columnGap={1}>
-          <Box flexShrink={1}>
-            <Text wrap="truncate-end">
-              {past.startedAt.slice(0, 16).replace('T', ' ')} {past.outcome}: {firstLine(past.draft)}
-            </Text>
-          </Box>
-          {past.prompt !== null && (
-            <Button key={`copy-${at}`} label="Copy prompt" onPress={press => copyPrompt($, past.prompt ?? '', press.surface)} />
-          )}
-        </Box>
-      ))}
+      {runs.map((past, at) => runRow(ui, $, past, at, now))}
     </Box>
   )
 }
@@ -875,7 +907,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: RUNS_PANE }, async ($, e) =>
-    runsPane($.ui.resolve(e), $, await read($, lastDraft), await read($, recent)),
+    runsPane($.ui.resolve(e), $, await read($, lastDraft), await read($, recent), await $.clock.now()),
   )
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

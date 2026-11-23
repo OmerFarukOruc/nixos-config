@@ -113,9 +113,11 @@ The row starts with "✗ Enhance failed:" and has **Retry**, **Details** and **D
 
 `/enhance-runs` opens the runs pane.
 
-- The first row is this session's last draft, with **Put draft in box**. It appears after you start a run in this session.
-- Below it are the 10 newest runs, with **Copy prompt** on each run that has a prompt.
-- The times are in UTC.
+- The card on top is this session's last draft, with **Put draft in box**. It appears after you start a run in this session.
+- Below it are the 10 newest runs, newest first.
+- Each run has two lines. The first has the outcome (✓ enhanced, ✗ failed, ○ for the rest), how long ago it started, its seconds and its cost. The second is the first line of the draft.
+- A fact the record lacks, and a cost of 0, are left out. A cost under half a cent shows as `<$0.01`.
+- **Copy prompt** is on each run that has a prompt.
 
 ## Settings
 

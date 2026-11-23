@@ -2,7 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { Guide, RunRecord, RunSummary } from '../types'
 import { configDir, runTool } from './copies'
-import { parseLine, textAt } from './reply'
+import { numberOrNullAt, parseLine, textAt } from './reply'
 
 const RECENT_RUNS = 10
 const KEEP_MS = 30 * 24 * 60 * 60 * 1000
@@ -93,7 +93,11 @@ function summaryOf(text: string): RunSummary[] {
   const record = parseLine(text)
   const [startedAt, outcome, draft] = [textAt(record, ['startedAt']), textAt(record, ['outcome', 'kind']), textAt(record, ['draft'])]
 
-  return startedAt === null || outcome === null || draft === null ? [] : [{ startedAt, outcome, draft, prompt: textAt(record, ['outcome', 'prompt']) }]
+  if (startedAt === null || outcome === null || draft === null) {
+    return []
+  }
+
+  return [{ startedAt, outcome, draft, prompt: textAt(record, ['outcome', 'prompt']), seconds: numberOrNullAt(record, ['seconds']), costUsd: numberOrNullAt(record, ['costUsd']) }]
 }
 
 export async function recentRuns($: EngineInterface): Promise<RunSummary[]> {
