@@ -336,10 +336,10 @@ const RECORDS = {
   [`${RUNS_DIR}/2026-10-24T12-00-01.000Z-dddd.json`]: JSON.stringify({ ...PAST, startedAt: '2026-10-24T12:00:01.000Z' }),
 }
 
-test('the Runs button lists the recent runs, newest first, and copies the prompt of one', async ($, on) => {
+test('/enhance-runs lists the recent runs, newest first, and copies the prompt of one', async ($, on) => {
   const seen = stubSession(on, { replies: [], files: RECORDS })
 
-  await press($, seen, BAND, 'runs')
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened).toEqual(['enhance-runs'])
 
   const ui = await $.ui.mount(RUNS)
@@ -371,7 +371,7 @@ test("the runs pane's first row puts the session's last draft back in the box", 
   await press($, seen, BAND, 'band-dismiss')
   seen.box.text = ''
 
-  await press($, seen, BAND, 'runs')
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened.at(-1)).toBe('enhance-runs')
   await press($, seen, RUNS, 'put-back')
 

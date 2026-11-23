@@ -1,6 +1,6 @@
 {
   "name": "enhance",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Runs /enhance-prompt in a copy of the session through claude -p, and puts the enhanced prompt in the prompt box",
   "types": "./types/index.d.ts",
   "userConfig": {
