@@ -43,6 +43,10 @@ controller_workflow=merge-controller.yml
 run_bucket='def bucket: if .status != "completed" then "pending" elif (.conclusion | IN("success", "neutral", "skipped")) then "pass" elif .conclusion == "cancelled" then "cancel" else "fail" end;'
 controller_wait=13200
 max_updates=3
+checks_done=0
+checks_pending=10
+checks_failed=11
+checks_absent=12
 kept=0
 
 say() { printf '%s\n' "$*" || exit 1; }
@@ -52,9 +56,8 @@ usage() { sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 
 setup() {
   ERR=$(mktemp)
-  JOBS_TABLE=$(mktemp)
   BODY_FILE=$(mktemp)
-  trap 'rm -f "$ERR" "$JOBS_TABLE" "$BODY_FILE"' EXIT
+  trap 'rm -f "$ERR" "$BODY_FILE"' EXIT
   command -v gh >/dev/null || die "gh is required"
   command -v jq >/dev/null || die "jq is required"
   git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
@@ -183,9 +186,10 @@ uses_controller() {
   exit 3
 }
 
-# Reads a PR object that carries statusCheckRollup. Prints "<conclusion> <url>" of the newest check run named gate on the PR
-# head when it ended without a pass, and nothing while it is missing, running, or green. Only the newest run counts, because a
-# rerun of the same check can list beside the failed one.
+# Reads a PR object. Prints "<conclusion> <url>" of the newest check run named gate on the PR head when it ended without a
+# pass, and nothing while it is missing, running, or green. Only the newest run counts, because a rerun of the same check can
+# list beside the failed one. Without statusCheckRollup, the newest Actions job named gate stands in for the check run, and
+# while no such job exists, the newest run of a gate.yml workflow does.
 red_gate() {
   local rows
   if jq -e 'has("statusCheckRollup")' <<<"$1" >/dev/null; then
@@ -194,7 +198,10 @@ red_gate() {
       | "\(.conclusion) \(.detailsUrl)"' <<<"$1"
   else
     rows=$(actions_checks "$(jq -r .headRefOid <<<"$1")") || return 1
-    awk -F'\t' '$1 == "job" && $2 == "gate" { if ($3 == "fail" || $3 == "cancel") print toupper($4), $5; exit }' <<<"$rows"
+    awk -F'\t' '
+      $1 == "run" && $6 ~ /(^|\/)gate\.yml$/ && !seen { seen = 1; if ($3 == "fail" || $3 == "cancel") run = toupper($4) " " $5 }
+      $1 == "job" && $2 == "gate" { job = 1; if ($3 == "fail" || $3 == "cancel") print toupper($4), $5; exit }
+      END { if (!job && run != "") print run }' <<<"$rows"
   fi
 }
 
@@ -289,56 +296,55 @@ await_controller() {
 }
 
 # A token without the Checks permission cannot list check runs, and a job's check run carries the job's name, so Actions
-# jobs stand in for check runs. Prints "<kind>\t<name>\t<bucket>\t<conclusion>\t<url>" rows for commit $1: kind run for the
-# newest run of each workflow, then kind job for each job of those runs, newest job first.
+# jobs stand in for check runs. Prints "<kind>\t<name>\t<bucket>\t<conclusion>\t<url>\t<workflow path>" rows for commit $1:
+# kind run for the newest run of each workflow, newest run first, then kind job for each job of those runs, newest job first. A job row has
+# an empty workflow path.
 actions_checks() {
   local sha=$1 runs ids id jobs=""
   runs=$(gh api "repos/$GH_REPO/actions/runs" -X GET -f head_sha="$sha" -f per_page=100 --paginate --slurp \
-    | jq -c '[.[].workflow_runs[]] | group_by(.workflow_id) | map(sort_by([(.run_started_at // .created_at), .id]) | last
-      | {id, name: (.name // .display_title // "run \(.id)"), status, conclusion, html_url})') || return 1
+    | jq -c '[.[].workflow_runs[]] | group_by(.workflow_id) | map(sort_by([(.run_started_at // .created_at), .id]) | last)
+      | sort_by([(.run_started_at // .created_at), .id]) | reverse
+      | map({id, name: (.name // .display_title // "run \(.id)"), status, conclusion, html_url, path})') || return 1
   ids=$(jq -r '.[].id' <<<"$runs") || return 1
   for id in $ids; do
     jobs+=$(gh api "repos/$GH_REPO/actions/runs/$id/jobs" -X GET -f filter=latest -f per_page=100 --paginate --slurp \
       | jq -c '[.[].jobs[]]')$'\n' || return 1
   done
-  printf '%s\n%s' "$runs" "$jobs" | jq -rs "$run_bucket"' def row(kind): [kind, .name, bucket, (.conclusion // "none"), .html_url] | @tsv;
+  printf '%s\n%s' "$runs" "$jobs" | jq -rs "$run_bucket"' def row(kind): [kind, .name, bucket, (.conclusion // "none"), .html_url, (.path // "")] | @tsv;
     (.[0][] | row("run")), (.[1:] | add // [] | sort_by([(.started_at // .created_at), .id]) | reverse | .[] | row("job"))'
 }
 
-# Prints the state of the newest Actions job named $2 on commit $1 in check_state's form, nothing when there is none.
-# The rows are read once per poll; check_state runs in a command substitution, so the file, not a variable, carries them
-# from one context to the next, after a first line that names the commit.
-actions_job_state() {
-  local sha=$1 ctx=$2 rows
-  if [[ "$(head -n 1 "$JOBS_TABLE")" != "$sha" ]]; then
-    rows=$(actions_checks "$sha") || return 1
-    printf '%s\n%s\n' "$sha" "$rows" >"$JOBS_TABLE" || return 1
-  fi
-  awk -F'\t' -v ctx="$ctx" 'NR > 1 && $1 == "job" && $2 == ctx { print ($3 == "pending" ? "pending" : "completed " $4); exit }' "$JOBS_TABLE"
+# Prints the state of the newest Actions job named $1 in actions_checks rows on stdin, in check_run_state's form, nothing
+# when there is none.
+job_state() {
+  awk -F'\t' -v ctx="$1" '$1 == "job" && $2 == ctx { print ($3 == "pending" ? "pending" : "completed " $4); exit }'
 }
 
-# Prints "<status> <conclusion>" of the newest check run named $2 on commit $1, or the state of a commit
-# status with that context ("pending", or "completed <state>"), or nothing when neither exists, or "lookup-error"
-# when a request failed and nothing was found, so that a failed lookup is never read as a missing check.
+# Prints "<status> <conclusion>" of the newest check run named $2 on commit $1, nothing when there is none,
+# "refused" when the token may not read check runs, or "lookup-error" when the request failed.
 # gh prints the error body on stdout when a request fails, so its output counts only on success.
-check_state() {
-  local sha=$1 ctx=$2 out failed=0 err=$ERR
+check_run_state() {
+  local sha=$1 ctx=$2 out
   if out=$(gh api "repos/$GH_REPO/commits/$sha/check-runs" -X GET -f check_name="$ctx" -f filter=latest \
-        --jq '.check_runs[0] | select(. != null) | "\(.status) \(.conclusion // "none")"' 2>"$err"); then
-    [[ -z "$out" ]] || { printf '%s\n' "$out"; return 0; }
-  elif refused "$err"; then
-    if out=$(actions_job_state "$sha" "$ctx") && [[ -n "$out" ]]; then printf '%s\n' "$out"; return 0; fi
-    failed=1
+        --jq '.check_runs[0] | select(. != null) | "\(.status) \(.conclusion // "none")"' 2>"$ERR"); then
+    printf '%s\n' "$out"
+  elif refused "$ERR"; then
+    say refused
   else
-    failed=1
+    say lookup-error
   fi
-  if out=$(CTX="$ctx" gh api "repos/$GH_REPO/commits/$sha/status" \
+}
+
+# Prints the state of a commit status with context $2 on commit $1 ("pending", or "completed <state>"), nothing when
+# there is none, or "lookup-error" when the request failed.
+status_state() {
+  local out
+  if out=$(CTX="$2" gh api "repos/$GH_REPO/commits/$1/status" \
         --jq 'first(.statuses[] | select(.context == env.CTX)) | if .state == "pending" then "pending" else "completed \(.state)" end' 2>/dev/null); then
-    [[ -z "$out" ]] || { printf '%s\n' "$out"; return 0; }
+    printf '%s\n' "$out"
   else
-    failed=1
+    say lookup-error
   fi
-  (( ! failed )) || say "lookup-error"
 }
 
 # Exits 3 when PR $1 is no longer the open, ready PR with head $2 and base $3 that pr-land waits for. Returns 1 when it
@@ -370,11 +376,9 @@ pr_unchanged() {
 # failed or cancelled one. A PR counts as having no checks only after three polls in a row list none, because
 # GitHub registers checks some seconds after a push. A lookup that fails is retried, never counts as "no checks", and
 # breaks the run of polls that listed none.
-# Returns 0 when the checks let the merge go ahead and 1 when the PR was merged meanwhile. Each poll runs required_done
-# or own_done, which returns 0 when the checks are done, sets this wait's poll_note and returns 1 while they are not, and
-# exits 1 on a failed check; own_done counts the polls that listed no checks in this wait's empty_polls.
+# Returns 0 when the checks let the merge go ahead and 1 when the PR was merged meanwhile.
 wait_required() {
-  local n=$1 sha=$2 base=$3 limit=${PR_LAND_WAIT:-1800} waited=0 started=$SECONDS listed intro poll_note="" empty_polls=0
+  local n=$1 sha=$2 base=$3 limit=${PR_LAND_WAIT:-1800} waited=0 started=$SECONDS listed intro poll_note="" empty_polls=0 poll
   local -a required=()
   # A failed request means no readable protection (GitHub answers 403 for a private repo on the free plan
   # and 404 for an unprotected branch); gh still prints the error body on stdout, so use the output only on success.
@@ -388,24 +392,51 @@ wait_required() {
   (( ${#required[@]} )) || { intro="no required checks are readable; waiting for the PR's own checks"; started=$SECONDS; }
   while :; do
     if (( waited % 60 == 0 )) && ! pr_unchanged "$n" "$sha" "$base"; then return 1; fi
+    poll=0
     if (( ${#required[@]} )); then
-      required_done "$sha" "${required[@]}" && return 0
+      poll_note=$(required_done "$sha" "${required[@]}") || poll=$?
     else
-      own_done "$n" "$sha" && return 0
+      poll_note=$(own_done "$n" "$sha") || poll=$?
     fi
+    case $poll in
+      "$checks_done") return 0 ;;
+      "$checks_failed") exit 1 ;;
+      "$checks_absent")
+        empty_polls=$((empty_polls + 1))
+        (( empty_polls < 3 )) || { say "no checks appeared on ${sha:0:12} in three polls; merging without checks"; return 0; }
+        ;;
+      "$checks_pending") empty_polls=0 ;;
+      *) exit 1 ;;
+    esac
     (( SECONDS - started < limit )) || { say "pr-land: gave up after ${limit}s; $poll_note" >&2; exit 1; }
     (( waited == 0 )) && say "$intro on ${sha:0:12}: $poll_note"
     waited=$((waited + $(sleep_within_limit 20 "$limit" "$started")))
   done
 }
 
+# Polls the required checks $2... on commit $1. Prints the poll note and returns checks_done, checks_pending, or
+# checks_failed after it reported the failed checks. It asks for the Actions rows at most once per poll, and a check
+# that only those rows could show counts as unreadable when they lack it or the request failed.
 required_done() {
-  local sha=$1 ctx st
+  local sha=$1 ctx st status jobs="" jobs_lookup=unread
   local -a pending=() failed=() missing=() unread=()
   shift
-  : >"$JOBS_TABLE" || exit 1
   for ctx in "$@"; do
-    st=$(check_state "$sha" "$ctx") || exit 1
+    st=$(check_run_state "$sha" "$ctx") || return "$checks_failed"
+    if [[ "$st" == refused ]]; then
+      if [[ "$jobs_lookup" == unread ]]; then
+        if jobs=$(actions_checks "$sha"); then jobs_lookup="read"; else jobs_lookup="failed"; fi
+      fi
+      st=lookup-error
+      if [[ "$jobs_lookup" == read ]]; then
+        st=$(job_state "$ctx" <<<"$jobs") || return "$checks_failed"
+        [[ -n "$st" ]] || st=lookup-error
+      fi
+    fi
+    if [[ -z "$st" || "$st" == lookup-error ]]; then
+      status=$(status_state "$sha" "$ctx") || return "$checks_failed"
+      [[ -z "$status" ]] || st=$status
+    fi
     case "$st" in
       "") missing+=("$ctx") ;;
       lookup-error) unread+=("$ctx") ;;
@@ -414,36 +445,32 @@ required_done() {
       *) pending+=("$ctx") ;;
     esac
   done
-  (( ${#failed[@]} )) && { say "pr-land: required check failed on ${sha:0:12}: ${failed[*]}" >&2; exit 1; }
+  (( ${#failed[@]} )) && { say "pr-land: required check failed on ${sha:0:12}: ${failed[*]}" >&2; return "$checks_failed"; }
   (( ${#unread[@]} )) && say "pr-land: could not read required check(s) on ${sha:0:12}: ${unread[*]}; retrying" >&2
-  poll_note="pending: ${pending[*]} missing: ${missing[*]} unreadable: ${unread[*]}"
-  (( ${#pending[@]} + ${#missing[@]} + ${#unread[@]} == 0 ))
+  say "pending: ${pending[*]} missing: ${missing[*]} unreadable: ${unread[*]}"
+  (( ${#pending[@]} + ${#missing[@]} + ${#unread[@]} == 0 )) || return "$checks_pending"
 }
 
+# Polls the checks of PR $1 on commit $2. Prints the poll note and returns checks_done, checks_pending, checks_absent
+# when none are listed, or checks_failed after it reported the failed checks.
 own_done() {
   local n=$1 sha=$2 out rows="" failed pending
-  poll_note=""
   if out=$(gh pr checks "$n" --json name,bucket 2>"$ERR") || [[ "$out" == \[* ]]; then
-    rows=$(jq -r '.[] | ["check", .name, .bucket] | @tsv' <<<"$out" 2>/dev/null) || poll_note="the check lookup returned unreadable output"
+    rows=$(jq -r '.[] | ["check", .name, .bucket] | @tsv' <<<"$out" 2>/dev/null) \
+      || { say "the check lookup returned unreadable output"; return "$checks_pending"; }
   elif refused "$ERR"; then
-    rows=$(actions_checks "$sha" 2>/dev/null) || poll_note="the Actions run lookup failed"
+    rows=$(actions_checks "$sha" 2>/dev/null) || { say "the Actions run lookup failed"; return "$checks_pending"; }
   elif ! grep -q 'no checks reported' "$ERR"; then
-    poll_note="the check lookup failed"
+    say "the check lookup failed"
+    return "$checks_pending"
   fi
-  if [[ -n "$poll_note" ]]; then empty_polls=0; return 1; fi
-  failed=$(awk -F'\t' '$3=="fail" || $3=="cancel" {printf "%s (%s) ", $2, $3}' <<<"$rows") || exit 1
-  [[ -z "$failed" ]] || { say "pr-land: check failed on ${sha:0:12}: $failed" >&2; exit 1; }
-  if [[ -z "$rows" ]]; then
-    empty_polls=$((empty_polls + 1))
-    (( empty_polls < 3 )) || { say "no checks appeared on ${sha:0:12} in three polls; merging without checks"; return 0; }
-    poll_note="no checks are listed yet"
-    return 1
-  fi
-  empty_polls=0
-  pending=$(awk -F'\t' '$3=="pending" {printf "%s ", $2}' <<<"$rows") || exit 1
-  [[ -n "$pending" ]] || return 0
-  poll_note="pending: $pending"
-  return 1
+  failed=$(awk -F'\t' '$3=="fail" || $3=="cancel" {printf "%s (%s) ", $2, $3}' <<<"$rows") || return "$checks_failed"
+  [[ -z "$failed" ]] || { say "pr-land: check failed on ${sha:0:12}: $failed" >&2; return "$checks_failed"; }
+  [[ -n "$rows" ]] || { say "no checks are listed yet"; return "$checks_absent"; }
+  pending=$(awk -F'\t' '$3=="pending" {printf "%s ", $2}' <<<"$rows") || return "$checks_failed"
+  [[ -n "$pending" ]] || return "$checks_done"
+  say "pending: $pending"
+  return "$checks_pending"
 }
 
 # Fast-forwards local branch $1 to the remote one, in the worktree that has it checked out, or by ref when none
