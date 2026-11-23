@@ -7,7 +7,7 @@
   # default 32768-60999 (Documentation/networking/ip-sysctl.rst), and RootlessKit
   # then binds that port on the host, where an outbound connection may already
   # hold it. The host's own outbound connections take their ports from the range
-  # below, which does not overlap. 61000-65535 is 4535 ports per destination
+  # below, which does not overlap. 61000-65535 is 4536 ports per destination
   # address and port (65535 - 61000 + 1); that this suffices for the agents'
   # outbound connections is a guess (`ss -Htn state established | wc -l` on the
   # Debian box printed 15 on 2026-10-27).

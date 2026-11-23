@@ -114,12 +114,13 @@ key. Neither `sops` nor `ssh-to-age` is on the box's PATH, so build them as
 `sops`, and give `sops set` the value with `--value-file`, so it never sits on a
 command line.
 An install that makes new host keys boots with no address, no password and no
-certificates. Install the Debian box's own key before the first boot, for example
-with `nixos-anywhere --copy-host-keys`, and check that
+certificates. For a reinstall, keep the running box's own
+`/etc/ssh/ssh_host_ed25519_key`: copy it to the new install before the first
+boot, for example with `nixos-anywhere --copy-host-keys`, and check that
 `ssh-to-age < ssh_host_ed25519_key.pub` prints the `devbox` recipient of
 `.sops.yaml`. `nixosModules/common.nix` lists the other hosts' keys in
-`programs.ssh.knownHosts`; adding this one there changes every host's system, so
-it waits for the move. `scripts/check-secrets.sh` without an argument checks
+`programs.ssh.knownHosts`; devbox's key is not in it, and adding it would change
+every host's system. `scripts/check-secrets.sh` without an argument checks
 the sops files; with a file argument it compares only the main file.
 
 ## Network and secrets
@@ -167,8 +168,8 @@ queue drops new records.
 - **Metrics** every 60 s: CPU, disk, filesystem, load, memory, network (without
   `veth`, `br-` and `docker` interfaces), paging, processes and system, the
   collector's own metrics, and the `/tmp` mount when `filesystemMounts` names
-  it. `/tmp` is not a mount on the Debian box today (observed on 2026-10-27),
-  so the Debian collector reported nothing for it. The VM test runs that
+  it. `/tmp` was not a mount on the Debian box (observed on 2026-10-27), so
+  the Debian collector reported nothing for it. The VM test runs that
   receiver but does not check its output.
 - **Certificates** every hour: `tlscheck.time_left` for each file in
   `certificates`. This box lists its IAM Roles Anywhere certificate,
@@ -193,7 +194,7 @@ queue drops new records.
   answers only on the tailnet. It is a plain option and no secret.
 
 The module also sets sshd's `LogLevel` to `VERBOSE`, which is what the Debian
-box logs at. `Accepted publickey` carries the key's fingerprint at the default
+box logged at. `Accepted publickey` carries the key's fingerprint at the default
 level too.
 
 **Audit rules** are in `security.audit.rules`. They keep the keys of the Debian
@@ -225,8 +226,8 @@ goes away.
 The audit records reach the journal through auditd's syslog plugin
 (`SYSLOG_IDENTIFIER=audisp-syslog`), and `systemd-journald-audit.socket` is off.
 
-Changes from the Debian setup. One collector replaces the two there. Health
-checks and self-metrics use `127.0.0.1:13133` and `127.0.0.1:8888`.
+The Debian box ran two collectors; NixOS runs one. Health checks and
+self-metrics use `127.0.0.1:13133` and `127.0.0.1:8888`.
 
 The boot test covers it in `ci/server-boot/checks/10-telemetry.py`. Its module
 `ci/server-boot/modules/telemetry.nix` points the collector at a second
@@ -324,7 +325,7 @@ everywhere and connects from the tailnet only.
 - Every site removes the `Tailscale-User-Login` header. The herdr web UI trusts
   it on a request from loopback as the identity that `tailscale serve` sets,
   and every request Caddy forwards comes from loopback, so a client could
-  forge it. The Debian Caddyfile strips it on the herdr site only;
+  forge it. The Debian Caddyfile stripped it on the herdr site only;
   nothing behind the openchamber site reads it, so stripping it there changes
   no behaviour. Responses stream (`flush_interval -1`), and `grace_period 10s`
   (the Debian Caddyfile's value) keeps open event streams from holding a
@@ -368,10 +369,10 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   containers. Docker picks the host port of a published container from
   32768-60999, and RootlessKit binds it on the host, where an outbound
   connection could already hold it. So `net.ipv4.ip_local_port_range` of the
-  host is 61000-65535, which leaves 4535 ports per destination address and
+  host is 61000-65535, which leaves 4536 ports per destination address and
   port for outbound connections. That this suffices is a guess; `ss -Htn state
   established | wc -l` on the Debian box printed 15 on 2026-10-27. The Debian
-  box instead narrows Docker's range with a wrapper script. A port that a
+  box instead narrowed Docker's range with a wrapper script. A port that a
   container publishes without an address listens on every address, so tailnet
   peers reach it, and the firewall blocks the public interface. If
   `docker.service` (a user unit) fails three times in 60 s it stays failed.
@@ -394,8 +395,8 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   (`podman system service --time` default) and has no start limit
   (`StartLimitIntervalSec=0`), so a burst of failures does not block the next
   client's start. Its lines are not shipped.
-- Rootful Docker, sysbox and iocost, which the Debian box has for its CI
-  runners, stay out of the move, because the runners are dropped.
+- The Debian box's CI runners were retired, so its rootful Docker, sysbox and
+  iocost were not ported.
 
 ## Agent runtime
 
