@@ -3,19 +3,22 @@ set -euo pipefail
 
 usage() {
 	cat <<'EOF'
-usage: review-slices [--max <head lines>] <checkout> <base> <head> <out-dir>
-       review-slices [--max <head lines>] --worktree <checkout> <base> <out-dir>
+usage: review-slices [--max <lines>] <checkout> <base> <head> <out-dir>
+       review-slices [--max <lines>] --worktree <checkout> <base> <out-dir>
 
 Cuts the files that <base>...<head> changes into review slices of whole files, in byte order of their paths, each
-under a budget of head lines, so one reviewer per slice can read every file of its slice in full. The default budget
-is 11000 head lines. A deleted file, a binary file and a submodule count 0 lines. <out-dir>/slice-N.txt lists the
-paths of slice N, one per line; <out-dir> must hold no slice file yet.
+under a budget of lines, so one reviewer per slice can read every file of its slice in full. The default budget is
+3000 lines; pkgs/agent-tools/README.md in nixos-config gives its source. A file counts its lines at the head, and a
+deleted file its lines at the base, because its diff shows each of them. A file whose blob git sees as binary, and a
+submodule, count 0 lines; .gitattributes does not change a count. <out-dir>/slice-N.txt lists the paths of slice N, one per line; <out-dir> must hold no
+slice file yet.
 
 With --worktree, the head is a commit of the checkout's working tree, tracked and untracked files that .gitignore
 does not exclude, made without touching the checkout's index; its parent is the checkout's HEAD.
 
 Prints `head <sha>` first, then one line per slice, an `over budget: <path>` line for each file that alone exceeds
-the budget (it gets a slice of its own), `total <lines> head lines`, and last `slices N`.
+the budget (it gets a slice of its own), `total <lines> lines`, and last `slices N`, which is 0 when the comparison
+changes no file.
 
 Exit codes: 0 when every slice fits the budget, 3 when a file alone exceeds it, 2 on a usage error, a revision
 that does not resolve, a git failure, an out-dir that already holds slice files, or a path that holds a newline.
@@ -31,7 +34,7 @@ if [[ ${1-} == -h || ${1-} == --help ]]; then
 	usage
 	exit 0
 fi
-max=11000
+max=3000
 if [[ ${1-} == --max ]]; then
 	max=${2-}
 	shift 2 || true
@@ -40,7 +43,11 @@ worktree=false
 if [[ ${1-} == --worktree ]]; then
 	worktree=true
 	shift
-	(($# == 3)) && set -- "$1" "$2" WORKTREE "$3"
+	if (($# != 3)); then
+		usage >&2
+		exit 2
+	fi
+	set -- "$1" "$2" "" "$3"
 fi
 if [[ $# -ne 4 || ! $max =~ ^[1-9][0-9]*$ ]]; then
 	usage >&2
@@ -70,26 +77,26 @@ if $worktree; then
 else
 	head=$(resolve "$3")
 fi
-fork=$(git -C "$checkout" merge-base "$base" "$head") || fail "$2 and $3 share no history in $checkout"
+fork=$(git -C "$checkout" merge-base "$base" "$head") || fail "$2 and $head share no history in $checkout"
 
 mapfile -d '' -t raw < <(git -C "$checkout" diff -O/dev/null --raw -z --no-renames --no-abbrev "$fork" "$head")
 wait $! || fail "git diff $fork $head failed in $checkout"
-mapfile -d '' -t numstat < <(git -C "$checkout" diff -O/dev/null --numstat -z --no-renames "$fork" "$head")
-wait $! || fail "git diff --numstat $fork $head failed in $checkout"
-
-declare -A binary=()
-for entry in "${numstat[@]}"; do
-	[[ $entry == -$'\t'-$'\t'* ]] && binary[${entry#-$'\t'-$'\t'}]=1
-done
+empty_tree=$(git -C "$checkout" hash-object -t tree /dev/null) || fail "cannot hash an empty tree in $checkout"
 
 declare -A lines=()
 for ((k = 0; k < ${#raw[@]}; k += 2)); do
-	read -r _ mode _ blob _ <<<"${raw[k]#:}"
+	read -r base_mode mode _ <<<"${raw[k]#:}"
 	path=${raw[k + 1]}
 	[[ $path != *$'\n'* ]] || fail "a changed path holds a newline, which a slice file cannot list: ${path@Q}"
+	rev=$head
+	[[ $mode != 000000 ]] || mode=$base_mode rev=$fork
 	count=0
-	if [[ $mode =~ ^(100644|100755|120000)$ && -z ${binary[$path]-} ]]; then
-		count=$(git -C "$checkout" cat-file blob "$blob" | awk 'END { print NR }') || fail "cannot read $path at $3"
+	if [[ $mode =~ ^(100644|100755|120000)$ ]]; then
+		count=$(git -C "$checkout" --literal-pathspecs --attr-source="$empty_tree" \
+			diff --no-renames --numstat "$empty_tree" "$rev" -- "$path") || fail "cannot count the lines of $path at $rev"
+		[[ -n $count ]] || fail "git counted no lines for $path at $rev"
+		count=${count%%$'\t'*}
+		[[ $count != - ]] || count=0
 	fi
 	lines[$path]=$count
 done
@@ -111,17 +118,17 @@ n=0 size=0 total=0 files=0 over=0
 for path in "${paths[@]}"; do
 	count=${lines[$path]}
 	if ((n == 0 || (files > 0 && size + count > max))); then
-		((n == 0)) || echo "slice $n: $files files, $size head lines"
+		((n == 0)) || echo "slice $n: $files files, $size lines"
 		n=$((n + 1)) size=0 files=0
 	fi
 	if ((count > max)); then
-		echo "over budget: $path ($count head lines)"
+		echo "over budget: $path ($count lines)"
 		over=1
 	fi
 	printf '%s\n' "$path" >>"$out/slice-$n.txt"
 	size=$((size + count)) total=$((total + count)) files=$((files + 1))
 done
-((n == 0)) || echo "slice $n: $files files, $size head lines"
-echo "total $total head lines"
+((n == 0)) || echo "slice $n: $files files, $size lines"
+echo "total $total lines"
 echo "slices $n"
 ((over == 0)) || exit 3

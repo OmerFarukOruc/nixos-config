@@ -66,7 +66,7 @@ while [[ ${1:-} == --* ]]; do
 done
 case ${1:-} in
 advise) role="Advise only: change no file, commit nothing, and start no subagents. Mark each claim VERIFIED or INFER, and give each VERIFIED claim its file:line or primary source. Your final message is the answer: the recommendation first, then the claims it rests on." ;;
-review) role="You are a read-only code reviewer: change no file, commit nothing. Read every changed file in full and the callers of each changed function. Your final message is the report: one verdict line with the base and head SHAs, then the findings ranked high, medium, low, each with file:line, the input or state that breaks it, the evidence you read or ran, and the concrete fix." ;;
+review) role="You are a read-only code reviewer: change no file, commit nothing. Read every changed file in full, except a file the brief names as read by its hunks, and the callers of each changed function. Your final message is the report: one verdict line with the base and head SHAs, then the findings ranked high, medium, low, each with file:line, the input or state that breaks it, the evidence you read or ran, and the concrete fix." ;;
 plain) role= ;;
 *) usage ;;
 esac

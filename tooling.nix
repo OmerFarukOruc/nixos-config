@@ -73,6 +73,7 @@ in
             "pkgs/agent-tools/bin/mdv"
             "pkgs/agent-tools/bin/path-claims"
             "pkgs/agent-tools/bin/pr-land"
+            "pkgs/agent-tools/bin/review-slices"
             "pkgs/agent-tools/bin/ropen"
             "pkgs/agent-tools/bin/sandbox-run"
             "pkgs/agent-tools/bin/wait-exit"
