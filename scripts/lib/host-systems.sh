@@ -4,6 +4,7 @@ HOST_SYSTEM_EXPR='h: {
   drv = h.config.system.build.toplevel.drvPath;
   out = h.config.system.build.toplevel.outPath;
   inherit (h.config.oruc.machine) deployLogin;
+  deployUser = h.config.oruc.machine.deployUser or null;
 }'
 
 fetch_inputs() {
@@ -35,7 +36,7 @@ host_systems_file() {
 
 valid_host_systems() {
   jq -e 'type == "object" and length > 0
-    and all(.[]; (.drv | type) == "string" and (.out | type) == "string")' \
+    and all(.[]; (.drv | type) == "string" and (.out | type) == "string" and has("deployUser"))' \
     >/dev/null 2>&1
 }
 

@@ -260,7 +260,23 @@ let
 in
 {
   machineOption = mkOption {
-    type = types.submodule { options = machineOptions; };
+    type = types.submodule (
+      { config, ... }:
+      {
+        options = machineOptions // {
+          deployUser = mkOption {
+            type = types.str;
+            default = lib.defaultTo config.user config.deployLogin;
+            defaultText = lib.literalExpression "if deployLogin == null then user else deployLogin";
+            description = ''
+              The user whose home holds the deploy lock and release records that
+              nixos-upgrade.service and scripts/affected-hosts.sh --running read:
+              deployLogin, or user when deployLogin is null.
+            '';
+          };
+        };
+      }
+    );
     apply = validate;
     description = "Validated machine inventory record.";
   };

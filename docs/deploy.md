@@ -409,7 +409,14 @@ the lock and the release records live under
 that lock (`DEPLOY_HOME` in `nixosModules/auto-upgrade.nix`). Run a deploy on
 the box itself as root too (`sudo -i`); one as omer keeps its lock and records
 in omer's home, where `nixos-upgrade.service` and
-`scripts/affected-hosts.sh --running` do not look.
+`scripts/affected-hosts.sh --running` do not look. On the host it runs on,
+`--running` reads the records of `deployUser` in that host's machine record at
+the evaluated commit (`deployLogin`, or the machine's user when `deployLogin` is
+null), the user `nixos-upgrade.service` reads, through `sudo -n` when that is
+not the caller. So run as omer on devbox, it prints devbox as `unreachable`,
+because omer's sudo needs a password; run it there as root, or from
+nixos-desktop or nixos-rog. It refuses a shallow checkout, because its ancestry
+checks need the history of `main`.
 
 **The reboot.** With `allowReboot`, NixOS's upgrade service runs
 `nixos-rebuild boot` instead of `switch`. When the new system has the same

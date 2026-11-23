@@ -7,7 +7,7 @@
 }:
 let
   cfg = config.oruc.autoUpgrade;
-  deployUser = lib.defaultTo config.oruc.machine.user config.oruc.machine.deployLogin;
+  inherit (config.oruc.machine) deployUser;
   state = "/var/lib/nixos-upgrade";
   rebootWindow = {
     lower = "03:00";

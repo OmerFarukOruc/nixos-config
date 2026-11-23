@@ -19,8 +19,9 @@
 # ${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts, one file per commit
 # and Nix version, so a later call for the same commit on this host skips its
 # evaluation; delete the file to evaluate again. OLD and REV must be 3941e78 or
-# later, whose machine records define deployLogin. Exits 1 when an evaluation or
-# a Git lookup fails, 2 for a usage error.
+# later, whose machine records define deployLogin, and --running needs a REV
+# whose machine records define deployUser. Exits 1 when an evaluation or a Git
+# lookup fails, in a shallow checkout, and 2 for a usage error.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=/dev/null
@@ -62,6 +63,10 @@ if ! command -v nix >/dev/null; then
   echo "$0 evaluates the systems on this host, and nix is not on PATH." >&2
   exit 1
 fi
+if [[ $(git rev-parse --is-shallow-repository) == true ]]; then
+  echo "This checkout is shallow, so it cannot tell which commits main holds; run git fetch --unshallow origin first." >&2
+  exit 1
+fi
 git fetch -q origin
 if ! sha=$(git rev-parse --verify -q "$rev^{commit}"); then
   echo "$rev names no commit here." >&2
@@ -89,10 +94,12 @@ deploy_login() {
   jq -r --arg h "$1" '.[$h].deployLogin // empty' <<<"${new:-null}"
 }
 
+deploy_user() {
+  jq -r --arg h "$1" '.[$h].deployUser' <<<"$new"
+}
+
 reads_as_other_login() {
-  local login
-  login=$(deploy_login "$1")
-  [[ $1 == "$this_host" && -n $login && $login != "$(id -un)" ]]
+  [[ $1 == "$this_host" && -n ${new:-} && $(deploy_user "$1") != "$(id -un)" ]]
 }
 
 on_host() {
@@ -100,7 +107,7 @@ on_host() {
   shift
   login=$(deploy_login "$host")
   if reads_as_other_login "$host"; then
-    sudo -n -u "$login" -H bash -c 'cd && bash -s -- "$@"' bash "$@"
+    sudo -n -u "$(deploy_user "$host")" -H bash -c 'cd && bash -s -- "$@"' bash "$@"
   elif [[ $host == "$this_host" ]]; then
     (cd && bash -s -- "$@")
   elif (($#)); then
@@ -178,6 +185,10 @@ if ! $running; then
   exit 0
 fi
 
+if [[ -n $(jq -r 'to_entries[] | select(.value.deployUser == null) | .key' <<<"$new") ]]; then
+  echo "$sha predates the deployUser field of the machine records, so --running cannot tell whose deploy records the hourly install reads; pass a later commit." >&2
+  exit 1
+fi
 for host in "${hosts[@]}"; do
   want=$(jq -r --arg h "$host" '.[$h].out' <<<"$new")
   if ! state=$(
@@ -191,7 +202,7 @@ REMOTE
   ); then
     if reads_as_other_login "$host"; then
       printf '%s\tunreachable\tsudo -n -u %s failed here, and the hourly install reads the deploy records of %s; run this from another host\n' \
-        "$host" "$(deploy_login "$host")" "$(deploy_login "$host")"
+        "$host" "$(deploy_user "$host")" "$(deploy_user "$host")"
     else
       printf '%s\tunreachable\tSSH to %s failed\n' "$host" "$host"
     fi
