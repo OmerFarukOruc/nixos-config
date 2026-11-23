@@ -29,7 +29,7 @@ type Task = { draft: string; revise: { from: Ready; text: string } | null }
 type ActiveRun = {
   id: string
   copyId: string
-  draft: string
+  task: Task
   cancel: Cancel
   copy: Copy | null
   boxAtStart: string
@@ -142,11 +142,20 @@ const CANCELLED: RunOutcome = { kind: 'cancelled' }
 async function refill($: EngineInterface, me: ActiveRun): Promise<boolean> {
   const box = await $.prompt.read()
 
-  return !me.isBoxTouched && box.text.trim() === '' && (await $.prompt.fill({ text: me.draft })).isFilled
+  return !me.isBoxTouched && box.text.trim() === '' && (await $.prompt.fill({ text: me.task.draft })).isFilled
 }
 
 async function fail($: EngineInterface, me: ActiveRun, failed: Extract<RunOutcome, { kind: 'failed' }>): Promise<boolean> {
-  return commit($, me, { ...failed, draft: me.draft, isDraftBack: await refill($, me) })
+  const { revise } = me.task
+  if (revise === null) {
+    return commit($, me, { ...failed, draft: me.task.draft, isDraftBack: await refill($, me) })
+  }
+  const isBack = await commit($, me, revise.from)
+  if (isBack) {
+    $.ui.toast(`Revise failed, and the earlier prompt stays: ${failed.reason.replace(/\s+/g, ' ')}`)
+  }
+
+  return isBack
 }
 
 async function announce($: EngineInterface, outcome: RunOutcome): Promise<void> {
@@ -317,16 +326,24 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
     record = await recordOf($, me, task, began, (await fail($, me, failed)) ? failed : CANCELLED)
   } finally {
     ticker.cancel()
-    if (record !== null) {
-      keepRecord($, record)
-      await announce($, record.outcome)
-    }
     if (active === me) {
       active = null
     }
-    if (me.copy !== null && record?.outcome.kind !== 'enhanced') {
-      await closeCopy($, me.copy)
-    }
+    await finish($, me, record)
+  }
+}
+
+async function finish($: EngineInterface, me: ActiveRun, record: RunRecord | null): Promise<void> {
+  const isReady = record?.outcome.kind === 'enhanced'
+  const isEarlierKept = !isReady && me.task.revise !== null
+  if (record !== null && !isEarlierKept) {
+    keepRecord($, record)
+  }
+  if (me.copy !== null && !isReady && !isEarlierKept) {
+    await closeCopy($, me.copy)
+  }
+  if (record !== null) {
+    await announce($, record.outcome)
   }
 }
 
@@ -339,7 +356,7 @@ function start($: EngineInterface, task: Task, boxAtStart: string): void {
   const me: ActiveRun = {
     id: task.revise?.from.record.id ?? crypto.randomUUID(),
     copyId: task.revise?.from.copyId ?? crypto.randomUUID(),
-    draft: task.draft,
+    task,
     cancel: { isCancelled: false },
     copy: null,
     boxAtStart,
@@ -486,11 +503,12 @@ async function revise($: EngineInterface): Promise<void> {
 
 async function cancel($: EngineInterface): Promise<void> {
   const me = await cancelActive()
-  const isDraftBack = me !== null && (await refill($, me))
+  const earlier = me?.task.revise?.from ?? null
+  const isDraftBack = me !== null && earlier === null && (await refill($, me))
   await transition(
     $,
     cur => (cur.kind === 'running' ? cur : null),
-    () => ({ kind: 'idle', isDraftBack }),
+    () => earlier ?? { kind: 'idle', isDraftBack },
   )
 }
 
@@ -791,8 +809,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    const isFromUser = e.origin.kind === 'composer' || e.origin.kind === 'bridge' || (e.origin.kind === 'plugin' && e.origin.name === 'enhance')
-    if (isFromUser) {
+    if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') {
       await clear($, record => (e.command === undefined ? sentOf(record, e.text) : 'dropped'))
       await markTouched($)
     }

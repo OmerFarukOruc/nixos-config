@@ -260,7 +260,6 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
     },
     stop: async () => {
       await child?.return({ code: null, signal: 'SIGTERM' })
-      await forgetCopy($, plan.sessionId)
     },
     close: () => forgetCopy($, plan.sessionId),
     spent: () => ({ ...spent, model }),

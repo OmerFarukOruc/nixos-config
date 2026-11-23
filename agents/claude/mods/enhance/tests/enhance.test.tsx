@@ -370,3 +370,15 @@ test('a task notification leaves a ready result in place', async ($, on) => {
   expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
   expect(lastRecord(seen).sent).toBeNull()
 })
+
+test('a Revise turn that fails keeps the earlier prompt and its record', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING, NO_RESULT], answers: ['make it shorter'] })
+  await typed($, seen, 'a draft')
+
+  await press($, seen, BAND, 'band-revise')
+
+  expect(seen.spawned.length).toBe(3)
+  expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
+  expect(lastRecord(seen).outcome).toMatchObject({ kind: 'enhanced', prompt: 'prompt' })
+  expect(seen.toasts).toEqual(['Revise failed, and the earlier prompt stays: claude -p printed no result for the prompt'])
+})
