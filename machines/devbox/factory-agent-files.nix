@@ -65,6 +65,8 @@ let
         "wait-exit"
         "sandbox-run"
         "dryer"
+        "review-slices"
+        "removed-defs"
       ]
   );
   link = path: target: "L+ ${path} - - - - ${target}";

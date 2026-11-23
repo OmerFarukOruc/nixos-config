@@ -697,7 +697,8 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   tmpfiles replaces a real folder put there at the next boot or switch. An
   edit to these files reaches the user at devbox's next upgrade, unlike omer's
   live links (`agents/README.md`). The user's profile holds `codex-ask`,
-  `wait-exit`, `sandbox-run` and `dryer`, Codex is logged in, so the second pass
+  `wait-exit`, `sandbox-run`, `dryer`, `review-slices` and `removed-defs`, the
+  commands the reviewer's definition calls, Codex is logged in, so the second pass
   runs, and `/tmp/agents` is mode 1733, owned by omer, with the default ACL
   `other::---`, so `sl-factory` can make its scratch folder there but cannot
   list the folder, and no folder that omer or `sl-factory` makes there is
