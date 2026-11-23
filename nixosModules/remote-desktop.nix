@@ -4,7 +4,7 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
   services.sunshine = {
     enable = true;
     capSysAdmin = true; # KMS capture on Wayland
-    autoStart = true;
+    autoStart = false;
     openFirewall = false;
     # In automatic mode Sunshine on Plasma asked the XDG portal first, which
     # waits for someone to approve a dialog on the host's screen, so Sunshine
@@ -44,4 +44,17 @@ lib.mkIf config.oruc.machine.features.remoteDesktop {
     };
   };
   services.avahi.openFirewall = false;
+  # The package's entry runs a bare `sunshine`, which reads ~/.config/sunshine
+  # instead of the generated sunshine.conf that only the unit passes. The same
+  # desktop-file ID in the user profile shadows it.
+  home-manager.users.${config.oruc.machine.user}.xdg.desktopEntries."dev.lizardbyte.app.Sunshine" = {
+    name = "Sunshine";
+    comment = "Self-hosted game stream host for Moonlight";
+    exec = "systemctl --user start sunshine.service";
+    icon = "dev.lizardbyte.app.Sunshine";
+    categories = [
+      "RemoteAccess"
+      "Network"
+    ];
+  };
 }

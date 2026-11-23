@@ -162,6 +162,8 @@ nixos-rog   Steam ------------------> Radeon 890M   the RTX 4070 stays asleep
 - **📡 The PCs stream to the phone.** Sunshine offers the desktop and Steam
   Big Picture over Tailscale to Moonlight
   ([`nixosModules/remote-desktop.nix`](nixosModules/remote-desktop.nix)).
+  It does not start at login; start it from its Sunshine menu entry before a
+  stream.
 
 [Gaming](docs/workstations.md#gaming) lists the Steam launch options and the
 HUD's files, and [nixos-desktop GPU](docs/architecture.md#nixos-desktop-gpu)
