@@ -206,7 +206,18 @@ async function typed($: Engine, seen: Seen, draft: string): Promise<void> {
   await seen.clock.settle()
 }
 
-test('the Enhance button runs on the text of the box and puts the prompt there', async ($, on) => {
+test('with no run, the row draws nothing and keeps the Enhance action mounted', async ($, on) => {
+  stubSession(on, { replies: [] })
+
+  const ui = await $.ui.mount(BAND)
+
+  expect(await ui.findAll({ type: 'Text' })).toEqual([])
+  expect((await ui.findAll({ type: 'Box' })).map(box => box.props.display)).toEqual([undefined, 'none'])
+  expect((await ui.find({ key: 'enhance' }))?.props.action).toBe('app:cycleDiffBase')
+  expect(await ui.find({ key: 'runs' })).toBeUndefined()
+})
+
+test('the Enhance action runs on the text of the box and puts the prompt there', async ($, on) => {
   const seen = stubSession(on, { box: 'fix the login', replies: [PROMPT, READING] })
 
   await press($, seen, BAND, 'enhance')
@@ -216,7 +227,7 @@ test('the Enhance button runs on the text of the box and puts the prompt there',
   expect(seen.notified).toEqual(['Enhanced prompt is ready'])
 })
 
-test('the Enhance button on an empty box starts nothing', async ($, on) => {
+test('the Enhance action on an empty box starts nothing', async ($, on) => {
   const seen = stubSession(on, { box: '  ', replies: [PROMPT, READING] })
 
   await press($, seen, BAND, 'enhance')
@@ -336,10 +347,10 @@ const RECORDS = {
   [`${RUNS_DIR}/2026-10-24T12-00-01.000Z-dddd.json`]: JSON.stringify({ ...PAST, startedAt: '2026-10-24T12:00:01.000Z' }),
 }
 
-test('the Runs button lists the recent runs, newest first, and copies the prompt of one', async ($, on) => {
+test('/enhance-runs lists the recent runs, newest first, and copies the prompt of one', async ($, on) => {
   const seen = stubSession(on, { replies: [], files: RECORDS })
 
-  await press($, seen, BAND, 'runs')
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened).toEqual(['enhance-runs'])
 
   const ui = await $.ui.mount(RUNS)
@@ -353,11 +364,15 @@ test('the Runs button lists the recent runs, newest first, and copies the prompt
   expect(seen.copied).toEqual(['an old prompt'])
 })
 
-test('a session start deletes the records that started more than 30 days ago', async ($, on) => {
+test('a session start lists both commands and deletes the records that started more than 30 days ago', async ($, on) => {
   const seen = stubSession(on, { replies: [], files: RECORDS })
 
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
 
+  expect(seen.registered).toEqual([
+    { name: 'enhance', immediate: true },
+    { name: 'enhance-runs', immediate: true },
+  ])
   expect([...seen.written.keys()].map(path => path.slice(RUNS_DIR.length + 1)).sort()).toEqual([
     '2026-10-24T12-00-01.000Z-dddd.json',
     '2026-11-20T10-00-00.000Z-aaaa.json',
@@ -371,7 +386,7 @@ test("the runs pane's first row puts the session's last draft back in the box", 
   await press($, seen, BAND, 'band-dismiss')
   seen.box.text = ''
 
-  await press($, seen, BAND, 'runs')
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
   expect(seen.opened.at(-1)).toBe('enhance-runs')
   await press($, seen, RUNS, 'put-back')
 

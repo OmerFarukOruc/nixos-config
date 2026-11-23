@@ -5,7 +5,7 @@
     {
       "name": "enhance",
       "source": "./agents/claude/mods/enhance",
-      "description": "Adds an Enhance button and /enhance <draft>, which rewrite a rough request into a prompt with the bundled enhance-prompt skill and put it in the prompt box"
+      "description": "Adds /enhance <draft>, a keybinding action for the text of the prompt box, and /enhance-runs. The first two rewrite a rough request into a prompt with the bundled enhance-prompt skill and put it in the prompt box"
     }
   ]
 }

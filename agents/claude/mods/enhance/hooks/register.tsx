@@ -692,9 +692,10 @@ function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
 
 function idleRow({ Box, Button, Text }: Ui, $: EngineInterface, isDraftBack: boolean) {
   return (
-    <Box columnGap={1}>
-      <Button key="enhance" label="Enhance" action={BIND_ACTION} onPress={() => enhanceBox($)} />
-      <Button key="runs" label="Runs" onPress={() => openRuns($)} />
+    <Box>
+      <Box display="none">
+        <Button key="enhance" label="Enhance" action={BIND_ACTION} onPress={() => enhanceBox($)} />
+      </Box>
       {isDraftBack && <Text dimColor>Cancelled. The draft is back in the box</Text>}
     </Box>
   )
@@ -799,8 +800,15 @@ export const register: Register = (on, options) => {
       argumentHint: '<draft>',
       immediate: true,
     })
+    await $.command.register({ name: 'enhance-runs', description: 'List the recent /enhance runs in a pane', immediate: true })
 
     return next(e)
+  })
+
+  on('command.run', { command: 'enhance-runs' }, async $ => {
+    await openRuns($)
+
+    return {}
   })
 
   on('command.run', { command: 'enhance' }, async ($, e) => {
