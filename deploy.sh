@@ -536,15 +536,38 @@ REMOTE
   removed_packages=$(sed -n 's/^removed=//p' <<<"$output")
 }
 
-roll_back_now() {
-  local rollback_status=0
-  on_target <<'REMOTE' || rollback_status=$?
-sudo systemctl start --wait deploy-rollback.service || exit 1
-sudo systemctl stop deploy-rollback.timer || exit 2
+poll_target() {
+  local deadline=$1 script result
+  script=$(cat)
+  while :; do
+    result=$(fresh_login <<<"$script") || result=running
+    [[ $result == running ]] || break
+    ((SECONDS < deadline)) || break
+    sleep 5
+  done
+  printf '%s\n' "$result"
+}
+
+target_state() {
+  poll_target "$((SECONDS + activation_seconds))" <<'REMOTE'
+if systemctl is-active --quiet deploy-rollback.service; then
+  echo running
+else
+  printf '%s %s\n' "$(readlink -f /run/current-system)" "$(systemctl is-active deploy-rollback.timer)"
+fi
 REMOTE
-  case $rollback_status in
-    0) ;;
-    2) printf '%s\n' 'The previous system is back, but the rollback timer would not stop. Stop deploy-rollback.timer on the target.' >&2 ;;
+}
+
+roll_back_now() {
+  on_target <<'REMOTE' || true
+sudo systemctl start --wait deploy-rollback.service || exit 1
+sudo systemctl stop deploy-rollback.timer
+REMOTE
+  case $(target_state) in
+    "$previous_system active")
+      printf '%s\n' 'The previous system is back, but the rollback timer would not stop. Stop deploy-rollback.timer on the target.' >&2
+      ;;
+    "$previous_system "*) ;;
     *)
       printf '%s\n' \
         'THE ROLLBACK FAILED. The target may still run the candidate system.' \
@@ -554,34 +577,31 @@ REMOTE
   esac
 }
 
+recorded_status() {
+  sed -n "s/^$1 \([0-9]\{1,3\}\)$/\1/p" "/run/$2.status" 2>/dev/null
+}
+
 wait_unit() {
   local unit=$1 deadline=$2 result
-  while :; do
-    result=$(
-      {
-        printf 'release=%q unit=%q\n' "$release_id" "$unit"
-        cat <<'REMOTE'
-status_file=/run/$unit.status
-status=$(sed -n "s/^$release //p" "$status_file" 2>/dev/null)
+  result=$({
+    declare -f recorded_status
+    printf 'release=%q unit=%q\n' "$release_id" "$unit"
+    cat <<'REMOTE'
+status=$(recorded_status "$release" "$unit")
 if [[ -z $status ]] && systemctl is-active --quiet "$unit.service"; then
   echo running
   exit 0
 fi
-[[ -n $status ]] || status=$(sed -n "s/^$release //p" "$status_file" 2>/dev/null)
+[[ -n $status ]] || status=$(recorded_status "$release" "$unit")
 echo "${status:-lost}"
 REMOTE
-      } | fresh_login
-    ) || result=running
-    [[ $result == running ]] || break
-    ((SECONDS < deadline)) || break
-    sleep 5
-  done
+  } | poll_target "$deadline")
   [[ $result =~ ^([0-9]+|running|lost)$ ]] || result=lost
   printf '%s\n' "$result"
 }
 
 run_in_unit() {
-  local unit=$1 release=$2 script=$3 started status
+  local unit=$1 release=$2 script=$3 started recorded
   shift 3
   started=$(date +%s)
   sudo systemd-run --quiet --no-ask-password --collect --unit="$unit" \
@@ -589,29 +609,35 @@ run_in_unit() {
 status=$?
 printf "%s %s\n" "$0" "$status" >/run/'"$unit"'.status
 exit "$status"' "$release" "$@"
-  status=$?
-  sudo journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit.service" --since "@$started" | tail -n 30
-  grep -q "^$release " "/run/$unit.status" 2>/dev/null || return 1
-  return "$status"
+  sudo journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit.service" --since "@$started" | tail -n 30 >&2
+  recorded=$(recorded_status "$release" "$unit")
+  [[ -n $recorded ]] || return 1
+  printf 'deploy-unit-result %s %s end\n' "$release" "$recorded"
 }
 
+# A Tailscale SSH session that a tailscaled restart hangs up can end with exit
+# status 1, so the transport's exit code cannot tell a failed unit from a
+# dropped connection; only the status the unit recorded can.
+# https://github.com/tailscale/tailscale/blob/v1.104.4/ssh/tailssh/tailssh.go (sshSession.run)
 run_unit() {
-  local unit=$1 deadline=$((SECONDS + $2)) script=$3 status=0 result
+  local unit=$1 deadline=$((SECONDS + $2)) script=$3 output result
   shift 3
-  {
-    declare -f run_in_unit
+  output=$({
+    declare -f recorded_status run_in_unit
     printf '%s\n' 'run_in_unit "$@"'
-  } | on_target "$unit" "$release_id" "$script" "$@" || status=$?
-  if ((status >= 128)); then
+  } | on_target "$unit" "$release_id" "$script" "$@") || true
+  result=$(awk -v release="$release_id" \
+    '$1 == "deploy-unit-result" && $2 == release && $3 ~ /^[0-9]+$/ && $4 == "end" && NF == 4 { print $3 }' \
+    <<<"$output")
+  if [[ -z $result ]]; then
     printf 'The connection dropped while %s ran. Waiting for its result.\n' "$unit" >&2
     result=$(wait_unit "$unit" "$deadline")
     case $result in
       running) return "$unit_running" ;;
       lost) return "$unit_lost" ;;
     esac
-    status=$result
   fi
-  return "$status"
+  return "$result"
 }
 
 activate() {
@@ -670,7 +696,8 @@ REMOTE
 }
 
 stop_rollback_timer() {
-  on_target "$new_system" <<'REMOTE'
+  local stop_status=0
+  on_target "$new_system" <<'REMOTE' || stop_status=$?
 set -euo pipefail
 
 new=$1
@@ -683,6 +710,17 @@ running_candidate || { printf '%s\n' 'The rollback already ran. The target is no
 sudo systemctl stop deploy-rollback.timer
 running_candidate || { printf '%s\n' 'The rollback ran during confirmation.' >&2; exit 72; }
 REMOTE
+  if ((stop_status == 0 || stop_status == 72)); then
+    return "$stop_status"
+  fi
+  case $(target_state) in
+    "$new_system active") return "$stop_status" ;;
+    "$new_system "*) return 0 ;;
+    *)
+      printf '%s\n' 'The rollback ran during confirmation.' >&2
+      return 72
+      ;;
+  esac
 }
 
 install_entries() {

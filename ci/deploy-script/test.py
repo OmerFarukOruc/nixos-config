@@ -115,6 +115,8 @@ publish("broken")
 status, out = deploy("switch")
 assert status == 4, f"a system that breaks sshd gave exit {status}, not 4"
 assert "Restoring the previous system now" in out, "the deploy did not roll back"
+assert "THE ROLLBACK FAILED" not in out, "the deploy reported a working rollback as failed"
+assert "would not stop" not in out, "the deploy reported a stopped rollback timer as armed"
 assert_on_good("broken")
 machine.wait_for_unit("sshd.service")
 
@@ -164,3 +166,13 @@ assert_on_good("drop")
 status, out = deploy("switch", other, "--replace")
 assert status == 0, "the deploy with --replace failed"
 assert_on_good("replace")
+
+print("phase: the deploy loses its wait for the activation, which then succeeds")
+publish("dropped")
+status, out = deploy("switch")
+assert status == 0, f"a lost wait for a working activation gave exit {status}, not 0"
+assert "The connection dropped while deploy-activate ran. Waiting for its result." in out
+assert "Restoring the previous system" not in out, "the deploy rolled back a working activation"
+assert running() == systems["dropped"], "the candidate does not keep running"
+assert boot_default() == systems["dropped"], "the candidate is not the boot default"
+machine.fail("systemctl is-active --quiet deploy-rollback.timer")

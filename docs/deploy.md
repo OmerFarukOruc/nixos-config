@@ -576,14 +576,20 @@ When a step after the build fails, the deploy acts as follows:
 - **The SSH connection drops during activation.** The deploy reconnects and
   polls for the exit status that the activation unit records in
   `/run/deploy-activate.status`, until 180 seconds after it started the
-  activation. It restores the previous system at once when the status is not 0
-  or the unit ended without one. When no status arrives in time, the deploy
-  exits 1 and the rollback timer restores the previous system, at most 420
-  seconds after the deploy armed it.
-- **The restore fails.** The deploy prints that the target may still run the
-  candidate. It leaves the rollback timer armed, and the timer repeats the
-  restore at its deadline. The boot default did not change, so a reboot also
-  restores the previous system.
+  activation. It takes the result only from that recorded status, never from
+  the exit code of the SSH session, because a Tailscale SSH session that a
+  `tailscaled` restart hangs up can end with exit status 1, the code of a
+  failed activation. It restores the previous system at once when the status
+  is not 0 or the unit ended without one. When no status arrives in time, the
+  deploy exits 1 and the rollback timer restores the previous system, at most
+  420 seconds after the deploy armed it.
+- **The restore fails.** The deploy judges the restore, and the stop of the
+  rollback timer after a confirmed switch, by the system the target runs and
+  the state of the timer, read over a fresh login, not by the exit code of the
+  SSH session. When the target still runs the candidate, the deploy prints
+  that, leaves the rollback timer armed, and the timer repeats the restore at
+  its deadline. The boot default did not change, so a reboot also restores the
+  previous system.
 - **The target stops answering.** The rollback timer restores the previous
   system after 420 seconds. It needs no command from the machine that runs the
   deploy.
@@ -645,26 +651,30 @@ scripts/build.sh .#checks.x86_64-linux.deploy-script
 ```
 
 Limine installs to a separate ESP on `/dev/vdb`, while the VM boots its kernel
-directly, and the VM's specialisations are the candidates; each phase of `ci/deploy-script/test.py` commits a `flake.nix`
-whose system is one of them and checks the exit code, the running system and
-the boot default. The phases cover a good switch, the lock, a pending rollback
-timer, an ordering cycle, the rollback after a failed activation or a broken
-user service, `oruc.deploy.sessionIgnore`, a failed boot entry install, an
-install that leaves a boot loader unsigned, and a checkout that would drop a
-file of the running release. Every install in the VM signs Limine with a key
-that the test makes, and the `unsigned` candidate drops that step.
+directly, and the VM's specialisations are the candidates; each phase of
+`ci/deploy-script/test.py` commits a `flake.nix` whose system is one of them
+and checks the exit code, the running system and the boot default. The phases
+cover a good switch, the lock, a pending rollback timer, an ordering cycle,
+the rollback after a failed activation or a broken user service,
+`oruc.deploy.sessionIgnore`, a failed boot entry install, an install that
+leaves a boot loader unsigned, a checkout that would drop a file of the
+running release, and a deploy that loses its wait for a working activation,
+which it then reads from the recorded status. Every install in the VM signs
+Limine with a key that the test makes, and the `unsigned` candidate drops that
+step.
 
-The check does not cover a deploy over SSH, a dropped connection (exit 76),
-exits 71, 72, 74, 79 and 81, the `deployLogin` lookup, or dix. Exit 81 needs
-a firmware that enforces Secure Boot, which the VM lacks. Prove it on
-nixos-desktop from a worktree with a commit that is never pushed: set
-`secureBoot = false` in its record and add two services that are each ordered
-`after` the other. `./deploy.sh nixos-desktop boot` and `switch` then exit 81,
-and `test` exits 80. A guard that does not fire stops at the ordering-cycle
-check (exit 80), so no run changes the host. No run covers a `SecureBoot`
-variable that cannot be read. Nix caches a pass
-until the test, `deploy.sh`, `nixosModules/deploy-host.nix` or the nixpkgs input
-changes, and `ci/checks.sh` only checks that the flake still names it.
+The check does not cover a deploy over SSH, a real SSH disconnect, a boot
+entry install that reports no result (exit 76), exits 71, 72, 74, 79 and 81,
+the `deployLogin` lookup, or dix. Exit 81 needs a firmware that enforces
+Secure Boot, which the VM lacks. Prove it on nixos-desktop from a worktree
+with a commit that is never pushed: set `secureBoot = false` in its record and
+add two services that are each ordered `after` the other. `./deploy.sh
+nixos-desktop boot` and `switch` then exit 81, and `test` exits 80. A guard
+that does not fire stops at the ordering-cycle check (exit 80), so no run
+changes the host. No run covers a `SecureBoot` variable that cannot be read.
+Nix caches a pass until the test, `deploy.sh`, `nixosModules/deploy-host.nix`
+or the nixpkgs input changes, and `ci/checks.sh` only checks that the flake
+still names it.
 
 ## One deploy at a time
 

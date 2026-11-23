@@ -93,6 +93,17 @@ in
               systemctl --user -M ${user}@ kill --signal=KILL session-test.service ignored-test.service
             '';
           };
+          dropped.systemd.services.client-ender = {
+            wantedBy = [ "multi-user.target" ];
+            path = [ pkgs.procps ];
+            serviceConfig.Type = "oneshot";
+            script = ''
+              for pid in $(pgrep -x systemd-run); do
+                kill -s TERM "$pid"
+              done
+              sleep 5
+            '';
+          };
           bootfail.boot.loader.limine.extraInstallCommands = "exit 1";
           unsigned.boot.loader.limine.extraInstallCommands = lib.mkForce "";
           cycle.systemd.services = {
