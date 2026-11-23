@@ -1,8 +1,8 @@
 export type Run =
-  | { kind: 'idle' }
+  | { kind: 'idle'; isDraftBack: boolean }
   | { kind: 'running'; runId: string; copyId: string; seconds: number; progress: string | null }
   | { kind: 'ready'; copyId: string; record: RunRecord<Enhanced>; restore: string; isFilled: boolean }
-  | { kind: 'failed'; reason: string; notes: string; draft: string }
+  | { kind: 'failed'; reason: string; notes: string; draft: string; isDraftBack: boolean }
 
 export type Receiver = 'this-conversation' | 'new-session'
 
@@ -11,7 +11,6 @@ export type Enhanced = { kind: 'enhanced'; prompt: string; notes: string }
 export type RunOutcome =
   | Enhanced
   | { kind: 'failed'; reason: string; notes: string }
-  | { kind: 'dismissed' }
   | { kind: 'cancelled' }
 
 export type Session = { id: string; cwd: string; model: string; receiver: Receiver }

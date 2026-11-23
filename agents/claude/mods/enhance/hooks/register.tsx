@@ -11,11 +11,14 @@ import { NOTHING_SPENT, parseReply, plus } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
 const RUNS_PANE = 'enhance-runs'
-const IDLE: Run = { kind: 'idle' }
+const IDLE: Run = { kind: 'idle', isDraftBack: false }
+const NO_DRAFT = 'Type a draft in the prompt box, or after /enhance'
+const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
+const BIND_ACTION = 'app:cycleDiffBase'
 const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 const BULLET = /^[-*+] \*{0,2}([^:*\n]{1,40}):/
 
-const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-5' })
+const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-6' })
 const lastDraft = atom({ plugin: 'enhance', key: 'lastDraft' } as const, null, { shape: 'draft-1' })
 const recent = atom({ plugin: 'enhance', key: 'recent' } as const, [], { shape: 'recent-1' })
 
@@ -26,6 +29,7 @@ type Task = { draft: string; revise: { from: Ready; text: string } | null }
 type ActiveRun = {
   id: string
   copyId: string
+  draft: string
   cancel: Cancel
   copy: Copy | null
   boxAtStart: string
@@ -125,10 +129,7 @@ async function converse($: EngineInterface, copy: Copy, first: Promise<Turn>): P
     }
 
     const answer = await ask($, reply.question, reply.options)
-    if (answer === null) {
-      return { kind: 'dismissed' }
-    }
-    turn = await copy.send(`Answer: ${answer}`)
+    turn = await copy.send(answer === null ? NO_ANSWER : `Answer: ${answer}`)
   }
 }
 
@@ -137,6 +138,27 @@ function restoreOf(boxText: string, fallback: string): string {
 }
 
 const CANCELLED: RunOutcome = { kind: 'cancelled' }
+
+async function refill($: EngineInterface, me: ActiveRun): Promise<boolean> {
+  const box = await $.prompt.read()
+
+  return !me.isBoxTouched && box.text.trim() === '' && (await $.prompt.fill({ text: me.draft })).isFilled
+}
+
+async function fail($: EngineInterface, me: ActiveRun, failed: Extract<RunOutcome, { kind: 'failed' }>): Promise<boolean> {
+  return commit($, me, { ...failed, draft: me.draft, isDraftBack: await refill($, me) })
+}
+
+async function announce($: EngineInterface, outcome: RunOutcome): Promise<void> {
+  if (outcome.kind === 'cancelled') {
+    return
+  }
+  try {
+    await $.ui.notify(outcome.kind === 'enhanced' ? 'Enhanced prompt is ready' : 'Enhance failed', { title: 'Enhance' })
+  } catch (error) {
+    $.ui.toast(reasonOf(error))
+  }
+}
 
 async function recordOf<Outcome extends RunOutcome>(
   $: EngineInterface,
@@ -173,13 +195,8 @@ async function settle($: EngineInterface, me: ActiveRun, task: Task, began: Bega
   if (outcome.kind === 'cancelled') {
     return recordOf($, me, task, began, outcome)
   }
-  if (outcome.kind === 'dismissed') {
-    await commit($, me, IDLE)
-
-    return recordOf($, me, task, began, me.cancel.isCancelled ? CANCELLED : outcome)
-  }
   if (outcome.kind === 'failed') {
-    return recordOf($, me, task, began, (await commit($, me, { ...outcome, draft: task.draft })) ? outcome : CANCELLED)
+    return recordOf($, me, task, began, (await fail($, me, outcome)) ? outcome : CANCELLED)
   }
 
   const box = await $.prompt.read()
@@ -297,12 +314,12 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
     record = await settle($, me, task, began, await replyOf($, me, began.session, task))
   } catch (error) {
     const failed = { kind: 'failed', reason: reasonOf(error), notes: '' } as const
-    await commit($, me, { ...failed, draft: task.draft })
-    record = await recordOf($, me, task, began, me.cancel.isCancelled ? CANCELLED : failed)
+    record = await recordOf($, me, task, began, (await fail($, me, failed)) ? failed : CANCELLED)
   } finally {
     ticker.cancel()
     if (record !== null) {
       keepRecord($, record)
+      await announce($, record.outcome)
     }
     if (active === me) {
       active = null
@@ -322,6 +339,7 @@ function start($: EngineInterface, task: Task, boxAtStart: string): void {
   const me: ActiveRun = {
     id: task.revise?.from.record.id ?? crypto.randomUUID(),
     copyId: task.revise?.from.copyId ?? crypto.randomUUID(),
+    draft: task.draft,
     cancel: { isCancelled: false },
     copy: null,
     boxAtStart,
@@ -348,9 +366,36 @@ async function cancelActive(): Promise<ActiveRun | null> {
   return me
 }
 
-function markTouched(): void {
+async function markTouched($: EngineInterface): Promise<void> {
   if (active !== null) {
     active.isBoxTouched = true
+  }
+  await update($, run, cur => (cur.kind === 'idle' && cur.isDraftBack ? IDLE : cur))
+}
+
+async function enhanceBox($: EngineInterface): Promise<void> {
+  const box = await $.prompt.read()
+  if (box.text.trim() === '') {
+    $.ui.toast(NO_DRAFT)
+    return
+  }
+  enhance($, box.text.trim(), box.text)
+}
+
+async function send($: EngineInterface): Promise<void> {
+  const ready = await read($, run)
+  if (ready.kind !== 'ready') {
+    return
+  }
+  try {
+    const box = await $.prompt.read()
+    await $.prompt.submit({ text: ready.record.outcome.prompt, asUser: true })
+    await clear($, () => 'as-is')
+    if (box.text === ready.record.outcome.prompt) {
+      await $.prompt.fill({ text: '' })
+    }
+  } catch (error) {
+    $.ui.toast(`Could not send the enhanced prompt: ${reasonOf(error)}`)
   }
 }
 
@@ -440,11 +485,12 @@ async function revise($: EngineInterface): Promise<void> {
 }
 
 async function cancel($: EngineInterface): Promise<void> {
-  await cancelActive()
+  const me = await cancelActive()
+  const isDraftBack = me !== null && (await refill($, me))
   await transition(
     $,
     cur => (cur.kind === 'running' ? cur : null),
-    () => IDLE,
+    () => ({ kind: 'idle', isDraftBack }),
   )
 }
 
@@ -546,18 +592,34 @@ function readyActions({ Button, Text }: Ui, $: EngineInterface, ready: Ready, si
       onPress={press => copyPrompt($, ready.record.outcome.prompt, press.surface)}
     />,
     ready.isFilled && <Button key={`${site}-restore`} label="Restore draft" onPress={() => restoreDraft($)} />,
+    <Button key={`${site}-send`} label="Send" onPress={() => send($)} />,
     <Button key={`${site}-revise`} label="Revise" onPress={() => revise($)} />,
   ]
 }
 
 function readyRow(ui: Ui, $: EngineInterface, ready: Ready) {
-  const { Box, Button } = ui
+  const { Box, Button, Text } = ui
+  const { notes } = ready.record.outcome
+  const lines = [
+    ['Goal', bulletOf(notes, 'Understood goal')],
+    ['Effort', bulletOf(notes, 'Effort')],
+  ] as const
 
   return (
-    <Box flexWrap="wrap" columnGap={1}>
-      {readyActions(ui, $, ready, 'band')}
-      <Button key="notes" label="Notes" onPress={() => openNotes($)} />
-      {dismissButton(ui, $, 'band')}
+    <Box flexDirection="column">
+      <Box flexWrap="wrap" columnGap={1}>
+        {readyActions(ui, $, ready, 'band')}
+        <Button key="notes" label="Notes" onPress={() => openNotes($)} />
+        {dismissButton(ui, $, 'band')}
+      </Box>
+      {lines.map(
+        ([label, text]) =>
+          text !== null && (
+            <Text dimColor wrap="truncate-end">
+              {label}: {text}
+            </Text>
+          ),
+      )}
     </Box>
   )
 }
@@ -570,6 +632,7 @@ function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
       <Box flexShrink={1}>
         <Text color="error" wrap="truncate-end">
           ✗ Enhance failed: {failed.reason.replace(/\s+/g, ' ')}
+          {failed.isDraftBack && '. The draft is back in the box'}
         </Text>
       </Box>
       <Box flexShrink={0} columnGap={1}>
@@ -581,10 +644,12 @@ function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
   )
 }
 
-function idleRow({ Box, Button }: Ui, $: EngineInterface) {
+function idleRow({ Box, Button, Text }: Ui, $: EngineInterface, isDraftBack: boolean) {
   return (
     <Box columnGap={1}>
+      <Button key="enhance" label="Enhance" action={BIND_ACTION} onPress={() => enhanceBox($)} />
       <Button key="runs" label="Runs" onPress={() => openRuns($)} />
+      {isDraftBack && <Text dimColor>Cancelled. The draft is back in the box</Text>}
     </Box>
   )
 }
@@ -694,7 +759,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'enhance' }, async ($, e) => {
     const draft = e.args.trim()
     if (draft === '') {
-      $.ui.toast('Type the draft after /enhance')
+      $.ui.toast(NO_DRAFT)
       return {}
     }
 
@@ -704,7 +769,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.edit', async ($, e, next) => {
-    markTouched()
+    await markTouched($)
 
     return next(e)
   })
@@ -712,7 +777,7 @@ export const register: Register = (on, options) => {
   on('prompt.change', async ($, e, next) => {
     const isOtherPlugin = e.origin.kind === 'plugin' && e.origin.name !== 'enhance'
     if (isOtherPlugin || e.origin.kind === 'history' || e.origin.kind === 'undo' || e.origin.kind === 'app' || e.origin.kind === 'engine') {
-      markTouched()
+      await markTouched($)
     }
 
     return next(e)
@@ -726,8 +791,11 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    await clear($, record => (e.command === undefined ? sentOf(record, e.text) : 'dropped'))
-    markTouched()
+    const isFromUser = e.origin.kind === 'composer' || e.origin.kind === 'bridge' || (e.origin.kind === 'plugin' && e.origin.name === 'enhance')
+    if (isFromUser) {
+      await clear($, record => (e.command === undefined ? sentOf(record, e.text) : 'dropped'))
+      await markTouched($)
+    }
 
     return next(e)
   })
@@ -770,6 +838,6 @@ export const register: Register = (on, options) => {
       return failedRow(ui, $, current)
     }
 
-    return idleRow(ui, $)
+    return idleRow(ui, $, current.isDraftBack)
   })
 }
