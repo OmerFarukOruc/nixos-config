@@ -6,11 +6,14 @@
 # the push landed on. STATUS is affected, which means the host needs a deploy
 # of REV, or unchanged.
 # With --running it compares the system each host runs with REV's system.
-# STATUS is current, behind (the release the host runs is an ancestor of REV;
-# DETAIL lists the subjects of the commits it lacks, so the reader can tell
-# whose merges they are), other (the host runs a release that is not an
-# ancestor of REV, one from a dirty tree, or one with no release record), or
-# unreachable.
+# STATUS is skips (the host runs a test deploy, a deploy from a dirty tree, or
+# a commit origin/main lacks, so its hourly install skips while it does;
+# install_skip_cause in scripts/lib/running-revision.sh holds the rule the
+# install applies, and DETAIL names the deploy), current, behind (the
+# release the host runs is an ancestor of REV; DETAIL lists the subjects of the
+# commits it lacks, so the reader can tell whose merges they are), other (the
+# host runs a release that is not an ancestor of REV, or one with no release
+# record), or unreachable.
 # REV defaults to origin/main and must be pushed, because this host evaluates
 # it from GitHub. This host keeps each commit's systems in
 # ${XDG_CACHE_HOME:-~/.cache}/nixos-config/affected-hosts, one file per commit
@@ -24,6 +27,8 @@ cd "$(dirname "$0")/.."
 . scripts/lib/host-systems.sh
 # shellcheck source=/dev/null
 . scripts/lib/parallel-each.sh
+# shellcheck source=/dev/null
+. scripts/lib/running-revision.sh
 # shellcheck source=/dev/null
 . scripts/lib/ssh.sh
 
@@ -80,20 +85,29 @@ fi
 repo=${BASH_REMATCH[1]%.git}
 this_host=$(</proc/sys/kernel/hostname)
 
+deploy_login() {
+  jq -r --arg h "$1" '.[$h].deployLogin // empty' <<<"${new:-null}"
+}
+
+reads_as_other_login() {
+  local login
+  login=$(deploy_login "$1")
+  [[ $1 == "$this_host" && -n $login && $login != "$(id -un)" ]]
+}
+
 on_host() {
-  local host=$1 target=$1 login=
+  local host=$1 login
   shift
-  if [[ -n ${new:-} ]]; then
-    login=$(jq -r --arg h "$host" '.[$h].deployLogin // empty' <<<"$new")
-    if [[ -n $login ]]; then target=$login@$host; fi
-  fi
-  if [[ $host == "$this_host" ]]; then
+  login=$(deploy_login "$host")
+  if reads_as_other_login "$host"; then
+    sudo -n -u "$login" -H bash -c 'cd && bash -s -- "$@"' bash "$@"
+  elif [[ $host == "$this_host" ]]; then
     (cd && bash -s -- "$@")
   elif (($#)); then
     # shellcheck disable=SC2029 # printf %q quotes the arguments for the remote shell
-    ssh "${SSH_OPTS[@]}" "$target" "bash -s -- $(printf '%q ' "$@")"
+    ssh "${SSH_OPTS[@]}" "${login:+$login@}$host" "bash -s -- $(printf '%q ' "$@")"
   else
-    ssh "${SSH_OPTS[@]}" "$target" 'bash -s'
+    ssh "${SSH_OPTS[@]}" "${login:+$login@}$host" 'bash -s'
   fi
 }
 
@@ -175,15 +189,20 @@ running_revision
 REMOTE
     } | on_host "$host"
   ); then
-    printf '%s\tunreachable\tSSH to %s failed\n' "$host" "$host"
+    if reads_as_other_login "$host"; then
+      printf '%s\tunreachable\tsudo -n -u %s failed here, and the hourly install reads the deploy records of %s; run this from another host\n' \
+        "$host" "$(deploy_login "$host")" "$(deploy_login "$host")"
+    else
+      printf '%s\tunreachable\tSSH to %s failed\n' "$host" "$host"
+    fi
     continue
   fi
   system=$(sed -n 1p <<<"$state")
-  read -r revision dirty _ <<<"$(sed -n 2p <<<"$state")" || true
-  if [[ $system == "$want" ]]; then
+  read -r revision dirty action branch <<<"$(sed -n 2p <<<"$state")" || true
+  if cause=$(install_skip_cause . origin/main "$revision" "$dirty" "$action" "$branch"); then
+    printf '%s\tskips\truns %s; its hourly install skips while it does\n' "$host" "$cause"
+  elif [[ $system == "$want" ]]; then
     printf '%s\tcurrent\t%s\n' "$host" "$system"
-  elif [[ $dirty == true ]]; then
-    printf '%s\tother\truns %s from a dirty tree at %s\n' "$host" "$system" "$revision"
   elif [[ -n $revision ]] && git merge-base --is-ancestor "$revision" "$sha" 2>/dev/null; then
     mapfile -t lacks < <(git log --format=%s "$revision..$sha")
     detail=$(printf '%s; ' "${lacks[@]:0:5}")

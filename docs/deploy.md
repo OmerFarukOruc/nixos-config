@@ -318,11 +318,11 @@ while a hand deploy holds the lock
 ([One deploy at a time](#one-deploy-at-a-time)).
 
 `scripts/affected-hosts.sh --running` lists each host whose running system
-differs from `main`, such as one that was offline at the last deploy, so run it
-before you end a session that deployed. For a host that is behind, it lists the
-commits the host lacks. A host that is behind only by commits that another
-session or the `update` workflow pushed is left to its timer: report it and
-leave it.
+differs from `main`, such as one that was offline at the last deploy, and each
+host whose hourly install skips, so run it before you end a session that
+deployed. For a host that is behind, it lists the commits the host lacks. A
+host that is behind only by commits that another session or the `update`
+workflow pushed is left to its timer: report it and leave it.
 
 For each affected host, run this block from the main checkout as one
 background task, with nothing after it. It makes the deploy worktree unless it
@@ -361,6 +361,20 @@ Before you remove the worktree with `git worktree remove`, run
 `git status --short` in it. The deploy copies the target's `flake.lock` into
 the worktree, and a changed lock is lost with the worktree unless you commit it
 on a branch.
+
+### Skipped installs
+
+A host that `--running` reports as `skips` runs a `test` deploy, a deploy from
+a dirty tree, or a commit `main` lacks, and its hourly install skips while it
+does ([Updater](workstations.md#updater)). Its DETAIL names the branch and the
+commit. A deploy that another session made is that session's: report it and
+leave it. End a deploy this session made after its change is on `main`: run
+`upgrade` on the host, or deploy the pushed commit with the block in
+[Deploy a change on main](#deploy-a-change-on-main), then
+run `--running` again until the host prints `current`. On devbox, when `main`
+has a new kernel, `upgrade` outside the reboot window only sets the boot
+default and the host keeps running the test deploy
+([Deploy to a server](#deploy-to-a-server)), so use the block there.
 
 ## Upgrade a host to main
 

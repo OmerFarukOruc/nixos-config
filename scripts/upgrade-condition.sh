@@ -36,13 +36,8 @@ main=$(git -C "$repo" rev-parse main)
 # shellcheck source=/dev/null
 . "${RUNNING_REVISION_LIB:?}"
 read -r revision dirty action branch <<<"$(HOME=$home running_revision)" || true
-if ! $now && [[ -n $revision ]]; then
-  if [[ $dirty == true || $action == test ]]; then
-    skip "This host runs a $action deploy of ${branch:-a branch} at ${revision:0:12}$([[ $dirty == true ]] && echo ' from a dirty tree'), so this run skips. Run upgrade to replace it with main."
-  fi
-  if ! git -C "$repo" merge-base --is-ancestor "$revision" main 2>/dev/null; then
-    skip "This host runs ${branch:-a branch} at ${revision:0:12}, which main lacks, so this run skips. Run upgrade to replace it with main."
-  fi
+if ! $now && cause=$(install_skip_cause "$repo" main "$revision" "$dirty" "$action" "$branch"); then
+  skip "This host runs $cause, so this run skips. Run upgrade to replace it with main."
 fi
 
 if ! $now && [[ -f $state/failed && $(<"$state/failed") == "$main" ]]; then

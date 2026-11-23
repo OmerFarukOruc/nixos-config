@@ -227,7 +227,7 @@ checkout with Nix. `scripts/prepare-update.sh` runs them
 | `scripts/move-inputs.sh` | move inputs to their newest release, or to the head of the branch they follow, except llm-agents and inputs pinned to a commit |
 | `scripts/update-release-tags.sh` | move release-pinned inputs to their newest tag |
 | `scripts/update-app.sh NAME` | move `pkgs/NAME.nix` to the vendor's newest release |
-| `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` |
+| `scripts/affected-hosts.sh [--running] [REV \| OLD..REV]` | list the hosts whose system a commit on `main`, or a push from OLD to REV, changes, or with `--running` the hosts whose running system differs from `main` or whose hourly install skips |
 | `scripts/check-theme.sh [--host HOST] [--contrast] SCHEME...` | run `theme SCHEME` for each scheme on this host or on HOST, check that the colour files and a running tmux and Neovim follow it, then switch back; `--contrast` first checks the contrast of every scheme in the pack |
 | `scripts/check-secrets.sh [FILE]` | on a host with a `secrets/<host>.yaml` (nixos-desktop, nixos-rog, devbox), decrypt that host's `secrets/<host>.yaml` (or FILE) with its host key and compare its keys with the secrets the configuration declares |
 | `scripts/verify-nixos-rog.sh` | check the running laptop and write a JSON report |
