@@ -5,7 +5,8 @@ import type { Enhanced, Receiver, Run, RunOutcome, RunRecord, Session } from '..
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
 import { liveEffort, trackEffort } from './effort'
 import type { Cancel, Copy, Turn, Writer } from './copies'
-import { parseReply } from './reply'
+import { missingFrom } from './missing'
+import { NOTHING_SPENT, parseReply, plus } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
 const IDLE: Run = { kind: 'idle' }
@@ -13,6 +14,7 @@ const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
 
 const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-5' })
 
+type Running = Extract<Run, { kind: 'running' }>
 type Ready = Extract<Run, { kind: 'ready' }>
 type Failed = Extract<Run, { kind: 'failed' }>
 type Task = { draft: string; revise: { from: Ready; text: string } | null }
@@ -28,6 +30,7 @@ type ActiveRun = {
 type Began = { at: number | null; session: Session | null }
 
 const SESSION_END_WAIT_MS = 1200
+const TICK_MS = 1000
 const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
@@ -46,7 +49,7 @@ async function setRunning($: EngineInterface, me: ActiveRun): Promise<Run> {
   const taken: { before: Run } = { before: IDLE }
   await update($, run, (cur): Run => {
     taken.before = cur
-    return { kind: 'running', runId: me.id, copyId: me.copyId }
+    return { kind: 'running', runId: me.id, copyId: me.copyId, seconds: 0, progress: null }
   })
 
   return taken.before
@@ -56,6 +59,10 @@ async function commit($: EngineInterface, me: ActiveRun, next: Run): Promise<boo
   const after = await update($, run, cur => (cur.kind === 'running' && cur.runId === me.id && !me.cancel.isCancelled ? next : cur))
 
   return after === next
+}
+
+function whileRunning($: EngineInterface, me: ActiveRun, change: (running: Running) => Running): void {
+  void update($, run, cur => (cur.kind === 'running' && cur.runId === me.id ? change(cur) : cur)).catch(() => undefined)
 }
 
 async function isCurrent($: EngineInterface, me: ActiveRun): Promise<boolean> {
@@ -93,6 +100,7 @@ function firstTurn($: EngineInterface, copy: Copy, copyId: string, brief: Brief)
 
 async function converse($: EngineInterface, copy: Copy, first: Promise<Turn>): Promise<RunOutcome> {
   let turn = await first
+  let isRepaired = false
   for (;;) {
     if (turn.kind !== 'reply') {
       return turn
@@ -100,7 +108,12 @@ async function converse($: EngineInterface, copy: Copy, first: Promise<Turn>): P
 
     const reply = parseReply(turn.text)
     if (reply.kind === 'unusable') {
-      return { kind: 'failed', reason: reply.reason, notes: turn.text }
+      if (isRepaired) {
+        return { kind: 'failed', reason: reply.reason, notes: turn.text }
+      }
+      isRepaired = true
+      turn = await copy.send(`Your reply was unusable: ${reply.reason}. Reply again with one paste block or one question block.`)
+      continue
     }
     if (reply.kind === 'prompt') {
       return { kind: 'enhanced', prompt: reply.prompt, notes: reply.notes }
@@ -130,9 +143,12 @@ async function recordOf<Outcome extends RunOutcome>(
   const endedAt = await $.clock.now()
   const startedAt = began.at ?? endedAt
   const prior = task.revise?.from.record
+  const turns = me.copy?.spent() ?? { ...NOTHING_SPENT, model: null }
 
   return {
-    version: 1,
+    ...plus(prior ?? NOTHING_SPENT, turns),
+    version: 2,
+    model: turns.model ?? prior?.model ?? null,
     id: me.id,
     startedAt: prior?.startedAt ?? new Date(startedAt).toISOString(),
     seconds: (prior?.seconds ?? 0) + Math.round((endedAt - startedAt) / 1000),
@@ -162,7 +178,7 @@ async function settle($: EngineInterface, me: ActiveRun, task: Task, began: Bega
   const restore = task.revise?.from.restore ?? restoreOf(box.text, task.draft)
   const isUntouched = !me.isBoxTouched && box.text === me.boxAtStart
   const isFilled = isUntouched && (await $.prompt.fill({ text: outcome.prompt })).isFilled
-  const record = await recordOf($, me, task, began, outcome)
+  const record = withCost(await recordOf($, me, task, began, outcome))
   if (!(await commit($, me, { kind: 'ready', copyId: me.copyId, record, restore, isFilled }))) {
     return recordOf($, me, task, began, CANCELLED)
   }
@@ -189,6 +205,12 @@ function withNotes(outcome: Enhanced, lines: readonly string[]): Enhanced {
   return { ...outcome, notes: [outcome.notes, ...lines.map(line => `- ${line}`)].filter(part => part !== '').join('\n') }
 }
 
+function withCost(record: RunRecord<Enhanced>): RunRecord<Enhanced> {
+  const cost = record.costUsd === null ? 'not reported' : `$${record.costUsd.toFixed(2)}`
+
+  return { ...record, outcome: withNotes(record.outcome, [`Cost: ${cost}, time: ${record.seconds} s`]) }
+}
+
 async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task: Task): Promise<RunOutcome> {
   if (!(await $.fs.exists(session.cwd))) {
     throw new Error(`this session's folder ${session.cwd} was deleted; restart Claude Code in an existing folder`)
@@ -202,16 +224,13 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
     isStarted: task.revise !== null,
     writer,
     cancel: me.cancel,
+    onProgress: progress => whileRunning($, me, running => ({ ...running, progress })),
   })
   me.copy = copy
+  const draft = await withImagePaths($, session, task.draft)
   const first =
     task.revise === null
-      ? firstTurn($, copy, me.copyId, {
-          model: session.model,
-          effort: await liveEffort($, session.model),
-          receiver: session.receiver,
-          draft: await withImagePaths($, session, task.draft),
-        })
+      ? firstTurn($, copy, me.copyId, { model: session.model, effort: await liveEffort($, session.model), receiver: session.receiver, draft })
       : copy.send(`Revise: ${task.revise.text}`)
   const outcome = await converse($, copy, first)
   if (outcome.kind !== 'enhanced') {
@@ -222,7 +241,10 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
     return CANCELLED
   }
 
-  return reading === null ? outcome : withNotes(outcome, [`Cold reader: ${reading}`])
+  return withNotes(outcome, [
+    ...missingFrom(draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
+    ...(reading === null ? [] : [`Cold reader: ${reading}`]),
+  ])
 }
 
 async function recordsDir($: EngineInterface): Promise<string> {
@@ -252,6 +274,7 @@ async function forget($: EngineInterface, copyId: string): Promise<void> {
 async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<void> {
   const began: Began = { at: null, session: task.revise?.from.record.session ?? null }
   let record: RunRecord | null = null
+  const ticker = $.clock.every(TICK_MS, () => whileRunning($, me, running => ({ ...running, seconds: running.seconds + 1 })))
   try {
     const before = await setRunning($, me)
     if (before.kind === 'ready' && before.copyId !== me.copyId) {
@@ -265,6 +288,7 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
     await commit($, me, { ...failed, draft: task.draft })
     record = await recordOf($, me, task, began, me.cancel.isCancelled ? CANCELLED : failed)
   } finally {
+    ticker.cancel()
     if (record !== null) {
       keepRecord($, record)
     }
@@ -435,10 +459,17 @@ async function clear($: EngineInterface): Promise<void> {
 type Ui = Pick<Elements[RenderSurface], 'Box' | 'Button' | 'Markdown' | 'Text'>
 type Site = 'band' | 'pane'
 
-function runningRow({ Box, Button, Text }: Ui, $: EngineInterface) {
+function runningRow({ Box, Button, Text }: Ui, $: EngineInterface, running: Running) {
   return (
     <Box columnGap={1}>
-      <Text>Enhancing the draft…</Text>
+      <Text>Enhancing the draft… {running.seconds} s</Text>
+      {running.progress !== null && (
+        <Box flexShrink={1}>
+          <Text dimColor wrap="truncate-end">
+            {running.progress}
+          </Text>
+        </Box>
+      )}
       <Button key="cancel" label="Cancel" onPress={() => cancel($)} />
     </Box>
   )
@@ -452,10 +483,18 @@ function retryButton({ Button }: Ui, $: EngineInterface, site: Site) {
   return <Button key={`${site}-retry`} label="Retry" variant="primary" onPress={() => retry($)} />
 }
 
+function statusOf(ready: Ready): string {
+  if (ready.record.outcome.prompt.trim() === ready.record.draft.trim()) {
+    return 'Draft already clear, nothing changed'
+  }
+
+  return ready.isFilled ? 'Enhanced prompt is in the box' : 'Enhanced prompt is ready'
+}
+
 function readyActions({ Button, Text }: Ui, $: EngineInterface, ready: Ready, site: Site) {
   return [
     <Text color="success">✓</Text>,
-    <Text>{ready.isFilled ? 'Enhanced prompt is in the box' : 'Enhanced prompt is ready'}</Text>,
+    <Text>{statusOf(ready)}</Text>,
     !ready.isFilled && <Button key={`${site}-use`} label="Use prompt" variant="primary" onPress={() => usePrompt($)} />,
     <Button
       key={`${site}-copy`}
@@ -634,7 +673,7 @@ export const register: Register = (on, options) => {
     const ui = $.ui.resolve(e)
     const current = await read($, run)
     if (current.kind === 'running') {
-      return runningRow(ui, $)
+      return runningRow(ui, $, current)
     }
     if (current.kind === 'ready') {
       return readyRow(ui, $, current)

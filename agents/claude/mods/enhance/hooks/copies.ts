@@ -1,7 +1,8 @@
 import type { EngineInterface, ProcessRunInit, ProcessRunResult } from 'claude-code'
 
 import { plainCause } from './failures'
-import { HEADLESS_START, headlessResultOf, isSessionId, readHeadless } from './reply'
+import type { Spent } from '../types'
+import { HEADLESS_START, NOTHING_SPENT, endHeadless, headlessResultOf, isSessionId, plus, readHeadless } from './reply'
 
 export type Turn = { kind: 'reply'; text: string } | { kind: 'failed'; reason: string; notes: string } | { kind: 'cancelled' }
 
@@ -12,6 +13,7 @@ export type Writer = { model: string; effort: string; turnMs: number }
 export type Copy = {
   send: (text: string) => Promise<Turn>
   read: (prompt: string) => Promise<string | null>
+  spent: () => Spent & { model: string | null }
   stop: () => Promise<void>
   close: () => Promise<void>
 }
@@ -22,6 +24,7 @@ type CopyPlan = {
   isStarted: boolean
   writer: Writer
   cancel: Cancel
+  onProgress: (progress: string) => void
 }
 
 type Place = { id: string; cwd: string }
@@ -176,6 +179,8 @@ export async function forgetCopy($: EngineInterface, sessionId: string): Promise
 export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
   let isFirstTurn = !plan.isStarted
   let child: ReturnType<EngineInterface['process']['spawn']> | null = null
+  let spent = NOTHING_SPENT
+  let model: string | null = null
 
   async function turnOf(flags: readonly string[], text: string, input?: string): Promise<Turn> {
     if (plan.cancel.isCancelled) {
@@ -199,7 +204,11 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
     try {
       for await (const piece of running) {
         if (piece.stream === 'stdout') {
+          const before = reader.tool
           reader = readHeadless(reader, piece.text)
+          if (reader.tool !== null && reader.tool !== before) {
+            plan.onProgress(reader.tool)
+          }
         } else {
           stderrTail = (stderrTail + piece.text).slice(-STDERR_TAIL_CHARS)
         }
@@ -207,6 +216,9 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
     } finally {
       deadline.abort()
       child = null
+      reader = endHeadless(reader)
+      spent = plus(spent, reader.spent)
+      model ??= reader.model
     }
     if (plan.cancel.isCancelled) {
       return { kind: 'cancelled' }
@@ -235,6 +247,7 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
     },
     read: async prompt => {
       const readerId = crypto.randomUUID()
+      plan.onProgress('cold reader')
       try {
         const turn = await turnOf(readerFlags(plan, readerId), '', `${READER_ASK}\n\n<prompt>\n${prompt}\n</prompt>\n`)
 
@@ -250,5 +263,6 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
       await forgetCopy($, plan.sessionId)
     },
     close: () => forgetCopy($, plan.sessionId),
+    spent: () => ({ ...spent, model }),
   }
 }

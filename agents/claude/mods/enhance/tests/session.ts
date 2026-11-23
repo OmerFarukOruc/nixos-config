@@ -1,6 +1,8 @@
 import { mock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import type { RunRecord } from '../types'
+
 export const SESSION_ID = '11111111-1111-4111-8111-111111111111'
 
 export type Script = {
@@ -92,4 +94,10 @@ export function stubSession(on: On, script: Script): Seen {
   })
 
   return seen
+}
+
+export function lastRecord(seen: Seen): RunRecord {
+  const records = [...seen.written].flatMap(([path, text]) => (path.includes('/enhance/runs/') ? [text] : []))
+
+  return JSON.parse(records.at(-1) ?? 'null') as RunRecord
 }
