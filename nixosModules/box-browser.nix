@@ -59,24 +59,6 @@ in
   config = lib.mkIf machine.features.boxBrowser {
     users.users.${machine.user}.linger = lib.mkIf (!desktop) true;
 
-    systemd.services.browser-lend-off = lib.mkIf (desktop && config.services.tailscale.enable) {
-      description = "Remove tailscale serve listeners on tailnet ports 9222 and 9223";
-      after = [ "tailscaled.service" ];
-      wants = [ "tailscaled.service" ];
-      wantedBy = [ "multi-user.target" ];
-      path = [
-        config.services.tailscale.package
-        pkgs.jq
-      ];
-      serviceConfig.Type = "oneshot";
-      script = ''
-        serve=$(tailscale serve status --json)
-        if jq -e '.TCP["9222"]' <<< "$serve" > /dev/null; then tailscale serve --tcp=9222 off; fi
-        if jq -e '.TCP["9223"]' <<< "$serve" > /dev/null; then tailscale serve --https=9223 off; fi
-        tailscale serve status --json | jq -e '.TCP // {} | has("9222") or has("9223") | not' > /dev/null
-      '';
-    };
-
     oruc.ownerLoopbackPorts = [
       vncPort
       cdpPort

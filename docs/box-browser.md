@@ -112,10 +112,6 @@ folder there.
   `BatchMode` and `ExitOnForwardFailure`, and opens the viewer on that socket.
   A failure of the viewer or its tunnel also shows as a desktop notification,
   since the menu entry has no terminal.
-- `browser-lend-off.service` (a NixOS oneshot on nixos-rog and nixos-desktop)
-  removes any `tailscale serve` listener on tailnet ports 9222 and 9223, the
-  ports that once published Brave's DevTools, because tailscaled keeps them
-  across restarts, and fails when they remain.
 
 To sign in, run `box-view`, or open Box browser from the menu, sign in to the
 site in the Chromium window, click Save when Chromium offers to save the
