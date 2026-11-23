@@ -4,6 +4,10 @@ How everything written to Omer reads: chat replies, docs, specs, plans, issues, 
 
 A text is done when Omer can find what he needs, understand it, and act on it. Check those three before length or polish. Never rewrite code, identifiers, commands, error strings, commit subjects, or quoted text; quoted evidence stays exact.
 
+## Communicating clearly
+
+Write for an intelligent reader with little context. Omer has not seen your tool calls, your reasoning or the files you opened, may be switching in from other work, and reads English as a second language. Put the key points in the first few sentences, and define a term before you use it. Use plain words in full sentences. Do not use a term or abbreviation you made up during the work; say what the thing is. Write mostly in the style of ASD-STE100 Simplified Technical English: short sentences, one idea per sentence, active voice, and the same word for the same thing. Use a paragraph of prose where ideas connect, and bullets for separate items. Leave out details Omer did not ask for, but keep every fact, condition and caveat he needs to act.
+
 ## Answer first
 
 - The first sentence answers the question or states the result.
@@ -28,29 +32,10 @@ A text is done when Omer can find what he needs, understand it, and act on it. C
 
 ## Plain sentences
 
-- Prefer short sentences and concise paragraphs with one idea each. Split a sentence when it mixes decisions, hides a condition, or makes the reader work.
-- Active voice, and a named actor. "The linter blocks the commit". A thing cannot act like a person: "I fixed the parser", never "the fix emerged".
 - Be concrete: the specific reason, count, or file. Use "every", "always", "never" only when literally true.
 - State the recommendation, then the trade-off. Keep honest uncertainty: "may", "likely", "not confirmed" stay when the evidence is uncertain.
-- Prefer the short common word: use, start, check, make sure, show, change, need, before, to. Keep the longer word when it is the exact technical term, and say why in one clause.
 - No em dashes, no unicode arrows, no parentheticals that carry the point.
-- Join two clauses with a word, not a colon. "The fix is simple: restart it" becomes "The fix is to restart it", or two sentences joined with because, so, but, or and. A colon may introduce a list, a quoted example, a command, or a label such as Bad: or Good:.
-- No verbless fragment as a sentence or paragraph opener. "Two things worth watching." names a topic without saying anything; fold it into the sentence that does the work: "The first thing to watch is whether it holds on long threads."
-- Keep verbs as verbs. "We validate the config" beats "config validation occurs". Never set two compressed noun phrases side by side; unpack one into a plain clause.
 - Every pronoun and noun phrase has an obvious referent. After a few turns, repeat the noun.
-- Mannered prose substitutes metaphor and flourish for direct statement: "a dial worth turning" for "a parameter worth varying", "this point earns its keep" for "this point still matters". The phrase displays the writer, and the metaphor drags in connotations the writer did not choose. When a literal phrase exists, use it.
-
-## Banned patterns
-
-More phrases and patterns are in `~/.claude/reference/voice/ai-tells.md`.
-
-- Negative parallelism: "It's not X; it's Y." Say what it is.
-- Filler openers: "Here's the thing", "Let's dive in". Start with content.
-- Avoid stock phrases such as "Bottom Line", "delve", "foster", "leverage", "it's worth noting", "importantly", and "genuinely".
-- Significance inflation: nothing "plays a pivotal role". State the fact.
-- Stacked hedges: "may have been caused by". Write "The cause is not confirmed."
-- Rhetorical question then answer. Delete the question, keep the answer.
-- Anthropomorphic punchline: "the archive already knew". Systems do not know things.
 
 ## Formatting
 
@@ -73,14 +58,10 @@ Write legible messages for other agents as well as Omer. Put proper spaces betwe
 Docs, specs, plans, issues, PR bodies, and configuration prose are read without you there to answer questions.
 
 - Keep instructions easy to follow. Join related actions when the sentence remains clear; separate distinct decisions or conditions.
-- Keep noun stacks to 3 words. "the handler that sets queue priority", not "the task queue priority handler".
-- Simple tenses only: "we changed", not "we have changed". Avoid "-ing" forms when a simple form works.
-- One word, one meaning across the whole text. Do not rotate synonyms.
-- A code comment exists only under the keep-list in `~/.claude/shared/core.md` (Writing), and it describes present behaviour.
 - Never delete a fact, condition, caveat, or scope qualifier to fit a cap. Split the sentence instead.
 
 ## Check before sending
 
-Read the draft once as Omer: tired, on a phone, mid-task. Cut every sentence that does not help him find, understand, or act. If a sentence needs rereading, rewrite it. Before you post an issue, PR body, spec, or plan, or when Omer says a text reads like AI, read `~/.claude/reference/voice/banned-words.md` and `ai-tells.md`; read `rewrites.md` there when you need a worked before-and-after pair.
+Read the draft once as Omer: tired, on a phone, mid-task. Cut every sentence that does not help him find, understand, or act. If a sentence needs rereading, rewrite it. When Omer says a text reads like AI, run the `humanizer` skill on it.
 
 When Omer asks for simpler language, that holds for the rest of the session: no headers, every project term defined inline on each use, prefer short, direct sentences.
