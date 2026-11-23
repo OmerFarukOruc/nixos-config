@@ -453,6 +453,15 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   desktop's daemon still holds the socket, run `systemctl --user restart
   cursor-worker.service`: it stops that daemon with the desktop and starts the
   user bus's daemon first.
+- The module masks `xfce4-notifyd.service` in the user manager. Chromium asks
+  the user bus for `org.freedesktop.Notifications` when it starts; a headless
+  Chromium that omer ran on 2026-11-23 made D-Bus activation start the unit,
+  which exited with "cannot open display", because the user manager has no
+  display. XFCE's autostart entry for notifyd runs `systemctl --user start
+  xfce4-notifyd.service` and runs the binary itself when that fails, so each
+  desktop on a bus of its own still gets its notification daemon; that bus also
+  runs the binary from the D-Bus service file, because it does not use systemd
+  activation.
 - `features.boxBrowser` is on in the host record, so the box browser's two user
   units exist; agents drive it with `box-browser` from agent-tools
   ([box-browser.md](box-browser.md)).

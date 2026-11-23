@@ -4,6 +4,7 @@
     enable = true;
     enableScreensaver = false;
   };
+  systemd.user.services.xfce4-notifyd.enable = false;
   programs.labwc.enable = true;
   # The Amp runner's desktop sharing downloads waymote-streamd, a prebuilt
   # binary that loads these through nix-ld.
