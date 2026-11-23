@@ -236,8 +236,19 @@ collector on loopback (a sink that writes files). The check restarts
 loads the rules, that sshd logs at `VERBOSE`, that the sink gets the host
 metrics and the test certificate's `tlscheck.time_left`, that a journal line
 with the audit identifier is not in the sink's log file 15 seconds later, and
-that the collector's journal has no `error` line. It does not prove the real
-endpoint or delivery to SigNoz.
+that the collector's journal has no line at level `error`, `dpanic`, `panic` or
+`fatal`, no `panic:`, `fatal error:` or `Error:` line, and at least one line at
+level `debug`, `info` or `warn`, and that systemd never restarted the
+collector. It reads the level and not the word `error`, because the collector
+logs a retried export at level `info` with the text "error reading from
+server". The check then reads the audit records with `journalctl -b -t
+audisp-syslog -o cat` and checks that a `sudo` run by omer over ssh writes a
+`sudo-exec` record and an `etc-change` record, both with omer's `auid`, that a
+read attempt on a secret by `nobody` (denied, `exit=-13`) writes a `credstore`
+record and a read by root writes none, and that the journal gains no
+`NETFILTER_CFG`, `ANOM_PROMISCUOUS` or `BPF` record when root's test shell
+changes the firewall, sets promiscuous mode and starts a unit with an IP deny
+list. It does not prove the real endpoint or delivery to SigNoz.
 
 ## AWS certificate
 
@@ -1029,12 +1040,16 @@ and `ci/checks.sh` only checks that the flake still names the test.
 To add a check, put Python in a new file of `ci/server-boot/checks/`. The files
 run in path order on `machine` (the booted host), and all files share one
 Python namespace, so give a variable or a function a name that only your file
-uses. Test values for a new sops key go in
-`ci/server-boot/secrets.yaml`, under the key the host reads.
-`ci/server-boot/modules/sops.nix` points every secret that names its own
-`sopsFile` on the host at the test file, so a new key needs nothing else. A
-NixOS module that only the test machine loads, such as a stub of an external
-service, goes in `ci/server-boot/modules/`.
+uses. Test values for a new sops key go in `ci/server-boot/secrets.yaml`, under
+the key the host reads. `ci/server-boot/modules/sops.nix` points every secret
+that names its own `sopsFile` on the host at the test file, so a new key needs
+nothing else. It also compares the top-level keys of the host's `sops.secrets`
+(all but `binary` secrets and whole-file reads) with the keys of that file when
+Nix evaluates the check, and stops with the names of the missing keys; the VM
+would otherwise time out 900 s after boot, because sops-install-secrets
+installs no secret when one key is missing, and the network template then gets
+no address. A NixOS module that only the test machine loads, such as a stub of
+an external service, goes in `ci/server-boot/modules/`.
 
 `ci/server-boot/modules/sops.nix` gives the test machine a sops file with test
 values under the real key names, encrypted for an SSH key that the build makes,

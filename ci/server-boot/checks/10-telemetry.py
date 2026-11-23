@@ -117,3 +117,80 @@ machine.succeed(f"{tel_run} | grep -F 'Everything is ready'")
 machine.succeed(f"{tel_run} | {tel_levelled_lines}")
 machine.fail(f"{tel_run} | {tel_failure_lines}")
 machine.succeed("systemctl show -p NRestarts --value opentelemetry-collector.service | grep -Fx 0")
+
+
+def tel_audit_lines():
+    return machine.succeed("journalctl -b -t audisp-syslog -o cat --no-pager").splitlines()
+
+
+def tel_audit_syscalls(key, comm):
+    return [
+        line
+        for line in tel_audit_lines()
+        if line.startswith("type=SYSCALL ")
+        and re.search(rf'\bcomm="{re.escape(comm)}"', line)
+        and re.search(rf'\bkey="{re.escape(key)}"', line)
+    ]
+
+
+def tel_audit_count(record_type):
+    return sum(line.startswith(f"type={record_type} ") for line in tel_audit_lines())
+
+
+def tel_expect(message, condition):
+    for _ in range(60):
+        if condition():
+            return
+        machine.sleep(1)
+    raise AssertionError(message)
+
+
+machine.succeed(f"mkdir -p /home/{BOX_USER}")
+machine.succeed(f"install -d -m 0700 -o {BOX_USER} -g {BOX_USER} /home/{BOX_USER}/.ssh")
+machine.succeed("ssh-keygen -q -t ed25519 -N '' -f /tmp/probe_key")
+machine.succeed(f"install -m 0600 -o {BOX_USER} -g {BOX_USER} /tmp/probe_key.pub /home/{BOX_USER}/.ssh/authorized_keys")
+tel_box_uid = machine.succeed(f"id -u {BOX_USER}").strip()
+tel_probes = [("sudo-exec", "sudo"), ("etc-change", "touch")]
+
+
+def tel_box_records(key, comm):
+    return [line for line in tel_audit_syscalls(key, comm) if re.search(rf"\bauid={tel_box_uid}\b", line)]
+
+
+tel_probe_seen = {probe: len(tel_box_records(*probe)) for probe in tel_probes}
+machine.succeed(
+    "printf test | ssh -p 2222 -i /tmp/probe_key -o StrictHostKeyChecking=no "
+    f"-o UserKnownHostsFile=/dev/null -o BatchMode=yes -o LogLevel=ERROR {BOX_USER}@127.0.0.1 "
+    "'/run/wrappers/bin/sudo -S -p sudo: touch /etc/telemetry-probe'"
+)
+machine.succeed("rm -f /etc/telemetry-probe")
+for tel_key, tel_comm in tel_probes:
+    tel_expect(
+        f"the ssh probe wrote no {tel_key} record of {tel_comm} with the auid {tel_box_uid} of {BOX_USER}",
+        lambda: len(tel_box_records(tel_key, tel_comm)) > tel_probe_seen[(tel_key, tel_comm)],
+    )
+
+
+def tel_credstore_read_recorded(user):
+    seen = len(tel_audit_syscalls("credstore", "cat"))
+    machine.execute(f"runuser -u {user} -- cat /run/secrets/network-dns-1")
+    tel_expect(
+        f"no credstore record of a read by {user}",
+        lambda: len(tel_audit_syscalls("credstore", "cat")) > seen,
+    )
+
+
+machine.succeed("cat /run/secrets/network-dns-1 >/dev/null")
+tel_credstore_read_recorded("nobody")
+tel_credstore_reads = tel_audit_syscalls("credstore", "cat")
+assert any(re.search(r"\buid=65534\b", line) for line in tel_credstore_reads), "the credstore record is not of nobody"
+assert not any(re.search(r"\buid=0\b", line) for line in tel_credstore_reads), "a read by root wrote a credstore record"
+
+tel_excluded = ["NETFILTER_CFG", "ANOM_PROMISCUOUS", "BPF"]
+tel_before = {record_type: tel_audit_count(record_type) for record_type in tel_excluded}
+machine.succeed("iptables -N tel-probe && iptables -X tel-probe")
+machine.succeed("ip link set lo promisc on && ip link set lo promisc off")
+machine.succeed("systemd-run --wait -p IPAddressDeny=any true")
+tel_credstore_read_recorded("nobody")
+for tel_type in tel_excluded:
+    assert tel_audit_count(tel_type) == tel_before[tel_type], f"the journal got {tel_type} records of system processes"
