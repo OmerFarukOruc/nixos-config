@@ -19,6 +19,7 @@ export type Seen = {
   spawned: { argv: readonly string[]; input: string | undefined }[]
   ran: (readonly string[])[]
   opened: string[]
+  registered: { name: string; immediate: boolean | undefined }[]
   copied: string[]
   written: Map<string, string>
   toasts: string[]
@@ -39,6 +40,7 @@ export function stubSession(on: On, script: Script): Seen {
     spawned: [],
     ran: [],
     opened: [],
+    registered: [],
     copied: [],
     written: new Map(Object.entries(script.files ?? {})),
     toasts: [],
@@ -49,7 +51,11 @@ export function stubSession(on: On, script: Script): Seen {
   }
   mock.env(on, { HOME: '/home/t' })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  on('command.register', (_, e) => {
+    seen.registered.push({ name: e.name, immediate: e.immediate })
+
+    return { value: { command: e.name } }
+  })
   on('session.id', () => ({ value: SESSION_ID }))
   on('session.cwd', () => ({ value: '/work' }))
   on('session.model', () => ({ value: 'claude-test-1' }))
