@@ -41,7 +41,7 @@ Typing the `herdr tab create` and `herdr agent start` commands by hand fails in 
 
 - **`sandbox_workspace_write.network_access=true`** lets the agent reach the herdr socket, so its `NEED` and `DONE` prompts arrive, and lets `gh` reach GitHub. Without it, Codex 0.166.0's `workspace-write` sandbox refuses both: `codex sandbox -c sandbox_mode=workspace-write -- herdr agent list` fails with `Operation not permitted`, and adding the socket's folder to `writable_roots` does not help. The same command with `-c sandbox_workspace_write.network_access=true` lists the agents.
 - **The first prompt names a skill as `$<skill-name>`** (operational-notes.md, Codex CLI).
-- **One session covers one slice.** An interactive Codex session could not start subagents ("agent type is currently not available"), so a gpt-6.1-sol review of a 326-file pull request ended as a partial report. Split a large review into slices of whole files, about 14,000 head lines each, with one agent per slice.
+- **One session covers one slice.** An interactive Codex session could not start subagents ("agent type is currently not available"), so a gpt-6.1-sol review of a 326-file pull request ended as a partial report. Split a large review into slices of whole files with `review-slices`, under its budget (`pkgs/agent-tools/README.md`), with one agent per slice; slices of about 14,000 lines each worked for that gpt-6.1-sol review.
 
 ## Starting an opencode agent
 
