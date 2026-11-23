@@ -12,7 +12,7 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | `reference/` | `~/.claude/reference` | reference pages the rules send agents to |
 | `infisical.md` | `~/.claude/infisical.md` | the Infisical usage note |
 | `skills/<name>/` | `~/.claude/skills`, `~/.agents/skills`, `~/.gemini/antigravity-cli/skills` | Omer's own skills; `skills/SOURCES.md` names what they borrow |
-| `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `bash-env.sh`, `stop-sound.sh` and its sounds |
+| `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `bash-env.sh`, `stop-sound.sh` and its sounds, and `herdr-agent-state.sh`, which `herdr integration install claude` writes and `.gitignore` keeps out of git |
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | the status line |
 | `claude/agents/` | `~/.claude/agents` | the `code-reviewer` and `comment-sicko` agents |
 | `opencode/agents/` | `~/.config/opencode/agents` | the opencode agents `opencode-review`, read-only with no shell, and `opencode-implement`, which set their model and permissions ([herdr.md](reference/headless-clis/herdr.md), Starting an opencode agent) |
@@ -42,6 +42,12 @@ Each entry sets `force`, because Home Manager backs up only a target that is not
 The commands these files name, such as `pr-land`, `wait-exit` and `sandbox-run`, come from `pkgs/agent-tools`, which the same module installs ([its README](../pkgs/agent-tools/README.md)).
 
 Private values stay out of these files ([Checks](#checks)). The Infisical project IDs reach every zsh, interactive or not, through `.zshenv` as `$INFISICAL_PERSONAL_SECRETS_PROJECT` and `$INFISICAL_STATUSLANTERN_PROJECT` from the sops secret `agents-infisical-ids`.
+
+## Claude Code settings
+
+- `switchModelsOnFlag` is `false`, so a request that a safety classifier flags never moves to an older model unnoticed: an interactive session asks first, a headless run ends the turn with a refusal, and an Agent-tool subagent fails (Claude Code model-config docs, "Ask before switching").
+- The Bash sandbox stays at its default, off, so `settings.json` sets no `sandbox` key. When it was on, it left empty placeholder files in the working checkout (`.bashrc`, `.gitconfig`, `.mcp.json`, `.claude/settings.json` and others) and an empty `.git/config.lock` that made every `.git/config` write fail, even outside the sandbox.
+- Give each login its own `.credentials.json`. Claude Code rotates the OAuth refresh token on use, so two processes or role homes that share one file log each other out.
 
 ## Mods
 
