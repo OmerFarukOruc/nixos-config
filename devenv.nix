@@ -1,11 +1,18 @@
-{ config, pkgs, ... }:
+{
+  config,
+  inputs,
+  pkgs,
+  ...
+}:
 let
+  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
   heavy =
     command:
     "bash -c 'if command -v heavy >/dev/null; then exec heavy ${command}; else exec ${command}; fi'";
 in
 {
   packages = with pkgs; [
+    llmAgents.claude-code
     deadnix
     gitleaks
     jq
