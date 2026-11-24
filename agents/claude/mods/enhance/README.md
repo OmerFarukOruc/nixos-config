@@ -69,12 +69,20 @@ The buttons, in screen order:
 - **Cancel** during a Revise brings back the earlier prompt.
 - A Revise that fails keeps the earlier prompt. A toast gives the reason.
 
+### When the box is tall
+
+In a fullscreen terminal, Claude Code gives the prompt box and the row half the screen together. A tall box takes all of it, and the row has no room.
+
+- The mod then draws the same row in the conversation, at its end, above the box.
+- This holds for a run that is going, a prompt that is ready, and a run that failed.
+- When the box gets shorter, the row goes back above the box.
+- If the conversation takes no row, a toast says why.
+
 ### The Notes pane
 
 - It opens by itself on a terminal of 144 columns or more.
 - On a narrower terminal, press **Notes**.
 - It repeats the row's buttons.
-- A prompt taller than half the screen hides the row. Use the pane's buttons then.
 
 ### Keyboard
 

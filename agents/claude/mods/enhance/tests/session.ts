@@ -13,12 +13,14 @@ export type Script = {
   answers?: readonly (string | null)[]
   exists?: (path: string) => boolean
   files?: Readonly<Record<string, string>>
+  placeRefusal?: string
 }
 
 export type Seen = {
   spawned: { argv: readonly string[]; input: string | undefined }[]
   ran: (readonly string[])[]
   opened: string[]
+  placed: string[]
   registered: { name: string; immediate: boolean | undefined }[]
   copied: string[]
   written: Map<string, string>
@@ -40,6 +42,7 @@ export function stubSession(on: On, script: Script): Seen {
     spawned: [],
     ran: [],
     opened: [],
+    placed: [],
     registered: [],
     copied: [],
     written: new Map(Object.entries(script.files ?? {})),
@@ -113,6 +116,14 @@ export function stubSession(on: On, script: Script): Seen {
     return { value: { isPlaced: true } }
   })
   on('ui.close', () => ({ value: undefined }))
+  on('ui.place', (_, e) => {
+    if (script.placeRefusal !== undefined) {
+      return { value: { isPlaced: false, reason: script.placeRefusal } }
+    }
+    seen.placed.push(e.id)
+
+    return { value: { isPlaced: true, requestId: e.id } }
+  })
   on('ui.toast', (_, e) => {
     seen.toasts.push(e.text)
 

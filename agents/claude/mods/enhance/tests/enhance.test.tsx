@@ -180,7 +180,7 @@ test('the notes name each path, URL and code span of the draft that the prompt l
   ])
 })
 
-type Site = typeof BAND | typeof NOTES | typeof RUNS
+type Site = Parameters<Engine['ui']['mount']>[0]
 
 async function press($: Engine, seen: Seen, site: Site, key: string): Promise<void> {
   const ui = await $.ui.mount(site)
@@ -452,6 +452,93 @@ test("the runs pane's card shows the session's last draft and puts it back in th
   await press($, seen, RUNS, 'put-back')
 
   expect(seen.box.text).toBe('my draft')
+})
+
+test('Put draft in box over a prompt that is in the box leaves the result behind Use prompt', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING] })
+  await typed($, seen, 'my draft')
+  expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
+
+  await $.command.run({ ...TYPED, command: 'enhance-runs', args: '' })
+  await press($, seen, RUNS, 'put-back')
+
+  expect(seen.box.text).toBe('my draft')
+  expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is ready')
+})
+
+const NO_ROOM = { ...BAND, props: { ...BAND.props, maxRows: 0, scroll: { offset: 0, bodyRows: 0 } } } as const
+
+function transcriptRow(id: string) {
+  return { plugin: 'enhance', component: 'Placed', requestId: id, surface: 'terminal', props: { id, plugin: 'enhance' } } as const
+}
+
+async function buttons($: Engine, site: Site): Promise<number> {
+  const ui = await $.ui.mount(site)
+  const found = await ui.findAll({ type: 'Button' })
+  await ui.unmount()
+
+  return found.length
+}
+
+test('the result row is drawn in the transcript only while the band has no room, and by this plugin alone', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING] })
+  await typed($, seen, 'a draft')
+
+  await buttons($, BAND)
+  expect(seen.placed).toEqual([])
+
+  await buttons($, NO_ROOM)
+  await buttons($, NO_ROOM)
+  expect(seen.placed).toHaveLength(1)
+  const [id = ''] = seen.placed
+  expect(await buttons($, transcriptRow(id))).toBe(6)
+  expect(await buttons($, { ...transcriptRow(id), props: { id, plugin: 'other' } })).toBe(0)
+  expect(await buttons($, transcriptRow('enhance-row-0'))).toBe(0)
+  await press($, seen, transcriptRow(id), 'row-copy')
+  expect(seen.copied).toEqual(['prompt'])
+
+  await buttons($, BAND)
+  expect(await buttons($, transcriptRow(id))).toBe(0)
+
+  await buttons($, NO_ROOM)
+  expect(seen.placed).toHaveLength(2)
+  expect(await buttons($, transcriptRow(id))).toBe(0)
+  expect(await buttons($, transcriptRow(seen.placed[1] ?? ''))).toBe(6)
+
+  await press($, seen, transcriptRow(seen.placed[1] ?? ''), 'row-dismiss')
+  expect(await buttons($, transcriptRow(seen.placed[1] ?? ''))).toBe(0)
+  await buttons($, BAND)
+})
+
+test('with no room above the prompt, a failed run is told in the transcript', async ($, on) => {
+  const seen = stubSession(on, { replies: [NO_RESULT] })
+  await typed($, seen, 'a draft')
+
+  await buttons($, NO_ROOM)
+
+  expect(await shown($, transcriptRow(seen.placed[0] ?? ''), /Enhance failed/)).toMatch(/The draft is back in the box/)
+  await press($, seen, transcriptRow(seen.placed[0] ?? ''), 'row-dismiss')
+  await buttons($, BAND)
+})
+
+test('a row the conversation refuses is told once in a toast', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING], placeRefusal: 'past the cap' })
+  await typed($, seen, 'a draft')
+  const before = seen.toasts.length
+
+  await buttons($, NO_ROOM)
+  await buttons($, NO_ROOM)
+
+  expect(seen.toasts.slice(before)).toEqual(['The enhance buttons have no room above the prompt, and the conversation took no row for them: past the cap'])
+})
+
+test('a band the person collapsed keeps the result row out of the transcript', async ($, on) => {
+  const seen = stubSession(on, { replies: [PROMPT, READING] })
+  await typed($, seen, 'a draft')
+
+  await buttons($, { ...NO_ROOM, props: { ...NO_ROOM.props, isCollapsed: true } })
+
+  expect(seen.placed).toEqual([])
 })
 
 test('a task notification leaves a ready result in place', async ($, on) => {

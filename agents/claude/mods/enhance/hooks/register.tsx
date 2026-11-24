@@ -12,6 +12,8 @@ import { NOTHING_SPENT, parseReply, plus } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
 const RUNS_PANE = 'enhance-runs'
+const PLUGIN = 'enhance'
+const TRANSCRIPT_ROW = 'enhance-row'
 const IDLE: Run = { kind: 'idle', isDraftBack: false }
 const NO_DRAFT = 'Type the draft after /enhance'
 const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
@@ -45,6 +47,8 @@ const TICK_MS = 1000
 const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
+let transcriptRow: string | null = null
+let placeRefusal: string | null = null
 let writer!: Writer
 let isSending = false
 let recordWrite: Promise<void> = Promise.resolve()
@@ -567,10 +571,16 @@ async function openRuns($: EngineInterface): Promise<void> {
   }
 }
 
+async function leaveBox($: EngineInterface): Promise<void> {
+  await update($, run, cur => (cur.kind === 'ready' ? { ...cur, isFilled: false } : cur))
+}
+
 async function putBack($: EngineInterface, draft: string): Promise<void> {
   if (!(await $.prompt.fill({ text: draft })).isFilled) {
     $.ui.toast('The prompt box is not available right now')
+    return
   }
+  await leaveBox($)
 }
 
 async function clear($: EngineInterface, sent: (record: RunRecord<Enhanced>) => Sent): Promise<void> {
@@ -593,9 +603,9 @@ async function clear($: EngineInterface, sent: (record: RunRecord<Enhanced>) => 
 }
 
 type Ui = Pick<Elements[RenderSurface], 'Box' | 'Button' | 'Markdown' | 'Text'>
-type Site = 'band' | 'pane'
+type Site = 'band' | 'pane' | 'row'
 
-function runningRow({ Box, Button, Text }: Ui, $: EngineInterface, running: Running) {
+function runningRow({ Box, Button, Text }: Ui, $: EngineInterface, running: Running, site: Site) {
   return (
     <Box columnGap={1}>
       <Text>Enhancing the draft… {running.seconds} s</Text>
@@ -606,7 +616,7 @@ function runningRow({ Box, Button, Text }: Ui, $: EngineInterface, running: Runn
           </Text>
         </Box>
       )}
-      <Button key="cancel" label="Cancel" onPress={() => cancel($)} />
+      <Button key={`${site}-cancel`} label="Cancel" onPress={() => cancel($)} />
     </Box>
   )
 }
@@ -644,7 +654,7 @@ function readyActions({ Button, Text }: Ui, $: EngineInterface, ready: Ready, si
   ]
 }
 
-function readyRow(ui: Ui, $: EngineInterface, ready: Ready) {
+function readyRow(ui: Ui, $: EngineInterface, ready: Ready, site: Site) {
   const { Box, Button, Text } = ui
   const { notes } = ready.record.outcome
   const lines = [
@@ -655,9 +665,9 @@ function readyRow(ui: Ui, $: EngineInterface, ready: Ready) {
   return (
     <Box flexDirection="column">
       <Box flexWrap="wrap" columnGap={1}>
-        {readyActions(ui, $, ready, 'band')}
-        <Button key="notes" label="Notes" onPress={() => openNotes($)} />
-        {dismissButton(ui, $, 'band')}
+        {readyActions(ui, $, ready, site)}
+        <Button key={`${site}-notes`} label="Notes" onPress={() => openNotes($)} />
+        {dismissButton(ui, $, site)}
       </Box>
       {lines.map(
         ([label, text]) =>
@@ -671,7 +681,7 @@ function readyRow(ui: Ui, $: EngineInterface, ready: Ready) {
   )
 }
 
-function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
+function failedRow(ui: Ui, $: EngineInterface, failed: Failed, site: Site) {
   const { Box, Button, Text } = ui
 
   return (
@@ -683,9 +693,9 @@ function failedRow(ui: Ui, $: EngineInterface, failed: Failed) {
         </Text>
       </Box>
       <Box flexShrink={0} columnGap={1}>
-        {retryButton(ui, $, 'band')}
-        <Button key="details" label="Details" onPress={() => openNotes($)} />
-        {dismissButton(ui, $, 'band')}
+        {retryButton(ui, $, site)}
+        <Button key={`${site}-details`} label="Details" onPress={() => openNotes($)} />
+        {dismissButton(ui, $, site)}
       </Box>
     </Box>
   )
@@ -700,6 +710,33 @@ function idleRow({ Box, Button, Text }: Ui, $: EngineInterface, isDraftBack: boo
       {isDraftBack && <Text dimColor>Cancelled. The draft is back in the box</Text>}
     </Box>
   )
+}
+
+function rowOf(ui: Ui, $: EngineInterface, current: Exclude<Run, { kind: 'idle' }>, site: Site) {
+  if (current.kind === 'running') {
+    return runningRow(ui, $, current, site)
+  }
+
+  return current.kind === 'ready' ? readyRow(ui, $, current, site) : failedRow(ui, $, current, site)
+}
+
+async function seatRow($: EngineInterface, isBandFull: boolean): Promise<void> {
+  if (isBandFull === (transcriptRow !== null) || (isBandFull && placeRefusal !== null)) {
+    return
+  }
+  if (!isBandFull) {
+    transcriptRow = null
+    $.ui.invalidate('ui.render')
+    return
+  }
+  const id = `${TRANSCRIPT_ROW}-${crypto.randomUUID()}`
+  transcriptRow = id
+  const placed = await $.ui.place({ id })
+  if (!placed.isPlaced) {
+    transcriptRow = null
+    placeRefusal = placed.reason
+    $.ui.toast(`The enhance buttons have no room above the prompt, and the conversation took no row for them: ${placed.reason}`)
+  }
 }
 
 function firstLine(text: string): string {
@@ -865,6 +902,7 @@ export const register: Register = (on, options) => {
     const isOtherPlugin = e.origin.kind === 'plugin' && e.origin.name !== 'enhance'
     if (isOtherPlugin || e.origin.kind === 'history' || e.origin.kind === 'undo' || e.origin.kind === 'app' || e.origin.kind === 'engine') {
       await markTouched($)
+      await leaveBox($)
     }
 
     return next(e)
@@ -917,16 +955,17 @@ export const register: Register = (on, options) => {
 
     const ui = $.ui.resolve(e)
     const current = await read($, run)
-    if (current.kind === 'running') {
-      return runningRow(ui, $, current)
-    }
-    if (current.kind === 'ready') {
-      return readyRow(ui, $, current)
-    }
-    if (current.kind === 'failed') {
-      return failedRow(ui, $, current)
-    }
+    await seatRow($, current.kind !== 'idle' && !e.props.isCollapsed && e.props.scroll.bodyRows < 1)
 
-    return idleRow(ui, $, current.isDraftBack)
+    return current.kind === 'idle' ? idleRow(ui, $, current.isDraftBack) : rowOf(ui, $, current, 'band')
+  })
+
+  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
+    if (e.props.plugin !== PLUGIN || e.props.id !== transcriptRow) {
+      return next(e)
+    }
+    const current = await read($, run)
+
+    return current.kind === 'idle' ? next(e) : rowOf($.ui.resolve(e), $, current, 'row')
   })
 }
