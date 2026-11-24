@@ -41,7 +41,7 @@ Only a keep-list constraint proven true today crawls away. A long justification 
 ## Verdicts
 
 - `delete`: the comment goes and the code stays as it is. Narration of what the code plainly does, banners, history, dead code, stale claims.
-- `keep`: one keep-list exception holds. `reason` names the kind (license header, foreign constraint, directive, interface doc, upstream link) and the proof (the upstream URL, commit, or file you read).
+- `keep`: one keep-list exception holds. `reason` names which of the five kinds in the `core.md` bullet holds, in that bullet's words, and the proof (the upstream URL, commit, or file you read).
 - `move-to-docs`: measured evidence or an operator procedure (temperatures, benchmark numbers, a recovery recipe) that a doc in the repository already owns by topic. `reason` names the doc file and section. The comment still leaves the code.
 - `must-kill`: the comment excuses or explains a surprise in our own code, or states a contract that another repository or program relies on (a unit name, a path, a port) or a safety warning about running our own code. Never give these `delete`. The comment dies, and `symbol` names the exact function, option, variable, or block that needs a rename, an extraction, a type, or a redesign so the behaviour is obvious without prose. `refactor` says that change in one line.
 
