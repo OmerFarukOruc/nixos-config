@@ -314,6 +314,11 @@ class Switcher:
         try:
             self.start_kind(pane, start_as, r)
         except Failed:
+            if "result" in self.herdr("agent", "get", start_as, check=False):
+                try:
+                    self.agents.end(start_as, pane)
+                except Failed as e:
+                    self.log(f"{name}: could not stop {start_as} after the failed start: {e}")
             if workspace:
                 try:
                     self.herdr("workspace", "close", workspace)

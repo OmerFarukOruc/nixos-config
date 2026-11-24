@@ -26,7 +26,7 @@ def claude_box(screen: str, _columns: int) -> Composer | None:
         return None
     start, end = rules[-2:]
     rows = prompt_rows(lines[start + 1:end], "❯\xa0")
-    return Composer(rows, len(lines[end]) - 2) if rows else None
+    return Composer(rows, len(lines[end]) - 3) if rows else None
 
 
 def codex_box(screen: str, columns: int) -> Composer | None:
@@ -43,7 +43,13 @@ def codex_box(screen: str, columns: int) -> Composer | None:
     return Composer(rows, columns - 2) if rows else None
 
 
-def opencode_box(screen: str, _columns: int) -> Composer | None:
+class OpencodeFrame(NamedTuple):
+    box: list[str]
+    margin: str
+    rule: str
+
+
+def opencode_frame(screen: str) -> OpencodeFrame | None:
     frame = re.split(r"^( *╹▀+) *$", screen, flags=re.MULTILINE)
     if len(frame) < 3 or "┃" in frame[-1]:
         return None
@@ -55,7 +61,19 @@ def opencode_box(screen: str, _columns: int) -> Composer | None:
         return None
     if "ctrl+p commands" not in frame[-1] and not (footer[1] == " " and re.match(r"\n +[~/…]", frame[-1])):
         return None
-    margin = box[0] + footer[1]
+    return OpencodeFrame(box, box[0] + footer[1], frame[-2])
+
+
+def opencode_footer_agent(screen: str) -> str | None:
+    found = opencode_frame(screen)
+    return found.box[-1][len(found.margin):].partition(" · ")[0].strip() if found else None
+
+
+def opencode_box(screen: str, _columns: int) -> Composer | None:
+    found = opencode_frame(screen)
+    if not found:
+        return None
+    box, margin = found.box, found.margin
     rows = box[1:-2]
     if len(rows) >= max(6, len(screen.splitlines()) // 3):
         return None
@@ -63,7 +81,7 @@ def opencode_box(screen: str, _columns: int) -> Composer | None:
         return None
     if any(re.search(r"\[Pasted ~\d+ lines\]", row) for row in rows):
         return None
-    width = len(frame[-2]) - len(margin) - len(footer[1])
+    width = len(found.rule) - len(margin) - (len(margin) - len(box[0]))
     return Composer([line[len(margin):] for line in rows], width)
 
 
@@ -75,8 +93,11 @@ def composer_holds(kind: str, screen: str, text: str, columns: int = 0) -> bool:
     box = reader(screen, columns) if reader else None
     if not box or not text.strip():
         return False
-    parts = [box.rows[0]]
-    for row, following in pairwise(box.rows):
+    rows = box.rows[:]
+    while len(rows) > 1 and rows[-1] == "":
+        rows.pop()
+    parts = [rows[0]]
+    for row, following in pairwise(rows):
         word = following.partition(" ")[0]
         if box.width <= 0 or not (row.isascii() and word.isascii()):
             return False

@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from claude_tools.accounts import normalize
-from claude_tools.composer import composer_holds
+from claude_tools.composer import composer_holds, opencode_footer_agent
 from claude_tools.errors import Failed, HerdrError, NoProcess
 from claude_tools.herdr import SETTLED, Herdr, remaining_seconds, until
 from claude_tools.settings import Settings
@@ -22,6 +22,9 @@ CODEX = ("codex", ".codex-wrapped")
 OPENCODE = ("opencode", ".opencode2-wrap")
 KINDS = {"claude": CLAUDE, "codex": CODEX, "opencode": OPENCODE}
 OPENCODE_AGENT_FIELDS = ("mode", "model", "permissions", "system")
+OPENCODE_LIST_READS = 3
+OPENCODE_FOOTER_WAIT_S = 30
+OPENCODE_NEWS = "What's new in"
 OPENCODE_CONFIG_VARS = (
     "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_PROJECT_DISABLE",
     "OPENCODE_CLI_CONFIG_CONTENT",
@@ -126,12 +129,21 @@ def opencode_agents(folder: Path, agent: str) -> dict[str, dict]:
         raise Failed(f"opencode debug agents printed no agent list in {folder}: {out[:200]}") from e
 
 
+def listed_agent(folder: Path, agent: str) -> dict | None:
+    for _ in range(OPENCODE_LIST_READS):
+        if (found := opencode_agents(folder, agent).get(agent)) is not None:
+            return found
+    return None
+
+
 def check_opencode_agent(cwd: Path, agent: str) -> None:
     with tempfile.TemporaryDirectory() as empty:
-        defined = opencode_agents(Path(empty), agent).get(agent)
+        defined = listed_agent(Path(empty), agent)
     if defined is None:
         raise Failed(f"opencode has no global agent {agent}; `opencode debug agents` lists the agents")
-    effective = opencode_agents(cwd, agent).get(agent) or {}
+    effective = listed_agent(cwd, agent)
+    if effective is None:
+        raise Failed(f"`opencode debug agents` in {cwd} did not list agent {agent} in {OPENCODE_LIST_READS} reads")
     changed = [f for f in OPENCODE_AGENT_FIELDS if effective.get(f) != defined.get(f)]
     if changed:
         raise Failed(f"the opencode config of {cwd} changes the {', '.join(changed)} of agent {agent}, "
@@ -320,15 +332,13 @@ class Agents:
         screen = ""
         try:
             while True:
-                wait_ms = int(remaining_seconds(deadline) * 1000)
-                if claude_startup:
-                    wait_ms = min(wait_ms, SUBMIT_WAIT_MS)
+                wait_ms = min(int(remaining_seconds(deadline) * 1000), SUBMIT_WAIT_MS)
                 try:
                     self.herdr("agent", "prompt", name, text, "--wait", *SUBMIT_UNTIL,
                                "--timeout", str(max(1, wait_ms)), deadline=deadline)
                     return
                 except HerdrError as e:
-                    if e.code == "agent_prompt_stalled" or (claude_startup and e.code == "timeout"):
+                    if e.code in ("agent_prompt_stalled", "timeout"):
                         break
                     if not claude_startup or e.code not in ("agent_not_ready", "agent_blocked"):
                         raise
@@ -376,6 +386,26 @@ class Agents:
         env = " ".join(["unset", *OPENCODE_CONFIG_VARS, *(["; export", *exports] if exports else [])])
         standalone = ["--standalone"] if agent and "--standalone" not in args else []
         self.start_in_pane(pane, name, "opencode", env, [*standalone, *args])
+        if agent:
+            self.wait_opencode_footer(name, agent)
+
+    def wait_opencode_footer(self, name: str, agent: str) -> None:
+        deadline = time.monotonic() + OPENCODE_FOOTER_WAIT_S
+        screen, shown, dismissed = "", None, False
+        while time.monotonic() < deadline:
+            screen = self.herdr.screen(name, deadline=deadline)
+            if OPENCODE_NEWS in screen:
+                if not dismissed:
+                    self.herdr("agent", "send-keys", name, "esc", deadline=deadline)
+                    dismissed = True
+            elif (footer := opencode_footer_agent(screen)) is not None:
+                shown = footer
+                if shown.casefold() == agent.casefold():
+                    return
+            time.sleep(min(1, max(0, deadline - time.monotonic())))
+        raise Failed(f"the opencode TUI of {name} did not show agent {agent} in its footer within "
+                     f"{OPENCODE_FOOTER_WAIT_S} s (last shown: {shown or 'none'}), so it may run another agent; "
+                     f"last visible screen: {screen[-400:]}")
 
     def start_codex(self, pane: str, name: str, codex_home: str, args: list[str]) -> None:
         env = f"export CODEX_HOME={shlex.quote(codex_home)}" if codex_home else "unset CODEX_HOME"

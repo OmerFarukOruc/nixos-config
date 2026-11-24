@@ -34,7 +34,12 @@ cleanup() {
     [[ "$(readlink "/proc/$p/cwd" 2>/dev/null)" == "$dir"* ]] && kill "$p" 2>/dev/null
   done
   if [[ -n $csid ]]; then find "$HOME/.codex/sessions" -name "rollout-*-$csid.jsonl" -delete 2>/dev/null; fi
-  if [[ -n $osid ]]; then (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode session delete "$osid" >/dev/null 2>&1); fi
+  if [[ -d "$dir/opencode" ]]; then
+    (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode session list --standalone --format json 2>/dev/null) |
+      jq -r '.[].id' 2>/dev/null | while IFS= read -r sid; do
+      (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode session delete "$sid" >/dev/null 2>&1)
+    done
+  fi
   if ((ok)); then
     rm -rf "$dir" "${HOME:?}/.claude/projects/$(tr '/.' '--' <<<"$dir")"
   else
@@ -176,13 +181,26 @@ if command -v opencode >/dev/null && [[ -d "$HOME/.config/opencode" ]]; then
   [[ ! -e "$oc_files/$oc_agent.md" ]] || fail "the checkout has an agent file $oc_agent.md, the name of an agent this test writes"
   mkdir -p "$dir/opencode/agents"
   for entry in "$HOME/.config/opencode"/*; do
-    [[ "$(basename "$entry")" == agents ]] || ln -s "$entry" "$dir/opencode/"
+    [[ "$(basename "$entry")" =~ ^(agents|opencode\.json)$ ]] || ln -s "$entry" "$dir/opencode/"
   done
   ln -s "$oc_files"/*.md "$dir/opencode/agents/"
   (cd "$dir" && OPENCODE_CONFIG_DIR="$dir/opencode" opencode models --standalone) >"$dir/opencode-models" ||
     fail "opencode models exited $?"
-  oc_model=$(grep -m 1 -v -E '[[:space:]|&\\]' "$dir/opencode-models" || true)
-  [[ -n "$oc_model" ]] || fail "opencode models lists no model"
+  oc_model=""
+  while IFS= read -r candidate; do
+    { cat "$HOME/.config/opencode/opencode.json" 2>/dev/null || echo '{}'; } |
+      jq --arg m "$candidate" '. + {model: $m, small_model: $m}' >"$dir/opencode/opencode.json" ||
+      fail "cannot write the opencode config with model $candidate"
+    if (cd "$dir" && env -u CLAUDE_CONFIG_DIR -u CLAUDE_TOOLS_ROTATE_ID -u CLAUDE_TOOLS_START_ACCOUNT -u CLAUDE_TOOLS_PICK \
+      -u CLAUDE_TOOLS_PLAIN OPENCODE_CONFIG_DIR="$dir/opencode" timeout -k 10 60 opencode run --standalone --archived \
+      -m "$candidate" "Reply with only the word OK." </dev/null >"$dir/opencode-probe" 2>&1) &&
+      [[ "$(tail -n 1 "$dir/opencode-probe")" == OK ]]; then
+      oc_model=$candidate
+      break
+    fi
+    echo "setup: opencode model $candidate did not answer OK within 60 s: $(tail -c 200 "$dir/opencode-probe")"
+  done < <(grep -v -E '[[:space:]|&\\]' "$dir/opencode-models" | head -n 5)
+  [[ -n "$oc_model" ]] || fail "none of the first 5 usable models opencode lists answered OK within 60 s"
   sed "s|^model: .*|model: $oc_model|" "$oc_files/opencode-review.md" >"$dir/opencode/agents/$oc_agent.md"
   oc_ready=1
 fi
