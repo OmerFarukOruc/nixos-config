@@ -25,6 +25,9 @@ permissions:
     resource: ~/.claude/shared/**
     effect: allow
   - action: external_directory
+    resource: ~/.claude/reference/**
+    effect: allow
+  - action: external_directory
     resource: ~/.agents/skills/**
     effect: allow
   - action: question

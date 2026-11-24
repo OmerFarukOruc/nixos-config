@@ -1,7 +1,8 @@
 """Checks on calls that run git or gh: a push that rewrites main or skips the repository's hooks, a `git add` that
-stages everything or a `git commit` without a pathspec, a merge or label that bypasses `pr-land`, a HEAD move in a
-repository's main checkout, a `git worktree add` outside the worktrees folder, and a GitHub post that still holds a
-placeholder.
+stages everything (a dry run, `-n` or `--dry-run` without a later `--no-dry-run`, stages nothing and passes unless
+`-e`, `-p` or `-i` makes git stage anyway) or a `git commit` without a pathspec, a merge or label that bypasses
+`pr-land`, a HEAD move in a repository's main checkout, a `git worktree add` outside the worktrees folder, and a GitHub
+post that still holds a placeholder.
 
 Sessions share a checkout's index, so a commit without a pathspec can take files another session staged. A commit
 that git refuses to make partial, the one that concludes a merge, cherry-pick or revert, passes, and so does a dry run
@@ -367,6 +368,7 @@ class AddWords:
     all: bool = False
     update: bool = False
     dry_run: bool = False
+    interactive: bool = False
     from_file: bool = False
     paths: list = dataclasses.field(default_factory=list)
 
@@ -378,7 +380,7 @@ def _add_words(args):
         name, eq, _ = word.partition("=")
         if after_dashes or not word.startswith("-"):
             words.paths.append(word)
-        elif word == "--":
+        elif word in ("--", "--end-of-options"):
             after_dashes = True
         elif _abbreviates(name, "--all", "--al"):
             words.all = True
@@ -390,6 +392,8 @@ def _add_words(args):
             words.dry_run = True
         elif _abbreviates(name, "--no-dry-run", "--no-d"):
             words.dry_run = False
+        elif any(_abbreviates(name, option, option[:4]) for option in ("--edit", "--patch", "--interactive")):
+            words.interactive = True
         elif _abbreviates(name, "--pathspec-from-file", "--pathspec-fr"):
             words.from_file = True
             k += not eq
@@ -400,6 +404,7 @@ def _add_words(args):
                 words.all = words.all or letter == "A"
                 words.update = words.update or letter == "u"
                 words.dry_run = words.dry_run or letter == "n"
+                words.interactive = words.interactive or letter in "epi"
         k += 1
     return words
 
@@ -411,9 +416,9 @@ def _add_stages_all(words):
 
 
 def _add_updates_all(words):
-    """Whether `git add` updates every tracked file: `-u` or `--update` with no pathspec, no `--pathspec-from-file`
-    and no dry run."""
-    return words.update and not words.dry_run and not words.from_file and not words.paths
+    """Whether `git add` updates every tracked file: `-u` or `--update` with no pathspec and no
+    `--pathspec-from-file`."""
+    return words.update and not words.from_file and not words.paths
 
 
 def _amends_all(options, paths):
@@ -462,6 +467,8 @@ def _index_reason(git, directory, deadline, after_head_move, unknown):
     verb = git.args[:1]
     if verb in (["add"], ["stage"]):
         words = _add_words(git.args[1:])
+        if words.dry_run and not words.interactive:
+            return None
         if _add_stages_all(words):
             return STAGE_ALL_REASON
         if _add_updates_all(words) and _in_shared_checkout(git, directory, deadline, unknown):
