@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import accounts, env_for, folder, registry
+from claude_tools.accounts import accounts, env_for, folder, outside_session, registry
 from claude_tools.errors import Failed
 from claude_tools.settings import Settings
 from claude_tools.store import locked, now, read_json, write_json
@@ -115,7 +115,7 @@ def probe_windows(stdout: str) -> tuple[dict | None, str]:
 
 def probe(config_dir: str, probe_dir: Path) -> dict:
     probe_dir.mkdir(parents=True, exist_ok=True)
-    env = env_for({k: v for k, v in os.environ.items() if k != "CLAUDE_TOOLS_ROTATE_ID"}, config_dir)
+    env = env_for(outside_session(os.environ), config_dir)
     cmd = ["claude", "-p", "--safe-mode", "--no-session-persistence", "--model", "haiku", "--max-turns", "1",
            "--output-format", "stream-json", "--verbose", "Reply with ok."]
     try:

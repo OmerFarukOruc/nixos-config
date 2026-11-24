@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from claude_tools.accounts import outside_session
 from claude_tools.errors import Failed, HerdrError
 from claude_tools.settings import Settings
 
@@ -157,7 +158,8 @@ class Herdr:
             return server
         if self.session:
             subprocess.Popen([*self.cmd, "server"], start_new_session=True, stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.home)
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=self.home,
+                             env=outside_session(os.environ))
         else:
             subprocess.run(["systemctl", "--user", "start", "herdr-default.service"], check=False)
         deadline = time.time() + SERVER_WAIT_S

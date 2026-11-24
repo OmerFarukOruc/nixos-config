@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,14 @@ def read_accounts(accounts_file: Path) -> Accounts:
 
 def accounts(accounts_file: Path) -> dict[str, str]:
     return read_accounts(accounts_file).usable
+
+
+ROTATE_ID = "CLAUDE_TOOLS_ROTATE_ID"
+SESSION_VARS = (ROTATE_ID, "CLAUDE_TOOLS_START_ACCOUNT", "CLAUDE_TOOLS_PICK", "CLAUDE_TOOLS_PLAIN", "CLAUDE_CONFIG_DIR")
+
+
+def outside_session(env: Mapping[str, str]) -> dict[str, str]:
+    return {k: v for k, v in env.items() if k not in SESSION_VARS}
 
 
 def env_for(base: dict, config_dir: str) -> dict:

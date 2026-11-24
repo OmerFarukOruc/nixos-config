@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import account_of, read_accounts
+from claude_tools.accounts import ROTATE_ID, account_of, read_accounts
 from claude_tools.agents import KINDS, SKIP_PERMISSIONS, UNNAMED, Agents, opencode_agent_of, opencode_config
 from claude_tools.commands.rotate import carried_args, claude_help, help_text, parse_help, parsed_flags
 from claude_tools.errors import Failed
@@ -370,7 +370,7 @@ class Switcher:
         r = Record(kind=kind, named=a.get("name") is not None, pane=a["pane_id"],
                    workspace=labels.get(a["workspace_id"]), cwd=a["cwd"], session=sid, args=argv[1:])
         if kind == "claude":
-            return replace(r, config_dir=env.get("CLAUDE_CONFIG_DIR", ""), rotate="CLAUDE_TOOLS_ROTATE_ID" in env,
+            return replace(r, config_dir=env.get("CLAUDE_CONFIG_DIR", ""), rotate=ROTATE_ID in env,
                            model=last_model(self.settings.home / ".claude/projects", sid))
         if kind == "opencode":
             return replace(r, opencode_config=opencode_config(env))

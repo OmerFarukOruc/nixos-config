@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from claude_tools.accounts import Accounts, account_of, env_for, read_accounts
+from claude_tools.accounts import ROTATE_ID, Accounts, account_of, env_for, read_accounts
 from claude_tools.agents import sessions
 from claude_tools.errors import Failed
 from claude_tools.limits import NO_RESET_WAIT
@@ -353,7 +353,7 @@ def run(settings: Settings, args: list[str]) -> int:
         plain(args)
     current = first_account(r, args)
     rotate_id = str(os.getpid())
-    base = {**os.environ, "CLAUDE_TOOLS_ROTATE_ID": rotate_id}
+    base = {**os.environ, ROTATE_ID: rotate_id}
     settings.runtime.joinpath("rotate").mkdir(parents=True, exist_ok=True)
     runner = Runner()
     argv, cwd = ["claude", *args], None
