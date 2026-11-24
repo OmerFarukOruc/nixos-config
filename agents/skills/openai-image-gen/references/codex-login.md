@@ -6,7 +6,7 @@ Use the existing Codex login with `scripts/generate_image.py`. The script defaul
 
 Checked on 2026-11-08 (details and commands in [API behavior](api-behavior.md)):
 
-- The route ignores the requested image model name and reports no model, so a model request stays unconfirmed in every report.
+- The route accepted an unknown image model name and returned no model identifier in the probes. The model used for an image remains unconfirmed.
 - `complexity` fails on every model with `invalid_value`, so the script has no flag for it.
 - The OAuth script has no SVG, GIF, markup, or mask controls. Omit `input_fidelity` on 2.6 edits.
 - `--size` is often replaced by `1536x1024`.

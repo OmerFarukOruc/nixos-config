@@ -1,6 +1,6 @@
 ---
 name: openai-image-gen
-description: Generates and edits images with OpenAI Images 2.6 through the Codex login or the OpenAI Images API. Supports reference images, transparent assets, and route-specific diagnostics.
+description: Generates and edits images through the Codex login or with GPT Image 2.6 on the OpenAI Images API. Supports reference images, transparent assets, and route-specific diagnostics.
 disable-model-invocation: true
 ---
 # OpenAI Images 2.6
@@ -14,7 +14,7 @@ Carry forward explicit settings. Derive aspect ratio and pixel dimensions from t
 | Decision | How to choose |
 | --- | --- |
 | Model | Explain the trade-off for this image. Flare favors speed when exploring compositions. Sunburst favors detail and consistency when a label must stay legible or a product must keep its shape across edits. Both can generate, edit, and produce transparent backgrounds. On the API, select `gpt-image-2.6-flare` or `gpt-image-2.6-sunburst`. The Codex login cannot confirm either choice. |
-| Quality | Choose from `auto`, `low`, `medium`, `high`, `xhigh`, and `max`. Suggest low for a sketch, medium for a general image, and high for fine lettering. Offer xhigh or max when additional detail matters enough to justify the time and cost. |
+| Quality | Choose from `auto`, `low`, `medium`, `high`, `xhigh`, and `max`. Suggest low for a sketch, medium for a general image, and high for fine lettering. When deciding between xhigh and max for a 4K Sunburst final, suggest xhigh first. Offer max when a specific close-up detail matters at the intended viewing size, or use it directly when requested. See the [4K comparisons](references/images-api.md#4k-sunburst-cost-comparison). |
 | Resolution | Offer square 1024×1024, portrait 1024×1536, landscape 1536×1024, or widescreen 1536×864 as the use suggests. For a 4K landscape deliverable, request 3840×2160. For custom still rasters, use multiples of 16, up to 3840 per edge, an aspect ratio within 3:1 either way, and 655,360–8,294,400 total pixels. GIFs have separate limits. |
 | API complexity | Leave the default high for layouts with multiple elements. Low can suit a focused edit. Medium is also available. Increase quality for illegible text and adjust complexity for misplaced labels or objects. |
 | Background and count | Request transparent PNG for cutouts and check the alpha channel. Use one image unless the user asks for variations. Agree on the count before spending credits on a batch. |

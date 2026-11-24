@@ -12,7 +12,7 @@ Public Responses documentation defines the analogous request fields, not this ro
 | Concern | Current script behavior |
 | --- | --- |
 | Orchestration | Top-level `model: gpt-6-astra`, no `reasoning` field |
-| Image model | `gpt-image-2.6-sunburst` or `gpt-image-2.6-flare` inside `tools[]`; the route ignores it (see Probes) |
+| Image model | `gpt-image-2.6-sunburst` or `gpt-image-2.6-flare` inside `tools[]`; model selection is unconfirmed (see Probes) |
 | Action | `generate`, `auto` with `--reference`, or `edit` with `--style-reference`; forced image tool choice |
 | Image controls | Tool-level `size`, `quality`, `output_format: png`, and `background` when `--background` is set |
 | Image input | One data URL per `--reference`, or one for `--style-reference` |
@@ -105,7 +105,7 @@ Actual size and format come from the decoded response image, before local WebP c
 With `--background transparent`, `actual.transparent_pixels` is true when the decoded image has a pixel below full alpha, and a false value is a mismatch.
 Concrete returned values satisfy `auto` requests; unspecified returned values cannot prove a concrete setting.
 
-For generation and edits, exit code `0` means all requested settings were verified for every image.
+For generation and edits, exit code `0` means every image passed the checks for quality, size, format, action and any requested background. The report records the requested model separately. Its identity remains unverified.
 Exit code `5` means images were saved but some settings mismatched or remained unverified.
 Images and reports remain available for inspection after exit code `5`.
 This status does not trigger a retry or a lower-quality request.
