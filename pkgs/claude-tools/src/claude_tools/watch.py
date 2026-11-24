@@ -8,13 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from claude_tools.errors import Failed, HerdrError
-from claude_tools.herdr import Herdr, Stream, session_of
+from claude_tools.herdr import SETTLED, Herdr, Stream, session_of
 
 TICK_S = 5
 TOPOLOGY = ("pane.agent_detected", "pane.updated", "pane.moved", "pane.closed", "pane.exited", "tab.closed",
             "workspace.closed")
 RESUBSCRIBE = ("events_lost", "pane_not_found")
-SETTLED = ("idle", "done")
 LOAD_PER_CORE = 2
 SWAP_MAX = 80
 INODES_MAX = 70

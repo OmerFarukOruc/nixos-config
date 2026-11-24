@@ -13,6 +13,11 @@ from claude_tools.settings import Settings
 
 SERVER_WAIT_S = 30
 REQUEST_TIMEOUT_S = 30
+SETTLED = ("idle", "done")
+
+
+def until(*states: str) -> tuple[str, ...]:
+    return tuple(arg for state in states for arg in ("--until", state))
 
 
 def remaining_seconds(deadline: float) -> float:

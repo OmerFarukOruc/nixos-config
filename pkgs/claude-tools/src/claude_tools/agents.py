@@ -13,7 +13,7 @@ from pathlib import Path
 from claude_tools.accounts import normalize
 from claude_tools.composer import composer_holds
 from claude_tools.errors import Failed, HerdrError, NoProcess
-from claude_tools.herdr import Herdr, remaining_seconds
+from claude_tools.herdr import SETTLED, Herdr, remaining_seconds, until
 from claude_tools.settings import Settings
 from claude_tools.store import append_event
 
@@ -34,7 +34,7 @@ PROBE_LONGEST_WAIT_MS = 30000
 FREED_WAIT_S = 30
 PROMPT_WAIT_S = 60
 SUBMIT_WAIT_MS = 5000
-SUBMIT_UNTIL = ("--until", "working", "--until", "blocked")
+SUBMIT_UNTIL = until("working", "blocked")
 TRUST_SCREENS = {
     "claude": (("Yes, I trust this folder",), ("down", "enter")),
     "codex": (("Trust this folder?", "› 1. Trust and continue"), ("enter",)),
@@ -341,7 +341,7 @@ class Agents:
             agent = self.herdr("agent", "get", name, deadline=deadline)["result"]["agent"]
             if agent["agent_status"] in ("working", "blocked"):
                 return
-            if agent["agent_status"] in ("idle", "done"):
+            if agent["agent_status"] in SETTLED:
                 columns = 0
                 if agent["agent"] == "codex":
                     pane = agent["pane_id"]
@@ -399,5 +399,5 @@ class Agents:
             screen = h.screen(name)
             if not self.answer_trust(kind, name, screen):
                 raise self.blocked_at_startup(name, screen, "agent_not_ready")
-            h("agent", "wait", name, "--until", "idle", "--timeout", "60000")
+            h("agent", "wait", name, *until(*SETTLED), "--timeout", "60000")
             return
