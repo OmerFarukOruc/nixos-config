@@ -22,3 +22,16 @@ For requests beyond the PNG helper, use the official SDK on the selected API pro
 - For SVG, use generations, a single output, and no streaming. Decode the returned base64 to an SVG file and inspect the rendered result.
 - For an animated GIF, use generations or edits and the guide’s GIF-specific sizes, frame count, and frame duration. Inspect the animation and loop.
 - For a markup-guided edit, supply a transparent PNG overlay matching the first image’s dimensions. A mask identifies a region through its alpha channel. Describe the change and what to preserve. Omit `input_fidelity` on Images 2.6 edits.
+
+## 4K Sunburst cost comparison
+
+Two standard Images API generations on 2026-11-24 used Sunburst, an identical text-only prompt for a vintage camera, high complexity, and opaque PNG output. Both PNGs measured 3840×2160 (8,294,400 pixels), and each response reported the requested quality.
+
+| Quality | Calculator output estimate | API output tokens | Output cost from usage | Total with prompt |
+| --- | ---: | ---: | ---: | ---: |
+| xhigh | $0.17790 | 5,930 | $0.17790 | $0.178645 |
+| max | $0.40026 | 13,342 | $0.40026 | $0.401005 |
+
+Each request used 149 text input tokens and zero image input tokens. At $5 per million text input tokens, the prompt added $0.000745 per image. Image output cost $30 per million tokens. Totals use the published standard rates before credits. The responses supplied usage counts; the account invoice and credit balance were not checked. [Cost calculator](https://developers.openai.com/api/docs/guides/image-generation#calculating-costs) and [standard pricing](https://developers.openai.com/api/docs/pricing#image-generation).
+
+At these settings max cost about 2.25 times as much for image output. Both renders reproduced “ASTRA 35” and “50 mm” legibly. One image per setting establishes a cost example; it gives limited evidence about visual quality on other prompts.
