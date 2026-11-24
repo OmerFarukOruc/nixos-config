@@ -13,15 +13,23 @@ Carry forward explicit settings. Derive aspect ratio and pixel dimensions from t
 
 | Decision | How to choose |
 | --- | --- |
-| Model | Flare for quick studies. Sunburst for precise edits, detailed textures, and demanding layouts. The API accepts an explicit model. The Codex route has returned images even for unknown model names. |
+| Model | Explain the trade-off for this image. Flare favors speed when exploring compositions. Sunburst favors detail and consistency when a label must stay legible or a product must keep its shape across edits. Both can generate, edit, and produce transparent backgrounds. On the API, select `gpt-image-2.6-flare` or `gpt-image-2.6-sunburst`. The Codex login cannot confirm either choice. |
 | Quality | Choose from `auto`, `low`, `medium`, `high`, `xhigh`, and `max`. Suggest low for a sketch, medium for a general image, and high for fine lettering. Offer xhigh or max when additional detail matters enough to justify the time and cost. |
 | Resolution | Offer square 1024×1024, portrait 1024×1536, landscape 1536×1024, or widescreen 1536×864 as the use suggests. For a 4K landscape deliverable, request 3840×2160. For custom still rasters, use multiples of 16, up to 3840 per edge, an aspect ratio within 3:1 either way, and 655,360–8,294,400 total pixels. GIFs have separate limits. |
 | API complexity | Leave the default high for layouts with multiple elements. Low can suit a focused edit. Medium is also available. Increase quality for illegible text and adjust complexity for misplaced labels or objects. |
 | Background and count | Request transparent PNG for cutouts and check the alpha channel. Use one image unless the user asks for variations. Agree on the count before spending credits on a batch. |
 
-When exact dimensions or rendering quality matter, recommend the API. The Codex login has returned a different size or lower quality than requested. See the [OAuth measurements](references/api-behavior.md).
+When a particular model, exact dimensions, or rendering quality matter, recommend the API. The Codex login has returned a different size or lower quality than requested. See the [OAuth measurements](references/api-behavior.md).
 
-For model-specific controls and billing estimates, use the [2.6 prompting guide](https://developers.openai.com/api/docs/guides/image-prompting) and the [image generation guide and calculator](https://developers.openai.com/api/docs/guides/image-generation).
+## Explain API cost before generation
+
+When offering API credits or using them, quote an approximate USD output cost for the chosen model, quality, dimensions, and image count before sending. Include the per-image and batch estimates for multiple images. A user who already chose the route and settings needs the estimate without another approval question. For a Codex-only request, explain that it uses subscription allowance if the user asks about cost.
+
+Consult the live [image generation guide](https://developers.openai.com/api/docs/guides/image-generation) for billing and format-specific controls. Use its [output cost calculator](https://developers.openai.com/api/docs/guides/image-generation#calculating-costs) with explicit settings. Consult the live [image prompting guide](https://developers.openai.com/api/docs/guides/image-prompting) when comparing models or advising on prompting, quality, or edit consistency. Use the GPT-Image-2.6 section of each guide. Reuse sources already checked during the request.
+
+The calculator groups Flare and Sunburst. Use its shared estimate while it does so. Actual usage can differ. Complexity has no separate fee. Label the estimate as image output before any credits are applied; prompt tokens and reference-image inputs add to the total at the [current standard API rates](https://developers.openai.com/api/docs/pricing#image-generation). For `auto`, illustrate a named quality and size and say which choices remain open. Use format-specific billing guidance for GIF or SVG.
+
+If the calculator is unavailable, this dated example gives the scale: on 2026-11-24 its standard API estimate for either model at one 1024×1024 still was about $0.025 at low, $0.043 at medium, $0.053 at high, $0.094 at xhigh, or $0.211 at max, before inputs. Label these as historical examples. For other dimensions, use the square example only to show scale and disclose that the requested size could not be priced. Proceed with an already authorized API request unless the user made a cost ceiling or an estimate a condition.
 
 ## Generate, inspect, and deliver
 
