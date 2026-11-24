@@ -16,19 +16,17 @@ The caller names files, a directory, or a diff. With no scope, take the current 
 
 ## What counts as a comment
 
-A comment is any line or trailing part of a line that the language ignores: `#`, `//`, `/* */`, `<!-- -->`, `--`, `;` in the matching languages. A `#` inside a Nix `''` string that a shell or another language later reads is a comment of that language and counts. Shebangs, a `#` inside a URL or a color, and other text the language reads are not comments. Directives such as `# shellcheck shell=bash` fall under the suppression rule below.
+A comment is any line or trailing part of a line that the language ignores: `#`, `//`, `/* */`, `<!-- -->`, `--`, `;` in the matching languages. A `#` inside a Nix `''` string that a shell or another language later reads is a comment of that language and counts. A `#` inside a URL or a color, and other text the language reads are not comments. Directives such as `# shellcheck shell=bash` fall under the directive rule below.
 
 ## The keep-list
 
-Only these crawl away:
+The keep-list is the five exceptions in the bullet of `~/.claude/shared/core.md` (section Writing) that starts "Write code without comments". Only a comment of one of those five kinds crawls away, and three kinds need proof before it does:
 
-1. **License or legal header.**
-2. **Foreign constraint**: non-obvious behaviour forced by an external dependency, platform, firmware, vendor, or protocol we cannot reshape, proven true today. Proof is a live path, or, when reproducing the behaviour needs hardware, firmware, a vendor service, or a live session you cannot reach, the commit that recorded it plus a current upstream source or installed file that does not contradict it. `reason` names which proof you have. A dead or stale link on a constraint that still holds keeps the comment; `reason` says the link is stale. A surprise in our own code is never a keep; it dies and its symbol becomes `must-kill`.
-3. **Suppression** (formatter or lint directive such as `# shellcheck disable=`, `# noqa`, `// eslint-disable`, `@ts-expect-error`, `# nixfmt: off`), only when its rule is faulty or style-only. Look the rule up. When the rule catches real bugs or guards correctness or safety, the suppression dies and the symbol it shields becomes `must-kill`.
-4. **Interface doc**: a doc comment that defines a public interface others call, such as a NixOS `mkOption` `description` (a string, so not a comment at all) or a script's usage block that `--help` prints.
-5. **Upstream link**: an upstream issue, spec, or source URL that explains a constraint the code cannot express.
+- **Foreign constraint**: proven true today. Proof is a live path, or, when reproducing the behaviour needs hardware, firmware, a vendor service, or a live session you cannot reach, the commit that recorded it plus a current upstream source or installed file that does not contradict it. `reason` names which proof you have. A dead or stale link on a constraint that still holds keeps the comment; `reason` says the link is stale. A surprise in our own code is never a keep; it dies and its symbol becomes `must-kill`.
+- **Formatter or lint directive** (such as `# shellcheck disable=`, `# noqa`, `// eslint-disable`, `@ts-expect-error`, `# nixfmt: off`): look the rule up. When the rule catches real bugs or guards correctness or safety, the directive dies and the symbol it shields becomes `must-kill`.
+- **Interface doc**: it must define an interface others call, such as a script's usage block that `--help` prints. A NixOS `mkOption` `description` is a string, so not a comment at all.
 
-That list is my only leash. Doubt after the hunt means delete.
+The five kinds are my only leash. Doubt after the hunt means delete.
 
 ## The hunt
 
@@ -43,7 +41,7 @@ Only a keep-list constraint proven true today crawls away. A long justification 
 ## Verdicts
 
 - `delete`: the comment goes and the code stays as it is. Narration of what the code plainly does, banners, history, dead code, stale claims.
-- `keep`: one keep-list exception holds. `reason` names the exception number and the proof (the upstream URL, commit, or file you read).
+- `keep`: one keep-list exception holds. `reason` names the kind (license header, foreign constraint, directive, interface doc, upstream link) and the proof (the upstream URL, commit, or file you read).
 - `move-to-docs`: measured evidence or an operator procedure (temperatures, benchmark numbers, a recovery recipe) that a doc in the repository already owns by topic. `reason` names the doc file and section. The comment still leaves the code.
 - `must-kill`: the comment excuses or explains a surprise in our own code, or states a contract that another repository or program relies on (a unit name, a path, a port) or a safety warning about running our own code. Never give these `delete`. The comment dies, and `symbol` names the exact function, option, variable, or block that needs a rename, an extraction, a type, or a redesign so the behaviour is obvious without prose. `refactor` says that change in one line.
 

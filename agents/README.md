@@ -7,6 +7,7 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | Path | Read through | Holds |
 | --- | --- | --- |
 | `shared/` | `~/.claude/shared` | `core.md`, the rules every agent follows, and the rule files it points to |
+| `shared/core.md` | `~/.grok/rules/core.md`, `~/.config/opencode/AGENTS.md` | the same rules for Grok, which loads every `*.md` in `~/.grok/rules`, and for opencode, whose global `AGENTS.md` replaces its fallback to `~/.claude/CLAUDE.md` |
 | `claude/CLAUDE.md` | `~/.claude/CLAUDE.md` | Claude Code's user instructions, which import `core.md` |
 | `claude/rules/` | `~/.claude/rules` | Claude Code rule files |
 | `reference/` | `~/.claude/reference` | reference pages the rules send agents to |
