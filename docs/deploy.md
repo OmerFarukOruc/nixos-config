@@ -177,8 +177,13 @@ job per host (check 4) and one job that runs checks 5 to 9 in order.
    `scripts/lib/theme-contrast.py` on nixos-rog's theme packs, and the
    `patches` check (`ci/patches.nix`), which unpacks each nixpkgs package that
    this repository patches and applies its patches, and builds each package
-   whose overlay edits it in `preFixup` or `postFixup`. The `patches` check
-   fails when an overlay in `overlays/` patches a package it does not list, so
+   whose overlay edits it in `preFixup` or `postFixup`. It unpacks each
+   package on `stdenvNoCC` with only the attributes its unpack and patch
+   phases read, so no build input, such as the CachyOS kernel that the NVIDIA
+   open module's `makeFlags` name, enters the check; devbox lists no CachyOS
+   binary cache (`nixosModules/kernel.nix`) and would build that kernel from
+   source. The `patches` check fails when an overlay in `overlays/` patches
+   a package it does not list, so
    a nixpkgs move after which a patch no longer applies fails without a build
    of the whole system.
 6. `box browser feature`: evaluates the box browser of devbox, nixos-rog and

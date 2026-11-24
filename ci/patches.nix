@@ -19,26 +19,39 @@ let
     agent-skills =
       nixosConfigurations.nixos-rog.config.home-manager.users.oruc.oruc.agents.upstreamSkills;
   };
-  patchNeedsTools = [ "vscode" ];
-  patchOnlyDrops = {
-    iptvnator = {
-      pnpmDeps = null;
-      preConfigure = "";
-      preBuild = "";
-    };
+  patchTools = {
+    vscode = [
+      rog.jq
+      rog.asar
+    ];
   };
+  unpackAndPatchAttrs = [
+    "__structuredAttrs"
+    "name"
+    "src"
+    "srcs"
+    "sourceRoot"
+    "setSourceRoot"
+    "unpackCmd"
+    "preUnpack"
+    "unpackPhase"
+    "postUnpack"
+    "patches"
+    "patchFlags"
+    "prePatch"
+    "patchPhase"
+    "postPatch"
+  ];
   patchOnly =
     name: pkg:
-    (rog.srcOnly pkg).overrideAttrs (
-      old:
-      {
-        nativeBuildInputs = if lib.elem name patchNeedsTools then old.nativeBuildInputs else [ ];
-        buildInputs = [ ];
-        propagatedBuildInputs = [ ];
-        installPhase = "touch $out";
+    (rog.srcOnly (
+      lib.getAttrs (lib.filter (attr: pkg.drvAttrs ? ${attr}) unpackAndPatchAttrs) pkg.drvAttrs
+      // {
+        stdenv = rog.stdenvNoCC;
+        nativeBuildInputs = patchTools.${name} or [ ];
       }
-      // patchOnlyDrops.${name} or { }
-    );
+    )).overrideAttrs
+      { installPhase = "touch $out"; };
   unchecked = {
     deskflow = "it only drops the patches of libportal, which libportal 0.10.0 already contains";
   };
