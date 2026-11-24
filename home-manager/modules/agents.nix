@@ -55,6 +55,8 @@ in
           ".claude/statusline.sh" = live "claude/statusline.sh";
           ".claude/agents" = live "claude/agents";
           ".config/opencode/agents" = live "opencode/agents";
+          ".config/opencode/AGENTS.md" = live "shared/core.md";
+          ".grok/rules/core.md" = live "shared/core.md";
           ".codex/AGENTS.md" = {
             text =
               builtins.readFile ../../agents/shared/core.md
