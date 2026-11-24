@@ -1033,16 +1033,16 @@
     "vscode-vibrancy": {
       "flake": false,
       "locked": {
-        "lastModified": 1795115891,
-        "narHash": "sha256-EpFLVo/Z4tGx/v4sGk/C4OZVZHFetB859m16BX5pOk4=",
+        "lastModified": 1795504909,
+        "narHash": "sha256-qZBrIkkyiD8u+cvgHeOVCsSimJm0l8xPzbMhd9hDxBs=",
         "owner": "illixion",
         "repo": "vscode-vibrancy-continued",
-        "rev": "dfea462b5dcd55fbc66222f21262f176794d9ccd",
+        "rev": "80375896aa2925f056b78aaedc6a2f7e334210e6",
         "type": "github"
       },
       "original": {
         "owner": "illixion",
-        "ref": "v1.6.2",
+        "ref": "v1.6.3",
         "repo": "vscode-vibrancy-continued",
         "type": "github"
       }

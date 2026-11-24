@@ -89,7 +89,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     vscode-vibrancy = {
-      url = "github:illixion/vscode-vibrancy-continued/v1.6.2";
+      url = "github:illixion/vscode-vibrancy-continued/v1.6.3";
       flake = false;
     };
     stay-green = {
