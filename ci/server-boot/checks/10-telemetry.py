@@ -172,11 +172,16 @@ for tel_key, tel_comm in tel_probes:
 
 
 def tel_credstore_read_recorded(user):
+    uid = machine.succeed(f"id -u {user}").strip()
     seen = len(tel_audit_syscalls("credstore", "cat"))
-    machine.execute(f"runuser -u {user} -- cat /run/secrets/network-dns-1")
+    status, _ = machine.execute(f"runuser -u {user} -- cat /run/secrets/network-dns-1")
+    assert status != 0, f"{user} could read /run/secrets/network-dns-1"
     tel_expect(
-        f"no credstore record of a read by {user}",
-        lambda: len(tel_audit_syscalls("credstore", "cat")) > seen,
+        f"no credstore record of a read by {user} that the kernel refused with EACCES",
+        lambda: any(
+            re.search(r"\bexit=-13\b", line) and re.search(rf"\buid={uid}\b", line)
+            for line in tel_audit_syscalls("credstore", "cat")[seen:]
+        ),
     )
 
 

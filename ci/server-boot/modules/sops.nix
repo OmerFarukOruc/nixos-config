@@ -12,7 +12,7 @@ let
   fixtureKeys = lib.concatMap (
     line:
     let
-      match = builtins.match "[\"']?([A-Za-z0-9_-]+)[\"']?:.*" line;
+      match = builtins.match "[\"']?([A-Za-z0-9_.-]+)[\"']?:.*" line;
     in
     lib.optional (match != null) (lib.head match)
   ) (lib.splitString "\n" (builtins.readFile ../secrets.yaml));
