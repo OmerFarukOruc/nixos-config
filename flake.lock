@@ -649,11 +649,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1795463805,
-        "narHash": "sha256-xA4MPWAPXLwTSWqkWArAg2sHGrQ41Itkcm7tm5sYweY=",
+        "lastModified": 1795477838,
+        "narHash": "sha256-9zdMSQwLZjNetRIV1F0upOSFV3jWNXV3TZm/xNr/aTM=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "880c9a36fe5e7ccfce48a4cc50b090cb0b1c156b",
+        "rev": "fcb5e3adc1890db34f482f73e2449f3c57a2f423",
         "type": "github"
       },
       "original": {
