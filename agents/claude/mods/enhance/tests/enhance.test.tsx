@@ -1,10 +1,11 @@
 import { expect, test } from 'claude-code/testing'
+import type { PromptChangeInput, PromptChangeResult } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 import { HEADLESS_START, headlessResultOf, parseReply, readHeadless } from '../hooks/reply'
 import type { HeadlessResult } from '../hooks/reply'
 import { ERROR_STREAM, FORK_STREAM } from './fixtures'
-import { RUNS_DIR, lastRecord, resultLine, stubSession } from './session'
+import { RUNS_DIR, SESSION_ID, lastRecord, resultLine, stubSession } from './session'
 import type { Seen } from './session'
 
 const TYPED = { command: 'enhance', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const
@@ -589,6 +590,73 @@ test('a slash command leaves a ready result in place', async ($, on) => {
   expect(await shown($, BAND, /Enhanced prompt/)).toBe('Enhanced prompt is in the box')
   expect(lastRecord(seen).sent).toBeNull()
 })
+
+// The kit raises prompt.change on its $, but its Engine type lists only the calls a hook can make on its own $.
+type PromptChange = { change: (e: PromptChangeInput) => Promise<PromptChangeResult> }
+
+async function changed($: Engine, seen: Seen, origin: PromptChangeInput['origin']): Promise<void> {
+  const prompt = $.prompt as Engine['prompt'] & PromptChange
+  await prompt.change({ text: seen.box.text, cursor: 0, origin })
+  await seen.clock.settle()
+}
+
+async function recall($: Engine, seen: Seen, entry: string): Promise<void> {
+  seen.box.text = entry
+  await changed($, seen, { kind: 'history' })
+}
+
+const RUN_ENDS = [
+  ['a prompt put in the box', { box: 'fix the login', replies: [PROMPT, READING] }, async ($: Engine, seen: Seen) => press($, seen, BAND, 'enhance')],
+  [
+    'a prompt that was dismissed',
+    { box: 'fix the login', replies: [PROMPT, READING] },
+    async ($: Engine, seen: Seen) => {
+      await press($, seen, BAND, 'enhance')
+      await press($, seen, BAND, 'band-dismiss')
+    },
+  ],
+  ['a failed run beside other text in the box', { box: 'typed here', replies: [NO_RESULT] }, async ($: Engine, seen: Seen) => typed($, seen, 'fix the login')],
+] as const
+
+for (const [end, script, run] of RUN_ENDS) {
+  test(`after ${end}, the first history recall brings the draft back and the next one is left alone`, async ($, on) => {
+    const seen = stubSession(on, script)
+    await run($, seen)
+    expect(seen.box.text).not.toBe('fix the login')
+
+    await recall($, seen, 'newest entry')
+    expect(seen.box.text).toBe('fix the login')
+
+    await recall($, seen, 'older entry')
+    expect(seen.box.text).toBe('older entry')
+  })
+}
+
+const OFFER_ENDS = [
+  ['a submit from the box', async ($: Engine) => $.prompt.submit({ text: 'prompt', wait: false, origin: { kind: 'composer' } })],
+  ['Send', async ($: Engine, seen: Seen) => press($, seen, BAND, 'band-send')],
+  [
+    'Restore draft',
+    async ($: Engine, seen: Seen) => {
+      await press($, seen, BAND, 'band-restore')
+      await changed($, seen, { kind: 'plugin', name: 'enhance' })
+    },
+  ],
+  ['/clear', async ($: Engine) => $.session.end({ reason: 'clear', sessionId: SESSION_ID, resume: { id: SESSION_ID } })],
+] as const
+
+for (const [end, act] of OFFER_ENDS) {
+  test(`after ${end}, a history recall is left alone`, async ($, on) => {
+    const seen = stubSession(on, { box: 'fix the login', replies: [PROMPT, READING] })
+    await press($, seen, BAND, 'enhance')
+
+    await act($, seen)
+    await seen.clock.settle()
+    await recall($, seen, 'newest entry')
+
+    expect(seen.box.text).toBe('newest entry')
+  })
+}
 
 test('a question block before an unclosed paste block is unusable', () => {
   expect(parseReply('```question\nWhich page?\n```\n```paste\ncut off').kind).toBe('unusable')

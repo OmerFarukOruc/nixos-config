@@ -7,6 +7,7 @@ import { liveEffort, trackEffort } from './effort'
 import { dollars, factsOf, markOf } from './facts'
 import type { Cancel, Copy, Turn, Writer } from './copies'
 import { missingFrom } from './missing'
+import { forgetRecall, forgetRecallIfShown, offerDraft, recallDraft, recallTicket } from './recall'
 import { guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
 import { NOTHING_SPENT, parseReply, plus } from './reply'
 
@@ -38,6 +39,7 @@ type ActiveRun = {
   copy: Copy | null
   boxAtStart: string
   isBoxTouched: boolean
+  recallTicket: number
   done: Promise<void>
 }
 type Began = { at: number | null; session: Session | null }
@@ -352,6 +354,9 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
     if (active === me) {
       active = null
     }
+    if (record !== null && record.outcome.kind !== 'cancelled') {
+      await offerDraft($, me.recallTicket, me.task.draft)
+    }
     await finish($, me, record)
   }
 }
@@ -376,6 +381,7 @@ function start($: EngineInterface, task: Task, boxAtStart: string): boolean {
     return false
   }
 
+  forgetRecall()
   const me: ActiveRun = {
     id: task.revise?.from.record.id ?? crypto.randomUUID(),
     copyId: task.revise?.from.copyId ?? crypto.randomUUID(),
@@ -384,6 +390,7 @@ function start($: EngineInterface, task: Task, boxAtStart: string): boolean {
     copy: null,
     boxAtStart,
     isBoxTouched: false,
+    recallTicket: recallTicket(),
     done: Promise.resolve(),
   }
   active = me
@@ -438,6 +445,7 @@ async function send($: EngineInterface): Promise<void> {
       $.ui.toast(`The enhanced prompt was not sent: ${entered.drop}`)
       return
     }
+    forgetRecall()
     await clear($, () => 'as-is')
     if ((await $.prompt.read()).text === prompt) {
       await $.prompt.fill({ text: '' })
@@ -543,6 +551,9 @@ async function cancel($: EngineInterface): Promise<void> {
     cur => (cur.kind === 'running' && (me === null || cur.runId === me.id) ? cur : null),
     () => earlier ?? { kind: 'idle', isDraftBack },
   )
+  if (me !== null) {
+    await offerDraft($, me.recallTicket, me.task.draft)
+  }
 }
 
 async function openNotes($: EngineInterface): Promise<void> {
@@ -899,6 +910,11 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.change', async ($, e, next) => {
+    if (e.origin.kind === 'history') {
+      await recallDraft($, e.text)
+    } else {
+      forgetRecallIfShown(e.text)
+    }
     const isOtherPlugin = e.origin.kind === 'plugin' && e.origin.name !== 'enhance'
     if (isOtherPlugin || e.origin.kind === 'history' || e.origin.kind === 'undo' || e.origin.kind === 'app' || e.origin.kind === 'engine') {
       await markTouched($)
@@ -911,6 +927,7 @@ export const register: Register = (on, options) => {
   on('session.end', async ($, e, next) => {
     const me = await cancelActive()
     await Promise.race([wrapUp($, me), $.clock.sleep(SESSION_END_WAIT_MS)])
+    forgetRecall()
 
     return next(e)
   })
@@ -918,8 +935,11 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     const entered = await next(e)
     if (e.origin.kind === 'composer' || e.origin.kind === 'bridge') {
-      if (e.command === undefined && !('drop' in entered)) {
-        await clear($, record => sentOf(record, e.text))
+      if (!('drop' in entered)) {
+        forgetRecall()
+        if (e.command === undefined) {
+          await clear($, record => sentOf(record, e.text))
+        }
       }
       await markTouched($)
     }

@@ -47,7 +47,7 @@ The mod fills the box only when you left it alone during the run.
 - Typing counts as touching.
 - A slash command counts too, `/enhance-runs` included.
 - After a touch, the prompt waits behind **Use prompt**.
-- After a touch, a cancelled or failed run does not put the draft back.
+- After a touch, a cancelled or failed run does not put the draft back. If the box no longer holds the draft, the first Up arrow brings it back.
 
 ## When the prompt is ready
 
@@ -68,6 +68,18 @@ The buttons, in screen order:
 - "Draft already clear, nothing changed" means the prompt equals your draft.
 - **Cancel** during a Revise brings back the earlier prompt.
 - A Revise that fails keeps the earlier prompt. A toast gives the reason.
+
+### Up arrow brings back the draft
+
+The chord submits nothing, so Claude Code keeps no history entry for your draft. The mod fills that gap once per run.
+
+- A run ends ready, failed or cancelled, and the box no longer holds the draft.
+- The first Up arrow then shows the draft instead of the newest history entry.
+- Down puts back what the box held before Up, such as the enhanced prompt. Up, Up shows the second newest history entry.
+- Claude Code keeps the draft in that place of the history until you submit a prompt. Until then, the newest history entry stays hidden behind the draft.
+- An entry you pick from the history search (`ctrl+r`) right after a run is also replaced by the draft, once, because Claude Code reports the pick to the mod the same way as Up. Pick the entry again to get it.
+- A new run, a prompt you submit, **Send**, **Restore draft**, **Put draft in box** or `/clear` ends the offer. **Dismiss** keeps it.
+- If the box cannot take the draft, a toast says so, and the runs pane still has it.
 
 ### When the box is tall
 
@@ -114,7 +126,7 @@ The row starts with "✗ Enhance failed:" and has **Retry**, **Details** and **D
 | this session's folder … was deleted | Restart Claude Code in an existing folder |
 | anything else | Press Details for the full text and the copy's reply, then Retry |
 
-- The draft goes back into the box when the box is empty and untouched.
+- The draft goes back into the box when the box is empty and untouched. If the box then does not hold the draft, the first Up arrow brings it back, see [Up arrow brings back the draft](#up-arrow-brings-back-the-draft).
 - A run that ends ready or failed sends a notification: "Enhanced prompt is ready" or "Enhance failed". A cancelled run sends none.
 
 ## Get a draft or a prompt back

@@ -102,6 +102,8 @@ export function stubSession(on: On, script: Script): Seen {
 
     return { isFilled: true }
   })
+  on('prompt.change', (_, e) => ({ text: e.text }))
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }))
   on('prompt.submit', (_, e) => {
     if (script.isSubmitRefused === true) {
       return { drop: 'refused' }
