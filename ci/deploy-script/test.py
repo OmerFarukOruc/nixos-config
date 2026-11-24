@@ -197,3 +197,35 @@ assert "Restoring the previous system" not in out, "the deploy rolled back a wor
 assert running() == systems["dropped"], "the candidate does not keep running"
 assert boot_default() == systems["dropped"], "the candidate is not the boot default"
 machine.fail("systemctl is-active --quiet deploy-rollback.timer")
+
+print("phase: the connection that holds the lock drops during activation")
+publish("relock")
+status, out = deploy("switch")
+assert status == 0, f"a dropped lock connection gave exit {status}, not 0"
+assert "dropped with its connection. Taking it again." in out, "the deploy did not take the lock again"
+assert running() == systems["relock"], "the candidate does not keep running"
+assert boot_default() == systems["relock"], "the candidate is not the boot default"
+machine.fail("systemctl is-active --quiet deploy-rollback.timer")
+
+print("phase: the lock goes while its connection still runs")
+publish("stalled")
+status, out = deploy("switch")
+assert status == 0, f"a lock freed under a live connection gave exit {status}, not 0"
+assert "is free although its connection still runs" in out, "the deploy did not see that its lock was free"
+assert running() == systems["stalled"], "the candidate does not keep running"
+assert boot_default() == systems["stalled"], "the candidate is not the boot default"
+machine.fail("systemctl is-active --quiet deploy-rollback.timer")
+
+print("phase: another deploy takes the lock during activation")
+publish("stolen")
+status, out = deploy("switch")
+assert status == 77, f"a lock taken during activation gave exit {status}, not 77"
+assert f"Another deploy to {HOST} is running: lock-thief since the test" in out
+assert "leaves the rollback timer armed and the candidate running" in out
+assert running() == systems["stolen"], "the candidate does not keep running"
+assert boot_default() == systems["stalled"], "the candidate became the boot default without the lock"
+machine.succeed("systemctl is-active --quiet deploy-rollback.timer")
+machine.succeed("systemctl stop lock-thief.service")
+machine.succeed("systemctl start deploy-rollback.service")
+machine.wait_until_succeeds(f"test \"$(readlink -f /run/current-system)\" = {systems['stalled']}", timeout=180)
+machine.succeed("systemctl stop deploy-rollback.timer")

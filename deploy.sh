@@ -174,13 +174,22 @@ action=$action
 claude_config_dir=${CLAUDE_CONFIG_DIR:-}
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+lock_owner="$deployer:$repo_dir (${branch:-detached}, pid $$)"
+lock_free=252
+own_lock_seconds=50
+lock_end_seconds=40
+
 acquire_lock() {
-  local state='' holder
-  coproc DEPLOY_LOCK { on_target; }
-  trap '' PIPE
-  {
-    printf 'owner=%q\n' "$deployer:$repo_dir (${branch:-detached}, pid $$)"
-    cat <<'REMOTE'
+  local lock_in lock_out state holder deadline=$((SECONDS + own_lock_seconds))
+  while true; do
+    state='' holder=unknown
+    coproc DEPLOY_LOCK { on_target; }
+    if [[ -n ${DEPLOY_LOCK[0]:-} ]]; then
+      exec {lock_in}>&"${DEPLOY_LOCK[1]}" {lock_out}<&"${DEPLOY_LOCK[0]}"
+      trap '' PIPE
+      {
+        printf 'owner=%q\n' "$lock_owner"
+        cat <<'REMOTE'
 set -euo pipefail
 state_dir=$HOME/.local/state/nixos-config-deploy
 mkdir -p -- "$state_dir"
@@ -202,27 +211,35 @@ printf '%s since %s\n' "$owner" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$state_dir/de
 echo locked
 exec cat >/dev/null
 REMOTE
-  } >&"${DEPLOY_LOCK[1]}" || true
-  trap - PIPE
-  if [[ -n ${DEPLOY_LOCK[0]:-} ]]; then
-    IFS= read -r -t 60 -u "${DEPLOY_LOCK[0]}" state || state=
-  fi
-  case $state in
-    locked) ;;
-    busy)
-      IFS= read -r -t 5 -u "${DEPLOY_LOCK[0]:-}" holder || holder=unknown
-      printf 'Another deploy to %s is running: %s\n' "$host" "$holder" >&2
-      exit 77
-      ;;
-    no-flock)
-      printf 'flock is missing on %s, so the deploy cannot take its lock.\n' "$host" >&2
-      exit 1
-      ;;
-    *)
-      printf 'Could not take the deploy lock on %s.\n' "$host" >&2
-      exit 1
-      ;;
-  esac
+      } >&"$lock_in" || true
+      trap - PIPE
+      exec {lock_in}>&-
+      IFS= read -r -t 60 -u "$lock_out" state || state=
+      if [[ $state == busy ]]; then
+        IFS= read -r -t 5 -u "$lock_out" holder || holder=unknown
+      fi
+      exec {lock_out}<&-
+    fi
+    case $state in
+      locked) return 0 ;;
+      busy)
+        if [[ $holder == "$lock_owner since "* ]] && ((SECONDS < deadline)); then
+          sleep 5
+          continue
+        fi
+        printf 'Another deploy to %s is running: %s\n' "$host" "$holder" >&2
+        return 77
+        ;;
+      no-flock)
+        printf 'flock is missing on %s, so the deploy cannot take its lock.\n' "$host" >&2
+        return 1
+        ;;
+      *)
+        printf 'Could not take the deploy lock on %s.\n' "$host" >&2
+        return 1
+        ;;
+    esac
+  done
 }
 
 target_system() {
@@ -237,10 +254,27 @@ readlink -f /run/current-system
 REMOTE
 }
 
-ensure_lock() {
-  [[ -n ${DEPLOY_LOCK_PID:-} ]] && kill -0 "$DEPLOY_LOCK_PID" 2>/dev/null && return 0
+lock_held() {
+  local pid=${DEPLOY_LOCK_PID:-}
+  [[ -n $pid ]] && kill -0 "$pid" 2>/dev/null
+}
+
+await_lock_end() {
+  local deadline=$((SECONDS + lock_end_seconds))
+  while lock_held && ((SECONDS < deadline)); do
+    sleep 1
+  done
+  ! lock_held
+}
+
+retake_lock() {
   printf 'The deploy lock on %s dropped with its connection. Taking it again.\n' "$host" >&2
   acquire_lock
+}
+
+ensure_lock() {
+  lock_held && return 0
+  retake_lock || return $?
   if [[ $replace == false ]]; then
     check_live_releases || return $?
   fi
@@ -357,7 +391,7 @@ REMOTE
   done <<<"$live"
 }
 
-acquire_lock
+acquire_lock || exit $?
 if [[ $replace == false ]]; then
   check_live_releases || exit $?
 fi
@@ -685,6 +719,11 @@ run_unit() {
   return "$result"
 }
 
+rollback_deadline() {
+  printf 'The rollback timer starts the restore of the previous system at most %d seconds after the deploy armed it. journalctl -u deploy-rollback.service and /run/deploy-rollback.status on %s show the result.\n' \
+    "$rollback_seconds" "$host" >&2
+}
+
 activate() {
   "$1/bin/switch-to-configuration" test
 }
@@ -713,8 +752,8 @@ REMOTE
     activate_status=$?
   case $activate_status in
     "$unit_running")
-      printf 'The activation reported no result in time. The previous system returns within %d seconds.\n' \
-        "$rollback_seconds" >&2
+      printf '%s\n' 'The activation reported no result in time.' >&2
+      rollback_deadline
       return 1
       ;;
     "$unit_lost")
@@ -729,8 +768,8 @@ REMOTE
   fi
 
   if ! confirm_target; then
-    printf 'The target did not answer a fresh login. The previous system returns within %d seconds.\n' \
-      "$rollback_seconds" >&2
+    printf '%s\n' 'The target did not answer a fresh login.' >&2
+    rollback_deadline
     return 1
   fi
 
@@ -748,7 +787,19 @@ stop_rollback_timer() {
     cat <<'REMOTE'
 set -euo pipefail
 
-new=$1 release=$2
+new=$1 release=$2 owner=$3 lock_free=$4
+state_dir=$HOME/.local/state/nixos-config-deploy
+
+exec 8>>"$state_dir/deploy.lock"
+if flock -n 8; then
+  exit "$lock_free"
+fi
+exec 8>&-
+IFS= read -r holder <"$state_dir/deploy.owner" || holder=
+if [[ $holder != "$owner since "* ]]; then
+  printf 'Another deploy holds the lock on this host: %s\n' "${holder:-unknown}" >&2
+  exit 77
+fi
 
 running_candidate() {
   [[ $(readlink -f /run/current-system) == "$new" ]] && unit_ended deploy-rollback.service &&
@@ -759,13 +810,22 @@ running_candidate || { printf '%s\n' 'The rollback already ran. The target is no
 sudo systemctl stop deploy-rollback.timer
 running_candidate || { printf '%s\n' 'The rollback ran during confirmation.' >&2; exit 72; }
 REMOTE
-  } | on_target "$new_system" "$release_id" || stop_status=$?
-  if ((stop_status == 0 || stop_status == 72)); then
-    return "$stop_status"
-  fi
+  } | on_target "$new_system" "$release_id" "$lock_owner" "$lock_free" || stop_status=$?
+  case $stop_status in
+    0 | 72 | "$lock_free") return "$stop_status" ;;
+    77)
+      printf '%s\n' 'This deploy no longer holds the lock, so it leaves the rollback timer armed and the candidate running.' >&2
+      rollback_deadline
+      return 77
+      ;;
+  esac
   case $(target_state) in
     "$new_system inactive none") return 0 ;;
-    "$new_system active none") return "$stop_status" ;;
+    "$new_system active none")
+      printf '%s\n' 'The rollback timer could not be stopped, so it stays armed and the candidate keeps running.' >&2
+      rollback_deadline
+      return "$stop_status"
+      ;;
     running)
       printf '%s\n' 'The state of the rollback timer could not be read, so it may still be armed. The candidate does not become the boot default.' >&2
       return "$stop_status"
@@ -775,6 +835,38 @@ REMOTE
       return 72
       ;;
   esac
+}
+
+locked_stop() {
+  local lock_status=0
+  if ! lock_held; then
+    retake_lock || lock_status=$?
+    if ((lock_status != 0)); then
+      printf '%s\n' 'Without the lock, this deploy leaves the rollback timer armed and the candidate running.' >&2
+      rollback_deadline
+      return "$lock_status"
+    fi
+  fi
+  stop_rollback_timer
+}
+
+stop_rollback_timer_locked() {
+  local stop_status=0
+  locked_stop || stop_status=$?
+  if ((stop_status == lock_free)); then
+    printf 'The deploy lock on %s is free although its connection still runs. Waiting up to %d seconds for that connection to end.\n' \
+      "$host" "$lock_end_seconds" >&2
+    if await_lock_end; then
+      stop_status=0
+      locked_stop || stop_status=$?
+    fi
+  fi
+  if ((stop_status == lock_free)); then
+    printf 'This deploy could not take the lock on %s again, so it leaves the rollback timer armed and the candidate running.\n' "$host" >&2
+    rollback_deadline
+    return 1
+  fi
+  return "$stop_status"
 }
 
 install_entries() {
@@ -855,7 +947,7 @@ deploy() {
   ensure_lock || return $?
   if [[ $action != boot ]]; then
     activate_with_rollback || return $?
-    stop_rollback_timer || return $?
+    stop_rollback_timer_locked || return $?
   fi
   if [[ $action != test ]]; then
     install_boot_entries || return $?

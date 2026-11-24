@@ -542,7 +542,10 @@ The deploy runs these steps in order:
     active.
 15. Twenty seconds after the SSH check, it checks the recorded user services.
     The next list says what happens when this check fails.
-16. It stops the rollback timer.
+16. It stops the rollback timer. It first takes the lock again when the
+    connection that held it dropped, and the stop itself first checks on the
+    target that this deploy holds the lock ([One deploy at a
+    time](#one-deploy-at-a-time)).
 17. For `switch` and `boot`, it makes the checked build the system profile and
     boot default in a system service, `deploy-boot`, so an SSH drop cannot
     interrupt the install. It does not build or activate the build again.
@@ -607,9 +610,12 @@ When a step after the build fails, the deploy acts as follows:
   deploy reads the running system, the timer state, and the status the
   rollback unit recorded for this release, over fresh logins. Only the
   candidate, an `inactive` timer and no recorded status count as stopped, so a
-  timer that fired and left a failed restore exits 72. When the state cannot
-  be read within 180 seconds, the deploy says the timer may still be armed
-  and does not make the candidate the boot default.
+  timer that fired and left a failed restore exits 72. When the timer still
+  reads `active` with no recorded status, the deploy says that the timer
+  stays armed and the candidate keeps running, exits with the status of the
+  stop, and does not make the candidate the boot default. When the state
+  cannot be read within 180 seconds, the deploy says the timer may still be
+  armed and does not make the candidate the boot default.
 - **The target stops answering.** The rollback timer restores the previous
   system after 420 seconds. It needs no command from the machine that runs the
   deploy.
@@ -653,7 +659,7 @@ such as 1.
 | 74 | The ESP lacks room for the new kernels and initrds plus 1 GiB. | ESP untouched. |
 | 75 | A recorded user service failed, waits to restart, or could not be queried. | Previous system restored, unless the output says `THE ROLLBACK FAILED`. |
 | 76 | The boot entry install reported no result, after a dropped connection or a unit that ended without one. | Unknown: the system profile and boot default point at the candidate or the previous system. After `switch`, the candidate runs and no rollback timer is armed. |
-| 77 | Another deploy holds the lock on the host, or `nixos-upgrade.service` is installing main there. | Unchanged. |
+| 77 | Another deploy holds the lock on the host, or `nixos-upgrade.service` is installing main there. | Unchanged, or, when the lock was lost during activation, the candidate until the rollback timer restores the previous system, at most 420 seconds after the deploy armed it. |
 | 78 | A running or boot-default release holds files that this checkout lacks. | Unchanged. |
 | 79 | `/boot` is not mounted. | Unchanged. |
 | 80 | The candidate's units hold an ordering cycle, so the next boot would not finish. | Unchanged. |
@@ -724,8 +730,26 @@ have run since. It does these steps:
    one.
 
 It exits 77 if another deploy holds the lock by then, or 70 if another deploy
-left a rollback timer. During activation, the pending rollback timer keeps
-other deploys out.
+left a rollback timer. When the lock still names this deploy, the target has
+not yet ended the dropped connection, so the deploy tries again every 5 seconds
+for up to 50 seconds before it exits 77.
+
+During activation, the pending rollback timer keeps other deploys out. A
+`tailscaled` restart can end every SSH connection to the host, the lock's
+included, so the deploy takes the lock again after activation when its
+connection ended. The stop of the rollback timer then checks on the target that
+the lock is held and names this deploy. A Tailscale SSH session can end on the
+target while the deploy's `ssh` waits up to 30 seconds to notice, so when the
+check finds the lock free, the deploy waits up to 40 seconds for that
+connection to end, takes the lock again, and repeats the stop once. When another deploy holds the lock, the
+deploy exits 77; when it cannot take the lock, it exits 1. In both cases it
+leaves the rollback timer armed and the candidate running, and the timer
+restores the previous system at most 420 seconds after the deploy armed it.
+
+The check and the stop run in one login, but the boot entry install and the
+`current` update after them run in later logins. When the lock drops between
+the stop and those steps, another deploy can take it and activate while this
+deploy installs its boot entries.
 
 ## Dirty trees and other checkouts
 

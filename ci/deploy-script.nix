@@ -7,6 +7,17 @@ let
   signingKey = "/var/lib/secure-boot/db.key";
   signingCertificate = "/var/lib/secure-boot/db.pem";
   loader = "/boot/EFI/BOOT/BOOTX64.EFI";
+  lockFile = "/home/${user}/.local/state/nixos-config-deploy/deploy.lock";
+  lockBreaker = script: {
+    wantedBy = [ "multi-user.target" ];
+    path = [
+      pkgs.procps
+      pkgs.psmisc
+      pkgs.util-linux
+    ];
+    serviceConfig.Type = "oneshot";
+    inherit script;
+  };
   sleeper = {
     wantedBy = [ "default.target" ];
     serviceConfig = {
@@ -120,6 +131,25 @@ in
               sleep 5
             '';
           };
+          relock.systemd.services.lock-ender = lockBreaker ''
+            fuser --kill -TERM ${lockFile}
+          '';
+          stalled.systemd.services.lock-staller = lockBreaker ''
+            holder=$(fuser ${lockFile} 2>/dev/null | tr -d ' ')
+            parent=$(ps -o ppid= -p "$holder" | tr -d ' ')
+            kill -s STOP "$parent"
+            kill -s TERM "$holder"
+            systemd-run --collect --on-active=35 --timer-property=AccuracySec=1s ${pkgs.util-linux}/bin/kill -s CONT "$parent"
+            echo "lock-staller: stopped $parent and ended $holder"
+          '';
+          stolen.systemd.services.lock-stealer = lockBreaker ''
+            fuser --kill -TERM ${lockFile}
+            systemd-run --unit=lock-thief --uid=${user} ${pkgs.util-linux}/bin/flock ${lockFile} ${pkgs.coreutils}/bin/sleep 600
+            until ! flock -n ${lockFile} true; do
+              sleep 0.2
+            done
+            echo "lock-thief since the test" >${dirOf lockFile}/deploy.owner
+          '';
           bootfail.boot.loader.limine.extraInstallCommands = "exit 1";
           unsigned.boot.loader.limine.extraInstallCommands = lib.mkForce "";
           cycle.systemd.services = {

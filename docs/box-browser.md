@@ -67,11 +67,13 @@ With `--app ACCOUNT`, the command drives the Grok Bot app that is signed in to
 that account. It finds the app as it finds the box browser: this host's when
 the host runs `grok-bot-box-<account>.service`, else devbox's over SSH. The
 session runs as `app_<account>_<session>`, apart from the same agent's box
-browser session, and a session name that starts with `app_` exits 2. The app has one window and no tabs, so its sessions share that
-window and nothing is pinned, and `close` ends the session and leaves the app
-running. Every command but `close` starts the app when it is stopped and
-waits for its chat or its sign-in screen ([Grok Bot app](#grok-bot-app)); `start` does only that,
-and `box-view --app` calls it. `--app` with `--brave` exits 2.
+browser session, and a session name that starts with `app_` exits 2. The app
+has one window and no tabs, so its sessions share that window and nothing is
+pinned, and `close` ends the session and leaves the app running. `status` and
+`close` do not start the app. `start` starts it when it is stopped and waits
+for DevTools, and `box-view --app` calls it. Every other command starts it the
+same way and also waits for its chat or its sign-in screen ([Grok Bot
+app](#grok-bot-app)). `--app` with `--brave` exits 2.
 
 The command runs the first `agent-browser` on `PATH`, which Home Manager
 installs from llm-agents.nix (`home-manager/modules/agent-cli.nix`).
@@ -156,8 +158,8 @@ Each account gets three user units, and an idle check
   `XDG_CONFIG_HOME` to `~/.local/share/grok-bot-box/<account>`, and the two
   instances run side by side, each with its own login. The login survives a
   restart of the app with `--password-store=basic`, with no keyring.
-- No unit starts at boot. The first `box-browser --app <account>` command or
-  `box-view --app <account>` starts that account's app unit, which pulls in
+- No unit starts at boot. The first `box-browser --app <account>` command
+  other than `status` and `close`, or `box-view --app <account>`, starts that account's app unit, which pulls in
   its display, its window manager and `grok-bot-idle-<account>.timer`; a start
   took under 10 s on devbox on 2026-11-20 and kept the login. Every 5 minutes
   the timer runs `grok-bot-box-idle check`, which stops the display, and with
