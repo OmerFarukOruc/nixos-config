@@ -164,6 +164,10 @@
       url = "github:GoogleChrome/modern-web-guidance";
       flake = false;
     };
+    skills-demolab = {
+      url = "github:google-gemini/demolab";
+      flake = false;
+    };
   };
 
   outputs =

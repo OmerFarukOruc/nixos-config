@@ -577,6 +577,7 @@
         "skills-avoid-ai-writing": "skills-avoid-ai-writing",
         "skills-caldoai": "skills-caldoai",
         "skills-compound-engineering": "skills-compound-engineering",
+        "skills-demolab": "skills-demolab",
         "skills-diagram-design": "skills-diagram-design",
         "skills-gh-stack": "skills-gh-stack",
         "skills-grill-for-unknowns": "skills-grill-for-unknowns",
@@ -659,6 +660,22 @@
       "original": {
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
+        "type": "github"
+      }
+    },
+    "skills-demolab": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794315692,
+        "narHash": "sha256-w/7mhlEZCkCakNpHFPfGrGHr/Q8ZTsdIZRIDmOTxH7s=",
+        "owner": "google-gemini",
+        "repo": "demolab",
+        "rev": "cd0c1f8540c0186ec9592af972a0700fa20909d4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "google-gemini",
+        "repo": "demolab",
         "type": "github"
       }
     },

@@ -83,6 +83,10 @@ let
       path = "skills/chrome-extensions";
       plugin = true;
     };
+    gemini-frontend-design = {
+      src = inputs.skills-demolab;
+      path = "skills/gemini-frontend-design";
+    };
     codebase-design = matt "skills/engineering/codebase-design";
     diagnosing-bugs = matt "skills/engineering/diagnosing-bugs";
     domain-modeling = matt "skills/engineering/domain-modeling";
