@@ -1,7 +1,7 @@
 # Image prompting tips
 
 Use this reference for composition, exact text, preservation requirements, transparent assets, or expansion of a brief prompt.
-It follows the [GPT Image 2.6 prompting guide](https://developers.openai.com/api/docs/guides/image-prompting), limited to the controls this CLI sends.
+It follows the [GPT Image 2.6 prompting guide](https://developers.openai.com/api/docs/guides/image-prompting).
 
 Contents: Structure, Specificity, Generation, Text, Editing, Transparent assets, Iteration, Check the result, Examples.
 
@@ -26,7 +26,7 @@ Exclude: <unwanted elements specified by the request>
 ```
 
 These labels structure the prompt; they are not CLI flags. Short prompts, paragraphs, and JSON-like structures all work, so choose the format that is easiest to read and update.
-Rendering quality, dimensions, and background belong in the CLI options described in SKILL.md.
+Rendering quality, dimensions, and background belong in the request settings for the selected route.
 
 ## Specificity
 

@@ -697,24 +697,11 @@ def main() -> int:
     if args.style_reference:
         image_to_data_url(Path(args.style_reference).expanduser().resolve())
 
-    report = run_preflight(auth_file)
-    if not report["ok"]:
-        print_preflight(report)
-        die(
-            "Preflight failed. Fix the issues above and retry.\n"
-            "Tip: Run with --preflight to diagnose without attempting generation.",
-            code=3,
-        )
-    print("Preflight passed.", file=sys.stderr)
-
     size = validate_size(args.size)
     n = validate_n(args.n)
     prompt = load_prompt(args)
     if not prompt.strip():
         die("Prompt is empty.")
-
-    auth_data = report["auth_data"]
-    access_token, account_id, refresh_token = get_credentials(auth_data)
 
     output_path = Path(args.output).expanduser().resolve()
     paths = output_paths(output_path, n)
@@ -726,6 +713,19 @@ def main() -> int:
     for destination in destinations:
         if destination.exists():
             die(f"Output already exists: {destination}")
+
+    report = run_preflight(auth_file)
+    if not report["ok"]:
+        print_preflight(report)
+        die(
+            "Preflight failed. Fix the issues above and retry.\n"
+            "Tip: Run with --preflight to diagnose without attempting generation.",
+            code=3,
+        )
+    print("Preflight passed.", file=sys.stderr)
+
+    auth_data = report["auth_data"]
+    access_token, account_id, refresh_token = get_credentials(auth_data)
 
     action = "edit" if args.style_reference else "auto" if references else "generate"
     tool = {"action": action, "model": args.image_model, "size": size, "quality": args.quality}

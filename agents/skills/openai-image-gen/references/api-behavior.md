@@ -1,8 +1,8 @@
-# API behavior
+# Codex OAuth behavior
 
 Checked on 2026-11-08 against the public pages and the local scripts; Reference-guided generation was checked on 2026-10-28.
 
-Contents: Request structure, Controls outside the CLI, Probes, Reference-guided generation, Failure limitations, Verification report, Sources.
+Contents: Request structure, Controls outside the OAuth script, Probes, Reference-guided generation, Failure limitations, Verification report, Sources.
 
 ## Request structure
 
@@ -25,7 +25,7 @@ The script sends no `reasoning` field because the route turns `reasoning.effort`
 The [prompting guide](https://developers.openai.com/api/docs/guides/image-prompting), Model parameters, also says GPT Image 2.6 does not support `reasoning.summary` and asks to omit `input_fidelity` on edits.
 The [Astra guide](https://developers.openai.com/api/docs/guides/latest-model) requires Responses for tool use and excludes `none` reasoning.
 
-## Controls outside the CLI
+## Controls outside the OAuth script
 
 The 2.6 models take `complexity` (`low`, `medium`, `high`; omitted means `high`), `markup` on edits, `output_format` `svg` and `gif` (with `frame_count` and `frame_duration_ms`), and `output_compression` for JPEG and WebP.
 The [image generation guide](https://developers.openai.com/api/docs/guides/image-generation) places SVG output on `POST /v1/images/generations` only, GIF output on generations and `POST /v1/images/edits`, and markup on edits. These endpoints are the Images API, which needs an API key. On the OAuth route, the probes below show SVG and GIF requests failing with HTTP 400.
