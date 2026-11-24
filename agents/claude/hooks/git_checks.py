@@ -4,8 +4,9 @@ repository's main checkout, a `git worktree add` outside the worktrees folder, a
 placeholder.
 
 Sessions share a checkout's index, so a commit without a pathspec can take files another session staged. A commit
-that git refuses to make partial, the one that concludes a merge, cherry-pick or revert, passes, and so does
-`--amend`.
+that git refuses to make partial, the one that concludes a merge, cherry-pick or revert, passes, and so do `--amend`
+and a dry run (`--dry-run`, `--short`, `--porcelain`, `--long`), unless a later `--no-<option>` cancels it. A commit
+with `-i` or `--include` is refused, `--amend` included.
 
 Sessions share a repository's main checkout, so a `git checkout <rev>`, `git switch`, or `git reset --hard` there
 changes the files under every other session working in it. A linked worktree is a session's own, and so are the
@@ -41,11 +42,12 @@ GH_OPTION = rf"(?:\s+(?:(?:{GH_LONG})(?:\s+|=)|-[{GH_SHORT}]\s*)\S+)*"
 POSTING = re.compile(rf"\bgh{GH_OPTION}\s+(?:(?:issue|pr){GH_OPTION}\s+(?:comment|create|edit|review|close)|api\b)")
 # Bytes of a post body file that the check reads (guess); GitHub takes at most 65536 characters in a body.
 PLACEHOLDER_CAP = 1 << 20
-FORCE_FLAGS = {"-f", "--force"}
+FORCE_FLAGS = {"--force"}
 LEASE_FLAGS = {"--force-with-lease", "--force-if-includes"}
 DEFAULT_BRANCHES = {"main", "master"}
 # `git push` options that may take the next word as their value.
-PUSH_VALUE_OPTIONS = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+PUSH_VALUE_OPTIONS = {"--push-option", "--repo", "--receive-pack", "--exec"}
+PUSH_VALUE_LETTERS = "o"
 LABEL = "automerge"
 # The short options of each command that take a value, as a bundle such as `-dl automerge` reads them: `-f` is a
 # value for `gh api` and a flag for `gh pr create`.
@@ -84,7 +86,7 @@ WORKTREE_REASON = (
     "revision run `git worktree add --detach ~/Desktop/workspace/worktrees/<repo>/review-<sha7> <rev>`. Write the path "
     "as an absolute one when an earlier `cd` in the same call changes the directory."
 )
-ADD_VALUE_OPTIONS = {"-b", "-B", "--reason"}
+ADD_VALUE_OPTIONS = {"--reason"}
 HEAD_MOVING_VERBS = {"commit", "rebase", "merge", "cherry-pick", "am", "revert"}
 SHARED_INDEX = "Sessions share the checkout's index, so this takes files another session left there."
 STAGE_ALL_REASON = ("Stage the paths you changed by name: `git add -- <path>...`, with no `-A`, `--all`, `.`, `:/` or "
@@ -138,6 +140,24 @@ def _gh_words(args):
     return args[at[0]], args[at[1]], [a for j, a in enumerate(args) if j not in at]
 
 
+def _short_bundle(word, values, attached=""):
+    """The letters of the short-option bundle word, such as `-dx`, up to the first letter that takes a value, the text
+    after that letter or None when no letter takes one, and whether the value is the next word: a letter in values
+    takes that text, or the next word when the text is empty; a letter in attached takes only that text."""
+    for at, letter in enumerate(word[1:], 2):
+        if letter in values or letter in attached:
+            rest = word[at:]
+            return word[1:at], rest, letter in values and not rest
+    return word[1:], None, False
+
+
+def _short_letters(args, values):
+    """The short options of the words args before `--`, each as `-<letter>`, reading bundles such as `-fb`."""
+    words = args[:args.index("--")] if "--" in args else args
+    return {"-" + letter for word in words if word.startswith("-") and not word.startswith("--") and len(word) > 1
+            for letter in _short_bundle(word, values)[0]}
+
+
 def _force_push_reason(args):
     """Why the `git push` words args may not run, or None. A lease push passes only when each refspec names its
     branch literally and none is main or master; a bare refspec such as `HEAD` pushes a branch the words do not show."""
@@ -149,8 +169,11 @@ def _force_push_reason(args):
             positional += args[k:]
             break
         name = arg.split("=", 1)[0]
-        # A bundle of short flags such as -uf counts too.
-        if name in FORCE_FLAGS or re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", arg):
+        if arg.startswith("-") and not arg.startswith("--") and len(arg) > 1:
+            letters, _, takes_next = _short_bundle(arg, PUSH_VALUE_LETTERS)
+            bare = bare or "f" in letters
+            k += takes_next
+        elif name in FORCE_FLAGS:
             bare = True
         elif name in LEASE_FLAGS:
             lease = True
@@ -192,15 +215,12 @@ def _option_values(args, long_name, short, letters):
                     values.append(args[k])
                     k += 1
         elif arg.startswith("-"):
-            for j, letter in enumerate(arg[1:], 2):
-                if letter in letters:
-                    rest = arg[j:]
-                    if rest or k < len(args):
-                        value = rest[1:] if rest.startswith("=") else rest or args[k]
-                        k += 0 if rest else 1
-                        if letter == short:
-                            values.append(value)
-                    break
+            bundle, rest, _ = _short_bundle(arg, letters)
+            if rest is not None and (rest or k < len(args)):
+                value = rest[1:] if rest.startswith("=") else rest or args[k]
+                k += 0 if rest else 1
+                if bundle[-1] == short:
+                    values.append(value)
     return values
 
 
@@ -250,9 +270,10 @@ def _sets_upstream_without_branch(args):
             elif name in BRANCH_VALUE_OPTIONS:
                 k += 0 if equals else 1
         elif arg.startswith("-") and len(arg) > 1:
-            if "u" in arg[1:]:
+            _, rest, takes_next = _short_bundle(arg, "u")
+            if rest is not None:
                 sets = True
-                k += 0 if arg.partition("u")[2] else 1
+                k += takes_next
         else:
             positional += 1
     return sets and positional == 0
@@ -293,30 +314,32 @@ def _commit_words(args):
             return options, args[k + 1:]
         if word.startswith("--"):
             option = _long_option(word)
-            options.add(option or word)
+            negated = _long_option("--" + word[len("--no-"):]) if option is None and word.startswith("--no-") else None
+            if negated:
+                options.discard(negated)
+            else:
+                options.add(option or word)
             k += bool(COMMIT_LONG_OPTIONS.get(option) and "=" not in word)
         elif word.startswith("-") and len(word) > 1:
-            for at, letter in enumerate(word[1:], 1):
-                options.add(letter)
-                if letter in COMMIT_VALUES:
-                    k += at == len(word) - 1
-                    break
-                if letter in COMMIT_ATTACHED:
-                    break
+            letters, _, takes_next = _short_bundle(word, COMMIT_VALUES, COMMIT_ATTACHED)
+            options.update(letters)
+            k += takes_next
         k += 1
     return options, None
 
 
 def _whole_tree(path):
-    """Whether the pathspec path covers the whole tree or everything but a part of it: `.`, `./`, `..`, `*`, `:`,
-    `:/`, `:(top)`, or an exclusion such as `:!x`."""
+    """Whether the pathspec path covers the whole tree or everything but a part of it: `.`, `./`, `..`, `:`, `:/`,
+    `:(top)`, a path whose components each match every name, such as `*`, `**`, `**/*` or `?*`, or an exclusion such as
+    `:!x`."""
     rest = path
     if rest.startswith(":"):
-        magic = re.match(r":(\([^)]*\)|[/!^]*)", rest)
+        magic = re.match(r":(\([^)]*\)|[/!^]*:?)", rest)
         if any(mark in magic.group(1) for mark in ("!", "^", "exclude")):
             return True
         rest = rest[magic.end():]
-    return set(os.path.normpath(rest or ".").split("/")) <= {".", "..", "*"}
+    return all(part in (".", "..") or ("*" in part and set(part) <= {"*", "?"})
+               for part in os.path.normpath(rest or ".").split("/"))
 
 
 def _add_stages_all(args):
@@ -360,11 +383,15 @@ def _index_reason(git, directory, deadline, after_head_move):
     if verb != ["commit"]:
         return None
     options, paths = _commit_words(git.args[1:])
+    if options & {"--dry-run", "--short", "--porcelain", "--long"}:
+        return None
     if options & {"--all", "a"}:
         return COMMIT_ALL_REASON
+    if options & {"--include", "i"}:
+        return PATHSPEC_REASON
     if "--amend" in options or "--pathspec-from-file" in options:
         return None
-    if paths and not options & {"--include", "i"} and not any(_whole_tree(p) for p in paths):
+    if paths and not any(_whole_tree(p) for p in paths):
         return None
     if paths is not None:
         return PATHSPEC_REASON
@@ -464,7 +491,7 @@ def _default_branch(directory, deadline):
 
 
 def _moves_head(directory, sub, args, deadline):
-    flags = {a for a in args if a.startswith("-")}
+    flags = {a for a in args if a.startswith("--")} | _short_letters(args, "bBcC")
     names = [a for a in args if not a.startswith("-") or a == "-"]
     if sub == "reset":
         return bool(flags & HARD_RESETS)
@@ -505,7 +532,7 @@ def _worktree_path(args):
         arg = args[k]
         if arg == "--":
             return args[k + 1] if k + 1 < len(args) else None
-        if arg in ADD_VALUE_OPTIONS or (arg[:1] == "-" and arg[1:2] != "-" and len(arg) > 2 and arg[-1] in "bB"):
+        if arg in ADD_VALUE_OPTIONS or (arg[:1] == "-" and arg[1:2] != "-" and _short_bundle(arg, "bB")[2]):
             k += 2
         elif arg.startswith("-"):
             k += 1
