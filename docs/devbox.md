@@ -444,21 +444,23 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   the desktop's daemon and exit, so `org.freedesktop.secrets` would get no
   owner on the user bus. Home Manager's `gnome-keyring.service` therefore
   starts the daemon on the user bus at login, and `cursor-worker.service` wants
-  it and starts once it owns that name. Every desktop on a bus of its own (the
-  Cursor worker's, each RDP desktop, the Amp runner's labwc) then has no Secret
-  Service: its daemon hands off to the user bus's daemon and exits, and a
-  Secret Service call there finds no owner and times out (`busctl` waited 25 s
-  in a scratch run). A deploy does not restart the worker (`X-SwitchMethod =
-  "keep-old"`). When the desktop's daemon still holds the socket,
-  `gnome-keyring.service` hands off to it and stops as `inactive`, not
-  `failed`, so the failed-unit list stays empty while the Ping on the user bus
-  times out. Then run `systemctl --user restart cursor-worker.service`: it
-  stops that daemon with the desktop and starts the user bus's daemon first.
+  it and starts after it, and starts anyway when it fails. Every desktop on a
+  bus of its own (the Cursor worker's, each RDP desktop, the Amp runner's
+  labwc) then has no Secret Service: its daemon hands off to the user bus's
+  daemon and exits, and a Secret Service call there finds no owner and waits
+  out D-Bus's default method timeout of 25 s. A deploy does not restart the worker
+  (`X-SwitchMethod = "keep-old"`). When the desktop's daemon still holds the
+  socket, `gnome-keyring.service` hands off to it and stops as `inactive`, not
+  `failed`, so the failed-unit list stays empty while `timeout 5 busctl --user
+  call org.freedesktop.secrets /org/freedesktop/secrets
+  org.freedesktop.DBus.Peer Ping` on the user bus exits 124. Then run
+  `systemctl --user restart cursor-worker.service`: it stops that daemon with
+  the desktop and starts the user bus's daemon first.
 - The module masks `xfce4-notifyd.service` in the user manager. Chromium asks
-  the user bus for `org.freedesktop.Notifications` when it starts; a headless
-  Chromium that omer ran on 2026-11-23 made D-Bus activation start the unit,
-  which exited with "cannot open display", because the user manager has no
-  display. XFCE's autostart entry for notifyd runs `systemctl --user start
+  the user bus for `org.freedesktop.Notifications` when it starts, so a
+  headless Chromium makes D-Bus activation start the unit, which exits with
+  "cannot open display", because the user manager has no display. XFCE's
+  autostart entry for notifyd runs `systemctl --user start
   xfce4-notifyd.service` and runs the binary itself when that fails, so each
   desktop on a bus of its own still gets its notification daemon; that bus also
   runs the binary from the D-Bus service file, because it does not use systemd
@@ -636,7 +638,7 @@ Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
   so `-u` missed the `updated` line of a run on 2026-11-07, and the unit sets
   `SyslogIdentifier=` to its name.
 - The failure marker. Every unit built with
-  `home-manager/modules/scheduled-unit.nix`, and the four Status Lantern units
+  `home-manager/modules/scheduled-unit.nix`, and the five Status Lantern units
   above through `failureMarker` in `machines/devbox/home.nix`, run a
   marker command as `ExecStopPost=`, which systemd runs after every run with
   `$SERVICE_RESULT` set ([systemd.service(5)](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)).
@@ -744,7 +746,7 @@ because `nix.settings.allowed-users` is `*`. It is not in `trusted-users`.
   the tailnet's SSH answer without a password. A process of `sl-factory` that
   needs another loopback port fails, so a new need adds an exception there.
   The fence assumes devbox uses no Tailscale exit node, so internet traffic
-  leaves by `ens3`. It covers TCP and UDP on network sockets only, so a Unix
+  leaves by `ens3`. It covers IP traffic only, so a Unix
   socket of omer, such as an X server's, needs its own access control. A reload
   never leaves `sl-factory` without the fence. The chain `sl-factory-out` and the
   owner-matched jump from `OUTPUT` stay in place, and `iptables-restore
@@ -865,8 +867,10 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
 - **Images.** The app image is pulled as `ghcr.io/kyanitehq/threadsift:main`, but
   the container runs the local tag `localhost/threadsift:<12 hex of the image id>`,
   and `~/.local/state/threadsift/good-image` holds the id of the image that last
-  passed the check below. A start runs that image, so a restart, a reboot or an
-  update cut short never runs an image that was pulled and not checked. The
+  passed the check below. A start runs that image while it still exists, so a
+  restart, a reboot or an update cut short runs no image that was pulled and
+  not checked. When that image is gone, a start falls back to the pulled tag,
+  pulling it when it is missing, and starts it before the check runs. The
   connector image is pinned by tag and digest in `compose.yml`, so it changes
   only when a commit changes it; Dependabot's `docker-compose` entry in
   `.github/dependabot.yml` opens a pull request for a new version, which lands
@@ -1071,9 +1075,10 @@ Python namespace, so give a variable or a function a name that only your file
 uses. Test values for a new sops key go in `ci/server-boot/secrets.yaml`, under
 the key the host reads. `ci/server-boot/modules/sops.nix` points every secret
 that names its own `sopsFile` on the host at the test file, so a new key needs
-nothing else. It also compares the top-level keys of the host's `sops.secrets`
-(all but `binary` secrets and whole-file reads) with the keys of that file when
-Nix evaluates the check, and stops with the names of the missing keys; the VM
+nothing else. It also compares the first part of each `key` of the host's
+`sops.secrets` (all but `binary` secrets and whole-file reads) with the keys of
+that file and the two password hashes the build adds (`omer-password-hash`,
+`root-password-hash`) when Nix evaluates the check, and stops with the names of the missing keys; the VM
 would otherwise time out 900 s after boot, because sops-install-secrets
 installs no secret when one key is missing, and the network template then gets
 no address. A NixOS module that only the test machine loads, such as a stub of
@@ -1105,10 +1110,10 @@ settings work with sops-nix's real activation. It does not show that the box's
 own host key opens the real secrets files, that the netcup network works, that
 Tailscale logs in, that a tailnet peer reaches sshd, that CLIProxyAPI,
 Threadsift and stay-green start (they need a registry, a Cloudflare tunnel or a
-Teams sign-in, so the test turns them off and checks the secrets of CLIProxyAPI
-only), that Let's Encrypt issues the host's certificates with the real
-Cloudflare token, or that the BIOS stage installs from the kexec installer. The
-cutover proves the real certificates and the tailnet address. It also does
+Teams sign-in, so the test turns them off and checks only the rendered secrets of
+CLIProxyAPI and Threadsift), that Let's Encrypt issues the host's certificates
+with the real Cloudflare token, or that the BIOS stage installs from the kexec
+installer. The cutover proves the real certificates and the tailnet address. It also does
 not cover the VGA console. QEMU gives the test only a serial console and no
 guest agent channel, so `qemu-guest-agent` does not start. The VM has 1 GiB of RAM instead of 62 GiB,
 and a 9p `/nix/store`, which is disko's test wrapper.
@@ -1122,8 +1127,11 @@ enables smartd unless a host says otherwise.
 
 A deploy rolls back when a system unit fails during the switch or root's
 session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
---failed` and `systemctl --user -M omer@ --failed` on the box. These show only
-in daily use:
+--failed` and `systemctl --user -M omer@ --failed` on the box, and `timeout 5
+busctl --user call org.freedesktop.secrets /org/freedesktop/secrets
+org.freedesktop.DBus.Peer Ping` as omer, because a keyring daemon that hands
+off to a desktop's daemon stops as `inactive` and leaves both lists empty
+([Agent runtime](#agent-runtime)). These show only in daily use:
 
 - **The run user's isolation.** The boot check covers the empty subordinate
   uid range, the sysctl, the sudoers line, the firewall rules, one loopback
