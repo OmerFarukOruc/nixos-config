@@ -4,9 +4,14 @@ repository's main checkout, a `git worktree add` outside the worktrees folder, a
 placeholder.
 
 Sessions share a checkout's index, so a commit without a pathspec can take files another session staged. A commit
-that git refuses to make partial, the one that concludes a merge, cherry-pick or revert, passes, and so do `--amend`
-and a dry run (`--dry-run`, `--short`, `--porcelain`, `--long`), unless a later `--no-<option>` cancels it. A commit
-with `-i` or `--include` is refused, `--amend` included.
+that git refuses to make partial, the one that concludes a merge, cherry-pick or revert, passes, and so does a dry run
+(`--dry-run`, `--short`, `--porcelain`, `--long`), unless a later `--no-<option>` cancels it. A commit with `-i` or
+`--include` is refused, `--amend` included. In a repository's main checkout, a `git add -u` (`--update`) without a
+pathspec is refused, because it stages the tracked edits of every session working there, and so is a `git commit
+--amend` without a pathspec or with one that covers the whole tree, because it takes whatever the shared index holds;
+`--amend --only` without a path and `--amend --pathspec-from-file` pass. A linked worktree's index belongs to one
+session, so both pass there, and so does a call whose directory the checks cannot follow: a wrapper that moves it
+(`env -C`, `direnv exec <dir>`), `pushd`, or a `GIT_DIR` or `GIT_WORK_TREE` setting.
 
 Sessions share a repository's main checkout, so a `git checkout <rev>`, `git switch`, or `git reset --hard` there
 changes the files under every other session working in it. A linked worktree is a session's own, and so are the
@@ -23,6 +28,7 @@ file that cannot be read lets the call through. A commit without a pathspec whos
 because the hook cannot tell whether it concludes a merge, cherry-pick or revert. The placeholder check also searches
 the raw command text, so a command that does not parse still gets that search.
 """
+import dataclasses
 import os
 import re
 import shutil
@@ -93,13 +99,20 @@ STAGE_ALL_REASON = ("Stage the paths you changed by name: `git add -- <path>...`
                     f"other pathspec that covers the whole tree. {SHARED_INDEX}")
 COMMIT_ALL_REASON = ("Stage new files with `git add -- <path>...`, then commit by name: `git commit -m <msg> -- "
                      f"<path>...`, without `-a`. {SHARED_INDEX}")
+UPDATE_ALL_REASON = ("In a repository's main checkout, name the paths you changed: `git add -u -- <path>...`. "
+                     "Sessions share the checkout's files, so this stages tracked edits another session made.")
+AMEND_REASON = ("In a repository's main checkout, amend with your paths named: `git commit --amend -m <msg> -- "
+                "<path>...`, or `git commit --amend --only` to change only the message. "
+                f"{SHARED_INDEX}")
 PATHSPEC_REASON = ("Commit only your paths, named after `--`: `git commit -m <msg> -- <path>...`, with no `-i` and no "
                    f"pathspec that covers the whole tree. {SHARED_INDEX}")
 UNREADABLE_REASON = ("git could not read the repository this commit targets, so the hook cannot tell whether it "
                      "concludes a merge, cherry-pick or revert. Commit with `-- <path>...`, or check the `-C` path.")
 CHAINED_SEQUENCER_REASON = ("Run the commit that concludes a merge, cherry-pick or revert in its own call, because "
                             "the git command before it in this call changes what that commit takes.")
+DIRECTORY_SETTINGS = re.compile(r"\bpushd\b|\bGIT_(?:DIR|WORK_TREE)=")
 SEQUENCER_HEADS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD")
+COMMIT_SHORT_NAMES = {"--all": "a", "--include": "i", "--only": "o"}
 COMMIT_LONG_OPTIONS = {
     "--message": True, "--file": True, "--reuse-message": True, "--reedit-message": True, "--template": True,
     "--author": True, "--date": True, "--cleanup": True, "--fixup": True, "--squash": True, "--trailer": True,
@@ -317,6 +330,7 @@ def _commit_words(args):
             negated = _long_option("--" + word[len("--no-"):]) if option is None and word.startswith("--no-") else None
             if negated:
                 options.discard(negated)
+                options.discard(COMMIT_SHORT_NAMES.get(negated))
             else:
                 options.add(option or word)
             k += bool(COMMIT_LONG_OPTIONS.get(option) and "=" not in word)
@@ -342,23 +356,91 @@ def _whole_tree(path):
                for part in os.path.normpath(rest or ".").split("/"))
 
 
-def _add_stages_all(args):
-    """Whether the `git add` words args stage every change: `-A` alone or in a bundle, `--all` or a prefix git reads
-    as it, or a pathspec that covers the whole tree."""
-    after_dashes = False
-    for word in args:
+def _abbreviates(name, option, shortest):
+    """Whether the long option word name is option or an abbreviation of it that git reads, at least shortest long."""
+    return len(name) >= len(shortest) and option.startswith(name)
+
+
+@dataclasses.dataclass
+class AddWords:
+    """The `git add` options that the index checks read, in the order git applies them, and the pathspecs."""
+    all: bool = False
+    update: bool = False
+    dry_run: bool = False
+    from_file: bool = False
+    paths: list = dataclasses.field(default_factory=list)
+
+
+def _add_words(args):
+    words, k, after_dashes = AddWords(), 0, False
+    while k < len(args):
+        word = args[k]
+        name, eq, _ = word.partition("=")
         if after_dashes or not word.startswith("-"):
-            if _whole_tree(word):
-                return True
+            words.paths.append(word)
         elif word == "--":
             after_dashes = True
-        elif word.startswith("--"):
-            name = word.partition("=")[0]
-            if len(name) >= len("--al") and "--all".startswith(name):
-                return True
-        elif "A" in word:
+        elif _abbreviates(name, "--all", "--al"):
+            words.all = True
+        elif _abbreviates(name, "--update", "--up"):
+            words.update = True
+        elif _abbreviates(name, "--no-update", "--no-u"):
+            words.update = False
+        elif _abbreviates(name, "--dry-run", "--d"):
+            words.dry_run = True
+        elif _abbreviates(name, "--no-dry-run", "--no-d"):
+            words.dry_run = False
+        elif _abbreviates(name, "--pathspec-from-file", "--pathspec-fr"):
+            words.from_file = True
+            k += not eq
+        elif _abbreviates(name, "--chmod", "--ch"):
+            k += not eq
+        elif not word.startswith("--"):
+            for letter in word[1:]:
+                words.all = words.all or letter == "A"
+                words.update = words.update or letter == "u"
+                words.dry_run = words.dry_run or letter == "n"
+        k += 1
+    return words
+
+
+def _add_stages_all(words):
+    """Whether `git add` stages every change: `-A` alone or in a bundle, `--all` or a prefix git reads as it, or a
+    pathspec that covers the whole tree."""
+    return words.all or any(_whole_tree(path) for path in words.paths)
+
+
+def _add_updates_all(words):
+    """Whether `git add` updates every tracked file: `-u` or `--update` with no pathspec, no `--pathspec-from-file`
+    and no dry run."""
+    return words.update and not words.dry_run and not words.from_file and not words.paths
+
+
+def _amends_all(options, paths):
+    """Whether the `git commit --amend` options and paths take the whole index: a pathspec that covers the whole tree,
+    or no pathspec without `--only` and without `--pathspec-from-file`."""
+    if paths and any(_whole_tree(p) for p in paths):
+        return True
+    return not paths and not options & {"--only", "o", "--pathspec-from-file"}
+
+
+def _directory_unknown(command, text):
+    """Whether the directory a git command acts on may differ from the one the checks read: a wrapper that moves it
+    (`env -C`, `direnv exec <dir>`), a `pushd`, or a `GIT_DIR` or `GIT_WORK_TREE` setting in the call."""
+    if DIRECTORY_SETTINGS.search(text):
+        return True
+    lead = command.full[:len(command.full) - len(command.invocation)]
+    for k, word in enumerate(lead):
+        if word == "env" and any(w in ("-C", "--chdir") or w.startswith(("-C", "--chdir=")) for w in lead[k + 1:]):
+            return True
+        if word == "direnv" and lead[k + 1:k + 2] == ["exec"] and lead[k + 2:k + 3] not in ([], ["."], ["./"]):
             return True
     return False
+
+
+def _in_shared_checkout(git, directory, deadline, unknown):
+    repository = _repository_directory(git, directory)
+    return not unknown and repository is not None and is_shared_checkout(repository, deadline)
 
 
 def _concludes_sequencer(directory, deadline):
@@ -376,10 +458,15 @@ def _repository_directory(git, directory):
     return os.path.join(directory, named[-1]) if named and directory else directory
 
 
-def _index_reason(git, directory, deadline, after_head_move):
+def _index_reason(git, directory, deadline, after_head_move, unknown):
     verb = git.args[:1]
     if verb in (["add"], ["stage"]):
-        return STAGE_ALL_REASON if _add_stages_all(git.args[1:]) else None
+        words = _add_words(git.args[1:])
+        if _add_stages_all(words):
+            return STAGE_ALL_REASON
+        if _add_updates_all(words) and _in_shared_checkout(git, directory, deadline, unknown):
+            return UPDATE_ALL_REASON
+        return None
     if verb != ["commit"]:
         return None
     options, paths = _commit_words(git.args[1:])
@@ -389,7 +476,10 @@ def _index_reason(git, directory, deadline, after_head_move):
         return COMMIT_ALL_REASON
     if options & {"--include", "i"}:
         return PATHSPEC_REASON
-    if "--amend" in options or "--pathspec-from-file" in options:
+    if "--amend" in options:
+        return AMEND_REASON if _amends_all(options, paths) and _in_shared_checkout(git, directory, deadline, unknown) \
+            else None
+    if "--pathspec-from-file" in options:
         return None
     if paths and not any(_whole_tree(p) for p in paths):
         return None
@@ -413,7 +503,8 @@ def _index_call_reason(call):
             continue
         seen.add(command.span)
         own = resolved.get(command.span, command)
-        if reason := _index_reason(command.git, own.git_directory, call.deadline, head_moved):
+        unknown = _directory_unknown(command, call.command)
+        if reason := _index_reason(command.git, own.git_directory, call.deadline, head_moved, unknown):
             return reason
         head_moved = head_moved or command.git.args[:1] and command.git.args[0] in HEAD_MOVING_VERBS
     return None
