@@ -5,6 +5,11 @@ grep -qx 'resume_agents_on_restore = false' "${HERDR_CONFIG_PATH:-$HOME/.config/
   echo "FAIL: herdr restores Claude panes itself on this host, so the restore step cannot pass; run this where claude-tools-limit-switch runs (devbox)"
   exit 1
 }
+SHELL=$(getent passwd "$(id -un)" | cut -d: -f7) && [[ -n $SHELL ]] || {
+  echo "FAIL: getent passwd gives no login shell for $(id -un), whose claude function the rotate steps need"
+  exit 1
+}
+export SHELL
 dir=$(mktemp -d /tmp/cls-e2e.XXXXXX)
 run="cls-e2e-$(basename "$dir" | cut -d. -f2 | tr '[:upper:]' '[:lower:]')"
 export CLAUDE_TOOLS_HERDR_SESSION="$run" CLAUDE_TOOLS_STATE="$dir/state"
@@ -188,7 +193,7 @@ if [[ -z $start ]]; then
 fi
 [[ -n $start ]] || fail "no account with a folder in accounts.json"
 cls restore || fail "restore could not start the $run server"
-ws_json=$(h workspace create --cwd "$dir" --label "$run" --env "CLAUDE_CONFIG_DIR=$(profiles dir "$start")" --no-focus)
+ws_json=$(h workspace create --cwd "$dir" --label "$run" --env "CLAUDE_CONFIG_DIR=$(profiles dir "$start")" --env CLAUDE_TOOLS_PLAIN=1 --no-focus)
 pane=$(jq -r .result.root_pane.pane_id <<<"$ws_json")
 for _ in $(seq 60); do
   out=$(h agent start "$name" --kind claude --pane "$pane" --timeout 120000 -- "${agent_args[@]}" 2>&1) && break
@@ -307,7 +312,7 @@ if h agent read "$run-u" --source visible | grep -q "Yes, I trust this folder"; 
 fi
 h agent wait "$run-u" --until idle --until "done" --timeout 120000 >/dev/null
 upid=$(claude_in "$upane" | cut -f3)
-grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") || fail "the pane's claude function did not start rotate"
+grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") || fail "the claude function of the pane shell $SHELL did not start rotate"
 uaccount=$(account "$upane")
 h agent rename "$run-u" --clear >/dev/null
 [[ "$(name_of "$upane")" == null ]] || fail "the rotate agent kept a herdr name"
