@@ -9,21 +9,32 @@ usage: review-slices [--max <lines>] <checkout> <base> <head> <out-dir>
 Cuts the files that <base>...<head> changes into review slices of whole files, in byte order of their paths, each
 under a budget of lines, so one reviewer per slice can read every file of its slice in full. The default budget is
 3000 lines; pkgs/agent-tools/README.md in nixos-config gives its source. A file counts its lines at the head, and a
-deleted file its lines at the base, because its diff shows each of them. A file whose blob git sees as binary, and a
-submodule, count 0 lines; .gitattributes does not change a count. <out-dir>/slice-N.txt lists the paths of slice N, one per line; <out-dir> must hold no
-slice file yet.
+deleted file its lines at the base, because its diff shows each of them. A generated text file counts the lines of
+its patch instead, because a reviewer reads it as its diff and judges it through its generator's input: a lockfile
+such as flake.lock or package-lock.json, or a file whose first 10 lines hold a comment line with `@generated`, or
+comment lines with `DO NOT EDIT` and the word generated. A file whose blob git sees as binary, and a submodule, count 0 lines; .gitattributes does not change
+a count. <out-dir>/slice-N.txt lists the paths of slice N, one per line; <out-dir> must hold no slice file yet.
 
 With --worktree, the head is a commit of the checkout's working tree, tracked and untracked files that .gitignore
 does not exclude, made without touching the checkout's index; its parent is the checkout's HEAD.
 
-Prints `head <sha>` first, then one line per slice, an `over budget: <path>` line for each file that alone exceeds
-the budget (it gets a slice of its own), `total <lines> lines`, and last `slices N`, which is 0 when the comparison
-changes no file.
+Prints `head <sha>` first, then one line per slice, a `generated: <path> (<lines> diff lines)` line for each generated
+file, an `over budget: <path>` line for each file that alone exceeds the budget (it gets a slice of its own),
+`total <lines> lines`, and last `slices N`, which is 0 when the comparison changes no file.
 
 Exit codes: 0 when every slice fits the budget, 3 when a file alone exceeds it, 2 on a usage error, a revision
 that does not resolve, a git failure, an out-dir that already holds slice files, or a path that holds a newline.
 EOF
 }
+
+declare -A LOCKFILES=()
+for name in flake.lock devenv.lock package-lock.json npm-shrinkwrap.json pnpm-lock.yaml yarn.lock bun.lock deno.lock \
+	Cargo.lock go.sum go.work.sum poetry.lock pdm.lock uv.lock Pipfile.lock renv.lock Gemfile.lock composer.lock mix.lock \
+	pubspec.lock Package.resolved Podfile.lock Cartfile.resolved gradle.lockfile packages.lock.json MODULE.bazel.lock \
+	Chart.lock .terraform.lock.hcl lazy-lock.json; do
+	LOCKFILES[$name]=1
+done
+COMMENT='^[[:space:]]*(//|#|/\*|\*|--|<!--|;)'
 
 fail() {
 	echo "review-slices: $*" >&2
@@ -83,20 +94,43 @@ mapfile -d '' -t raw < <(git -C "$checkout" diff -O/dev/null --raw -z --no-renam
 wait $! || fail "git diff $fork $head failed in $checkout"
 empty_tree=$(git -C "$checkout" hash-object -t tree /dev/null) || fail "cannot hash an empty tree in $checkout"
 
-declare -A lines=()
+is_generated() {
+	local path=$1 rev=$2 line warned=false named=false
+	[[ -z ${LOCKFILES[${path##*/}]-} ]] || return 0
+	while IFS= read -r line; do
+		[[ $line =~ $COMMENT ]] || continue
+		[[ ! $line =~ @generated([^[:alnum:]_]|$) ]] || return 0
+		[[ $line != *"DO NOT EDIT"* ]] || warned=true
+		[[ ! ${line,,} =~ (^|[^[:alnum:]_])generated([^[:alnum:]_]|$) ]] || named=true
+	done < <(git -C "$checkout" show "$rev:$path" 2>/dev/null | head -c 4096 | tr -d '\0' | head -n 10)
+	$warned && $named
+}
+
+diff_lines() {
+	git -C "$checkout" --literal-pathspecs --attr-source="$empty_tree" diff --no-renames "$@" "$fork" "$head" -- "$path"
+}
+
+declare -A lines=() generated=()
 for ((k = 0; k < ${#raw[@]}; k += 2)); do
-	read -r base_mode mode _ <<<"${raw[k]#:}"
+	read -r base_mode mode _ _ status <<<"${raw[k]#:}"
 	path=${raw[k + 1]}
 	[[ $path != *$'\n'* ]] || fail "a changed path holds a newline, which a slice file cannot list: ${path@Q}"
 	rev=$head
 	[[ $mode != 000000 ]] || mode=$base_mode rev=$fork
 	count=0
 	if [[ $mode =~ ^(100644|100755|120000)$ ]]; then
-		count=$(git -C "$checkout" --literal-pathspecs --attr-source="$empty_tree" \
-			diff --no-renames --numstat "$empty_tree" "$rev" -- "$path") || fail "cannot count the lines of $path at $rev"
-		[[ -n $count ]] || fail "git counted no lines for $path at $rev"
-		count=${count%%$'\t'*}
-		[[ $count != - ]] || count=0
+		stat=$(diff_lines --numstat) || fail "cannot count the diff lines of $path"
+		if [[ ${stat%%$'\t'*} != - ]] &&
+			{ is_generated "$path" "$rev" || { [[ $status == T ]] && is_generated "$path" "$fork"; }; }; then
+			count=$(diff_lines | wc -l) || fail "cannot count the diff lines of $path"
+			generated[$path]=1
+		else
+			count=$(git -C "$checkout" --literal-pathspecs --attr-source="$empty_tree" \
+				diff --no-renames --numstat "$empty_tree" "$rev" -- "$path") || fail "cannot count the lines of $path at $rev"
+			[[ -n $count ]] || fail "git counted no lines for $path at $rev"
+			count=${count%%$'\t'*}
+			[[ $count != - ]] || count=0
+		fi
 	fi
 	lines[$path]=$count
 done
@@ -121,6 +155,7 @@ for path in "${paths[@]}"; do
 		((n == 0)) || echo "slice $n: $files files, $size lines"
 		n=$((n + 1)) size=0 files=0
 	fi
+	[[ -z ${generated[$path]-} ]] || echo "generated: $path ($count diff lines)"
 	if ((count > max)); then
 		echo "over budget: $path ($count lines)"
 		over=1
