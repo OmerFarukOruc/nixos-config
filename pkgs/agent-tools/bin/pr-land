@@ -56,8 +56,9 @@ usage() { sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'; }
 
 setup() {
   ERR=$(mktemp)
+  STATE_ERR=$(mktemp)
   BODY_FILE=$(mktemp)
-  trap 'rm -f "$ERR" "$BODY_FILE"' EXIT
+  trap 'rm -f "$ERR" "$STATE_ERR" "$BODY_FILE"' EXIT
   command -v gh >/dev/null || die "gh is required"
   command -v jq >/dev/null || die "jq is required"
   git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
@@ -194,7 +195,7 @@ red_gate() {
   local rows
   if jq -e 'has("statusCheckRollup")' <<<"$1" >/dev/null; then
     jq -r '[.statusCheckRollup[]? | select(.__typename == "CheckRun" and .name == "gate")] | sort_by(.startedAt) | last
-      | select(. != null and (.conclusion | IN("FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED")))
+      | select(. != null and .status == "COMPLETED" and (.conclusion | IN("SUCCESS", "NEUTRAL", "SKIPPED") | not))
       | "\(.conclusion) \(.detailsUrl)"' <<<"$1"
   else
     rows=$(actions_checks "$(jq -r .headRefOid <<<"$1")") || return 1
@@ -297,12 +298,12 @@ await_controller() {
 
 # A token without the Checks permission cannot list check runs, and a job's check run carries the job's name, so Actions
 # jobs stand in for check runs. Prints "<kind>\t<name>\t<bucket>\t<conclusion>\t<url>\t<workflow path>" rows for commit $1:
-# kind run for the newest run of each workflow, newest run first, then kind job for each job of those runs, newest job first. A job row has
-# an empty workflow path.
+# kind run for the newest run of each workflow and event, newest run first, then kind job for each job of those runs,
+# newest job first. A job row has an empty workflow path.
 actions_checks() {
   local sha=$1 runs ids id jobs=""
   runs=$(gh api "repos/$GH_REPO/actions/runs" -X GET -f head_sha="$sha" -f per_page=100 --paginate --slurp \
-    | jq -c '[.[].workflow_runs[]] | group_by(.workflow_id) | map(sort_by([(.run_started_at // .created_at), .id]) | last)
+    | jq -c '[.[].workflow_runs[]] | group_by([.workflow_id, .event]) | map(sort_by([(.run_started_at // .created_at), .id]) | last)
       | sort_by([(.run_started_at // .created_at), .id]) | reverse
       | map({id, name: (.name // .display_title // "run \(.id)"), status, conclusion, html_url, path})') || return 1
   ids=$(jq -r '.[].id' <<<"$runs") || return 1
@@ -339,7 +340,7 @@ check_run_state() {
 # there is none, or "lookup-error" when the request failed.
 status_state() {
   local out
-  if out=$(CTX="$2" gh api "repos/$GH_REPO/commits/$1/status" \
+  if out=$(CTX="$2" gh api -X GET "repos/$GH_REPO/commits/$1/status" -f per_page=100 --paginate \
         --jq 'first(.statuses[] | select(.context == env.CTX)) | if .state == "pending" then "pending" else "completed \(.state)" end' 2>/dev/null); then
     printf '%s\n' "$out"
   else
@@ -451,21 +452,37 @@ required_done() {
   (( ${#pending[@]} + ${#missing[@]} + ${#unread[@]} == 0 )) || return "$checks_pending"
 }
 
+# Prints a "status\t<context>\t<bucket>" row for the newest commit status of each context on commit $1.
+status_rows() {
+  gh api -X GET "repos/$GH_REPO/commits/$1/status" -f per_page=100 --paginate \
+    --jq '.statuses[] | ["status", .context, (if .state == "pending" then "pending" elif .state == "success" then "pass" else "fail" end)] | @tsv'
+}
+
 # Polls the checks of PR $1 on commit $2. Prints the poll note and returns checks_done, checks_pending, checks_absent
 # when none are listed, or checks_failed after it reported the failed checks.
 own_done() {
-  local n=$1 sha=$2 out rows="" failed pending
+  local n=$1 sha=$2 out rows="" actions statuses lookup_gap="" failed pending
   if out=$(gh pr checks "$n" --json name,bucket 2>"$ERR") || [[ "$out" == \[* ]]; then
     rows=$(jq -r '.[] | ["check", .name, .bucket] | @tsv' <<<"$out" 2>/dev/null) \
       || { say "the check lookup returned unreadable output"; return "$checks_pending"; }
   elif refused "$ERR"; then
-    rows=$(actions_checks "$sha" 2>/dev/null) || { say "the Actions run lookup failed"; return "$checks_pending"; }
+    actions=$(actions_checks "$sha" 2>/dev/null) || { actions=""; lookup_gap="the Actions run lookup failed"; }
+    if statuses=$(status_rows "$sha" 2>"$ERR"); then
+      :
+    elif refused "$ERR"; then
+      statuses=""
+    else
+      statuses=""
+      lookup_gap="${lookup_gap:+$lookup_gap; }the commit status lookup failed"
+    fi
+    rows=$(printf '%s\n%s' "$actions" "$statuses" | sed '/^$/d')
   elif ! grep -q 'no checks reported' "$ERR"; then
     say "the check lookup failed"
     return "$checks_pending"
   fi
   failed=$(awk -F'\t' '$3=="fail" || $3=="cancel" {printf "%s (%s) ", $2, $3}' <<<"$rows") || return "$checks_failed"
   [[ -z "$failed" ]] || { say "pr-land: check failed on ${sha:0:12}: $failed" >&2; return "$checks_failed"; }
+  [[ -z "$lookup_gap" ]] || { say "$lookup_gap"; return "$checks_pending"; }
   [[ -n "$rows" ]] || { say "no checks are listed yet"; return "$checks_absent"; }
   pending=$(awk -F'\t' '$3=="pending" {printf "%s ", $2}' <<<"$rows") || return "$checks_failed"
   [[ -n "$pending" ]] || return "$checks_done"
@@ -596,14 +613,14 @@ is_behind() {
   grep -qiE 'head branch is (not up to date|out of date)' "$ERR" && return 0
   grep -qiE 'required status checks? (is|are) expected' "$ERR" || return 1
   for i in 1 2 3 4 5; do
-    if state=$(pr_json "$n" mergeStateStatus 2>"$ERR.state" | jq -r .mergeStateStatus); then
+    if state=$(pr_json "$n" mergeStateStatus 2>"$STATE_ERR" | jq -r .mergeStateStatus); then
       [[ "$state" == UNKNOWN ]] || break
     else
       state=UNREADABLE
     fi
     (( i < 5 )) && sleep 3
   done
-  [[ "$state" != UNREADABLE ]] || say "pr-land: could not read the merge state of PR #$n: $(head -n 1 "$ERR.state")" >&2
+  [[ "$state" != UNREADABLE ]] || say "pr-land: could not read the merge state of PR #$n: $(head -n 1 "$STATE_ERR")" >&2
   [[ "$state" == BEHIND ]]
 }
 
