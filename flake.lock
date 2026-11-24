@@ -384,11 +384,11 @@
         "nixpkgs": "nixpkgs_3"
       },
       "locked": {
-        "lastModified": 1795387629,
-        "narHash": "sha256-+bXH64eCZhRm6MaMlB4lwTjUjax2aDy6yWsfTSCZlas=",
+        "lastModified": 1795490956,
+        "narHash": "sha256-ZExeqyTk0uCPbR7u2GGbNgjne+F3tanByxr/aS+8rdk=",
         "owner": "xddxdd",
         "repo": "nix-cachyos-kernel",
-        "rev": "306480b9096055a06503167f975c027e244dd839",
+        "rev": "920a3823872b21640181fe8065a5fb35fcb06e3f",
         "type": "github"
       },
       "original": {
@@ -480,11 +480,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1795374673,
-        "narHash": "sha256-8YP9YTqsO6cGEZag9bDauM7q+wv/ToLTuwjlO9LMEfQ=",
+        "lastModified": 1795469476,
+        "narHash": "sha256-fvs3qX0oG57wGKJ2Ho9Kt+3ZmSxR7SoyquMX7pF9KMI=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "616ae05a769a23c143b19746b6a3b06366a9a28f",
+        "rev": "8ed16af8de06a5941dc797b4e9ed27aae5cf7960",
         "type": "github"
       },
       "original": {
@@ -618,11 +618,11 @@
     "skills-avoid-ai-writing": {
       "flake": false,
       "locked": {
-        "lastModified": 1795463097,
-        "narHash": "sha256-ASjPAJOCjli+Y1baIyqR8ob1ID4s5B7cqiHxXh55zVw=",
+        "lastModified": 1795544120,
+        "narHash": "sha256-Fdcsrzw0MEX9ZrOnHgpie5jcaAvATYIpFBuf7T+kS+g=",
         "owner": "conorbronsdon",
         "repo": "avoid-ai-writing",
-        "rev": "cd5573a185f3ab468b094fc2cf2fa193fcaeaf53",
+        "rev": "dca19064d1675c213fd2596501a00c6e7444baa4",
         "type": "github"
       },
       "original": {
