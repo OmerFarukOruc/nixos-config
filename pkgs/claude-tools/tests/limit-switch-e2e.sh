@@ -200,7 +200,7 @@ if grep -q agent_not_ready <<<"$out"; then
   h agent send-keys "$name" down >/dev/null
   h agent send-keys "$name" enter >/dev/null
 fi
-h agent wait "$name" --until idle --timeout 60000 >/dev/null
+h agent wait "$name" --until idle --until "done" --timeout 60000 >/dev/null
 [[ "$(account "$pane")" == "$start" ]] || fail "scratch agent did not start on $start"
 ask "Remember the code word PELICAN. Reply only OK."
 sid=$(session)
@@ -249,7 +249,7 @@ grep -q "$name: every other account is limited or unreadable; $name stays on $st
   "$state/events.log" || fail "switch did not log that it stays"
 rm "$dir/state/limits.json"
 echo "held: switch kept the agent on $start while the hold file held every other account"
-h agent wait "$name" --until idle --timeout 120000 >/dev/null || fail "the agent did not go idle after the held switch"
+h agent wait "$name" --until idle --until "done" --timeout 120000 >/dev/null || fail "the agent did not settle after the held switch"
 
 cls switch "$name" || fail "switch exited $?"
 first=$(account "$pane")
@@ -305,7 +305,7 @@ if h agent read "$run-u" --source visible | grep -q "Yes, I trust this folder"; 
   h agent send-keys "$run-u" down >/dev/null
   h agent send-keys "$run-u" enter >/dev/null
 fi
-h agent wait "$run-u" --until idle --timeout 120000 >/dev/null
+h agent wait "$run-u" --until idle --until "done" --timeout 120000 >/dev/null
 upid=$(claude_in "$upane" | cut -f3)
 grep -qx 'CLAUDE_TOOLS_ROTATE_ID=[0-9]*' <(tr '\0' '\n' <"/proc/$upid/environ") || fail "the pane's claude function did not start rotate"
 uaccount=$(account "$upane")
