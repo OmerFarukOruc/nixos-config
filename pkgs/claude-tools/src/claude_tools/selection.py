@@ -7,7 +7,7 @@ from claude_tools.accounts import accounts
 from claude_tools.agents import sessions
 from claude_tools.limits import NO_RESET_WAIT, WINDOWS, Hold, full_window, hold, holds, parse_limit
 from claude_tools.settings import Settings
-from claude_tools.store import now, read_json
+from claude_tools.store import locked, now, read_json, write_json
 from claude_tools.usage import by_name, entries, locked_refresh
 
 SESSION_MAX, WEEK_MAX = 90, 95
@@ -17,6 +17,7 @@ REFRESH_BUDGET = 120
 START_MAX_AGE = 900
 PACE_BAND = 5
 SLOW_LEAD = 1
+PICK_WAIT = 120
 RECENT = 60
 FIRST, LASTS, SHORT, BLOCKED = range(4)
 GROUPS = ("first", "lasts", "short", "blocked")
@@ -165,9 +166,43 @@ def best(settings: Settings, readings: dict[str, dict], names: list[str], model:
     return next(iter(startable(settings, readings, names, model, live)), None)
 
 
-def live_sessions(settings: Settings, dirs: dict[str, str]) -> dict[str, int]:
+def open_sessions(settings: Settings, dirs: dict[str, str]) -> dict[str, int]:
     by_dir = sessions(settings.home)
     return {n: by_dir.get(d, 0) for n, d in dirs.items()}
+
+
+def recent_picks(settings: Settings, at: int) -> list[dict]:
+    data = read_json(settings.picks_file).get("picks")
+    return [p for p in data if isinstance(p, dict) and isinstance(p.get("account"), str)
+            and isinstance(p.get("at"), int) and isinstance(p.get("seen"), int) and p["at"] > at - PICK_WAIT] \
+        if isinstance(data, list) else []
+
+
+def waiting(picks: list[dict], counts: dict[str, int]) -> dict[str, int]:
+    out = {}
+    for n in {p["account"] for p in picks}:
+        mine = [p for p in picks if p["account"] == n]
+        arrived = max(0, counts.get(n, 0) - min(p["seen"] for p in mine))
+        out[n] = max(0, len(mine) - arrived)
+    return out
+
+
+def live_sessions(settings: Settings, dirs: dict[str, str]) -> dict[str, int]:
+    counts = open_sessions(settings, dirs)
+    pending = waiting(recent_picks(settings, now()), counts)
+    return {n: c + pending.get(n, 0) for n, c in counts.items()}
+
+
+def note_pick(settings: Settings, account: str, dirs: dict[str, str]) -> None:
+    at = now()
+    seen = open_sessions(settings, dirs).get(account, 0)
+    picks = [*recent_picks(settings, at), {"account": account, "at": at, "seen": seen}]
+    write_json(settings.picks_file, {"picks": picks})
+
+
+def record_pick(settings: Settings, account: str, dirs: dict[str, str]) -> None:
+    with locked(settings.picks_file.with_suffix(".lock")):
+        note_pick(settings, account, dirs)
 
 
 def default_model(settings: Settings) -> str | None:
@@ -175,20 +210,30 @@ def default_model(settings: Settings) -> str | None:
     return settings.env_model or (configured if isinstance(configured, str) else None)
 
 
-def start_account(settings: Settings, dirs: dict[str, str], model: str | None) -> str | None:
+def start_account(settings: Settings, dirs: dict[str, str], model: str | None, record: bool = True) -> str | None:
     data = locked_refresh(settings, [], START_MAX_AGE)
-    return best(settings, by_name(data), list(dirs), model, live_sessions(settings, dirs))
+    with locked(settings.picks_file.with_suffix(".lock")):
+        name = best(settings, by_name(data), list(dirs), model, live_sessions(settings, dirs))
+        if name and record:
+            note_pick(settings, name, dirs)
+    return name
 
 
-def next_account(settings: Settings, skip: str | None, model: str | None = None) -> str | None:
-    names = [n for n in accounts(settings.accounts_file) if n != skip]
+def next_account(settings: Settings, skip: str | None, model: str | None = None,
+                 current: str | None = None) -> str | None:
+    dirs = accounts(settings.accounts_file)
+    names = [n for n in dirs if n != skip]
     at, readings = now(), entries(settings)
     held = {h.account for h in holds(settings.holds_file, at) if h.blocks(model)}
     fresh = [n for n in names if n not in held and at - ((readings.get(n) or {}).get("checked") or 0) > RECENT]
     if fresh:
         data = locked_refresh(settings, fresh, RECENT, at + REFRESH_BUDGET)
         readings = by_name(data)
-    return best(settings, readings, names, model)
+    with locked(settings.picks_file.with_suffix(".lock")):
+        nxt = best(settings, readings, names, model, live_sessions(settings, dirs))
+        if nxt and nxt != current:
+            note_pick(settings, nxt, dirs)
+    return nxt
 
 
 def free_at(settings: Settings, names: list[str], at: int, model: str | None = None) -> int | None:

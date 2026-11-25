@@ -61,6 +61,10 @@ class Settings:
         return self.state / "limits.json"
 
     @property
+    def picks_file(self) -> Path:
+        return self.state / "picks.json"
+
+    @property
     def usage_cache(self) -> Path:
         return self.cache / "usage.json"
 

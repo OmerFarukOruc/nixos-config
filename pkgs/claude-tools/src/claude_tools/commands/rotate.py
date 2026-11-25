@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 
 from claude_tools.accounts import ROTATE_ID, Accounts, account_of, env_for, read_accounts
-from claude_tools.agents import sessions
 from claude_tools.errors import Failed
 from claude_tools.limits import NO_RESET_WAIT
 from claude_tools.picker import CANCELLED, PICKED, Picker
@@ -25,7 +24,9 @@ from claude_tools.selection import (
     default_model,
     free_at,
     hold_limit,
+    live_sessions,
     next_account,
+    record_pick,
     start_account,
 )
 from claude_tools.settings import Settings
@@ -63,8 +64,7 @@ class Rotation:
     def choose(self, recommend: str | None) -> str | None:
         cursor = recommend
         while True:
-            by_dir = sessions(self.settings.home)
-            live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
+            live = live_sessions(self.settings, self.dirs)
             try:
                 picker = Picker(self.accounts.names, self.dirs, load_cache(self.settings), live,
                                 current_holds(self.settings), self.model, cursor, self.settings.color)
@@ -86,7 +86,7 @@ class Rotation:
     def after_limit(self, current: str, hook: dict) -> str | None:
         held = hold_limit(self.settings, current, hook.get("last_assistant_message") or "")
         self.model = held.model if held and held.model else self.model
-        nxt = next_account(self.settings, None, self.model)
+        nxt = next_account(self.settings, None, self.model, current)
         what = f"a {held.reason} until {when(held.until)}" if held else "a limit that has already reset"
         self.log(f"{current} hit {what}; next account: {nxt or 'none'}")
         return nxt
@@ -316,7 +316,7 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
             r.say(f"the start account {start} is not usable; starting on the account with the most room")
         if now() - load_cache(r.settings).get("updated", 0) > START_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
-        current = start_account(r.settings, r.dirs, r.model)
+        current = start_account(r.settings, r.dirs, r.model, record=not (r.settings.pick and not start))
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
@@ -325,6 +325,8 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
         if chosen == "":
             raise SystemExit(0)
         current = chosen or current
+        if current:
+            record_pick(r.settings, current, r.dirs)
     if current is None:
         try:
             current = account_of(r.settings.config_dir, r.dirs, r.settings.home)
@@ -345,7 +347,7 @@ def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[St
         if got is not None:
             stop = Stop.at_limit(got)
         try:
-            nxt = r.after_limit(current, got) if got else next_account(r.settings, None, r.model)
+            nxt = r.after_limit(current, got) if got else next_account(r.settings, None, r.model, current)
         except Exception as e:
             r.log(f"session {stop.session}: no move, picking the next account failed: {e!r}")
             nxt = None

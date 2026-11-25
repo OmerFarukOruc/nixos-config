@@ -252,7 +252,7 @@ class Switcher:
         current = account_of(config_dir, found.local, self.settings.home)
         if to is None:
             try:
-                to = next_account(self.settings, None if after_limit else current, model)
+                to = next_account(self.settings, None if after_limit else current, model, current)
             except (OSError, subprocess.SubprocessError, ValueError) as e:
                 raise Failed(f"could not pick the next account: {e!r}") from e
             if to is None:

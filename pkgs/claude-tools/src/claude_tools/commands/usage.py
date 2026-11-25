@@ -9,10 +9,9 @@ import time
 from datetime import datetime
 
 from claude_tools.accounts import accounts
-from claude_tools.agents import sessions
 from claude_tools.display import annotate
 from claude_tools.errors import Failed
-from claude_tools.selection import GROUPS, live_sessions, ranked, startable
+from claude_tools.selection import GROUPS, live_sessions, open_sessions, ranked, startable
 from claude_tools.settings import Settings
 from claude_tools.terminal import Cards
 from claude_tools.usage import by_name, combined, entries, load_cache, locked_refresh
@@ -23,8 +22,7 @@ WATCH_MAX_AGE = 300
 
 def show(settings: Settings, data: dict) -> str:
     try:
-        by_dir = sessions(settings.home)
-        live = {n: by_dir[d] for n, d in accounts(settings.accounts_file).items() if by_dir.get(d)}
+        live = {n: c for n, c in open_sessions(settings, accounts(settings.accounts_file)).items() if c}
     except (OSError, Failed):
         live = {}
     color = sys.stdout.isatty() and settings.color
