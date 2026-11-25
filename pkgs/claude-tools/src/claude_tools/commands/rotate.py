@@ -16,12 +16,14 @@ from pathlib import Path
 
 from claude_tools.accounts import ROTATE_ID, Accounts, account_of, env_for, read_accounts
 from claude_tools.errors import Failed
-from claude_tools.limits import NO_RESET_WAIT
+from claude_tools.limits import NO_RESET_WAIT, last_model
 from claude_tools.picker import CANCELLED, PICKED, Picker
 from claude_tools.selection import (
+    PICK_WAIT,
     START_MAX_AGE,
     current_holds,
     default_model,
+    drop_pick,
     free_at,
     hold_limit,
     live_sessions,
@@ -49,6 +51,7 @@ class Rotation:
         self.accounts = Accounts({}, None)
         self.dirs: dict[str, str] = {}
         self.model: str | None = None
+        self.resume_model: str | None = None
 
     @property
     def names(self) -> list[str]:
@@ -62,9 +65,11 @@ class Rotation:
         self.log(msg)
 
     def choose(self, recommend: str | None) -> str | None:
-        cursor = recommend
+        cursor, reserved = recommend, time.time()
         while True:
             live = live_sessions(self.settings, self.dirs)
+            if recommend and time.time() - reserved < PICK_WAIT:
+                live[recommend] = max(0, live.get(recommend, 0) - 1)
             try:
                 picker = Picker(self.accounts.names, self.dirs, load_cache(self.settings), live,
                                 current_holds(self.settings), self.model, cursor, self.settings.color)
@@ -85,7 +90,9 @@ class Rotation:
 
     def after_limit(self, current: str, hook: dict) -> str | None:
         held = hold_limit(self.settings, current, hook.get("last_assistant_message") or "")
-        self.model = held.model if held and held.model else self.model
+        session = hook.get("session_id")
+        self.resume_model = last_model(self.settings.home / ".claude/projects", session) if session else None
+        self.model = self.resume_model or (held.model if held else None) or self.model
         nxt = next_account(self.settings, None, self.model, current)
         what = f"a {held.reason} until {when(held.until)}" if held else "a limit that has already reset"
         self.log(f"{current} hit {what}; next account: {nxt or 'none'}")
@@ -236,6 +243,14 @@ def start_model(args: list[str], opts: dict[str, str], settings: Settings) -> st
     return model_arg(args, opts) or default_model(settings)
 
 
+def with_model(argv: list[str], model: str | None, opts: dict[str, str]) -> list[str]:
+    given = model_arg(argv, opts)
+    if not model or (given and given.split("[", 1)[0] in model):
+        return argv
+    kept = [t for name, tokens in parsed_flags(argv, opts) if name != "--model" for t in tokens]
+    return [*kept, "--model", model]
+
+
 def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
     return [t for name, tokens in parsed_flags(args, opts) if name not in NOT_CARRIED for t in tokens]
 
@@ -311,22 +326,25 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
         r.accounts = read_accounts(r.settings.accounts_file)
         r.dirs = r.accounts.usable
         if start in r.dirs:
+            record_pick(r.settings, start, r.dirs)
             return start
         if start:
             r.say(f"the start account {start} is not usable; starting on the account with the most room")
         if now() - load_cache(r.settings).get("updated", 0) > START_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
-        current = start_account(r.settings, r.dirs, r.model, record=not (r.settings.pick and not start))
+        current = start_account(r.settings, r.dirs, r.model)
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
     if r.settings.pick and not start:
         chosen = r.choose(current)
+        if current and chosen is not None and chosen != current:
+            drop_pick(r.settings, current)
         if chosen == "":
             raise SystemExit(0)
+        if chosen and chosen != current:
+            record_pick(r.settings, chosen, r.dirs)
         current = chosen or current
-        if current:
-            record_pick(r.settings, current, r.dirs)
     if current is None:
         try:
             current = account_of(r.settings.config_dir, r.dirs, r.settings.home)
@@ -394,7 +412,7 @@ def run(settings: Settings, args: list[str]) -> int:
             message = (f"Your Claude account {current} hit its usage limit, so claude-tools rotate resumed this "
                        f"session on the {nxt} account. Continue where you stopped.")
         runner.stop()
-        args = carried_args(args, opts)
+        args = with_model(carried_args(args, opts), r.resume_model, opts)
         argv, cwd = ["claude", *args, "--resume", session, message], stop.cwd
         current = nxt
 

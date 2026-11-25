@@ -144,6 +144,51 @@ expect "a second relink succeeds" "$rc" "0"
 expect "and leaves the shared settings untouched" "$(stat -c '%i %Y' "$main_r/settings.json")" "$r_before"
 expect "and links the repaired profile" "$(readlink "$home_r/.claude-q2/settings.json")" "$main_r/settings.json"
 
+claude_bin=$(type -P claude) || {
+  echo "FAIL prefs-e2e needs claude on PATH"
+  exit 1
+}
+q4="$home_r/.claude-q4" q5="$home_r/.claude-q5"
+mkdir -p "$q4/sessions" "$q5/sessions"
+touch "$q4/.claude-profile" "$q5/.claude-profile"
+true &
+dead=$!
+wait "$dead"
+echo '{}' >"$q4/sessions/$$.json"
+echo '{}' >"$q4/sessions/$dead.json"
+mkfifo "$s/q5-in"
+HOME="$home_r" CLAUDE_CONFIG_DIR="$q5" "$claude_bin" -p <"$s/q5-in" >"$s/q5-out" 2>&1 &
+q5_job=$!
+exec 7>"$s/q5-in"
+printf 'Reply only OK.' >&7
+q5_running() {
+  local p
+  for p in $(pgrep -x 'claude|\.claude-wrapped'); do
+    grep -qxzF "CLAUDE_CONFIG_DIR=$q5" "/proc/$p/environ" 2>/dev/null && return 0
+  done
+  return 1
+}
+for _ in $(seq 30); do
+  q5_running && break
+  sleep 0.5
+done
+expect "a claude process runs with the profile q5" "$(q5_running && echo yes)" "yes"
+rc=0
+relink_r || rc=$?
+expect "relink succeeds while a claude session runs with a profile whose sessions folder is its own" "$rc" "0"
+expect "and names that folder" "$(grep -c "$q5/sessions: a claude session runs with this account" "$s/out")" "1"
+expect "and leaves it a folder" "$([[ -d "$q5/sessions" && ! -L "$q5/sessions" ]] && echo folder)" "folder"
+expect "and links the idle profile's sessions to the shared folder" "$(readlink "$q4/sessions")" "$main_r/sessions"
+expect "and moves its file of a running process there" "$(ls "$main_r/sessions")" "$$.json"
+expect "and deletes its file of an ended process" "$(find "$home_r" -name "$dead.json" | wc -l)" "0"
+exec 7>&-
+wait "$q5_job" || true
+expect "the claude process of q5 ended once its input closed" "$(q5_running && echo running || echo ended)" "ended"
+rc=0
+relink_r || rc=$?
+expect "relink after it ended succeeds" "$rc" "0"
+expect "and links q5's sessions to the shared folder" "$(readlink "$q5/sessions")" "$main_r/sessions"
+
 rounds="${E2E_LOCK_ROUNDS:-20}"
 lock_sh() { HOME="$s/homeC" bash -c 'source "$1"; shift; '"$1" _ "$lock" "${@:2}"; }
 

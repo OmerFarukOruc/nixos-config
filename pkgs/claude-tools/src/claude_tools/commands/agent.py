@@ -12,8 +12,10 @@ from claude_tools.accounts import accounts, config_dir_of
 from claude_tools.agents import SKIP_PERMISSIONS, UNNAMED, Agents, check_codex_choice, check_opencode_agent
 from claude_tools.errors import Failed, NoProcess
 from claude_tools.herdr import Herdr
-from claude_tools.selection import default_model, start_account
+from claude_tools.selection import START_MAX_AGE, configured_model, drop_pick, record_pick, start_account
 from claude_tools.settings import Settings
+from claude_tools.store import now
+from claude_tools.usage import load_cache
 from claude_tools.watch import watch
 
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
@@ -109,27 +111,46 @@ def refuse_agent(a: argparse.Namespace) -> None:
         raise Failed("--agent names an opencode agent; it needs --kind opencode")
 
 
-def picked_dir(settings: Settings, a: argparse.Namespace) -> str:
-    dirs = accounts(settings.accounts_file)
-    name = start_account(settings, dirs, a.model or default_model(settings))
+def picked_account(settings: Settings, a: argparse.Namespace, dirs: dict[str, str]) -> str | None:
+    if now() - load_cache(settings).get("updated", 0) > START_MAX_AGE:
+        print("claude-tools agent: reading account usage…", file=sys.stderr, flush=True)
+    try:
+        name = start_account(settings, dirs, a.model or configured_model(settings))
+    except (OSError, ValueError, KeyError, TypeError, Failed) as e:
+        print(f"claude-tools agent: could not pick an account ({e}); {a.name} starts on the caller's account",
+              file=sys.stderr)
+        return None
     if name is None:
         print(f"claude-tools agent: every account is limited or unreadable; {a.name} starts on the caller's account",
               file=sys.stderr)
-        return settings.config_dir
-    print(f"claude-tools agent: {a.name} starts on {name}", file=sys.stderr)
-    return dirs[name]
+    else:
+        print(f"claude-tools agent: {a.name} starts on {name}", file=sys.stderr)
+    return name
 
 
 def prepare_claude(settings: Settings, a: argparse.Namespace) -> Starter:
     refuse_agent(a)
     if a.effort and a.effort not in EFFORTS:
         raise Failed(f"--effort {a.effort} is not one of {', '.join(EFFORTS)}")
-    config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else picked_dir(settings, a)
+    dirs = accounts(settings.accounts_file)
+    if a.account:
+        config_dir = config_dir_of(a.account, dirs)
+        picked = next((n for n, d in dirs.items() if d == config_dir), None)
+        if picked:
+            record_pick(settings, picked, dirs)
+    else:
+        picked = picked_account(settings, a, dirs)
+        config_dir = dirs[picked] if picked else settings.config_dir
     flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
              *(["--effort", a.effort] if a.effort else [])]
 
     def start_claude(ag: Agents, pane: str, brief: str | None) -> None:
-        ag.start_claude(pane, a.name, config_dir, flags)
+        try:
+            ag.start_claude(pane, a.name, config_dir, flags)
+        except BaseException:
+            if picked:
+                drop_pick(settings, picked)
+            raise
         if a.permission_mode:
             wait_for_mode(ag, a.name, a.permission_mode)
         if brief:

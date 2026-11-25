@@ -73,10 +73,8 @@ def readable(e: dict) -> bool:
 def blocked(e: dict, held: list[Hold], at: int, model: str | None = None) -> str | None:
     if e.get("state") == "logged-out":
         return "logged out"
-    if any(h.model is None for h in held):
-        return "held back after a limit"
-    if h := next((h for h in held if h.blocks(model)), None):
-        return f"held back after a {h.model} limit"
+    if h := min((h for h in held if h.blocks(model)), key=lambda h: h.model is not None, default=None):
+        return f"held back after a {h.model} limit" if h.model else "held back after a limit"
     if not e.get("five_hour") and not e.get("seven_day"):
         return "no reading yet"
     if not readable(e):
@@ -86,7 +84,7 @@ def blocked(e: dict, held: list[Hold], at: int, model: str | None = None) -> str
         if used >= cap:
             return f"{LABELS[key]} at {used:.0f}%"
     if full := full_window(e, at, model) if model else None:
-        return f"{full[2]} at 100%"
+        return f"{full[1].removesuffix(' limit')} at 100%"
     return None
 
 
@@ -171,11 +169,14 @@ def open_sessions(settings: Settings, dirs: dict[str, str]) -> dict[str, int]:
     return {n: by_dir.get(d, 0) for n, d in dirs.items()}
 
 
+def valid_pick(p: object, at: int) -> bool:
+    return (isinstance(p, dict) and isinstance(p.get("account"), str) and isinstance(p.get("at"), int)
+            and isinstance(p.get("seen"), int) and p["at"] > at - PICK_WAIT)
+
+
 def recent_picks(settings: Settings, at: int) -> list[dict]:
     data = read_json(settings.picks_file).get("picks")
-    return [p for p in data if isinstance(p, dict) and isinstance(p.get("account"), str)
-            and isinstance(p.get("at"), int) and isinstance(p.get("seen"), int) and p["at"] > at - PICK_WAIT] \
-        if isinstance(data, list) else []
+    return [p for p in data if valid_pick(p, at)] if isinstance(data, list) else []
 
 
 def waiting(picks: list[dict], counts: dict[str, int]) -> dict[str, int]:
@@ -205,16 +206,29 @@ def record_pick(settings: Settings, account: str, dirs: dict[str, str]) -> None:
         note_pick(settings, account, dirs)
 
 
-def default_model(settings: Settings) -> str | None:
+def drop_pick(settings: Settings, account: str) -> None:
+    with locked(settings.picks_file.with_suffix(".lock")):
+        picks = recent_picks(settings, now())
+        mine = [i for i, p in enumerate(picks) if p["account"] == account]
+        if mine:
+            del picks[mine[-1]]
+            write_json(settings.picks_file, {"picks": picks})
+
+
+def configured_model(settings: Settings) -> str | None:
     configured = read_json(settings.home / ".claude" / "settings.json").get("model")
-    return settings.env_model or (configured if isinstance(configured, str) else None)
+    return configured if isinstance(configured, str) else None
 
 
-def start_account(settings: Settings, dirs: dict[str, str], model: str | None, record: bool = True) -> str | None:
+def default_model(settings: Settings) -> str | None:
+    return settings.env_model or configured_model(settings)
+
+
+def start_account(settings: Settings, dirs: dict[str, str], model: str | None) -> str | None:
     data = locked_refresh(settings, [], START_MAX_AGE)
     with locked(settings.picks_file.with_suffix(".lock")):
         name = best(settings, by_name(data), list(dirs), model, live_sessions(settings, dirs))
-        if name and record:
+        if name:
             note_pick(settings, name, dirs)
     return name
 
@@ -260,8 +274,7 @@ def hold_limit(settings: Settings, name: str, text: str, said: int | None = None
     if until is None:
         usable = name in accounts(settings.accounts_file)
         entry = by_name(locked_refresh(settings, [name], None)).get(name, {}) if usable else {}
-        until, reason, model = full_window(entry, at, model) or (at + NO_RESET_WAIT, f"{reason} with no full window",
-                                                                 model)
+        until, reason = full_window(entry, at, model) or (at + NO_RESET_WAIT, f"{reason} with no full window")
     if until <= at:
         return None
     return hold(settings.holds_file, Hold(name, until, reason, model))

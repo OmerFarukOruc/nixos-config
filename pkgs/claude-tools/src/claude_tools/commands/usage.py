@@ -11,7 +11,7 @@ from datetime import datetime
 from claude_tools.accounts import accounts
 from claude_tools.display import annotate
 from claude_tools.errors import Failed
-from claude_tools.selection import GROUPS, live_sessions, open_sessions, ranked, startable
+from claude_tools.selection import GROUPS, default_model, live_sessions, open_sessions, ranked, startable
 from claude_tools.settings import Settings
 from claude_tools.terminal import Cards
 from claude_tools.usage import by_name, combined, entries, load_cache, locked_refresh
@@ -54,7 +54,8 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
     if a.order:
         dirs = accounts(settings.accounts_file)
         names = [n for n in dirs if n not in a.skip]
-        for n in startable(settings, entries(settings), names, a.model, live_sessions(settings, dirs)):
+        model = a.model or default_model(settings)
+        for n in startable(settings, entries(settings), names, model, live_sessions(settings, dirs)):
             print(n)
         return 0
     if a.watch:
@@ -66,7 +67,8 @@ def run(settings: Settings, a: argparse.Namespace) -> int:
         print(json.dumps({**data, "accounts": [annotate(entry) for entry in data.get("accounts", [])],
                           "combined": [annotate(entry) for entry in combined(data, settings.accounts_file)],
                           "order": [{"name": n, "group": GROUPS[g], "why": why}
-                                    for n, g, why in ranked(settings, readings, list(readings), live=live)]}, indent=1))
+                                    for n, g, why in ranked(settings, readings, list(readings), default_model(settings),
+                                                            live)]}, indent=1))
     elif not a.quiet:
         print(show(settings, data))
     return 0
@@ -87,5 +89,6 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                     help="print the accounts to start on, best first, from the cache; check nothing")
     ap.add_argument("--skip", action="append", default=[], metavar="NAME", help="with --order: an account to leave out")
     ap.add_argument("--model", metavar="MODEL",
-                    help="with --order: the model the session runs on, so an account held back for that model goes last")
+                    help="with --order: the model the session runs on, so an account held back for that model is left "
+                         "out (default: ANTHROPIC_MODEL, then the model in ~/.claude/settings.json)")
     ap.set_defaults(run=run)

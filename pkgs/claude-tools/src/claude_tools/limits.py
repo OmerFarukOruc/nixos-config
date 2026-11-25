@@ -104,15 +104,16 @@ def parse_limit(text: str, at: int) -> tuple[int | None, str, str | None] | None
 
 
 def covers(label: str, model: str | None) -> bool:
-    return bool(model) and label.split()[0].lower() in model.lower()
+    words = [w for w in label.lower().split() if w != "claude"]
+    return bool(model and words) and words[0] in model.lower()
 
 
-def full_window(e: dict, at: int, model: str | None = None) -> tuple[int, str, str | None] | None:
-    scoped = [(x, f"{x['label']} limit", x["label"]) for x in e.get("scoped") or []
-              if model is None or covers(x["label"], model)]
-    windows = scoped if model else [(e.get("seven_day"), "weekly limit", None), (e.get("five_hour"), "session limit", None),
-                                    *scoped]
-    return next(((w["resets_at"], reason, label) for w, reason, label in windows
+def full_window(e: dict, at: int, model: str | None = None) -> tuple[int, str] | None:
+    if model:
+        windows = [(x, f"{x['label']} limit") for x in e.get("scoped") or [] if covers(x["label"], model)]
+    else:
+        windows = [(e.get("seven_day"), "weekly limit"), (e.get("five_hour"), "session limit")]
+    return next(((w["resets_at"], reason) for w, reason in windows
                  if w and w["used"] >= 100 and (w.get("resets_at") or 0) > at), None)
 
 

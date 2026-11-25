@@ -114,13 +114,15 @@ with_account() {
   if [[ -z "$d" ]]; then env -u CLAUDE_CONFIG_DIR "$@"; else env CLAUDE_CONFIG_DIR="$d" "$@"; fi
 }
 
+is_session_dir() { [[ " ${session_dirs[*]} " == *" $1 "* ]]; }
+
 link_shared() {
   local dir="$1" name bad=0
   for name in "${session_dirs[@]}"; do mkdir -p "$main/$name" || bad=1; done
   for name in "${shared[@]}"; do
     if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
       ln -sfn "$main/$name" "$dir/$name" || bad=1
-    elif [[ " ${session_dirs[*]} " == *" $name "* ]] && in_use "$dir"; then
+    elif is_session_dir "$name" && in_use "$dir"; then
       echo "  $dir/$name: a claude session runs with this account; the next relink after it ends links it" >&2
     else
       echo "  not replacing real file $dir/$name" >&2
@@ -279,7 +281,7 @@ sync_config() {
 in_use() {
   local p
   for p in $(pgrep -x 'claude|\.claude-wrapped' || true); do
-    grep -qxzF "CLAUDE_CONFIG_DIR=$1" "/proc/$p/environ" 2>/dev/null && return 0
+    grep -qxzF -e "CLAUDE_CONFIG_DIR=$1" -e "CLAUDE_CONFIG_DIR=$1/" "/proc/$p/environ" 2>/dev/null && return 0
   done
   return 1
 }
@@ -374,7 +376,7 @@ cmd_update() {
   while read -r d; do
     echo "$d"
     if ! in_use "$d"; then
-      for f in "${shared[@]}"; do fold_dir "$d" "$f"; done
+      for f in "${shared[@]}"; do is_session_dir "$f" || fold_dir "$d" "$f"; done
     fi
     relink "$d" || bad=1
     sync_config "$d" || bad=1
@@ -382,9 +384,21 @@ cmd_update() {
   return "$bad"
 }
 
+drop_dead_sessions() {
+  local f pid
+  [[ -d "$1/sessions" && ! -L "$1/sessions" ]] || return 0
+  for f in "$1"/sessions/*.json; do
+    pid="${f##*/}"
+    pid="${pid%.json}"
+    [[ "$pid" =~ ^[0-9]+$ && ! -d "/proc/$pid" ]] && rm -f -- "$f"
+  done
+  return 0
+}
+
 relink() {
   local rc=0 name
   if ! in_use "$1"; then
+    drop_dead_sessions "$1"
     for name in "${session_dirs[@]}"; do fold_dir "$1" "$name"; done
   fi
   fold_settings "$1" || rc=1

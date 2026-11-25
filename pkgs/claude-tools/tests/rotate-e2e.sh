@@ -11,7 +11,7 @@ ok=0
 cleanup() {
   t kill-server 2>/dev/null || true
   local w
-  for w in ${wrapper:-} ${mwrapper:-}; do
+  for w in ${wrapper:-} ${mwrapper:-} ${mwrapper2:-}; do
     rm -f "${XDG_RUNTIME_DIR:-/tmp/claude-tools-$(id -u)}/claude-tools/rotate/$w-"*.json
   done
   if ((ok)); then rm -rf "$dir"; else echo "kept $dir"; fi
@@ -20,17 +20,17 @@ trap cleanup EXIT
 fail() {
   echo "FAIL: $*"
   t capture-pane -p -t "$run" 2>/dev/null | grep -v '^\s*$' | tail -12 >"$dir/pane.log" || true
-  t capture-pane -p -t "$run-m" 2>/dev/null | grep -v '^\s*$' | tail -12 >"$dir/pane-move.log" || true
+  t capture-pane -p -t "$run-m1" 2>/dev/null | grep -v '^\s*$' | tail -12 >"$dir/pane-move.log" || true
   exit 1
 }
 
 "$tools" usage --json --max-age 600 >"$dir/real-usage.json"
-R=${CR_E2E_R:-$(jq -r 'first(.accounts[] | select(.plan != null and (.state == "ok" or .state == "expiring")) | .name) // empty' \
-  "$dir/real-usage.json")}
+source "$(dirname "$0")/idle-account.sh"
+R=${CR_E2E_R:-$(idle_profile)}
 other() { profiles names | awk -v r="$R" -v a="${A:-}" '$0 != r && $0 != a { print; exit }'; }
 A=${CR_E2E_A:-$(other)}
 C=${CR_E2E_C:-$(other)}
-[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a signed-in account and two more accounts; set CR_E2E_R, CR_E2E_A and CR_E2E_C"
+[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a signed-in profile account without an open claude session and two more accounts; set CR_E2E_R, CR_E2E_A and CR_E2E_C"
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
 done
@@ -158,60 +158,108 @@ done
   fail "q made claude-tools rotate exit $(t display -p -t "$run-q" '#{pane_dead_status}')"
 echo "quit: q in the picker started nothing"
 
-m="$run-m" mstate="$dir/move-state" sid=$(cat /proc/sys/kernel/random/uuid)
-mkdir -p "$mstate" "$dir/move-cache"
-cp "$dir/real-usage.json" "$dir/move-cache/usage.json"
-menv="CLAUDE_TOOLS_CACHE=$dir/move-cache CLAUDE_TOOLS_STATE=$mstate"
-order() { env CLAUDE_TOOLS_CACHE="$dir/move-cache" CLAUDE_TOOLS_STATE="$mstate" "$tools" usage --order "$@" | head -n 1; }
-t new-session -d -s "$m" -x 200 -y 50 \
-  "cd $dir && exec env -u CLAUDE_CONFIG_DIR -u CLAUDE_TOOLS_ROTATE_ID CLAUDE_TOOLS_PICK=0 $menv \
-$tools rotate --session-id $sid --model haiku --dangerously-skip-permissions"
-t set-option -t "$m" remain-on-exit on
-mwrapper=$(t display -p -t "$m" '#{pane_pid}')
-settle "$m" "$mwrapper"
-type_line "Reply only OK." "$m"
-for _ in $(seq 60); do
-  transcript=$(ls ~/.claude/projects/*/"$sid".jsonl 2>/dev/null) && break
-  sleep 1
+m="$run-m" mstate="$dir/move-state"
+mkdir -p "$mstate" "$dir/move-cache" "$dir/move-data"
+MX=$(idle_profile)
+MY=$(idle_profile "$MX")
+MA=""
+for n in $(profiles names); do
+  signed_in "$n" && [[ "$n" != "$MX" && "$n" != "$MY" ]] && {
+    MA=$n
+    break
+  }
 done
-[[ -n "${transcript:-}" ]] || fail "session $sid wrote no transcript"
+[[ -n "$MA" && -n "$MX" && -n "$MY" ]] ||
+  fail "the move step needs a signed-in account and two more signed-in profile accounts without an open claude session"
+jq --arg a "$MA" --arg x "$MX" --arg y "$MY" '.accounts |= with_entries(select(.key == $a or .key == $x or .key == $y))' \
+  "${CLAUDE_TOOLS_DATA:-$HOME/.config/claude-tools}/accounts.json" >"$dir/move-data/accounts.json"
+jq --arg a "$MA" --arg x "$MX" --arg y "$MY" --argjson now "$(date +%s)" '
+  def w($u; $left): {used: $u, resets_at: ($now + $left)};
+  .updated = ($now + 600) | .hosts = []
+  | .accounts |= map(select(.name == $a or .name == $x or .name == $y) | .checked = ($now + 600) | .scoped = []
+      | .five_hour = w(10; 3 * 3600) | .seven_day = w(30; 4 * 86400) | if .name == $a then . else .plan = "team 5x" end)' \
+  "$dir/real-usage.json" >"$dir/move-cache/usage.json"
+menv="CLAUDE_TOOLS_CACHE=$dir/move-cache CLAUDE_TOOLS_STATE=$mstate CLAUDE_TOOLS_DATA=$dir/move-data"
+orders() { env CLAUDE_TOOLS_CACHE="$dir/move-cache" CLAUDE_TOOLS_STATE="$mstate" CLAUDE_TOOLS_DATA="$dir/move-data" "$tools" usage --order "$@"; }
+declare -A msid mwr mtr mfirst mnext mto
+for i in 1 2; do
+  msid[$i]=$(cat /proc/sys/kernel/random/uuid)
+  t new-session -d -s "$m$i" -x 200 -y 50 \
+    "cd $dir && exec env -u CLAUDE_CONFIG_DIR -u CLAUDE_TOOLS_ROTATE_ID CLAUDE_TOOLS_PICK=0 CLAUDE_TOOLS_START_ACCOUNT=$MA $menv \
+$tools rotate --session-id ${msid[$i]} --model haiku --dangerously-skip-permissions"
+  t set-option -t "$m$i" remain-on-exit on
+  mwr[$i]=$(t display -p -t "$m$i" '#{pane_pid}')
+  [[ $i == 1 ]] && mwrapper=${mwr[1]} || mwrapper2=${mwr[2]}
+done
 quiet() {
   local size=-1 now
   for _ in $(seq 120); do
-    now=$(stat -c %s "$transcript")
+    now=$(stat -c %s "$1")
     ((now == size)) && jq -se '[.[] | select(.type == "user" or .type == "assistant")] | last | .type == "assistant"' \
-      "$transcript" >/dev/null && return
+      "$1" >/dev/null && return
     size=$now
     sleep 5
   done
-  fail "the transcript of $sid did not settle in 600 s"
-}
-limit() {
-  jq -n --arg s "$sid" --arg t "$transcript" --arg m "You've hit your 5-hour limit · resets $1 (UTC)" \
-    '{session_id: $s, transcript_path: $t, hook_event_name: "StopFailure", last_assistant_message: $m}' >"$dir/limit.json"
-  type_line "! ${tools%/bin/claude-tools}/libexec/claude-tools/rotate-on-limit < $dir/limit.json" "$m"
+  fail "the transcript $1 did not settle in 600 s"
 }
 moved() {
   local c
   for _ in $(seq "$2"); do
-    c=$(child "$mwrapper")
-    [[ -n "$c" && "$(cut -f1 <<<"$c")" != "$1" ]] && grep -q -- "--resume $sid" <<<"$(cut -f3 <<<"$c")" && {
+    c=$(child "$3")
+    [[ -n "$c" && "$(cut -f1 <<<"$c")" != "$1" ]] && grep -q -- "--resume $4" <<<"$(cut -f3 <<<"$c")" && {
       echo "$c"
       return
     }
     sleep 1
   done
 }
-quiet
-first=$(child "$mwrapper")
-A=$(account_of "$(cut -f2 <<<"$first")")
+hook_input() {
+  jq -n --arg s "${msid[$1]}" --arg t "${mtr[$1]}" --arg m "$2" \
+    '{session_id: $s, transcript_path: $t, hook_event_name: "StopFailure", last_assistant_message: $m}' >"$dir/limit-$1.json"
+  t send-keys -t "$m$1" -l "! ${tools%/bin/claude-tools}/libexec/claude-tools/rotate-on-limit < $dir/limit-$1.json"
+}
+for i in 1 2; do
+  settle "$m$i" "${mwr[$i]}"
+  type_line "Reply only OK." "$m$i"
+done
+for i in 1 2; do
+  for _ in $(seq 60); do
+    mtr[$i]=$(ls ~/.claude/projects/*/"${msid[$i]}".jsonl 2>/dev/null) && break
+    sleep 1
+  done
+  [[ -n "${mtr[$i]}" ]] || fail "session ${msid[$i]} wrote no transcript"
+  quiet "${mtr[$i]}"
+  mfirst[$i]=$(child "${mwr[$i]}")
+  [[ "$(account_of "$(cut -f2 <<<"${mfirst[$i]}")")" == "$MA" ]] || fail "session $i did not start on $MA"
+done
 reset=$(date -u -d '+2 hours' +%s)
 reset=$((reset - reset % 60))
-limit "$(LC_ALL=C date -u -d "@$reset" +%-I:%M%P)"
-next=$(moved "$(cut -f1 <<<"$first")" 300)
-[[ -n "$next" ]] || fail "claude-tools rotate did not resume $sid on another account in 300 s after the limit on $A"
-B=$(account_of "$(cut -f2 <<<"$next")")
-[[ "$B" == "$(order --skip "$A")" ]] || fail "the session moved to $B, not to $(order --skip "$A"), the first of the order"
-echo "move: the limit on $A resumed $sid on $B, the first of the order"
+for i in 1 2; do hook_input "$i" "You've hit your 5-hour limit · resets $(LC_ALL=C date -u -d "@$reset" +%-I:%M%P) (UTC)"; done
+sleep 1
+t send-keys -t "${m}1" Enter
+t send-keys -t "${m}2" Enter
+for i in 1 2; do
+  mnext[$i]=$(moved "$(cut -f1 <<<"${mfirst[$i]}")" 300 "${mwr[$i]}" "${msid[$i]}")
+  [[ -n "${mnext[$i]}" ]] || fail "claude-tools rotate did not resume session $i in 300 s after the limit on $MA"
+  mto[$i]=$(account_of "$(cut -f2 <<<"${mnext[$i]}")")
+done
+[[ "$(printf '%s\n' "${mto[1]}" "${mto[2]}" | sort | tr '\n' ' ')" == "$(printf '%s\n' "$MX" "$MY" | sort | tr '\n' ' ')" ]] ||
+  fail "two sessions that hit a limit on $MA in the same second moved to ${mto[1]} and ${mto[2]}, not one each to $MX and $MY"
+echo "move: two sessions that hit a limit on $MA at once moved to ${mto[1]} and ${mto[2]}"
+
+B=${mto[1]}
+quiet "${mtr[1]}"
+fable_reset=$(LC_ALL=C date -u -d '+2 days' '+%b %-d, %-I%P')
+hook_input 1 "You've hit your Fable limit · resets $fable_reset (UTC)"
+sleep 1
+t send-keys -t "${m}1" Enter
+again=$(moved "$(cut -f1 <<<"${mnext[1]}")" 300 "${mwr[1]}" "${msid[1]}")
+[[ -n "$again" ]] || fail "claude-tools rotate did not resume session 1 in 300 s after the Fable limit on $B"
+jq -e --arg k "$B:Fable" '.[$k].model == "Fable"' "$mstate/limits.json" >/dev/null ||
+  fail "the Fable limit on $B wrote no hold for Fable alone: $(jq -c . "$mstate/limits.json")"
+jq -e --arg k "$B" 'has($k) | not' "$mstate/limits.json" >/dev/null || fail "the Fable limit on $B held the whole account"
+orders --model haiku | grep -qxF "$B" || fail "usage --order --model haiku leaves out $B, which only Fable holds"
+! orders --model claude-fable-5-2 | grep -qxF "$B" || fail "usage --order --model claude-fable-5-2 lists $B, which Fable holds"
+echo "model limit: a Fable limit on $B held only Fable there"
 ok=1
 echo PASS

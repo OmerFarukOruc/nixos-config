@@ -11,11 +11,18 @@ from pathlib import Path
 
 from claude_tools.accounts import ROTATE_ID, account_of, read_accounts
 from claude_tools.agents import KINDS, SKIP_PERMISSIONS, UNNAMED, Agents, opencode_agent_of, opencode_config
-from claude_tools.commands.rotate import carried_args, claude_help, help_text, model_arg, parse_help, parsed_flags
+from claude_tools.commands.rotate import (
+    carried_args,
+    claude_help,
+    help_text,
+    parse_help,
+    parsed_flags,
+    with_model,
+)
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
 from claude_tools.limits import last_model, recorded_limit
-from claude_tools.selection import hold_limit, next_account
+from claude_tools.selection import hold_limit, next_account, record_pick
 from claude_tools.settings import Settings
 from claude_tools.store import locked, read_json, write_json
 
@@ -103,14 +110,6 @@ def drop_flags(argv: list[str], valued: tuple[str, ...], bare: tuple[str, ...]) 
         elif a not in bare and a.split("=", 1)[0] not in valued:
             out.append(a)
     return out
-
-
-def with_model(argv: list[str], model: str | None, opts: dict[str, str]) -> list[str]:
-    given = model_arg(argv, opts)
-    if not model or (given and given.split("[", 1)[0] in model):
-        return argv
-    kept = [t for name, tokens in parsed_flags(argv, opts) if name != "--model" for t in tokens]
-    return [*kept, "--model", model]
 
 
 def resume_args(argv: list[str], session: str, opts: dict[str, str], model: str | None = None,
@@ -250,9 +249,10 @@ class Switcher:
         found = read_accounts(self.settings.accounts_file)
         dirs = found.usable
         current = account_of(config_dir, found.local, self.settings.home)
+        running = last_model(self.settings.home / ".claude/projects", session)
         if to is None:
             try:
-                to = next_account(self.settings, None if after_limit else current, model, current)
+                to = next_account(self.settings, None if after_limit else current, running or model, current)
             except (OSError, subprocess.SubprocessError, ValueError) as e:
                 raise Failed(f"could not pick the next account: {e!r}") from e
             if to is None:
@@ -265,12 +265,15 @@ class Switcher:
                 return True
         elif to not in dirs:
             raise Failed(f"unknown account {to}")
+        else:
+            record_pick(self.settings, to, dirs)
         self.agents.exit_claude(name, pid)
+        args = self.resume_args(argv[1:], session, running)
         try:
-            self.agents.start_claude(pane, name, dirs[to], self.resume_args(argv[1:], session))
+            self.agents.start_claude(pane, name, dirs[to], args)
         except Failed as e:
             self.log(f"{name}: start on {to} failed ({e}); starting it on {current} again")
-            self.agents.start_claude(pane, name, found.local[current], self.resume_args(argv[1:], session))
+            self.agents.start_claude(pane, name, found.local[current], args)
             raise
         self.agents.prompt_when_ready(name, self.resume_message(name, (
             f"Your Claude account {current} hit its usage limit, so this session now runs on the {to} account. "

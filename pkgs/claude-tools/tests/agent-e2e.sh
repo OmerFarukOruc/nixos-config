@@ -29,12 +29,14 @@ cleanup() {
   "$tools" agent stop --force "$slow" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$oc" >/dev/null 2>&1 || true
   "$tools" agent stop --force "$cx" >/dev/null 2>&1 || true
+  for i in 1 2 3; do "$tools" agent stop --force "$run-p$i" >/dev/null 2>&1 || true; done
   h server stop >/dev/null 2>&1 || true
   sleep 2
   "$real_herdr" session delete "$run" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 source "$(dirname "$0")/foreign-agent.sh"
+source "$(dirname "$0")/idle-account.sh"
 fail() {
   echo "FAIL: $*"
   pane=$(h agent get "$name" 2>/dev/null | jq -r '.result.agent.pane_id // empty') || true
@@ -313,5 +315,38 @@ if [[ -n "$codex_ready" ]]; then
 else
   echo "step 14: skipped, codex, its auth.json or its models_cache.json is missing on this host"
 fi
+
+step 15 "agent start without --account spreads new agents and starts an account that burns its week fast last"
+"$tools" usage --json --max-age 600 >"$dir/real-usage.json"
+fast_acct=$(idle_profile)
+slow_acct=$(idle_profile "$fast_acct")
+[[ -n "$fast_acct" && -n "$slow_acct" ]] || fail "step 15 needs two signed-in profile accounts without a claude process"
+mkdir -p "$dir/pick-cache" "$dir/pick-data" "$dir/pick-state"
+jq --arg f "$fast_acct" --arg s "$slow_acct" '.accounts |= with_entries(select(.key == $f or .key == $s))' \
+  "${CLAUDE_TOOLS_DATA:-$HOME/.config/claude-tools}/accounts.json" >"$dir/pick-data/accounts.json"
+jq --arg f "$fast_acct" --arg s "$slow_acct" --argjson now "$(date +%s)" '
+  def w($u; $left): {used: $u, resets_at: ($now + $left)};
+  .updated = ($now + 600) | .hosts = []
+  | .accounts |= map(select(.name == $f or .name == $s) | .checked = ($now + 600) | .scoped = [] | .plan = "team 5x"
+      | .five_hour = w(10; 3 * 3600) | .seven_day = w(if .name == $f then 70 else 10 end; 5 * 86400))' \
+  "$dir/real-usage.json" >"$dir/pick-cache/usage.json"
+started_on() {
+  local pane pid
+  pane=$(h agent get "$1" | jq -r '.result.agent.pane_id')
+  pid=$(h pane process-info --pane "$pane" |
+    jq -r 'first(.result.process_info.foreground_processes[] | select(.name == "claude" or .name == ".claude-wrapped") | .pid) // empty')
+  [[ -n "$pid" ]] || fail "no claude process runs in the pane of $1"
+  tr '\0' '\n' <"/proc/$pid/environ" | sed -n 's/^CLAUDE_CONFIG_DIR=//p'
+}
+want=("$slow_acct" "$slow_acct" "$fast_acct")
+for i in 1 2 3; do
+  (cd "$dir" && CLAUDE_TOOLS_CACHE="$dir/pick-cache" CLAUDE_TOOLS_DATA="$dir/pick-data" CLAUDE_TOOLS_STATE="$dir/pick-state" \
+    "$tools" agent start "$run-p$i" --cwd work --model haiku 2>"$dir/pick-$i.err") || fail "agent start $run-p$i exited $?: $(cat "$dir/pick-$i.err")"
+  grep -qxF "claude-tools agent: $run-p$i starts on ${want[$((i - 1))]}" "$dir/pick-$i.err" ||
+    fail "agent start $run-p$i did not say it starts on ${want[$((i - 1))]}: $(cat "$dir/pick-$i.err")"
+  [[ "$(started_on "$run-p$i")" == "$("$tools" accounts dir "${want[$((i - 1))]}")" ]] ||
+    fail "$run-p$i runs with CLAUDE_CONFIG_DIR=$(started_on "$run-p$i"), not ${want[$((i - 1))]}'s folder"
+done
+for i in 1 2 3; do "$tools" agent stop "$run-p$i" >/dev/null || fail "agent stop $run-p$i exited $?"; done
 
 echo PASS
