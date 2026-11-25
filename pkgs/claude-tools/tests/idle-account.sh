@@ -6,11 +6,16 @@ signed_in() {
     "${dir:?}/real-usage.json" >/dev/null
 }
 
+has_room() {
+  jq -e --arg n "$1" '.accounts[] | select(.name == $n) | (.five_hour.used // 0) < 70 and (.seven_day.used // 0) < 80' \
+    "${dir:?}/real-usage.json" >/dev/null
+}
+
 idle_profile() {
   local n d p busy
   for n in $("${tools:?}" accounts names); do
     grep -qxF -- "$n" <<<"$*" && continue
-    signed_in "$n" || continue
+    { signed_in "$n" && has_room "$n"; } || continue
     d=$("$tools" accounts dir "$n")
     [[ -n "$d" ]] || continue
     busy=0

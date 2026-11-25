@@ -30,7 +30,7 @@ R=${CR_E2E_R:-$(idle_profile)}
 other() { profiles names | awk -v r="$R" -v a="${A:-}" '$0 != r && $0 != a { print; exit }'; }
 A=${CR_E2E_A:-$(other)}
 C=${CR_E2E_C:-$(other)}
-[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a signed-in profile account without an open claude session and two more accounts; set CR_E2E_R, CR_E2E_A and CR_E2E_C"
+[[ -n $A && -n $C && -n $R ]] || fail "rotate-e2e needs a signed-in profile account with room (5h under 70%, week under 80%) and no open claude session, and two more accounts; set CR_E2E_R, CR_E2E_A and CR_E2E_C"
 for n in "$A" "$C" "$R"; do
   profiles names | grep -qx "$n" || fail "no account $n here"
 done
@@ -164,13 +164,13 @@ MX=$(idle_profile)
 MY=$(idle_profile "$MX")
 MA=""
 for n in $(profiles names); do
-  signed_in "$n" && [[ "$n" != "$MX" && "$n" != "$MY" ]] && {
+  signed_in "$n" && has_room "$n" && [[ "$n" != "$MX" && "$n" != "$MY" ]] && {
     MA=$n
     break
   }
 done
 [[ -n "$MA" && -n "$MX" && -n "$MY" ]] ||
-  fail "the move step needs a signed-in account and two more signed-in profile accounts without an open claude session"
+  fail "the move step needs three signed-in accounts with room (5h under 70%, week under 80%), two of them profiles without an open claude session"
 jq --arg a "$MA" --arg x "$MX" --arg y "$MY" '.accounts |= with_entries(select(.key == $a or .key == $x or .key == $y))' \
   "${CLAUDE_TOOLS_DATA:-$HOME/.config/claude-tools}/accounts.json" >"$dir/move-data/accounts.json"
 jq --arg a "$MA" --arg x "$MX" --arg y "$MY" --argjson now "$(date +%s)" '
