@@ -127,7 +127,9 @@ stop when it fails; then run `git diff --stat <SHA>..origin/<branch> --` on ever
 Current state and touch-set path. When a path changed, follow reconciliation steps 2 to
 5 before you deliver. Search the destination for a document with the same title and
 update it instead of creating a second one; after a failed write, read the destination
-before you retry. Linear: `linctl document create`, then `document update`. GitHub: `gh
+before you retry. Linear: `linctl document create`, then `document update`; both refuse
+without a pinned `project_id` (in `.linctl.toml` or `--project`), so without one deliver
+to GitHub or the repository instead. GitHub: `gh
 issue create --body-file <plan.md>`. A repository: its established plan location,
 otherwise `plans/<slug>.md`. Read the delivered text back and compare it with the
 source; a dropped section means the plan is not delivered. Report the link or path, the
