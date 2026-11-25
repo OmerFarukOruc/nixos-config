@@ -11,7 +11,7 @@ from pathlib import Path
 
 from claude_tools.accounts import ROTATE_ID, account_of, read_accounts
 from claude_tools.agents import KINDS, SKIP_PERMISSIONS, UNNAMED, Agents, opencode_agent_of, opencode_config
-from claude_tools.commands.rotate import carried_args, claude_help, help_text, parse_help, parsed_flags
+from claude_tools.commands.rotate import carried_args, claude_help, help_text, model_arg, parse_help, parsed_flags
 from claude_tools.errors import Failed
 from claude_tools.herdr import session_of
 from claude_tools.limits import last_model, recorded_limit
@@ -106,9 +106,8 @@ def drop_flags(argv: list[str], valued: tuple[str, ...], bare: tuple[str, ...]) 
 
 
 def with_model(argv: list[str], model: str | None, opts: dict[str, str]) -> list[str]:
-    given = [tokens[1] if len(tokens) > 1 else tokens[0].split("=", 1)[-1]
-             for name, tokens in parsed_flags(argv, opts) if name == "--model"]
-    if not model or (given and given[-1].split("[", 1)[0] in model):
+    given = model_arg(argv, opts)
+    if not model or (given and given.split("[", 1)[0] in model):
         return argv
     kept = [t for name, tokens in parsed_flags(argv, opts) if name != "--model" for t in tokens]
     return [*kept, "--model", model]
@@ -238,7 +237,7 @@ class Switcher:
                 from e
         return codex_args(argv, session, parse_help(text, CODEX_OPTION_LINE)[0])
 
-    def switch(self, name: str, to: str | None, after_limit: bool = False) -> bool:
+    def switch(self, name: str, to: str | None, after_limit: bool = False, model: str | None = None) -> bool:
         agent = self.herdr("agent", "get", name)["result"]["agent"]
         if agent.get("agent") != "claude" or agent.get("agent_status") == "working":
             what = f"{agent['agent']} and {agent.get('agent_status')}" if agent.get("agent") else "no running agent"
@@ -253,7 +252,7 @@ class Switcher:
         current = account_of(config_dir, found.local, self.settings.home)
         if to is None:
             try:
-                to = next_account(self.settings, None if after_limit else current)
+                to = next_account(self.settings, None if after_limit else current, model)
             except (OSError, subprocess.SubprocessError, ValueError) as e:
                 raise Failed(f"could not pick the next account: {e!r}") from e
             if to is None:
@@ -413,9 +412,9 @@ class Switcher:
             held = hold_limit(self.settings, current, text, said)
         except (OSError, subprocess.SubprocessError, ValueError) as e:
             raise Failed(f"could not hold {current}: {e!r}") from e
-        what = f"held until {at(held[0])} after a {held[1]}" if held else "not held, its limit has reset"
+        what = f"held until {at(held.until)} after a {held.reason}" if held else "not held, its limit has reset"
         self.log(f"{name}: {current} recorded {text!r} at {at(said)}; {what}")
-        self.switch(name, None, after_limit=True)
+        self.switch(name, None, after_limit=True, model=held.model if held else None)
 
     def scan(self) -> int:
         server = self.herdr.ensure_server(self.log)

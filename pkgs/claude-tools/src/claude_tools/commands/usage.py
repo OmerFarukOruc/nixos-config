@@ -55,7 +55,7 @@ def watch(settings: Settings, max_age: int) -> int:
 def run(settings: Settings, a: argparse.Namespace) -> int:
     if a.order:
         names = [n for n in accounts(settings.accounts_file) if n not in a.skip]
-        for n in startable(settings, entries(settings), names):
+        for n in startable(settings, entries(settings), names, a.model):
             print(n)
         return 0
     if a.watch:
@@ -86,4 +86,6 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     ap.add_argument("--order", action="store_true",
                     help="print the accounts to start on, best first, from the cache; check nothing")
     ap.add_argument("--skip", action="append", default=[], metavar="NAME", help="with --order: an account to leave out")
+    ap.add_argument("--model", metavar="MODEL",
+                    help="with --order: the model the session runs on, so an account held back for that model goes last")
     ap.set_defaults(run=run)

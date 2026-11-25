@@ -5,7 +5,7 @@ import select
 import termios
 
 from claude_tools.display import login_left, window_view
-from claude_tools.limits import WINDOWS
+from claude_tools.limits import WINDOWS, Hold
 from claude_tools.selection import BLOCKED, SHORT, order, span
 from claude_tools.store import now
 from claude_tools.terminal import ACCENT, AMBER, BOLD, DIM, RED, Cards, visible
@@ -16,14 +16,15 @@ MOVES = {b"\x1b[A": -1, b"\x1bOA": -1, b"k": -1, b"\x1b[B": 1, b"\x1bOB": 1, b"j
 
 
 class Picker:
-    def __init__(self, names: list[str], dirs: dict[str, str], data: dict, live: dict[str, int], held: set[str],
-                 cursor: str | None, color: bool):
+    def __init__(self, names: list[str], dirs: dict[str, str], data: dict, live: dict[str, int], held: list[Hold],
+                 model: str | None, cursor: str | None, color: bool):
         self.names = names
         self.dirs = dirs
         self.data = data
         self.entries = {a["name"]: a for a in data.get("accounts", [])}
         self.live = live
-        self.ranked = order(self.entries, names, held, now())
+        self.ranked = order(self.entries, names, held, now(), model)
+        self.model_holds = {h.account: h for h in held if h.model and not h.blocks(model)}
         self.rows = [n for n, _, _ in self.ranked]
         self.group = {n: g for n, g, _ in self.ranked}
         self.why = {n: why for n, _, why in self.ranked}
@@ -53,6 +54,8 @@ class Picker:
             tags.append(cards.c(f"★ {self.why[name]}", ACCENT))
         else:
             tags.append(cards.c(self.why[name], AMBER if self.group[name] == BLOCKED else DIM))
+        if h := self.model_holds.get(name):
+            tags.append(cards.c(f"{h.model} held for {span(h.until - now())}", DIM))
         if e.get("state") == "expiring":
             tags.append(cards.c("login ends soon", AMBER))
         if self.live.get(name):

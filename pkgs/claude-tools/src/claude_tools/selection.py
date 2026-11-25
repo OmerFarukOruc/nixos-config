@@ -4,7 +4,7 @@ import math
 import re
 
 from claude_tools.accounts import accounts
-from claude_tools.limits import NO_RESET_WAIT, WINDOWS, full_window, hold, holds, parse_limit
+from claude_tools.limits import NO_RESET_WAIT, WINDOWS, Hold, full_window, hold, holds, parse_limit
 from claude_tools.settings import Settings
 from claude_tools.store import now
 from claude_tools.usage import by_name, entries, locked_refresh
@@ -53,11 +53,13 @@ def readable(e: dict) -> bool:
     return e.get("state") in ("ok", "expiring") and bool(e.get("five_hour") or e.get("seven_day"))
 
 
-def blocked(e: dict, held: bool, at: int) -> str | None:
+def blocked(e: dict, held: list[Hold], at: int, model: str | None = None) -> str | None:
     if e.get("state") == "logged-out":
         return "logged out"
-    if held:
+    if any(h.model is None for h in held):
         return "held back after a limit"
+    if h := next((h for h in held if h.blocks(model)), None):
+        return f"held back after a {h.model} limit"
     if not e.get("five_hour") and not e.get("seven_day"):
         return "no reading yet"
     if not readable(e):
@@ -66,6 +68,8 @@ def blocked(e: dict, held: bool, at: int) -> str | None:
         used = window_now(e.get(key), at)[0]
         if used >= cap:
             return f"{LABELS[key]} at {used:.0f}%"
+    if full := full_window(e, at, model) if model else None:
+        return f"{full[2]} at 100%"
     return None
 
 
@@ -97,12 +101,13 @@ def place(e: dict, rates: dict[str, float], at: int) -> tuple[tuple, str]:
     return (LASTS, week_reset or at + WINDOWS["seven_day"]), why
 
 
-def order(readings: dict[str, dict], names: list[str], held: set[str], at: int) -> list[tuple[str, int, str]]:
+def order(readings: dict[str, dict], names: list[str], held: list[Hold], at: int,
+          model: str | None = None) -> list[tuple[str, int, str]]:
     rates = {key: burn(list(readings.values()), key, at) for key in WINDOWS}
     places = []
     for i, n in enumerate(names):
         e = readings.get(n) or {}
-        if why := blocked(e, n in held, at):
+        if why := blocked(e, [h for h in held if h.account == n], at, model):
             places.append(((BLOCKED, i), n, why))
         else:
             key, why = place(e, rates, at)
@@ -110,57 +115,60 @@ def order(readings: dict[str, dict], names: list[str], held: set[str], at: int) 
     return [(n, key[0], why) for key, n, why in sorted(places)]
 
 
-def held_names(settings: Settings) -> set[str]:
-    return set(holds(settings.holds_file, now()))
+def current_holds(settings: Settings) -> list[Hold]:
+    return holds(settings.holds_file, now())
 
 
-def ranked(settings: Settings, readings: dict[str, dict], names: list[str]) -> list[tuple[str, int, str]]:
-    return order(readings, names, held_names(settings), now())
+def ranked(settings: Settings, readings: dict[str, dict], names: list[str],
+           model: str | None = None) -> list[tuple[str, int, str]]:
+    return order(readings, names, current_holds(settings), now(), model)
 
 
-def startable(settings: Settings, readings: dict[str, dict], names: list[str]) -> list[str]:
-    return [n for n, g, _ in ranked(settings, readings, names) if g != BLOCKED]
+def startable(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None) -> list[str]:
+    return [n for n, g, _ in ranked(settings, readings, names, model) if g != BLOCKED]
 
 
-def best(settings: Settings, readings: dict[str, dict], names: list[str]) -> str | None:
-    return next(iter(startable(settings, readings, names)), None)
+def best(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None) -> str | None:
+    return next(iter(startable(settings, readings, names, model)), None)
 
 
-def next_account(settings: Settings, skip: str | None) -> str | None:
+def next_account(settings: Settings, skip: str | None, model: str | None = None) -> str | None:
     names = [n for n in accounts(settings.accounts_file) if n != skip]
     at, readings = now(), entries(settings)
-    held = holds(settings.holds_file, at)
+    held = {h.account for h in holds(settings.holds_file, at) if h.blocks(model)}
     fresh = [n for n in names if n not in held and at - ((readings.get(n) or {}).get("checked") or 0) > RECENT]
     if fresh:
         data = locked_refresh(settings, fresh, RECENT, at + REFRESH_BUDGET)
         readings = by_name(data)
-    return best(settings, readings, names)
+    return best(settings, readings, names, model)
 
 
-def free_at(settings: Settings, names: list[str], at: int) -> int | None:
+def free_at(settings: Settings, names: list[str], at: int, model: str | None = None) -> int | None:
     readings, held = entries(settings), holds(settings.holds_file, at)
     times = []
     for n in names:
         e = readings.get(n) or {}
         if not readable(e):
             continue
-        t = held.get(n, {}).get("until", at)
+        t = max([at, *(h.until for h in held if h.account == n and h.blocks(model))])
         for key, cap in CAPS:
             used, reset = window_now(e.get(key), at)
             if used >= cap:
                 t = max(t, reset)
+        if full := full_window(e, at, model) if model else None:
+            t = max(t, full[0])
         times.append(t)
     return min(times, default=None)
 
 
-def hold_limit(settings: Settings, name: str, text: str, said: int | None = None) -> tuple[int, str] | None:
+def hold_limit(settings: Settings, name: str, text: str, said: int | None = None) -> Hold | None:
     at = now()
-    until, reason = parse_limit(text, said or at) or (None, "limit")
+    until, reason, model = parse_limit(text, said or at) or (None, "limit", None)
     if until is None:
         usable = name in accounts(settings.accounts_file)
         entry = by_name(locked_refresh(settings, [name], None)).get(name, {}) if usable else {}
-        until, reason = full_window(entry, at) or (at + NO_RESET_WAIT, f"{reason} with no full window")
+        until, reason, model = full_window(entry, at, model) or (at + NO_RESET_WAIT, f"{reason} with no full window",
+                                                                 model)
     if until <= at:
         return None
-    hold(settings.holds_file, name, until, reason)
-    return until, reason
+    return hold(settings.holds_file, Hold(name, until, reason, model))

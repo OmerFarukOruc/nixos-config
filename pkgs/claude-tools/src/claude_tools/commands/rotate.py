@@ -19,7 +19,7 @@ from claude_tools.agents import sessions
 from claude_tools.errors import Failed
 from claude_tools.limits import NO_RESET_WAIT
 from claude_tools.picker import CANCELLED, PICKED, Picker
-from claude_tools.selection import best, free_at, held_names, hold_limit, next_account
+from claude_tools.selection import best, current_holds, free_at, hold_limit, next_account
 from claude_tools.settings import Settings
 from claude_tools.store import append_event, now, read_json
 from claude_tools.usage import by_name, load_cache, locked_refresh
@@ -40,6 +40,7 @@ class Rotation:
         self.state = settings.state / "rotate"
         self.accounts = Accounts({}, None)
         self.dirs: dict[str, str] = {}
+        self.model: str | None = None
 
     @property
     def names(self) -> list[str]:
@@ -59,7 +60,7 @@ class Rotation:
             live = {n: by_dir.get(d, 0) for n, d in self.dirs.items()}
             try:
                 picker = Picker(self.accounts.names, self.dirs, load_cache(self.settings), live,
-                                held_names(self.settings), cursor, self.settings.color)
+                                current_holds(self.settings), self.model, cursor, self.settings.color)
                 outcome, name = picker.run()
             except Exception as e:
                 self.say(f"the account picker failed ({e!r})")
@@ -77,15 +78,16 @@ class Rotation:
 
     def after_limit(self, current: str, hook: dict) -> str | None:
         held = hold_limit(self.settings, current, hook.get("last_assistant_message") or "")
-        nxt = next_account(self.settings, None)
-        what = f"a {held[1]} until {when(held[0])}" if held else "a limit that has already reset"
+        self.model = held.model if held and held.model else self.model
+        nxt = next_account(self.settings, None, self.model)
+        what = f"a {held.reason} until {when(held.until)}" if held else "a limit that has already reset"
         self.log(f"{current} hit {what}; next account: {nxt or 'none'}")
         return nxt
 
     def wake_time(self, session: str) -> float:
         at = time.time()
         try:
-            free = free_at(self.settings, self.names, int(at))
+            free = free_at(self.settings, self.names, int(at), self.model)
         except Exception as e:
             self.log(f"session {session}: reading when an account is free failed: {e!r}")
             free = None
@@ -217,6 +219,18 @@ def parsed_flags(args: list[str], opts: dict[str, str]) -> Iterator[tuple[str, l
         yield name, [a, *taken]
 
 
+def model_arg(args: list[str], opts: dict[str, str]) -> str | None:
+    given = [tokens[1] if len(tokens) > 1 else tokens[0].split("=", 1)[-1]
+             for name, tokens in parsed_flags(args, opts) if name == "--model"]
+    return given[-1] if given else None
+
+
+def start_model(args: list[str], opts: dict[str, str], settings: Settings) -> str | None:
+    configured = read_json(settings.home / ".claude" / "settings.json").get("model")
+    return model_arg(args, opts) or os.environ.get("ANTHROPIC_MODEL") or (
+        configured if isinstance(configured, str) else None)
+
+
 def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
     return [t for name, tokens in parsed_flags(args, opts) if name not in NOT_CARRIED for t in tokens]
 
@@ -298,7 +312,7 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
         if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
         data = locked_refresh(r.settings, [], CACHE_MAX_AGE)
-        current = best(r.settings, by_name(data), r.names)
+        current = best(r.settings, by_name(data), r.names, r.model)
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
@@ -327,7 +341,7 @@ def supervise(r: Rotation, runner: Runner, current: str, flag: Path) -> tuple[St
         if got is not None:
             stop = Stop.at_limit(got)
         try:
-            nxt = r.after_limit(current, got) if got else next_account(r.settings, None)
+            nxt = r.after_limit(current, got) if got else next_account(r.settings, None, r.model)
         except Exception as e:
             r.log(f"session {stop.session}: no move, picking the next account failed: {e!r}")
             nxt = None
@@ -351,6 +365,7 @@ def run(settings: Settings, args: list[str]) -> int:
         plain(args)
     if not interactive(args, cmds):
         plain(args)
+    r.model = start_model(args, opts, settings)
     current = first_account(r, args)
     rotate_id = str(os.getpid())
     base = {**os.environ, ROTATE_ID: rotate_id}
