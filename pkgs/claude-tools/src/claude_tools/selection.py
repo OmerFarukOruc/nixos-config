@@ -16,6 +16,7 @@ MIN_ELAPSED = {"five_hour": 900, "seven_day": WINDOWS["five_hour"]}
 REFRESH_BUDGET = 120
 START_MAX_AGE = 900
 PACE_BAND = 5
+SLOW_LEAD = 1
 RECENT = 60
 FIRST, LASTS, SHORT, BLOCKED = range(4)
 GROUPS = ("first", "lasts", "short", "blocked")
@@ -116,22 +117,32 @@ def place(e: dict, rates: dict[str, float], at: int) -> tuple[tuple, str]:
     return (LASTS, week_reset or at + WINDOWS["seven_day"]), why
 
 
+def spread(rows: list[tuple[str, dict, tuple, str]], live: dict[str, int], at: int) -> list[tuple[tuple, str, int, str]]:
+    ahead = {n: week_ahead(e, at) for n, e, _, _ in rows}
+    load = {n: live.get(n, 0) / size(e.get("plan")) for n, e, _, _ in rows}
+    emptiest_fast = min((load[n] for n in load if ahead[n] is not None), default=math.inf)
+    out = []
+    for n, _, key, why in rows:
+        later = ahead[n] is not None or load[n] > emptiest_fast + SLOW_LEAD
+        why += f" · week {ahead[n]:.0f} points ahead of an even spread" if ahead[n] is not None else ""
+        out.append(((later, load[n], *key), n, key[0], why))
+    return out
+
+
 def order(readings: dict[str, dict], names: list[str], held: list[Hold], at: int, model: str | None = None,
           live: dict[str, int] | None = None) -> list[tuple[str, int, str]]:
     rates = {key: burn(list(readings.values()), key, at) for key in WINDOWS}
-    places = []
+    places, rows = [], []
     for i, n in enumerate(names):
         e = readings.get(n) or {}
         if why := blocked(e, [h for h in held if h.account == n], at, model):
             places.append(((True, i), n, BLOCKED, why))
-            continue
-        key, why = place(e, rates, at)
-        group = key[0]
-        if live is not None:
-            ahead = week_ahead(e, at)
-            key = (ahead is not None, live.get(n, 0) / size(e.get("plan")), *key)
-            why += f" · week {ahead:.0f} points ahead of an even spread" if ahead is not None else ""
-        places.append(((False, key), n, group, why))
+        else:
+            rows.append((n, e, *place(e, rates, at)))
+    if live is None:
+        places += [((False, key), n, key[0], why) for n, _, key, why in rows]
+    else:
+        places += [((False, key), n, group, why) for key, n, group, why in spread(rows, live, at)]
     return [(n, group, why) for _, n, group, why in sorted(places)]
 
 
