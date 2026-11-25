@@ -148,6 +148,7 @@
     }
   },
   "autoCompactWindow": 450000,
+  "idleCompaction": false,
   "promptSuggestionEnabled": false,
   "awaySummaryEnabled": false,
   "showClearContextOnPlanAccept": true,

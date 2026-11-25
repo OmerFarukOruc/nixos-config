@@ -47,6 +47,7 @@ Private values stay out of these files ([Checks](#checks)). The Infisical projec
 ## Claude Code settings
 
 - `switchModelsOnFlag` is `false`, so a request that a safety classifier flags never moves to an older model unnoticed: an interactive session asks first, a headless run ends the turn with a refusal, and an Agent-tool subagent fails (Claude Code model-config docs, "Ask before switching").
+- `idleCompaction` is `false`, so a session is not summarized while it sits idle. Idle compaction summarizes an interactive session on the one-hour prompt cache once its context reaches 200,000 tokens and about an hour passes without a request (Claude Code settings reference, `idleCompaction`). A resumed session then shows only the summary and what follows it, and the earlier messages stay only in the transcript file (Claude Code fullscreen docs, "Conversation compacted"). If the break outlasts the one-hour prompt cache, the next turn processes the whole conversation again as uncached input. Compaction at `autoCompactWindow` still runs.
 - The Bash sandbox stays at its default, off, so `settings.json` sets no `sandbox` key. When it was on, it left empty placeholder files in the working checkout (`.bashrc`, `.gitconfig`, `.mcp.json`, `.claude/settings.json` and others) and an empty `.git/config.lock` that made every `.git/config` write fail, even outside the sandbox.
 - Give each login its own `.credentials.json`. Claude Code rotates the OAuth refresh token on use, so two processes or role homes that share one file log each other out.
 
