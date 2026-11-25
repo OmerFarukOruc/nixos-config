@@ -1,6 +1,15 @@
 {
   bash,
+  coreutils,
+  findutils,
+  gnugrep,
+  gnused,
+  jq,
+  lib,
+  makeWrapper,
+  procps,
   python3Packages,
+  util-linux,
 }:
 python3Packages.buildPythonApplication {
   pname = "claude-tools";
@@ -8,6 +17,7 @@ python3Packages.buildPythonApplication {
   pyproject = true;
   src = ./claude-tools;
   build-system = [ python3Packages.setuptools ];
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ bash ];
   postPatch = ''
     substituteInPlace src/claude_tools/settings.py --replace-fail @libexec@ $out/libexec/claude-tools
@@ -16,6 +26,17 @@ python3Packages.buildPythonApplication {
   postInstall = ''
     install -Dm755 -t $out/libexec/claude-tools libexec/claude-accounts libexec/login-browser libexec/rotate-on-limit
     install -Dm644 -t $out/libexec/claude-tools libexec/config-lock.sh
+    wrapProgram $out/libexec/claude-tools/claude-accounts --prefix PATH : ${
+      lib.makeBinPath [
+        coreutils
+        findutils
+        gnugrep
+        gnused
+        jq
+        procps
+        util-linux
+      ]
+    }
     install -Dm644 -t $out/share/claude-tools share/claude-tools.sh README.md
   '';
   doInstallCheck = true;
