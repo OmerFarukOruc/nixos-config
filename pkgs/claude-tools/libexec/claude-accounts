@@ -4,8 +4,8 @@ set -euo pipefail
 main="$HOME/.claude"
 marker=.claude-profile
 main_label="$main/.claude-profile-name"
-shared=(settings.json CLAUDE.md agents hooks rules shared infisical.md reference skills plugins projects plans file-history themes)
-session_dirs=(projects plans file-history)
+shared=(settings.json CLAUDE.md agents hooks rules shared infisical.md reference skills plugins projects plans file-history themes sessions)
+session_dirs=(projects plans file-history sessions)
 libexec="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 tools="@bin@/claude-tools"
 source "$libexec/config-lock.sh"
@@ -120,6 +120,8 @@ link_shared() {
   for name in "${shared[@]}"; do
     if [[ -L "$dir/$name" || ! -e "$dir/$name" ]]; then
       ln -sfn "$main/$name" "$dir/$name" || bad=1
+    elif [[ " ${session_dirs[*]} " == *" $name "* ]] && in_use "$dir"; then
+      echo "  $dir/$name: a claude session runs with this account; the next relink after it ends links it" >&2
     else
       echo "  not replacing real file $dir/$name" >&2
       bad=1
@@ -381,7 +383,10 @@ cmd_update() {
 }
 
 relink() {
-  local rc=0
+  local rc=0 name
+  if ! in_use "$1"; then
+    for name in "${session_dirs[@]}"; do fold_dir "$1" "$name"; done
+  fi
   fold_settings "$1" || rc=1
   link_shared "$1" || rc=1
   return "$rc"
