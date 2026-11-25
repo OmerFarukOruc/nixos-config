@@ -763,11 +763,11 @@
     "skills-impeccable": {
       "flake": false,
       "locked": {
-        "lastModified": 1795039099,
-        "narHash": "sha256-vtmRhNPnX974JYvn5BKXeJ1JpBusS/0O57zTPVxbJPg=",
+        "lastModified": 1795547358,
+        "narHash": "sha256-wRRr7MpmnkoNKUPFAf9JGENLUYSY3WG4uYYOl8HAT/M=",
         "owner": "pbakaus",
         "repo": "impeccable",
-        "rev": "b49177d32788f2dc585c42831d845dacf1ebed2c",
+        "rev": "9e460a87ef338ee9d12c7beed8fedc597a5af5f7",
         "type": "github"
       },
       "original": {
@@ -827,11 +827,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1795420930,
-        "narHash": "sha256-u2vIBq5iujGx7D8JNuh2xWHEo9hA1GuTkDDqD3FD8R8=",
+        "lastModified": 1795593834,
+        "narHash": "sha256-Y6wyW7wPM85KVjXoKrMGv5RxFW/pAk/ClmJQmJvK0vc=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "39e783d07509607fe7f79a62a90b73e8b2edb754",
+        "rev": "45a937e598c3311eae2766cdfc02e95758010527",
         "type": "github"
       },
       "original": {
