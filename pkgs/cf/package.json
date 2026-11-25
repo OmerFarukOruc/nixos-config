@@ -1,8 +1,8 @@
 {
   "name": "cf-cli",
-  "version": "1.0.0-rc.5",
+  "version": "1.0.0-rc.6",
   "private": true,
   "dependencies": {
-    "cf": "1.0.0-rc.5"
+    "cf": "1.0.0-rc.6"
   }
 }
