@@ -602,11 +602,11 @@
     "skills-archify": {
       "flake": false,
       "locked": {
-        "lastModified": 1795622909,
-        "narHash": "sha256-750Ufg9R0mrDg5NtkCRBaogIN0hezFSyWtiN28VA118=",
+        "lastModified": 1795641054,
+        "narHash": "sha256-jM9sBp2JKnMGopw5qKKyNEfo5QsoWa4qrMWDiA0XiWc=",
         "owner": "tt-a1i",
         "repo": "archify",
-        "rev": "aff5c2b2a0f8b6cdb187f5f121e965a495833f10",
+        "rev": "c8e5241c7d8b036ea959121d7bd1df564f2b9fdf",
         "type": "github"
       },
       "original": {
