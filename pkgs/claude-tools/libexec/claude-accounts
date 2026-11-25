@@ -279,9 +279,13 @@ sync_config() {
 }
 
 in_use() {
-  local p
-  for p in $(pgrep -x 'claude|\.claude-wrapped' || true); do
-    grep -qxzF -e "CLAUDE_CONFIG_DIR=$1" -e "CLAUDE_CONFIG_DIR=$1/" "/proc/$p/environ" 2>/dev/null && return 0
+  local p comm kv
+  for p in /proc/[0-9]*; do
+    { read -r comm <"$p/comm"; } 2>/dev/null || continue
+    [[ "$comm" == claude || "$comm" == .claude-wrapped ]] || continue
+    while IFS= read -r -d '' kv; do
+      [[ "$kv" == "CLAUDE_CONFIG_DIR=$1" || "$kv" == "CLAUDE_CONFIG_DIR=$1/" ]] && return 0
+    done 2>/dev/null <"$p/environ"
   done
   return 1
 }

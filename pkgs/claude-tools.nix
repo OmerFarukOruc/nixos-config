@@ -7,7 +7,6 @@
   jq,
   lib,
   makeWrapper,
-  procps,
   python3Packages,
   util-linux,
 }:
@@ -33,7 +32,6 @@ python3Packages.buildPythonApplication {
         gnugrep
         gnused
         jq
-        procps
         util-linux
       ]
     }

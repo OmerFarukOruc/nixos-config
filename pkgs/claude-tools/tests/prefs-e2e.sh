@@ -123,7 +123,7 @@ echo '{"tui":"fullscreen","a":{"x":1},"n":null}' >"$main_r/settings.json"
 echo '{"a":{"x":2,"y":3},"n":{"m":1}}' >"$home_r/.claude-q1/settings.json"
 echo '{"tui":"fullscreen","keep":{}}' >"$home_r/.claude-q3/settings.json"
 echo '{"a":1}{"b":2}' >"$home_r/.claude-q2/settings.json"
-relink_r() { HOME="$home_r" CLAUDE_TOOLS_DATA="$s/data" "$ct" accounts relink >"$s/out" 2>&1; }
+relink_r() { HOME="$home_r" CLAUDE_TOOLS_DATA="$s/data" PATH=/var/empty "$ct" accounts relink >"$s/out" 2>&1; }
 rc=0
 relink_r || rc=$?
 expect "relink fails while one profile's settings.json holds two JSON documents" "$rc" "1"
