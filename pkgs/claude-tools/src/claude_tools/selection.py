@@ -4,15 +4,18 @@ import math
 import re
 
 from claude_tools.accounts import accounts
+from claude_tools.agents import sessions
 from claude_tools.limits import NO_RESET_WAIT, WINDOWS, Hold, full_window, hold, holds, parse_limit
 from claude_tools.settings import Settings
-from claude_tools.store import now
+from claude_tools.store import now, read_json
 from claude_tools.usage import by_name, entries, locked_refresh
 
 SESSION_MAX, WEEK_MAX = 90, 95
 EVEN_BURN = {key: 100 / (length / 3600) for key, length in WINDOWS.items()}
 MIN_ELAPSED = {"five_hour": 900, "seven_day": WINDOWS["five_hour"]}
 REFRESH_BUDGET = 120
+START_MAX_AGE = 900
+PACE_BAND = 5
 RECENT = 60
 FIRST, LASTS, SHORT, BLOCKED = range(4)
 GROUPS = ("first", "lasts", "short", "blocked")
@@ -29,6 +32,18 @@ def span(seconds: float) -> str:
 def size(plan: str | None) -> float:
     m = re.search(r"(\d+)x", plan or "")
     return int(m[1]) / 5 if m else 1
+
+
+def pace(used: float, resets_at: int | None, window: int, at: int) -> float | None:
+    if not resets_at or not 0 < resets_at - at <= window:
+        return None
+    return used - (1 - (resets_at - at) / window) * 100
+
+
+def week_ahead(e: dict, at: int) -> float | None:
+    w = e.get("seven_day")
+    d = pace(w["used"], w.get("resets_at"), WINDOWS["seven_day"], at) if w else None
+    return d if d is not None and d > PACE_BAND else None
 
 
 def window_now(w: dict | None, at: int) -> tuple[float, int | None]:
@@ -101,35 +116,57 @@ def place(e: dict, rates: dict[str, float], at: int) -> tuple[tuple, str]:
     return (LASTS, week_reset or at + WINDOWS["seven_day"]), why
 
 
-def order(readings: dict[str, dict], names: list[str], held: list[Hold], at: int,
-          model: str | None = None) -> list[tuple[str, int, str]]:
+def order(readings: dict[str, dict], names: list[str], held: list[Hold], at: int, model: str | None = None,
+          live: dict[str, int] | None = None) -> list[tuple[str, int, str]]:
     rates = {key: burn(list(readings.values()), key, at) for key in WINDOWS}
     places = []
     for i, n in enumerate(names):
         e = readings.get(n) or {}
         if why := blocked(e, [h for h in held if h.account == n], at, model):
-            places.append(((BLOCKED, i), n, why))
-        else:
-            key, why = place(e, rates, at)
-            places.append((key, n, why))
-    return [(n, key[0], why) for key, n, why in sorted(places)]
+            places.append(((True, i), n, BLOCKED, why))
+            continue
+        key, why = place(e, rates, at)
+        group = key[0]
+        if live is not None:
+            ahead = week_ahead(e, at)
+            key = (ahead is not None, live.get(n, 0) / size(e.get("plan")), *key)
+            why += f" · week {ahead:.0f} points ahead of an even spread" if ahead is not None else ""
+        places.append(((False, key), n, group, why))
+    return [(n, group, why) for _, n, group, why in sorted(places)]
 
 
 def current_holds(settings: Settings) -> list[Hold]:
     return holds(settings.holds_file, now())
 
 
-def ranked(settings: Settings, readings: dict[str, dict], names: list[str],
-           model: str | None = None) -> list[tuple[str, int, str]]:
-    return order(readings, names, current_holds(settings), now(), model)
+def ranked(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None,
+           live: dict[str, int] | None = None) -> list[tuple[str, int, str]]:
+    return order(readings, names, current_holds(settings), now(), model, live)
 
 
-def startable(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None) -> list[str]:
-    return [n for n, g, _ in ranked(settings, readings, names, model) if g != BLOCKED]
+def startable(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None,
+              live: dict[str, int] | None = None) -> list[str]:
+    return [n for n, g, _ in ranked(settings, readings, names, model, live) if g != BLOCKED]
 
 
-def best(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None) -> str | None:
-    return next(iter(startable(settings, readings, names, model)), None)
+def best(settings: Settings, readings: dict[str, dict], names: list[str], model: str | None = None,
+         live: dict[str, int] | None = None) -> str | None:
+    return next(iter(startable(settings, readings, names, model, live)), None)
+
+
+def live_sessions(settings: Settings, dirs: dict[str, str]) -> dict[str, int]:
+    by_dir = sessions(settings.home)
+    return {n: by_dir.get(d, 0) for n, d in dirs.items()}
+
+
+def default_model(settings: Settings) -> str | None:
+    configured = read_json(settings.home / ".claude" / "settings.json").get("model")
+    return settings.env_model or (configured if isinstance(configured, str) else None)
+
+
+def start_account(settings: Settings, dirs: dict[str, str], model: str | None) -> str | None:
+    data = locked_refresh(settings, [], START_MAX_AGE)
+    return best(settings, by_name(data), list(dirs), model, live_sessions(settings, dirs))
 
 
 def next_account(settings: Settings, skip: str | None, model: str | None = None) -> str | None:

@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from claude_tools.limits import WINDOWS
-from claude_tools.selection import span
+from claude_tools.selection import PACE_BAND, pace, span
 from claude_tools.store import now
 
 AMBER_FROM_PERCENT, RED_FROM_PERCENT = 70, 90
-PACE_BAND, PACE_FAR = 5, 20
+PACE_FAR = 20
 MINUTE, DAY = 60, 86400
 
 
@@ -17,12 +17,6 @@ def reset_minute(t: int) -> int:
 
 def tone(used: float) -> str:
     return "green" if used < AMBER_FROM_PERCENT else "amber" if used < RED_FROM_PERCENT else "red"
-
-
-def pace(used: float, resets_at: int | None, window: int, at: int) -> float | None:
-    if not resets_at or not 0 < resets_at - at <= window:
-        return None
-    return used - (1 - (resets_at - at) / window) * 100
 
 
 def pace_state(d: float | None) -> str | None:

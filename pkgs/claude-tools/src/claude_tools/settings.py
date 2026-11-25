@@ -25,6 +25,7 @@ class Settings:
     codex_home: str
     pick: bool
     start_account: str
+    env_model: str
     color: bool
 
     @classmethod
@@ -47,6 +48,7 @@ class Settings:
             codex_home=env.get("CODEX_HOME", ""),
             pick=env.get("CLAUDE_TOOLS_PICK") != "0",
             start_account=env.get("CLAUDE_TOOLS_START_ACCOUNT", ""),
+            env_model=env.get("ANTHROPIC_MODEL", ""),
             color=not env.get("NO_COLOR"),
         )
 

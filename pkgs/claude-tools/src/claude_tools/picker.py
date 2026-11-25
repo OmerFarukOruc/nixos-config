@@ -23,7 +23,7 @@ class Picker:
         self.data = data
         self.entries = {a["name"]: a for a in data.get("accounts", [])}
         self.live = live
-        self.ranked = order(self.entries, names, held, now(), model)
+        self.ranked = order(self.entries, names, held, now(), model, live)
         self.model_holds = {h.account: h for h in held if h.model and not h.blocks(model)}
         self.rows = [n for n, _, _ in self.ranked]
         self.group = {n: g for n, g, _ in self.ranked}
@@ -110,7 +110,9 @@ class Picker:
         lines = [title + " " * max(1, width - visible(title) - len(checked) - 1) + cards.c(checked, DIM), ""]
         wname = max((len(n) for n in self.names), default=8)
         for k, n in enumerate(self.rows):
-            if self.group[n] == SHORT and (k == 0 or self.group[self.rows[k - 1]] != SHORT):
+            rest = [self.group[x] for x in self.rows[k:] if self.group[x] != BLOCKED]
+            first_short = k == 0 or self.group[self.rows[k - 1]] != SHORT
+            if self.group[n] == SHORT and first_short and all(g == SHORT for g in rest):
                 lines.append(" " + cards.c("── reaches a limit before its 5h reset ", DIM))
             lines.append(self.row(n, width, wname))
         if self.choices:

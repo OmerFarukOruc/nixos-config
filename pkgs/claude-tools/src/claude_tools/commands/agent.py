@@ -12,6 +12,7 @@ from claude_tools.accounts import accounts, config_dir_of
 from claude_tools.agents import SKIP_PERMISSIONS, UNNAMED, Agents, check_codex_choice, check_opencode_agent
 from claude_tools.errors import Failed, NoProcess
 from claude_tools.herdr import Herdr
+from claude_tools.selection import default_model, start_account
 from claude_tools.settings import Settings
 from claude_tools.watch import watch
 
@@ -108,11 +109,22 @@ def refuse_agent(a: argparse.Namespace) -> None:
         raise Failed("--agent names an opencode agent; it needs --kind opencode")
 
 
+def picked_dir(settings: Settings, a: argparse.Namespace) -> str:
+    dirs = accounts(settings.accounts_file)
+    name = start_account(settings, dirs, a.model or default_model(settings))
+    if name is None:
+        print(f"claude-tools agent: every account is limited or unreadable; {a.name} starts on the caller's account",
+              file=sys.stderr)
+        return settings.config_dir
+    print(f"claude-tools agent: {a.name} starts on {name}", file=sys.stderr)
+    return dirs[name]
+
+
 def prepare_claude(settings: Settings, a: argparse.Namespace) -> Starter:
     refuse_agent(a)
     if a.effort and a.effort not in EFFORTS:
         raise Failed(f"--effort {a.effort} is not one of {', '.join(EFFORTS)}")
-    config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else settings.config_dir
+    config_dir = config_dir_of(a.account, accounts(settings.accounts_file)) if a.account else picked_dir(settings, a)
     flags = [*permission_flags(a.permission_mode), *(["--model", a.model] if a.model else []),
              *(["--effort", a.effort] if a.effort else [])]
 
@@ -248,7 +260,9 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
                                     "opencode-review; it must exist, set a model that `opencode models` lists in the "
                                     "folder, and the folder's project config must leave it as its global file defines "
                                     "it")
-    st.add_argument("--account", type=nonempty, help="an account name or a CLAUDE_CONFIG_DIR folder; default: the caller's account")
+    st.add_argument("--account", type=nonempty,
+                    help="an account name or a CLAUDE_CONFIG_DIR folder; default: the account rotate would start a "
+                         "session on")
     st.add_argument("--model", type=nonempty, help="Claude: a model name or alias; Codex: a model that its models_cache.json lists")
     st.add_argument("--effort", type=nonempty, help="Claude: one of " + ", ".join(EFFORTS) + "; Codex: one of the reasoning efforts "
                                      "that models_cache.json lists for --model, which it needs")

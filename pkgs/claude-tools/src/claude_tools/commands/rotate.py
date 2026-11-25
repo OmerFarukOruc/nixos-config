@@ -19,12 +19,19 @@ from claude_tools.agents import sessions
 from claude_tools.errors import Failed
 from claude_tools.limits import NO_RESET_WAIT
 from claude_tools.picker import CANCELLED, PICKED, Picker
-from claude_tools.selection import best, current_holds, free_at, hold_limit, next_account
+from claude_tools.selection import (
+    START_MAX_AGE,
+    current_holds,
+    default_model,
+    free_at,
+    hold_limit,
+    next_account,
+    start_account,
+)
 from claude_tools.settings import Settings
 from claude_tools.store import append_event, now, read_json
-from claude_tools.usage import by_name, load_cache, locked_refresh
+from claude_tools.usage import load_cache, locked_refresh
 
-CACHE_MAX_AGE = 900
 MIN_WAIT = 60
 STOP_WAIT_S = 15
 NON_INTERACTIVE = {"-p", "--print", "-v", "--version", "-h", "--help"}
@@ -226,9 +233,7 @@ def model_arg(args: list[str], opts: dict[str, str]) -> str | None:
 
 
 def start_model(args: list[str], opts: dict[str, str], settings: Settings) -> str | None:
-    configured = read_json(settings.home / ".claude" / "settings.json").get("model")
-    return model_arg(args, opts) or os.environ.get("ANTHROPIC_MODEL") or (
-        configured if isinstance(configured, str) else None)
+    return model_arg(args, opts) or default_model(settings)
 
 
 def carried_args(args: list[str], opts: dict[str, str]) -> list[str]:
@@ -309,10 +314,9 @@ def first_account(r: Rotation, args: list[str]) -> str | None:
             return start
         if start:
             r.say(f"the start account {start} is not usable; starting on the account with the most room")
-        if now() - load_cache(r.settings).get("updated", 0) > CACHE_MAX_AGE:
+        if now() - load_cache(r.settings).get("updated", 0) > START_MAX_AGE:
             print("claude-tools rotate: reading account usage…", file=sys.stderr, flush=True)
-        data = locked_refresh(r.settings, [], CACHE_MAX_AGE)
-        current = best(r.settings, by_name(data), r.names, r.model)
+        current = start_account(r.settings, r.dirs, r.model)
     except (OSError, ValueError, KeyError, TypeError, Failed) as e:
         r.say(f"could not pick an account ({e}); running plain claude")
         plain(args)
