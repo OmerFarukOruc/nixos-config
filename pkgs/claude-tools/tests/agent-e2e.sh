@@ -317,6 +317,8 @@ else
 fi
 
 step 15 "agent start without --account spreads new agents and starts an account that burns its week fast last"
+h agent wait "$name" --until idle --until "done" --timeout 60000 >/dev/null || fail "$name, which holds $account open, did not settle"
+"$tools" agent stop "$name" || fail "agent stop of $name, which holds $account open, exited $?"
 "$tools" usage --json --max-age 600 >"$dir/real-usage.json"
 fast_acct=$(idle_profile)
 slow_acct=$(idle_profile "$fast_acct")
