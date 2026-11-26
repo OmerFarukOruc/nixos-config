@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Sourced by rotate-e2e.sh and agent-e2e.sh after they set tools and write "$dir/real-usage.json".
+# Sourced by rotate-e2e.sh and agent-e2e.sh. A caller sets tools and writes "$dir/real-usage.json" before it calls a function.
 
 signed_in() {
   jq -e --arg n "$1" '.accounts[] | select(.name == $n) | .state == "ok" or .state == "expiring"' \
