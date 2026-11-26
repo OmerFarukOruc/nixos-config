@@ -650,11 +650,11 @@
     "skills-compound-engineering": {
       "flake": false,
       "locked": {
-        "lastModified": 1795477838,
-        "narHash": "sha256-9zdMSQwLZjNetRIV1F0upOSFV3jWNXV3TZm/xNr/aTM=",
+        "lastModified": 1795722817,
+        "narHash": "sha256-B16y6xtwWiKaIT9KrRA18h/YoOUQ4C9P87p4jjnEcUo=",
         "owner": "EveryInc",
         "repo": "compound-engineering-plugin",
-        "rev": "fcb5e3adc1890db34f482f73e2449f3c57a2f423",
+        "rev": "ee3695a24ae1ccb205e4334b79799cb25c060247",
         "type": "github"
       },
       "original": {
@@ -682,11 +682,11 @@
     "skills-diagram-design": {
       "flake": false,
       "locked": {
-        "lastModified": 1795714410,
-        "narHash": "sha256-DYpvw6UXCH6EWe8ifo3lixnR1Qw//qAWKH+6o02PBAE=",
+        "lastModified": 1795722536,
+        "narHash": "sha256-C0L3iyMYOkTk39yPslIkwkUTCKx8Y7KM89oitHGp2PA=",
         "owner": "cathrynlavery",
         "repo": "diagram-design",
-        "rev": "1164be7d275134ffa79c2ce91bd2b716e356cba4",
+        "rev": "795eec47fd376e5dda0b9e056a49520060cd2f13",
         "type": "github"
       },
       "original": {
