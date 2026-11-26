@@ -325,11 +325,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1795646831,
-        "narHash": "sha256-mflJ5QNbjclR5FP3VhdH7FJApb6Y4e6r7vp6z4jQ34w=",
+        "lastModified": 1795658001,
+        "narHash": "sha256-LjGpz+De0qfh2ZQzVGbhOQTmqyh5UOXuNqXCik4qQAM=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "9e9dbfefcc517757fe34bc82904e347a5ddbc6c8",
+        "rev": "2b585c8fa81617417ab1bfa95eb502494b32ef6a",
         "type": "github"
       },
       "original": {
@@ -602,11 +602,11 @@
     "skills-archify": {
       "flake": false,
       "locked": {
-        "lastModified": 1795651805,
-        "narHash": "sha256-bbWNrBqdsorLKOD5zQNpnxADDQf3aZMp+Fgolnj1BuM=",
+        "lastModified": 1795657145,
+        "narHash": "sha256-Y2+H64dgIjzBgU/BiCm/OMGwVvnNWkZHAByJ+WZXE4w=",
         "owner": "tt-a1i",
         "repo": "archify",
-        "rev": "95586bc667fa97ed73588efc13d2f14a5b3c4241",
+        "rev": "d6b0f71f25a3337ed2fcd09c973cacf67be7baba",
         "type": "github"
       },
       "original": {
@@ -763,11 +763,11 @@
     "skills-impeccable": {
       "flake": false,
       "locked": {
-        "lastModified": 1795547358,
-        "narHash": "sha256-wRRr7MpmnkoNKUPFAf9JGENLUYSY3WG4uYYOl8HAT/M=",
+        "lastModified": 1795656235,
+        "narHash": "sha256-E8WX7pDygLZ7IOJ/4iargSxQP0UMR886xv4ghTBSVyM=",
         "owner": "pbakaus",
         "repo": "impeccable",
-        "rev": "9e460a87ef338ee9d12c7beed8fedc597a5af5f7",
+        "rev": "2fc5e1459efbbf06d92c7306517c286bf12490cf",
         "type": "github"
       },
       "original": {
