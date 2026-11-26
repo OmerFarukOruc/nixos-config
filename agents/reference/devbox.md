@@ -49,6 +49,7 @@ infisical secrets get DEVBOX_OMER_SUDO_PASSWORD --plain --silent \
 ```
 
 - The pipe takes the command's stdin. For a command that reads stdin, or for several commands, run `sudo -S -p '' sh -c '<commands>'` with the input in a file.
+- Run `./deploy.sh devbox test` on the box as root, from the checkout: `direnv exec . bash -c 'exec /run/wrappers/bin/sudo -A -H env "PATH=$PATH" ./deploy.sh devbox test'`. A deploy as `omer` keeps its records in omer's home, where `nixos-upgrade.service` does not look (nixos-config `docs/deploy.md`, Deploy to a server), so the hourly install replaced such a test deploy with `main` 23 minutes after it (26-11-2026). `sudo -i` gives a shell without `git`, so pass the devenv shell's `PATH` as shown.
 - End the root work with `sudo -k`, because sudo caches the login for some minutes.
 - Root follows the approval rules in `~/.claude/shared/core.md`. Host state that must last goes into nixos-config (`machines/devbox/`), which the box's deploy timer applies.
 - As `omer`, `journalctl` for a system unit prints only `-- No entries --` and exits 0, so a count through `grep -c` reads 0. Read the system journal through the pipe above.
