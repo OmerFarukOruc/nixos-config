@@ -173,11 +173,23 @@ test('the notes name each path, URL and code span of the draft that the prompt l
 
   const outcome = lastRecord(seen).outcome
   expect(outcome.kind === 'enhanced' && outcome.notes.split('\n').filter(line => line.startsWith('- Not in the prompt:'))).toEqual([
+    '- Not in the prompt: ~/notes/plan.md',
     '- Not in the prompt: https://example.com/issue/7',
     '- Not in the prompt: retryCount',
-    '- Not in the prompt: ~/notes/plan.md',
     '- Not in the prompt: README.md',
     '- Not in the prompt: lib/old.ts',
+  ])
+})
+
+test('more than 5 draft items that the prompt leaves out become one line, and an item named twice counts once', async ($, on) => {
+  const seen = stubSession(on, { replies: [resultLine('```paste\nCompare the files.\n```'), READING] })
+
+  await $.command.run({ ...TYPED, args: 'compare a/one.ts, `a/one.ts`, a/two.ts, https://example.com/three, a/four.ts, a/five.ts and a/six.ts' })
+  await seen.clock.settle()
+
+  const outcome = lastRecord(seen).outcome
+  expect(outcome.kind === 'enhanced' && outcome.notes.split('\n').filter(line => line.startsWith('- Not in the prompt:'))).toEqual([
+    '- Not in the prompt: 6 paths, URLs and code spans of the draft, such as a/one.ts, a/two.ts, https://example.com/three',
   ])
 })
 

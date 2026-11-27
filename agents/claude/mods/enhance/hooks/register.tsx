@@ -6,7 +6,7 @@ import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copie
 import { liveEffort, trackEffort } from './effort'
 import { factsOf, markOf } from './facts'
 import type { Cancel, Copy, Turn, Writer } from './copies'
-import { missingFrom } from './missing'
+import { missingNotes } from './missing'
 import { RECEIVER_WORDS, bulletOf, receiverOf, shownNotes, withBoldLabels, withNotes, withReading } from './notes'
 import { forgetRecall, forgetRecallIfShown, offerDraft, recallDraft, recallTicket } from './recall'
 import { DROPPED, NOT_SENT, deliveryOf, guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
@@ -285,7 +285,7 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
 
   return withNotes(reading === null ? outcome : withReading(outcome, reading), [
     ...unnamed,
-    ...missingFrom(task.draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
+    ...missingNotes(task.draft, outcome.prompt),
   ])
 }
 

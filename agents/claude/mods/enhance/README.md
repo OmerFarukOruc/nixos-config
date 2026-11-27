@@ -109,7 +109,7 @@ These lines in **Notes** tell you whether to trust the prompt:
 - `Understood goal:` is what the copy thinks you want.
 - `Cold reader:` is a second run of the writer model, with no tools. It says what it would do with the prompt, then names what the prompt relies on without explaining, or says "Nothing unresolved." It sees the conversation when the notes' `Receiver:` bullet says the prompt is for this conversation, and not when the bullet says a new session. Without that bullet it sees the conversation in a session that has a turn, and a notes line says so. The line is missing when that run fails or takes more than 120 s.
 - `Deeper:` names what a specialist would add to this task. It is not in the prompt. To add an item, press **Revise** and name it.
-- `Not in the prompt:` names a path, URL or code span from your draft that the prompt lacks.
+- `Not in the prompt:` names a path, URL or code span from your draft that the prompt lacks, in the draft's order. More than 5 of them, as after a pasted report, become one line with their count and the first 3.
 - `Cost: $0.12, time: 34 s` is the last line. It says `Cost: not reported` when Claude Code gave no cost.
 
 In the prompt itself, each `Assuming:` line is a guess the copy made for you.
