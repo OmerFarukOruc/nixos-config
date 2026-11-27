@@ -456,6 +456,52 @@ in
     };
     Install.WantedBy = [ "timers.target" ];
   };
+  systemd.user.services.statuslantern-nightly-pin-move = factoryService {
+    description = "Run the nightly Status Lantern pull request as a forced nixpkgs pin move, which runner-watch starts";
+    script = "nightly-start --pin-move";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "10h30min";
+      TimeoutStopSec = "10min";
+    };
+    unit.X-SwitchMethod = "keep-old";
+  };
+
+  systemd.user.services.statuslantern-check-runner-watch = factoryService {
+    description = "Read the online state, version and GitHub dates of ci-1's Status Lantern runners";
+    script = "check-event run runner-watch timer -- runner-watch";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "30min";
+    };
+  };
+  systemd.user.timers.statuslantern-check-runner-watch = {
+    Unit.Description = "Read ci-1's Status Lantern runners every 6 hours";
+    Timer = {
+      OnCalendar = "*-*-* 00/6:20:00 UTC";
+      RandomizedDelaySec = "5m";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
+  systemd.user.services.statuslantern-check-pin-rollout = factoryService {
+    description = "Deploy a new Status Lantern nixpkgs pin to observability-1, ci-1 and spare-1 once staging-1 runs it";
+    script = "check-event run pin-rollout timer -- pin-rollout";
+    service = {
+      Type = "oneshot";
+      TimeoutStartSec = "4h";
+    };
+    unit.X-SwitchMethod = "keep-old";
+  };
+  systemd.user.timers.statuslantern-check-pin-rollout = {
+    Unit.Description = "Deploy a new Status Lantern nixpkgs pin every 30 minutes";
+    Timer = {
+      OnCalendar = "*:05/30";
+      Persistent = false;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
 
   systemd.user.services.statuslantern-factory-receive = factoryService (
     factoryResident
