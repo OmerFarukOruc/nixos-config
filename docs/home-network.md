@@ -1,9 +1,9 @@
 # Home network
 
 How the home line reaches Discord and NextDNS: the router's DPI bypass and DNS,
-the NextDNS profile every device shares, and the Windows PC. Read it before you
-change DNS, NextDNS, zapret2 or anything on the router, or when Discord or a
-site stops working at home.
+the NextDNS profile every device shares, the NixOS hosts' resolver, and the
+Windows PC. Read it before you change DNS, NextDNS, zapret2 or anything on the
+router, or when Discord or a site stops working at home.
 
 A date in this guide marks a measurement or a reading of a setting on that day.
 
@@ -13,6 +13,7 @@ A date in this guide marks a measurement or a reading of a setting on that day.
 - [Router bypass](#router-bypass)
 - [Router DNS](#router-dns)
 - [NextDNS profile](#nextdns-profile)
+- [NixOS hosts](#nixos-hosts)
 - [Windows PC](#windows-pc)
 - [Decisions](#decisions)
 
@@ -74,6 +75,7 @@ Work through the steps in order; a step is done when its expected output shows.
 | A name resolves, but TLS fails or resets on every device | the router's auto-list treats a healthy host | [Router bypass](#router-bypass) |
 | `test.nextdns.io` passes, but a browser shows "no profile" | the browser resolves names itself | [Windows PC](#windows-pc) |
 | A site breaks only on a NixOS host | zapret2's auto-list on that host | [DPI bypass](architecture.md#dpi-bypass) |
+| A name fails on one NixOS host with `DNSSEC validation failed: missing-key` | seen once: names of a zone resolved before its DS record was published; cause unconfirmed | [NixOS hosts](#nixos-hosts) |
 | A game refuses to start on the Windows PC | WinDivert loaded | [Windows PC](#windows-pc) |
 
 ## Router
@@ -299,6 +301,22 @@ blocked query within the day, and add the domain to the Allowlist. On nixos-rog,
 `scripts/verify-nixos-rog.sh` fails its `discord-com-resolves`,
 `gateway-discord-gg-resolves` or `cdn-discordapp-com-resolves` check when a
 list blocks Discord.
+
+## NixOS hosts
+
+nixos-desktop and nixos-rog resolve through systemd-resolved, with DNS over TLS
+to NextDNS and `DNSSEC = "allow-downgrade"` (`nixosModules/nextdns.nix`).
+
+On 2026-11-27 two names of one zone failed on nixos-desktop while public
+resolvers answered them as validated. `resolvectl query <name>` printed
+`resolve call failed: DNSSEC validation failed: missing-key`,
+and a browser showed a failed connection. The host had resolved the zone before
+its DS record was published. `sudo resolvectl flush-caches` cleared it, and
+`resolvectl query` then printed `Data is authenticated: yes`. The cause inside
+systemd-resolved is not confirmed.
+
+If a name fails with this error, run `sudo resolvectl flush-caches` on that
+host and repeat `resolvectl query <name>`.
 
 ## Windows PC
 
