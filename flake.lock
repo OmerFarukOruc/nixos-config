@@ -795,11 +795,11 @@
     "skills-mattpocock": {
       "flake": false,
       "locked": {
-        "lastModified": 1795608503,
-        "narHash": "sha256-kM/OK6+kbTHzlN5d6wjL9hM80lolcSCoO8A1oRvEJEU=",
+        "lastModified": 1795799261,
+        "narHash": "sha256-Y+tDX8bKHQ5hGp0R+DSmF2qs8r2tdBg/f4SA9kSeAm4=",
         "owner": "mattpocock",
         "repo": "skills",
-        "rev": "6f7f7831a625f040a8e06a0e7954826b87ce775a",
+        "rev": "bbadaa631c37af594e5a05c9cefacd9956136b18",
         "type": "github"
       },
       "original": {
@@ -827,11 +827,11 @@
     "skills-oh-my-opencode-slim": {
       "flake": false,
       "locked": {
-        "lastModified": 1795681109,
-        "narHash": "sha256-LWtLiZE7zlCKie7CN6GL7Gn5qQDD+11Mjr/09RUsBKE=",
+        "lastModified": 1795806300,
+        "narHash": "sha256-qYJi8PAlTnHJGleDHfnAk4q0yYoMCd9LJ1tmMjWtsZg=",
         "owner": "alvinunreal",
         "repo": "oh-my-opencode-slim",
-        "rev": "22751840b97c9f5d4d4d90530a0d332a2a42088a",
+        "rev": "ee4db52e216a54b5e5451f2f27490e98474d36b9",
         "type": "github"
       },
       "original": {
