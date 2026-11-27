@@ -14,6 +14,7 @@
 - [Factory run user](#factory-run-user)
 - [CLIProxyAPI](#cliproxyapi)
 - [Threadsift](#threadsift)
+- [Android phone](#android-phone)
 - [Streamed desktop](#streamed-desktop)
 - [Memory and logs](#memory-and-logs)
 - [Boot test in a VM](#boot-test-in-a-vm)
@@ -1034,6 +1035,38 @@ Token   -> Cloudflare (my-api.threadsift.app, three rules, no Access)   -+-> tun
   To restore a database copy, stop the unit, run
   `rm ~/.local/state/threadsift/data/threadsift.db*`, copy the files of the
   chosen `backups/<UTC time>/` folder into `data/` and start the unit.
+
+## Android phone
+
+`machines/devbox/adb-phone.nix` gives every session of omer one adb server
+and Omer's OnePlus 5T, the rooted phone the hurma repository uses, over
+Tailscale.
+
+- `android-tools` puts `adb` on omer's PATH, and `ANDROID_SERIAL` is
+  `oneplus-5t:5555`, the phone's MagicDNS name and adbd's TCP port, so `adb`
+  picks the phone without `-s` in every new shell. A session that started
+  before the variable existed passes `-s oneplus-5t:5555`.
+- The user unit `adb-server.service` runs `adb nodaemon server` on
+  127.0.0.1:5037, after `adb kill-server` stops a server that a client started
+  on its own. Every 10 s it reads the phone's state and runs
+  `adb connect oneplus-5t:5555` while the phone is missing, with a 20 s limit,
+  because a connect to a phone that Tailscale reports offline hangs for more
+  than 30 s. It disconnects a phone that stays `offline` for 60 s, so the next
+  connect starts a fresh session, and leaves an `unauthorized` one alone, so the
+  phone's prompt stays up. It logs each state change, and the unit exits and
+  restarts 5 s later when the server dies. Read it with
+  `journalctl --user -u adb-server -n 20`.
+- The phone needs the Tailscale app connected, USB debugging on, and adbd on
+  TCP 5555 across reboots, which the root property `persist.adb.tcp.port`
+  sets: `su -c 'setprop persist.adb.tcp.port 5555; setprop ctl.restart adbd'`
+  in a shell on the phone. `adb tcpip 5555` over USB lasts only until
+  the phone reboots. The first connect shows "Allow USB debugging?" with the
+  fingerprint of `~/.android/adbkey.pub`; tick "Always allow from this
+  computer" and tap Allow.
+- The tailnet policy, in the Tailscale admin console, grants `tag:infra-agent`
+  only `tcp:5555` on the phone's tailnet address, with an `accept` test for it
+  (added 2026-11-28). Every process of omer can use the phone, including the
+  Grok Bot bots that log in as omer over OpenSSH.
 
 ## Streamed desktop
 

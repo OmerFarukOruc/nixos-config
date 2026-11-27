@@ -95,6 +95,7 @@ let
 in
 {
   imports = [
+    ./adb-phone.nix
     ../../home-manager/modules/agent-cli.nix
     ../../home-manager/modules/claude-tools.nix
     ../../home-manager/modules/openrouter-free-guardrail.nix
