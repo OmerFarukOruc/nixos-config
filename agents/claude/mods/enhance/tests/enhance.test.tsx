@@ -260,14 +260,23 @@ test('the Enhance action runs on the text of the box and puts the prompt there',
   expect(seen.notified).toEqual(['Enhanced prompt is ready'])
 })
 
-test('the Enhance action on an empty box starts nothing', async ($, on) => {
-  const seen = stubSession(on, { box: '  ', replies: [PROMPT, READING] })
+const PASTE_TOAST = 'The box shows pasted text as a short label, and the draft would hold only that label. Paste again to expand it, or type /enhance and paste after it'
 
-  await press($, seen, BAND, 'enhance')
+for (const [box, toast] of [
+  ['  ', 'Type the draft after /enhance'],
+  ['fix this [Pasted text #1 +5 lines]', PASTE_TOAST],
+  ['[Pasted text #2]', PASTE_TOAST],
+  ['first words [...Truncated text #1 +40 lines...] last words', PASTE_TOAST],
+] as const) {
+  test(`the Enhance action on a box that holds "${box}" starts nothing and says why`, async ($, on) => {
+    const seen = stubSession(on, { box, replies: [PROMPT, READING] })
 
-  expect(seen.spawned).toEqual([])
-  expect(seen.toasts).toEqual(['Type the draft after /enhance'])
-})
+    await press($, seen, BAND, 'enhance')
+
+    expect(seen.spawned).toEqual([])
+    expect(seen.toasts).toEqual([toast])
+  })
+}
 
 for (const site of ['band', 'pane'] as const) {
   test(`the ${site}'s ready buttons swap the box, copy, revise on the same copy and send`, async ($, on) => {

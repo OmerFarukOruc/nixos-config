@@ -18,6 +18,8 @@ const PLUGIN = 'enhance'
 const TRANSCRIPT_ROW = 'enhance-row'
 const IDLE: Run = { kind: 'idle', isDraftBack: false }
 const NO_DRAFT = 'Type the draft after /enhance'
+const PASTE_LABEL = /\[(?:Pasted text #\d+(?: \+\d+ lines)?|✦ Team setup guide #\d+(?: \+\d+ lines)?|\.\.\.Truncated text #\d+ \+\d+ lines\.\.\.)\]/
+const PASTE_IS_LABEL = 'The box shows pasted text as a short label, and the draft would hold only that label. Paste again to expand it, or type /enhance and paste after it'
 const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
 const BIND_ACTION = 'app:cycleDiffBase'
 
@@ -401,6 +403,10 @@ async function enhanceBox($: EngineInterface): Promise<void> {
   const box = await $.prompt.read()
   if (box.text.trim() === '') {
     $.ui.toast(NO_DRAFT)
+    return
+  }
+  if (PASTE_LABEL.test(box.text)) {
+    $.ui.toast(PASTE_IS_LABEL)
     return
   }
   enhance($, box.text.trim(), box.text)

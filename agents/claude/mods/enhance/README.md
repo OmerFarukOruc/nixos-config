@@ -22,6 +22,7 @@ The full description is in [agents/README.md, Mods](../../../README.md#mods). Th
 - It also needs the `/diff` panel closed and no survey above the box.
 - With a result waiting, dismiss it first, or use `/enhance <draft>`. That drops the waiting result.
 - An empty box, or `/enhance` alone, starts nothing. A toast says "Type the draft after /enhance".
+- A long paste shows in the box as a label such as `[Pasted text #1 +5 lines]` or `[...Truncated text #1 +40 lines...]`. The chord then starts nothing, and a toast says to paste again, which expands the first kind of label. `/enhance <draft>` takes the pasted text as it is.
 - One run at a time. A second start shows "An enhancement is already running".
 
 ## While it runs
