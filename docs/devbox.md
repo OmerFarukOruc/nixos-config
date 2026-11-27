@@ -910,7 +910,7 @@ Token   -> Cloudflare (my-api.threadsift.app, three rules, no Access)   -+-> tun
   ingress `http://threadsift:8080`: `my.threadsift.app`, and
   `my-api.threadsift.app` with the origin setting HTTP Host Header
   `my.threadsift.app`, because the app refuses an MCP request whose `Host` is
-  not its public origin. A proxied CNAME for each points at
+  not the host of its public origin. A proxied CNAME for each points at
   `<tunnel id>.cfargotunnel.com`. They live in Cloudflare, so no file here
   creates them. To rebuild the tunnel, first make the Access application and
   the three rules of the Addresses bullet below, then make the tunnel with that
@@ -929,12 +929,14 @@ Token   -> Cloudflare (my-api.threadsift.app, three rules, no Access)   -+-> tun
   `my-api.threadsift.app` (`http.host`), because a rule of the zone without it
   also acts on the library address, where it would block the owner's browser:
   - A Single Redirect sends a request with no `Authorization: Bearer` header to
-    the same path on the library address, with status 302. The links the app
-    builds use its public origin, so a person who opens the token address
-    lands behind Access.
-  - A WAF custom rule blocks a request with no such header, and every request
-    whose path starts with `/api/session`, `/api/setup`, `/api/login` or
-    `/api/password`, so the owner's sign-in is not reachable there.
+    the same path on the library address, with status 302, so a person who
+    opens the token address in a browser lands behind Access. Cloudflare
+    applies it before the next rule.
+  - A WAF custom rule blocks every request whose path starts with
+    `/api/session`, `/api/setup`, `/api/login` or `/api/password`, so the
+    owner's sign-in is not reachable there. Its condition also covers a
+    request with no such header, so the address stays closed to those if the
+    redirect is ever removed.
   - A Transform rule removes the `Cookie` header, so an owner session never
     works on the token address.
 - **Container limits.** `compose.yml` runs both containers with
