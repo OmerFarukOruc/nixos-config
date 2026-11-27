@@ -310,8 +310,9 @@ omer's sudo asks for a password (`deployLogin` in the machine record). The relea
 records are in `/root/.local/state/nixos-config-deploy/`.
 The long-running agent units of omer are in `oruc.deploy.sessionIgnore` in
 `configuration.nix`. deploy.sh's session check leaves them out of a deploy as
-omer. A deploy as root, which is every deploy from another host, checks only root's own
-services.
+omer. A deploy as root, which is every deploy from another host, checks only
+root's own services. The Threadsift units belong to the user `threadsift`, and
+no deploy checks that user's services.
 
 ## Web names
 
@@ -834,11 +835,12 @@ before its config exists.
 
 ## Threadsift
 
-`threadsift.service`, a user unit of omer in `home.nix`, runs Omer's own
+`threadsift.service`, a user unit of the user `threadsift` in
+`machines/devbox/threadsift.nix`, runs Omer's own
 [Threadsift](https://github.com/KyaniteHQ/threadsift) Instance at
 `https://threadsift.risoluto.dev`. It runs `machines/devbox/threadsift/threadsift-up.sh`,
-which starts the compose stack of that folder on rootless Podman, as
-`cliproxy.service` does ([Containers](#containers)).
+which starts the compose stack of that folder on that user's rootless Podman,
+through the docker CLI as `cliproxy.service` does ([Containers](#containers)).
 
 ```
 Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
@@ -847,11 +849,16 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
 ```
 
 - **Run user.** `machines/devbox/threadsift.nix` declares the user `threadsift`
-  (uid 1100), which holds none of omer's credentials. Nothing runs as this user
-  yet; `threadsift.service` is still omer's. The user has its own group, a home with mode 700,
+  (uid 1100), and its Home Manager profile holds the three units, so a process
+  that breaks out of the app holds none of omer's credentials and cannot read
+  omer's home. The user has its own group, a home with mode 700,
   no `extraGroups`, the subordinate id range 200000-265535 for rootless Podman,
   and `linger`. omer may run any command as `threadsift` without a password,
-  such as `sudo -u threadsift -i`; `threadsift` cannot run `sudo`. Its Home
+  and `threadsift` cannot run `sudo`. Run the commands of this section in a
+  shell of that user, so `~`, a redirect, `systemctl --user`,
+  `journalctl --user` and `podman` all act on its home and its manager:
+  `sudo -u threadsift env -C / HOME=/home/threadsift XDG_RUNTIME_DIR=/run/user/1100 bash`.
+  Its Home
   Manager profile masks the rootless Docker unit with an empty
   `~/.config/systemd/user/docker.service`, because that unit starts for every
   user but root. `linger-users.service` wants and starts after
@@ -885,11 +892,21 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   that name, ingress and record, and put its connector token into
   `secrets/devbox-threadsift.yaml` as `connector-token`. To rotate the token,
   change it there the same way and apply it as the Secrets bullet below says.
+- **Container limits.** `compose.yml` runs both containers with
+  `no-new-privileges`, no capability, a read-only root, and a memory and a task
+  limit: 2 GiB and 512 tasks for the app, 256 MiB and 128 tasks for the
+  connector. The limits are guesses above the peaks of a 2 hour run, 359 MB and
+  14 tasks for the app and 63 MB and 15 tasks for the connector (`memory.peak`
+  and `pids.peak`, 2026-11-27). The app writes to `/data`, and to `/tmp` and
+  `/home/node`, which are tmpfs of 256 MiB each and empty at every start of
+  the container; Podman also keeps `/run`, `/var/tmp` and `/dev/shm` writable. A write
+  anywhere else in the image fails.
 - **Secrets.** The connector token, `THREADSIFT_SECRET_KEY` (the 64-character hex
   key that seals stored provider secrets), `SETUP_CODE` (the one-time code the
   first owner setup asks for) and `CLAUDE_CODE_OAUTH_TOKEN` are in
   `secrets/devbox-threadsift.yaml`. sops-nix renders them into the environment
-  file `threadsift.env`, which the unit reads. `env.public` holds the public
+  file `threadsift.env`, which belongs to `threadsift` and which the unit
+  reads. `env.public` holds the public
   values: the image to pull, the public origin and the two loopback ports. A
   changed value reaches the app in three steps: land the sops file on `main`,
   activate it on the box with `./deploy.sh devbox switch` (or wait for the box's
@@ -907,9 +924,10 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   only when a commit changes it; Dependabot's `docker-compose` entry in
   `.github/dependabot.yml` opens a pull request for a new version, which lands
   like the action pins ([Workflow actions](updates.md#workflow-actions)).
-- **Data.** `~/.local/state/threadsift/data` is the container's `/data`: the
-  SQLite database, the stored files and the CLI logins. The container runs as uid
-  1000 with `keep-id`, so the files belong to omer on the host.
+- **Data.** `/home/threadsift/.local/state/threadsift/data` is the container's
+  `/data`: the SQLite database, the stored files and the CLI logins. The
+  container runs as uid 1000 with `keep-id`, so the files belong to
+  `threadsift` on the host.
 - **Provider.** The Instance's Provider is "Claude Code on this server", signed in
   with `CLAUDE_CODE_OAUTH_TOKEN`, a `claude setup-token` token of the own-team
   Claude account. The Infisical record `/threadsift` `CLAUDE_CODE_OAUTH_TOKEN` is
@@ -1159,7 +1177,9 @@ enables smartd unless a host says otherwise.
 
 A deploy rolls back when a system unit fails during the switch or root's
 session check fails ([Deploys](#deploys)). After a deploy, run `systemctl
---failed` and `systemctl --user -M omer@ --failed` on the box, and `timeout 5
+--failed`, `systemctl --user -M omer@ --failed` and
+`sudo -u threadsift env XDG_RUNTIME_DIR=/run/user/1100 systemctl --user --failed`
+on the box, and `timeout 5
 busctl --user call org.freedesktop.secrets /org/freedesktop/secrets
 org.freedesktop.DBus.Peer Ping` as omer, because a keyring daemon that hands
 off to a desktop's daemon stops as `inactive` and leaves both lists empty
@@ -1189,8 +1209,10 @@ off to a desktop's daemon stops as `inactive` and leaves both lists empty
   <account> start` starts an account's units, and `box-browser --app
   <account> status` then checks the three units and DevTools
   ([Grok Bot app](box-browser.md#grok-bot-app)).
-- **omer's user units.** A root deploy checks only root's own services, so a
-  failed Home Manager unit of omer, such as cliproxy, rolls nothing back.
+- **omer's and threadsift's user units.** A root deploy checks only root's
+  own services, so a failed Home Manager unit of omer, such as cliproxy, or of
+  `threadsift` rolls nothing back. As root,
+  `systemctl --user -M threadsift@ --failed` lists the second user's.
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner,
   the Amp orb provider and the Cursor worker set
   `X-SwitchMethod = "keep-old"` in `machines/devbox/home.nix`, so a deploy

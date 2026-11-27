@@ -14,10 +14,11 @@ let
     inherit key;
     owner = user;
   };
+  threadsiftUser = config.users.users.threadsift.name;
   threadsiftSecret = key: {
     sopsFile = threadsift;
     inherit key;
-    owner = user;
+    owner = threadsiftUser;
   };
 in
 {
@@ -100,7 +101,7 @@ in
       '';
     };
     templates."threadsift.env" = {
-      owner = user;
+      owner = threadsiftUser;
       content = ''
         TUNNEL_TOKEN=${placeholder.threadsift-connector-token}
         THREADSIFT_SECRET_KEY=${placeholder.threadsift-secret-key}

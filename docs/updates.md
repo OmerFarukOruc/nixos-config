@@ -287,5 +287,5 @@ run passes.
 Dependabot also checks the pinned connector image of devbox's Threadsift stack
 (`machines/devbox/threadsift/compose.yml`, [Threadsift](devbox.md#threadsift)).
 Land its pull request the same way, then run `./deploy.sh devbox switch`, or
-leave it to the hourly install, and check `systemctl --user status
-threadsift.service`.
+leave it to the hourly install, and check `threadsift.service` as the user
+`threadsift` ([Threadsift](devbox.md#threadsift), Run user).

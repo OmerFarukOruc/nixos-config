@@ -75,7 +75,6 @@ in
           "cursor-worker"
           "herdr-web-ui"
           "openchamber"
-          "threadsift"
         ]
         (_: {
           Install.WantedBy = lib.mkForce [ ];
@@ -86,10 +85,13 @@ in
           "claude-tools-limit-switch"
           "cliproxy-update"
           "stay-green"
-          "threadsift-update"
         ]
         (_: {
           Install.WantedBy = lib.mkForce [ ];
         });
+  };
+  home-manager.users.threadsift.systemd.user = {
+    services.threadsift.Install.WantedBy = lib.mkForce [ ];
+    timers.threadsift-update.Install.WantedBy = lib.mkForce [ ];
   };
 }

@@ -6,6 +6,16 @@ services:
     restart: unless-stopped
     userns_mode: "keep-id:uid=1000,gid=1000"
     stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+      - /home/node:size=256m,mode=1777
+    mem_limit: 2g
+    pids_limit: 512
     environment:
       TZ: Europe/Istanbul
       THREADSIFT_PUBLIC_ORIGIN: ${THREADSIFT_PUBLIC_ORIGIN:?set THREADSIFT_PUBLIC_ORIGIN}
@@ -23,6 +33,15 @@ services:
     container_name: threadsift-cloudflared
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 256m
+    pids_limit: 128
     environment:
       TZ: Europe/Istanbul
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN}

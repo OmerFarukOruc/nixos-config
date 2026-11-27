@@ -152,5 +152,64 @@ in
     after = wants;
   };
 
-  home-manager.users.${account}.xdg.configFile."systemd/user/docker.service".text = "";
+  home-manager.users.${account} = {
+    xdg.configFile."systemd/user/docker.service".text = "";
+    systemd.user = {
+      services.threadsift =
+        let
+          up = "${./threadsift}/threadsift-up.sh";
+        in
+        {
+          Unit = {
+            Description = "Threadsift Instance and its Cloudflare tunnel connector";
+            After = [
+              "network-online.target"
+              "podman.socket"
+            ];
+            Wants = [ "network-online.target" ];
+            Requires = [ "podman.socket" ];
+          };
+          Service = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${up} start";
+            ExecReload = "${up} update";
+            ExecStop = "${up} stop";
+            Environment = [
+              "PATH=${
+                lib.makeBinPath [
+                  pkgs.coreutils
+                  pkgs.curl
+                  pkgs.findutils
+                ]
+              }:/run/current-system/sw/bin"
+            ];
+            EnvironmentFile = config.sops.templates."threadsift.env".path;
+            Restart = "on-failure";
+            RestartSec = 30;
+            TimeoutStartSec = "15min";
+          };
+          Install.WantedBy = [ "default.target" ];
+        };
+      services.threadsift-update = {
+        Unit = {
+          Description = "Threadsift image update";
+          After = [ "threadsift.service" ];
+        };
+        Service = {
+          Type = "oneshot";
+          ExecStart = "${pkgs.systemd}/bin/systemctl --user reload threadsift.service";
+        };
+      };
+      timers.threadsift-update = {
+        Unit.Description = "Threadsift image update every 5 minutes";
+        Timer = {
+          OnBootSec = "5min";
+          OnUnitActiveSec = "5min";
+          RandomizedDelaySec = "30s";
+        };
+        Install.WantedBy = [ "timers.target" ];
+      };
+    };
+  };
 }
