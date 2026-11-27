@@ -21,15 +21,15 @@ export type Spent = { costUsd: number | null; turns: number; tokens: Tokens }
 
 export type Guide = { url: string; sha256: string; isDownloaded: boolean }
 
-export type Sent = 'as-is' | 'edited' | 'own-draft' | 'dropped'
+export type Delivery = { sent: 'as-is' | 'own-draft' | 'dropped' | null; sentText: null } | { sent: 'edited'; sentText: string }
 
-export type RunRecord<Outcome extends RunOutcome = RunOutcome> = Spent & {
-  version: 2
+export type RunRecord<Outcome extends RunOutcome = RunOutcome> = Spent & Delivery & {
+  version: 3
   model: string | null
   skillSha256: string | null
   guides: Guide[]
   case: string | null
-  sent: Sent | null
+  earlierPrompts: string[]
   id: string
   startedAt: string
   seconds: number

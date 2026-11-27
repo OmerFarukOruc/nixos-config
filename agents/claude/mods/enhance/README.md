@@ -161,6 +161,7 @@ ${XDG_STATE_HOME:-~/.local/state}/enhance/runs/<start time>-<run id>.json
 ```
 
 - It holds the draft, the prompt, the notes, the model, the cost and the turns.
+- `earlierPrompts` holds each prompt that a Revise replaced, oldest first.
 - Records older than 30 days are deleted when a session starts.
 - The files hold your drafts and prompts as plain text.
 
@@ -169,7 +170,7 @@ ${XDG_STATE_HOME:-~/.local/state}/enhance/runs/<start time>-<run id>.json
 | Value | Meaning |
 | --- | --- |
 | `as-is` | You sent the prompt unchanged |
-| `edited` | You sent it after changing it |
+| `edited` | You sent it after changing it. `sentText` holds what you sent |
 | `own-draft` | You sent your own draft instead |
 | `dropped` | You dismissed it, or a new run or the session's end replaced it |
 | `null` | The run failed or was cancelled, or the result is still waiting |

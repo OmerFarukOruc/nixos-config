@@ -279,7 +279,7 @@ for (const site of ['band', 'pane'] as const) {
     await press($, seen, SITES[site], `${site}-send`)
     expect(seen.submitted).toEqual(['short'])
     expect(seen.box.text).toBe('')
-    expect(lastRecord(seen)).toMatchObject({ outcome: { kind: 'enhanced', prompt: 'short' }, sent: 'as-is' })
+    expect(lastRecord(seen)).toMatchObject({ outcome: { kind: 'enhanced', prompt: 'short' }, sent: 'as-is', sentText: null, earlierPrompts: ['prompt'] })
     expect(await shown($, BAND, /Enhanced prompt/)).toBeUndefined()
   })
 
@@ -343,10 +343,10 @@ test('a prompt equal to the draft says that nothing changed', async ($, on) => {
   expect(await shown($, BAND, /Enhanced prompt|nothing changed/)).toBe('Draft already clear, nothing changed')
 })
 
-for (const [sent, text] of [
-  ['as-is', 'prompt'],
-  ['edited', 'prompt, and the signup too'],
-  ['own-draft', 'a draft'],
+for (const [sent, text, sentText] of [
+  ['as-is', 'prompt', null],
+  ['edited', 'prompt, and the signup too', 'prompt, and the signup too'],
+  ['own-draft', 'a draft', null],
 ] as const) {
   test(`a submit of ${sent === 'as-is' ? 'the prompt' : sent === 'edited' ? 'a changed prompt' : 'the draft'} records ${sent}`, async ($, on) => {
     const seen = stubSession(on, { replies: [PROMPT, READING] })
@@ -355,7 +355,7 @@ for (const [sent, text] of [
     await $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
     await seen.clock.settle()
 
-    expect(lastRecord(seen).sent).toBe(sent)
+    expect(lastRecord(seen)).toMatchObject({ sent, sentText, earlierPrompts: [] })
   })
 }
 

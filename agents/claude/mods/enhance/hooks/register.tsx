@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, PluginOptions, Register, RenderSurface } from 'claude-code'
 
-import type { Enhanced, Receiver, Run, RunOutcome, RunRecord, RunSummary, Sent, Session } from '../types'
+import type { Delivery, Enhanced, Receiver, Run, RunOutcome, RunRecord, RunSummary, Session } from '../types'
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
 import { liveEffort, trackEffort } from './effort'
 import { factsOf, markOf } from './facts'
@@ -9,7 +9,7 @@ import type { Cancel, Copy, Turn, Writer } from './copies'
 import { missingFrom } from './missing'
 import { RECEIVER_WORDS, bulletOf, receiverOf, shownNotes, withBoldLabels, withNotes, withReading } from './notes'
 import { forgetRecall, forgetRecallIfShown, offerDraft, recallDraft, recallTicket } from './recall'
-import { guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
+import { DROPPED, NOT_SENT, deliveryOf, guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
 import { NOTHING_SPENT, parseReply, plus } from './reply'
 
 const NOTES_PANE = 'enhance-notes'
@@ -21,7 +21,7 @@ const NO_DRAFT = 'Type the draft after /enhance'
 const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
 const BIND_ACTION = 'app:cycleDiffBase'
 
-const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-6' })
+const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-7' })
 const lastDraft = atom({ plugin: 'enhance', key: 'lastDraft' } as const, null, { shape: 'draft-1' })
 const recent = atom({ plugin: 'enhance', key: 'recent' } as const, [], { shape: 'recent-2' })
 
@@ -193,12 +193,13 @@ async function recordOf<Outcome extends RunOutcome>(
 
   return {
     ...plus(prior ?? NOTHING_SPENT, turns),
-    version: 2,
+    ...NOT_SENT,
+    version: 3,
     model: turns.model ?? prior?.model ?? null,
     skillSha256: await skillSha256($),
     guides: [...(prior?.guides ?? []).filter(old => !guides.some(guide => guide.url === old.url)), ...guides],
     case: bulletOf(notes, 'Case') ?? prior?.case ?? null,
-    sent: null,
+    earlierPrompts: prior === undefined ? [] : [...prior.earlierPrompts, prior.outcome.prompt],
     id: me.id,
     startedAt: prior?.startedAt ?? new Date(startedAt).toISOString(),
     seconds: (prior?.seconds ?? 0) + Math.round((endedAt - startedAt) / 1000),
@@ -294,8 +295,8 @@ function keepRecord($: EngineInterface, record: RunRecord): void {
     .catch((error: unknown) => $.ui.toast(`Could not keep the enhance run record: ${reasonOf(error)}`))
 }
 
-async function leaveReady($: EngineInterface, ready: Ready, sent: Sent): Promise<void> {
-  keepRecord($, { ...ready.record, sent })
+async function leaveReady($: EngineInterface, ready: Ready, delivery: Delivery): Promise<void> {
+  keepRecord($, { ...ready.record, ...delivery })
   await forget($, ready.copyId)
 }
 
@@ -314,7 +315,7 @@ async function runCopy($: EngineInterface, me: ActiveRun, task: Task): Promise<v
   try {
     const before = await setRunning($, me)
     if (before.kind === 'ready' && before.copyId !== me.copyId) {
-      await leaveReady($, before, 'dropped')
+      await leaveReady($, before, DROPPED)
     }
     began.at = await $.clock.now()
     began.session ??= await sessionOf($)
@@ -419,7 +420,7 @@ async function send($: EngineInterface): Promise<void> {
       return
     }
     forgetRecall()
-    await clear($, () => 'as-is')
+    await clear($, record => deliveryOf(record, entered.text))
     if ((await $.prompt.read()).text === prompt) {
       await $.prompt.fill({ text: '' })
     }
@@ -433,7 +434,7 @@ async function send($: EngineInterface): Promise<void> {
 async function cleanUpLeftover($: EngineInterface): Promise<void> {
   const state = await read($, run)
   if (state.kind === 'ready') {
-    await leaveReady($, state, 'dropped')
+    await leaveReady($, state, DROPPED)
   }
   if (state.kind === 'running') {
     await forget($, state.copyId)
@@ -537,14 +538,6 @@ async function openNotes($: EngineInterface): Promise<void> {
   }
 }
 
-function sentOf(record: RunRecord<Enhanced>, text: string): Sent {
-  if (text.trim() === record.outcome.prompt.trim()) {
-    return 'as-is'
-  }
-
-  return text.trim() === record.draft.trim() ? 'own-draft' : 'edited'
-}
-
 async function openRuns($: EngineInterface): Promise<void> {
   try {
     const runs = await recentRuns($)
@@ -567,7 +560,7 @@ async function putBack($: EngineInterface, draft: string): Promise<void> {
   await leaveBox($)
 }
 
-async function clear($: EngineInterface, sent: (record: RunRecord<Enhanced>) => Sent): Promise<void> {
+async function clear($: EngineInterface, delivery: (record: RunRecord<Enhanced>) => Delivery): Promise<void> {
   const from = await transition(
     $,
     cur => (cur.kind === 'ready' || cur.kind === 'failed' ? cur : null),
@@ -577,7 +570,7 @@ async function clear($: EngineInterface, sent: (record: RunRecord<Enhanced>) => 
     return
   }
   if (from.kind === 'ready') {
-    await leaveReady($, from, sent(from.record))
+    await leaveReady($, from, delivery(from.record))
   }
   try {
     await $.ui.close({ id: NOTES_PANE })
@@ -606,7 +599,7 @@ function runningRow({ Box, Button, Text }: Ui, $: EngineInterface, running: Runn
 }
 
 function dismissButton({ Button }: Ui, $: EngineInterface, site: Site) {
-  return <Button key={`${site}-dismiss`} label="Dismiss" role="dismiss" onPress={() => clear($, () => 'dropped')} />
+  return <Button key={`${site}-dismiss`} label="Dismiss" role="dismiss" onPress={() => clear($, () => DROPPED)} />
 }
 
 function retryButton({ Button }: Ui, $: EngineInterface, site: Site) {
@@ -907,7 +900,7 @@ export const register: Register = (on, options) => {
       if (!('drop' in entered)) {
         forgetRecall()
         if (e.command === undefined) {
-          await clear($, record => sentOf(record, e.text))
+          await clear($, record => deliveryOf(record, entered.text))
         }
       }
       await markTouched($)

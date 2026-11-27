@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { Guide, RunRecord, RunSummary } from '../types'
+import type { Delivery, Enhanced, Guide, RunRecord, RunSummary } from '../types'
 import { configDir, runTool } from './copies'
 import { numberOrNullAt, parseLine, textAt } from './reply'
 
@@ -8,6 +8,18 @@ const RECENT_RUNS = 10
 const KEEP_MS = 30 * 24 * 60 * 60 * 1000
 const RECORD_NAME = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2}\.\d{3}Z)-.+\.json$/
 const SKILL_FILE = 'skills/enhance-prompt/SKILL.md'
+const SENT_AS_IS: Delivery = { sent: 'as-is', sentText: null }
+
+export const NOT_SENT: Delivery = { sent: null, sentText: null }
+export const DROPPED: Delivery = { sent: 'dropped', sentText: null }
+
+export function deliveryOf(record: RunRecord<Enhanced>, text: string): Delivery {
+  if (text.trim() === record.outcome.prompt.trim()) {
+    return SENT_AS_IS
+  }
+
+  return text.trim() === record.draft.trim() ? { sent: 'own-draft', sentText: null } : { sent: 'edited', sentText: text }
+}
 
 async function recordsDir($: EngineInterface): Promise<string> {
   return `${(await $.env.get('XDG_STATE_HOME')) || `${(await $.env.get('HOME')) || ''}/.local/state`}/enhance/runs`
