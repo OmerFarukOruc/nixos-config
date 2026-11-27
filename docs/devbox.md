@@ -858,12 +858,13 @@ before its config exists.
 `threadsift.service`, a user unit of the user `threadsift` in
 `machines/devbox/threadsift.nix`, runs Omer's own
 [Threadsift](https://github.com/KyaniteHQ/threadsift) Instance at
-`https://threadsift.risoluto.dev`. It runs `machines/devbox/threadsift/threadsift-up.sh`,
+`https://my.threadsift.app`. It runs `machines/devbox/threadsift/threadsift-up.sh`,
 which starts the compose stack of that folder on that user's rootless Podman,
 through the docker CLI as `cliproxy.service` does ([Containers](#containers)).
 
 ```
-Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
+Browser -> Cloudflare (my.threadsift.app, behind Cloudflare Access)     -+
+Token   -> Cloudflare (my-api.threadsift.app, three rules, no Access)   -+-> tunnel
   -> threadsift-cloudflared (connector, outbound only; /ready on 127.0.0.1:8089)
   -> http://threadsift:8080 (container threadsift, also on 127.0.0.1:8088)
 ```
@@ -904,14 +905,38 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   without the fence. The check runs at that start only; a jump deleted by hand
   later goes unnoticed.
 - **Tunnel.** The box opens no port. The connector dials out to Cloudflare. The
-  tunnel `threadsift-devbox` of the Cloudflare account `risoluto` is remotely
-  managed, with the public hostname `threadsift.risoluto.dev` and the ingress
-  `http://threadsift:8080`, and a proxied CNAME `threadsift` of the zone
-  `risoluto.dev` points at `<tunnel id>.cfargotunnel.com`. They live in
-  Cloudflare, so no file here creates them. To rebuild the tunnel, make it with
-  that name, ingress and record, and put its connector token into
+  tunnel `threadsift-devbox` of the Cloudflare account `Threadsift` is remotely
+  managed, with two public hostnames of the zone `threadsift.app`, both with the
+  ingress `http://threadsift:8080`: `my.threadsift.app`, and
+  `my-api.threadsift.app` with the origin setting HTTP Host Header
+  `my.threadsift.app`, because the app refuses an MCP request whose `Host` is
+  not its public origin. A proxied CNAME for each points at
+  `<tunnel id>.cfargotunnel.com`. They live in Cloudflare, so no file here
+  creates them. To rebuild the tunnel, first make the Access application and
+  the three rules of the Addresses bullet below, then make the tunnel with that
+  name, those hostnames and records, and put its connector token into
   `secrets/devbox-threadsift.yaml` as `connector-token`. To rotate the token,
   change it there the same way and apply it as the Secrets bullet below says.
+- **Addresses.** `my.threadsift.app` is the library address, for the owner's
+  browser. A Cloudflare Access application of the account's Zero Trust covers
+  the whole hostname and lets in only the owner's login, so nobody else reaches
+  the app's sign-in page. The application must exist before the tunnel gets
+  the hostname. `my-api.threadsift.app` is the token address, for the
+  Extension, the Threadsift bot and every agent, which send an agent token and
+  cannot pass an Access login. It has no Access application. Three rules of the
+  zone keep it to token requests, and the tunnel must not get the hostname
+  before they exist. The condition of each rule starts with the hostname
+  `my-api.threadsift.app` (`http.host`), because a rule of the zone without it
+  also acts on the library address, where it would block the owner's browser:
+  - A Single Redirect sends a request with no `Authorization: Bearer` header to
+    the same path on the library address, with status 302. The links the app
+    builds use its public origin, so a person who opens the token address
+    lands behind Access.
+  - A WAF custom rule blocks a request with no such header, and every request
+    whose path starts with `/api/session`, `/api/setup`, `/api/login` or
+    `/api/password`, so the owner's sign-in is not reachable there.
+  - A Transform rule removes the `Cookie` header, so an owner session never
+    works on the token address.
 - **Container limits.** `compose.yml` runs both containers with
   `no-new-privileges`, no capability, a read-only root, and a memory and a task
   limit: 2 GiB and 512 tasks for the app, 256 MiB and 128 tasks for the
@@ -928,11 +953,13 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   file `threadsift.env`, which belongs to `threadsift` and which the unit
   reads. `env.public` holds the public
   values: the image to pull, the public origin and the two loopback ports. A
-  changed value reaches the app in three steps: land the sops file on `main`,
+  changed value reaches the app in three steps: land the changed file on `main`
+  (`env.public` for the image, the public origin or a port, the sops file for a
+  secret),
   activate it on the box with `./deploy.sh devbox switch` (or wait for the box's
   hourly install of `main`), then run
   `systemctl --user restart threadsift.service`, because a restart before the
-  activation reads the old `threadsift.env`.
+  activation reads the old `threadsift.env` and the old `env.public`.
 - **Images.** The app image is pulled as `ghcr.io/kyanitehq/threadsift:main`, but
   the container runs the local tag `localhost/threadsift:<12 hex of the image id>`,
   and `~/.local/state/threadsift/good-image` holds the id of the image that last
