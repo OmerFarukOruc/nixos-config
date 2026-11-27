@@ -446,6 +446,14 @@ async function cleanUpLeftover($: EngineInterface): Promise<void> {
 
 async function wrapUp($: EngineInterface, me: ActiveRun | null): Promise<void> {
   await me?.done
+  const earlier = me?.task.revise?.from
+  if (me !== null && earlier !== undefined) {
+    await transition(
+      $,
+      cur => (cur.kind === 'running' && cur.runId === me.id ? cur : null),
+      () => earlier,
+    )
+  }
   await cleanUpLeftover($)
   await recordWrite
 }
