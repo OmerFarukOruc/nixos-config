@@ -13,7 +13,7 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | `reference/` | `~/.claude/reference` | reference pages the rules send agents to |
 | `infisical.md` | `~/.claude/infisical.md` | the Infisical usage note |
 | `skills/<name>/` | `~/.claude/skills`, `~/.agents/skills`, `~/.gemini/antigravity-cli/skills` | Omer's own skills; `skills/SOURCES.md` names what they borrow |
-| `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `bash-env.sh`, `stop-sound.sh` and its sounds, and `herdr-agent-state.sh`, which `herdr integration install claude` writes and `.gitignore` keeps out of git |
+| `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `agent-left-open.py`, `bash-env.sh`, `stop-sound.sh` and its sounds, and `herdr-agent-state.sh`, which `herdr integration install claude` writes and `.gitignore` keeps out of git |
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | the status line |
 | `claude/agents/` | `~/.claude/agents` | the `code-reviewer` and `comment-sicko` agents |
 | `opencode/agents/` | `~/.config/opencode/agents` | the opencode agents `opencode-review`, read-only with no shell, and `opencode-implement`, which set their model and permissions ([herdr.md](reference/headless-clis/herdr.md), Starting an opencode agent) |

@@ -32,6 +32,11 @@
             "type": "command",
             "command": "${HOME}/.claude/hooks/stop-sound.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${HOME}/.claude/hooks/agent-left-open.py",
+            "timeout": 10
           }
         ]
       }
