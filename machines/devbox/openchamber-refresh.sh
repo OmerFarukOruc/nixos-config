@@ -15,6 +15,13 @@ store_dir() {
   readlink -e "$1" | cut -d/ -f1-4
 }
 
+unit_procs() {
+  local cgroup
+  cgroup=$(systemctl --user show "$unit" -p ControlGroup --value)
+  [[ -n $cgroup ]] || fail "$unit has no control group"
+  cat "/sys/fs/cgroup$cgroup/cgroup.procs"
+}
+
 opencode_get() {
   curl -fsS -m 10 --variable '%OPENCODE_SERVER_PASSWORD' \
     --expand-user 'opencode:{{OPENCODE_SERVER_PASSWORD}}' "http://127.0.0.1:$opencode_port$1"
@@ -33,6 +40,9 @@ if ! opencode_port=$(jq -re 'select(.openCodeRunning == true) | .openCodePort | 
 fi
 info=$(opencode_get /api/info)
 opencode_pid=$(jq -re '.pid | numbers' <<<"$info") || fail "OpenCode's /api/info has no pid: $info"
+procs=$(unit_procs)
+grep -qx "$opencode_pid" <<<"$procs" ||
+  fail "OpenCode (pid $opencode_pid) runs outside $unit, such as OpenCode's shared service, so restarting $unit would not update it"
 
 stale=()
 cmdline=$(tr '\0' ' ' <"/proc/$main/cmdline")
@@ -54,8 +64,8 @@ printf -v reason '%s; ' "${stale[@]}"
 active=$(opencode_get /api/session/active)
 sessions=$(jq -re '.data | objects | length' <<<"$active") ||
   fail "OpenCode's /api/session/active has no session list: $active"
-procs=$(paste -sd, "/sys/fs/cgroup$(systemctl --user show "$unit" -p ControlGroup --value)/cgroup.procs")
-ttys=$(ps -o tty= -p "$procs" | tr -d ' ')
+procs=$(unit_procs)
+ttys=$(ps -o tty= -p "$(paste -sd, <<<"$procs")" | tr -d ' ')
 terminals=$(grep -c -v -x '?' <<<"$ttys" || true)
 
 if ((sessions > 0 || terminals > 0)); then

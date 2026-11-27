@@ -575,9 +575,12 @@ Podman. omer is in no docker group. The ranges in `/etc/subuid` and
   restarts `openchamber.service` only when OpenCode's `/api/session/active`
   lists no session and no process in the unit has a terminal, which covers
   OpenChamber's terminal panes. It waits while OpenChamber reports its OpenCode
-  server as not ready, and the unit fails when OpenChamber or OpenCode does not
-  answer as expected. The check and the restart are not atomic, so a prompt
-  sent in the second between them is cut off. A restart drops the clients'
+  server as not ready. The unit fails when OpenChamber or OpenCode does not
+  answer as expected, and when OpenCode runs outside `openchamber.service`, as
+  it does with OpenChamber's "Use shared OpenCode service" setting on, because
+  a restart of the unit would not update it; keep that setting off. The check
+  and the restart are not atomic, so a prompt sent in the second between them
+  is cut off. A restart drops the clients'
   connections, which reconnect. `journalctl --user -u openchamber-refresh`
   shows each check. The policy file pins OpenChamber's OpenCode to omer's
   profile (`opencodeBinary`), so OpenChamber runs the same `opencode` as a
