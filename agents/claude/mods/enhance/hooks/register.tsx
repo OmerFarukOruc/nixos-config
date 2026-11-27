@@ -4,9 +4,10 @@ import type { Elements, EngineInterface, PluginOptions, Register, RenderSurface 
 import type { Enhanced, Receiver, Run, RunOutcome, RunRecord, RunSummary, Sent, Session } from '../types'
 import { forgetCopy, headlessCopy, withDraftFile, withImagePaths } from './copies'
 import { liveEffort, trackEffort } from './effort'
-import { dollars, factsOf, markOf } from './facts'
+import { factsOf, markOf } from './facts'
 import type { Cancel, Copy, Turn, Writer } from './copies'
 import { missingFrom } from './missing'
+import { RECEIVER_WORDS, bulletOf, shownNotes, withBoldLabels, withNotes, withReading } from './notes'
 import { forgetRecall, forgetRecallIfShown, offerDraft, recallDraft, recallTicket } from './recall'
 import { guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
 import { NOTHING_SPENT, parseReply, plus } from './reply'
@@ -19,9 +20,6 @@ const IDLE: Run = { kind: 'idle', isDraftBack: false }
 const NO_DRAFT = 'Type the draft after /enhance'
 const NO_ANSWER = 'Answer: none; continue, and state what you assume as an `Assuming:` line in the prompt'
 const BIND_ACTION = 'app:cycleDiffBase'
-const BULLET_LABEL = /^([-*+] )([^:*\n]{1,40}):(?= )/gm
-const BULLET = /^[-*+] \*{0,2}([^:*\n]{1,40}):/
-const NEXT_BULLET = /^[-*+] /
 
 const run = atom({ plugin: 'enhance', key: 'run' } as const, IDLE, { shape: 'run-6' })
 const lastDraft = atom({ plugin: 'enhance', key: 'lastDraft' } as const, null, { shape: 'draft-1' })
@@ -46,7 +44,6 @@ type Began = { at: number | null; session: Session | null }
 
 const SESSION_END_WAIT_MS = 1200
 const TICK_MS = 1000
-const RECEIVER_WORDS: Record<Receiver, string> = { 'this-conversation': 'this conversation', 'new-session': 'a new session' }
 
 let active: ActiveRun | null = null
 let transcriptRow: string | null = null
@@ -248,34 +245,6 @@ async function sessionOf($: EngineInterface): Promise<Session> {
   const [id, cwd, model, turns] = await Promise.all([$.session.id(), $.session.cwd(), $.session.model(), $.session.turns()])
 
   return { id, cwd, model, receiver: turns > 0 ? 'this-conversation' : 'new-session' }
-}
-
-function bulletOf(notes: string, label: string): string | null {
-  const bullet = notes.split('\n').find(line => BULLET.exec(line)?.[1] === label)
-
-  return bullet === undefined ? null : bullet.slice(bullet.indexOf(':') + 1).replace(/^\*{0,2}\s*/, '').trim()
-}
-
-function withNotes(outcome: Enhanced, lines: readonly string[]): Enhanced {
-  return { ...outcome, notes: [outcome.notes, ...lines.map(line => `- ${line}`)].filter(part => part !== '').join('\n') }
-}
-
-function withReading(outcome: Enhanced, reading: string): Enhanced {
-  const lines = outcome.notes.split('\n')
-  const goal = lines.findIndex(line => BULLET.exec(line)?.[1] === 'Understood goal')
-  if (goal === -1) {
-    return withNotes(outcome, [`Cold reader: ${reading}`])
-  }
-  const after = lines.findIndex((line, at) => at > goal && (line.trim() === '' || NEXT_BULLET.test(line)))
-  const at = after === -1 ? lines.length : after
-
-  return { ...outcome, notes: [...lines.slice(0, at), `- Cold reader: ${reading}`, ...lines.slice(at)].join('\n') }
-}
-
-function shownNotes(record: RunRecord<Enhanced>): string {
-  const cost = record.costUsd === null ? 'not reported' : dollars(record.costUsd)
-
-  return withNotes(record.outcome, [`Cost: ${cost}, time: ${record.seconds} s`]).notes
 }
 
 async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task: Task): Promise<RunOutcome> {
@@ -813,10 +782,6 @@ function runsPane(ui: Ui, $: EngineInterface, draft: string | null, runs: readon
   )
 }
 
-function withBoldLabels(notes: string): string {
-  return notes.replace(BULLET_LABEL, '$1**$2:**')
-}
-
 function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
   const { Box, Markdown, Text } = ui
   const { prompt } = ready.record.outcome
@@ -830,7 +795,7 @@ function readyPane(ui: Ui, $: EngineInterface, ready: Ready) {
       </Box>
       <Box flexDirection="column">
         <Text weight="bold">Notes</Text>
-        {notes === '' ? <Text dimColor>The copy sent no notes with this prompt.</Text> : <Markdown text={withBoldLabels(notes)} />}
+        <Markdown text={withBoldLabels(notes)} />
       </Box>
       <Box flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1}>
         <Text weight="bold" color="suggestion">
