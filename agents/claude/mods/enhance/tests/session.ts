@@ -14,6 +14,7 @@ export type Script = {
   exists?: (path: string) => boolean
   files?: Readonly<Record<string, string>>
   placeRefusal?: string
+  turns?: number
 }
 
 export type Seen = {
@@ -62,7 +63,7 @@ export function stubSession(on: On, script: Script): Seen {
   on('session.id', () => ({ value: SESSION_ID }))
   on('session.cwd', () => ({ value: '/work' }))
   on('session.model', () => ({ value: 'claude-test-1' }))
-  on('session.turns', () => ({ value: 0 }))
+  on('session.turns', () => ({ value: script.turns ?? 0 }))
   on('settings.read', () => ({ value: {} }))
   on('fs.exists', (_, e) => ({ value: script.exists?.(e.path) ?? (e.path === '/work' || e.path === RUNS_DIR) }))
   on('fs.write', (_, e) => {

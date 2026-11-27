@@ -7,7 +7,7 @@ import { liveEffort, trackEffort } from './effort'
 import { factsOf, markOf } from './facts'
 import type { Cancel, Copy, Turn, Writer } from './copies'
 import { missingFrom } from './missing'
-import { RECEIVER_WORDS, bulletOf, shownNotes, withBoldLabels, withNotes, withReading } from './notes'
+import { RECEIVER_WORDS, bulletOf, receiverOf, shownNotes, withBoldLabels, withNotes, withReading } from './notes'
 import { forgetRecall, forgetRecallIfShown, offerDraft, recallDraft, recallTicket } from './recall'
 import { guidesOf, pruneRecords, recentRuns, skillSha256, writeRecord } from './records'
 import { NOTHING_SPENT, parseReply, plus } from './reply'
@@ -273,15 +273,19 @@ async function replyOf($: EngineInterface, me: ActiveRun, session: Session, task
   if (outcome.kind !== 'enhanced') {
     return outcome
   }
-  const reading = await copy.read(outcome.prompt)
+  const named = receiverOf(outcome.notes)
+  const earlier = task.revise === null ? null : receiverOf(task.revise.from.record.outcome.notes)
+  const receiver = named ?? earlier ?? session.receiver
+  const reading = await copy.read(outcome.prompt, receiver)
   if (me.cancel.isCancelled) {
     return CANCELLED
   }
+  const unnamed = reading !== null && named === null ? [`The notes name no receiver, so the cold reader read the prompt as one for ${RECEIVER_WORDS[receiver]}`] : []
 
-  return withNotes(
-    reading === null ? outcome : withReading(outcome, reading),
-    missingFrom(task.draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
-  )
+  return withNotes(reading === null ? outcome : withReading(outcome, reading), [
+    ...unnamed,
+    ...missingFrom(task.draft, outcome.prompt).map(item => `Not in the prompt: ${item}`),
+  ])
 }
 
 function keepRecord($: EngineInterface, record: RunRecord): void {

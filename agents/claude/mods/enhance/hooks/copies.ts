@@ -1,7 +1,7 @@
 import type { EngineInterface, ProcessRunInit, ProcessRunResult } from 'claude-code'
 
 import { plainCause } from './failures'
-import type { Spent } from '../types'
+import type { Receiver, Spent } from '../types'
 import { HEADLESS_START, NOTHING_SPENT, endHeadless, headlessResultOf, isSessionId, plus, readHeadless } from './reply'
 
 export type Turn = { kind: 'reply'; text: string } | { kind: 'failed'; reason: string; notes: string } | { kind: 'cancelled' }
@@ -12,7 +12,7 @@ export type Writer = { model: string; effort: string; turnMs: number }
 
 export type Copy = {
   send: (text: string) => Promise<Turn>
-  read: (prompt: string) => Promise<string | null>
+  read: (prompt: string, receiver: Receiver) => Promise<string | null>
   spent: () => Spent & { model: string | null }
   stop: () => Promise<void>
   close: () => Promise<void>
@@ -37,7 +37,7 @@ const TOOL_CWD = '/'
 const STDERR_TAIL_CHARS = 300
 const READER_TURN_MS = 120_000
 const READER_ASK =
-  'Do not carry out the prompt between the tags. Reply with one sentence that says what you would do if you received it as your next message.'
+  'Do not carry out the prompt between the tags. Reply with one sentence that says what you would do if you received it as your next message. Then, in at most three more sentences, name what the prompt relies on that neither it nor anything else you have read explains, and that the tools of a coding session could not look up: a reference to an earlier talk, a decision it leaves open, or no way to tell that the work is done. When there is none, say "Nothing unresolved."'
 const IMAGE_MARK = /\[Image #(\d+)\]/g
 const IMAGE_FILE = /\/(\d+)\.(?:png|jpe?g|gif|webp)$/
 const TYPED_IMAGE = /"([^"\n]+\.(?:png|jpe?g|gif|webp))"|'([^'\n]+\.(?:png|jpe?g|gif|webp))'|(?<![^\s(])@?([^\s"'()]+\.(?:png|jpe?g|gif|webp))(?!\.?\w)/gi
@@ -61,8 +61,10 @@ function copyFlags(plan: CopyPlan, isFirstTurn: boolean): string[] {
   return isFirstTurn ? [...shared, '--session-id', plan.sessionId, ...forkFlags(plan.parentId)] : ['--resume', plan.sessionId, ...shared]
 }
 
-function readerFlags(plan: CopyPlan): string[] {
-  return [...sharedFlags(plan.writer), '--tools', '', '--no-session-persistence', ...forkFlags(plan.parentId)]
+function readerFlags(plan: CopyPlan, receiver: Receiver): string[] {
+  const parentId = receiver === 'this-conversation' ? plan.parentId : null
+
+  return [...sharedFlags(plan.writer), '--tools', '', '--no-session-persistence', ...forkFlags(parentId)]
 }
 
 export async function configDir($: EngineInterface): Promise<string> {
@@ -245,10 +247,10 @@ export function headlessCopy($: EngineInterface, plan: CopyPlan): Copy {
 
       return turnOf(flags, text, plan.writer.turnMs)
     },
-    read: async prompt => {
+    read: async (prompt, receiver) => {
       plan.onProgress('cold reader')
       try {
-        const turn = await turnOf(readerFlags(plan), '', READER_TURN_MS, `${READER_ASK}\n\n<prompt>\n${prompt}\n</prompt>\n`)
+        const turn = await turnOf(readerFlags(plan, receiver), '', READER_TURN_MS, `${READER_ASK}\n\n<prompt>\n${prompt}\n</prompt>\n`)
 
         return turn.kind === 'reply' ? turn.text.replace(/\s+/g, ' ').trim() || null : null
       } catch {

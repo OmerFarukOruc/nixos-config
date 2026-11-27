@@ -181,6 +181,26 @@ test('the notes name each path, URL and code span of the draft that the prompt l
   ])
 })
 
+const FORK = ['--resume', SESSION_ID, '--fork-session']
+
+for (const [notes, fork] of [
+  ['- Receiver: a new session', []],
+  ['- **Receiver:** this conversation, as the command says', FORK],
+  ['- Receiver: `new session`', []],
+  ['- Target: test', FORK],
+] as const) {
+  test(`in a session with turns, the cold reader of a reply with the notes "${notes}" gets ${fork.length === 0 ? 'no conversation' : 'the conversation'}`, async ($, on) => {
+    const seen = stubSession(on, { turns: 2, replies: [resultLine(`\`\`\`paste\nprompt\n\`\`\`\n${notes}`), READING] })
+
+    await $.command.run({ ...TYPED, args: 'a draft' })
+    await seen.clock.settle()
+
+    const reader = seen.spawned[1]?.argv ?? []
+    expect(reader.slice(reader.indexOf('--tools'), reader.indexOf('--tools') + 2)).toEqual(['--tools', ''])
+    expect(reader.filter(flag => FORK.includes(flag))).toEqual(fork)
+  })
+}
+
 type Site = Parameters<Engine['ui']['mount']>[0]
 
 async function press($: Engine, seen: Seen, site: Site, key: string): Promise<void> {
