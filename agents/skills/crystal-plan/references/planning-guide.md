@@ -104,12 +104,15 @@ exist yet or the test already passes, observe Red on a stand-in in the red workt
 such as a scratch page or a reverted line, and say in the Red line which stand-in you
 used.
 
-The Final gate is the proof ladder, in order: every slice's Green again, the local gate
-(with the tests the repository already has) and one independent review started together,
-the review fixes and the gate on the fixed head, the full end-to-end suite or a runtime
-rehearsal where the change only shows when the real components run together, CI, and any
-post-merge check. Write the delivery boundary as a sentence, for example "no PR until
-the paired rehearsal passes after the final commit".
+The Final gate is the proof ladder, in order: every slice's Green again; once the diff
+is final, the local gate (with the tests the repository already has), one independent
+review (none when the equivalence check proves every hunk), and the equivalence check
+for each command-made hunk that `~/.claude/shared/reviews.md` lets the review leave out,
+all started together; the review fixes and the gate on the fixed head (when a pre-push
+hook runs the gate, the landing push is that gate); the full end-to-end suite or a
+runtime rehearsal where the change only shows when the real components run together; CI;
+and any post-merge check. Write the delivery boundary as a sentence, for example "no PR
+until the paired rehearsal passes after the final commit".
 
 A proof that takes minutes sets the cost of every rerun after it, such as the rerun
 after review fixes, which is why the Slow proof row asks for its measured duration and a

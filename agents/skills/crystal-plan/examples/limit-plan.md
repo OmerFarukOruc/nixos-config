@@ -80,7 +80,9 @@ Done when: Green and the Gate are observed, and `git show --stat --format=%s HEA
 1. The Caller run prints the Green output, and the Gate exits 0 with `Ran 3 tests` and `OK`.
 2. `git diff --name-only <fixture-sha> HEAD` prints only `limit.py`, and `grep -c 'def parse_limit(raw: str | None) -> int:' limit.py` prints `1`.
 
-No PR, push, or deploy is part of this teaching example.
+No PR, push, deploy, or review is part of this teaching example, because it lands nothing.
+A plan for a change that lands keeps the review rung of the Final gate in
+`references/planning-guide.md`.
 
 ## Stop conditions
 
