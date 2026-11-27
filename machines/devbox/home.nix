@@ -11,6 +11,7 @@ let
   claudeTools = pkgs.callPackage ../../pkgs/claude-tools.nix { };
   herdrWebUi = pkgs.callPackage ../../pkgs/herdr-web-ui.nix { };
   openchamberWeb = pkgs.callPackage ../../pkgs/openchamber-web.nix { };
+  openchamberPort = 3000;
   stayGreen = pkgs.callPackage ../../pkgs/stay-green.nix { src = inputs.stay-green; };
   ampInstall = pkgs.writeShellApplication {
     name = "amp-install";
@@ -21,6 +22,18 @@ let
       util-linux
     ];
     text = builtins.readFile ./amp-install.sh;
+  };
+  openchamberRefresh = pkgs.writeShellApplication {
+    name = "openchamber-refresh";
+    runtimeInputs = with pkgs; [
+      coreutils
+      curl
+      gnugrep
+      jq
+      procps
+      systemd
+    ];
+    text = builtins.readFile ./openchamber-refresh.sh;
   };
   ampOrbDispatch = pkgs.writeShellApplication {
     name = "amp-orb-dispatch";
@@ -117,13 +130,26 @@ in
     };
     Service = {
       EnvironmentFile = osConfig.sops.templates."openchamber.env".path;
-      # OpenChamber's own OpenCode update installs to ~/.opencode/bin.
-      ExecStart = "${lib.getExe pkgs.zsh} -c 'PATH=$HOME/.opencode/bin:$PATH exec ${lib.getExe openchamberWeb} --port 3000 --host 127.0.0.1 --foreground'";
+      ExecStart = "${lib.getExe pkgs.zsh} -c 'exec ${lib.getExe openchamberWeb} --port ${toString openchamberPort} --host 127.0.0.1 --foreground'";
       WorkingDirectory = "${home}/Desktop/workspace";
       Restart = "on-failure";
       RestartSec = 3;
     };
     Install.WantedBy = [ "default.target" ];
+  };
+
+  systemd.user.services.openchamber-refresh = {
+    Unit.Description = "Restart OpenChamber into its installed version once no OpenCode session runs";
+    Service = {
+      Type = "oneshot";
+      EnvironmentFile = osConfig.sops.templates."openchamber.env".path;
+      ExecStart = "${lib.getExe openchamberRefresh} ${openchamberWeb} ${toString openchamberPort}";
+    };
+  };
+  systemd.user.timers.openchamber-refresh = {
+    Unit.Description = "Check every 10 minutes whether OpenChamber runs its installed version";
+    Timer.OnCalendar = "*:0/10";
+    Install.WantedBy = [ "timers.target" ];
   };
 
   systemd.user.services.infisical-agent = {
@@ -512,10 +538,6 @@ in
   };
 
   # /etc/zshenv replaces a unit's PATH, so every zsh, interactive or not, gets
-  # the CLIs that installers put in the home: OpenCode's own update in
-  # ~/.opencode/bin, and ~/.local/bin.
-  home.sessionPath = [
-    "$HOME/.local/bin"
-    "$HOME/.opencode/bin"
-  ];
+  # the CLIs that installers put in ~/.local/bin.
+  home.sessionPath = [ "$HOME/.local/bin" ];
 }

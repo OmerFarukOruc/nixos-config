@@ -110,6 +110,9 @@ in
     "amp.remoteThreadCreation.enabled" = true;
     "amp.updates.mode" = "auto";
   };
+  environment.etc."openchamber/policy.json".text = builtins.toJSON {
+    opencodeBinary = "/etc/profiles/per-user/${config.oruc.machine.user}/bin/opencode";
+  };
 
   users.mutableUsers = false;
   users.groups.${config.oruc.machine.user}.gid = 1003;

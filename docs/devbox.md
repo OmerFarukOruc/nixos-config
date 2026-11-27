@@ -499,7 +499,8 @@ Podman. omer is in no docker group. The ranges in `/etc/subuid` and
   moves those packages like the others ([updates.md](updates.md#apps)). A
   deploy leaves a running OpenChamber, herdr session, Amp runner, Amp orb
   provider and Cursor worker alone (`X-SwitchMethod = "keep-old"`), so the new
-  version starts at their next restart. Their secrets, except the orb
+  version starts at their next restart; `openchamber-refresh.timer` below
+  makes that restart for OpenChamber. Their secrets, except the orb
   provider's token below, come from `services.nix`; after a secret changes,
   restart the user service, because sops-nix restarts only system units.
   `configuration.nix` writes Amp's `/etc/ampcode/managed-settings.json`, which
@@ -567,6 +568,22 @@ Podman. omer is in no docker group. The ranges in `/etc/subuid` and
   is `journalctl --user -u amp-orb-provider`. OpenChamber and OpenCode keep
   their own settings files, which they write themselves; nothing copies them
   elsewhere, so a reinstall starts them from their defaults.
+- `openchamber-refresh.timer` restarts OpenChamber into its installed version.
+  Every 10 minutes `machines/devbox/openchamber-refresh.sh` checks whether
+  OpenChamber runs a store path other than its unit's, or its OpenCode server
+  one other than the binary that `/etc/openchamber/policy.json` names. It
+  restarts `openchamber.service` only when OpenCode's `/api/session/active`
+  lists no session and no process in the unit has a terminal, which covers
+  OpenChamber's terminal panes. It waits while OpenChamber reports its OpenCode
+  server as not ready, and the unit fails when OpenChamber or OpenCode does not
+  answer as expected. The check and the restart are not atomic, so a prompt
+  sent in the second between them is cut off. A restart drops the clients'
+  connections, which reconnect. `journalctl --user -u openchamber-refresh`
+  shows each check. The policy file pins OpenChamber's OpenCode to omer's
+  profile (`opencodeBinary`), so OpenChamber runs the same `opencode` as a
+  shell, instead of the OpenCode server that its npm package bundles, and
+  reports an OpenCode update as unsupported, because the update would install
+  a copy in `~/.opencode/bin` that Nix never moves.
 - `stay-green.timer` starts a run every 4 minutes around the clock. A run keeps
   Omer's Teams status Available on weekdays from 09:00 to 18:00 Istanbul time
   with `pkgs/stay-green.nix`, built from the `stay-green` flake input, and does
@@ -1216,7 +1233,10 @@ off to a desktop's daemon stops as `inactive` and leaves both lists empty
 - **Units that keep their old version.** OpenChamber, herdr, the Amp runner,
   the Amp orb provider and the Cursor worker set
   `X-SwitchMethod = "keep-old"` in `machines/devbox/home.nix`, so a deploy
-  does not start their new version.
+  does not start their new version. `openchamber-refresh.timer` restarts
+  OpenChamber later, the Amp runner and the orb provider restart into Amp's
+  own update, and herdr and the Cursor worker run their old version until
+  they restart.
 - **Amp's own build.** No check covers the first download of
   `~/.amp/bin/amp` or the self-update restart of the Amp runner and the orb
   provider; `journalctl --user -u amp-runner -u amp-orb-provider` shows both.
