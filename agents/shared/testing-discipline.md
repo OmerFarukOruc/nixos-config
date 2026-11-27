@@ -47,7 +47,7 @@ Keep the artifact where the repository keeps test output, or name its path in th
 
 During development, run only the end-to-end tests that the change touches. When you cannot tell which tests a change reaches, as with a shared helper, a fixture, config, a generated file, or a dynamic lookup, run every test file that loads it, or the full end-to-end suite when you cannot list those files, because a selection that finds no test is not evidence that nothing breaks. Run the full end-to-end suite once, after the review fixes and before landing, unless it needs the landed system, and report its result; an edit after that run to a file it exercises means one more run.
 
-A proof that takes more than a few minutes runs last: after the gate passes, an independent review reports, and its fixes are in. A review fix to any file the proof exercises forces the proof to run again, so running it before the review spends one run per review round. A quick end-to-end check of the touched path may still run during development.
+A proof that takes more than a few minutes runs last: after the gate passes, an independent review reports, and its fixes are in. A review fix to any file the proof exercises forces the proof to run again, so running it before the review spends one run per review round. A quick end-to-end check of the touched path may still run during development. An equivalence check that replaces a review runs on the final head, because a later edit to a file it covers voids it.
 
 ## Probes that start a process
 
