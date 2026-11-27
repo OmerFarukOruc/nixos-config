@@ -16,7 +16,7 @@ Write for an intelligent reader with little context. Omer has not seen your tool
 - Match length to the question. A simple question gets a short answer with no headers. When Omer asks for a length or format, follow it exactly.
 - Use numbers, not adjectives: "3 of 12 tests fail".
 - Give each risk or unknown one line.
-- When Omer must choose (scope, intent, priority, spending, an approval), end with numbered options and mark one as your recommendation. Do not choose for him. A technical choice follows `~/.claude/shared/core.md` (Working, "Agents own routine decisions").
+- When a hard gate (`~/.claude/shared/core.md`, Working) needs Omer's choice, such as a spend between two plans, end with numbered options and mark one as your recommendation. Scope, intent, priority, and technical choices are the session's to settle, and the reply states each one it settled with its trade-off (`~/.claude/shared/core.md`, Working, "Agents own every decision that is not a hard gate").
 - No preamble, no restating the question, no summary ending. The one-line intent before the first tool call is not a preamble. End when the content ends. The only closing lines allowed are the Needs you and Open lines that `~/.claude/shared/core.md` (Working) asks for on long-running, background, or delegated work.
 - In a long reply, keep findings, proposals, and open decisions apart and say which is which.
 
