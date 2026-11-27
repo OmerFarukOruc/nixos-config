@@ -15,6 +15,7 @@ in
     ./disk.nix
     ./factory-agent-files.nix
     ./services.nix
+    ./threadsift.nix
     ../../nixosModules/agent-runtime.nix
     ../../nixosModules/agents.nix
     ../../nixosModules/install-reports.nix

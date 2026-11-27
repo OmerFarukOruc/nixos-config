@@ -26,9 +26,9 @@ devbox is Omer's dev box, a netcup KVM guest with one 2 TiB virtio disk.
 It is the first host with `kind = "server"` in `machines/inventory.nix`: no
 login session, no workstation module, and the kernel from nixpkgs. Its files are
 `machines/devbox/` (`configuration.nix`, `disk.nix`,
-`hardware-configuration.nix`, `home.nix`, `services.nix`, the `cliproxy/`
-folder of the CLIProxyAPI containers and the `threadsift/` folder of Omer's
-Threadsift containers) and `nixosModules/server-access.nix`.
+`hardware-configuration.nix`, `home.nix`, `services.nix`, `threadsift.nix`, the
+`cliproxy/` folder of the CLIProxyAPI containers and the `threadsift/` folder of
+Omer's Threadsift containers) and `nixosModules/server-access.nix`.
 The host imports four more modules for its services: `tailnet-web.nix`,
 `rootless-containers.nix`, `agent-runtime.nix` and `envfs.nix`. Its record sets
 `features.streamedDesktop`, which turns on `nixosModules/streamed-desktop.nix`
@@ -368,8 +368,10 @@ everywhere and connects from the tailnet only.
 ## Containers
 
 `nixosModules/rootless-containers.nix` gives omer rootless Docker and rootless
-Podman. omer is in no docker group, and the ranges in `/etc/subuid` and
-`/etc/subgid` come from `machines/devbox/configuration.nix`.
+Podman. omer is in no docker group. The ranges in `/etc/subuid` and
+`/etc/subgid` come from `machines/devbox/configuration.nix` for omer and from
+`machines/devbox/threadsift.nix` for `threadsift`
+([Threadsift](#threadsift), Run user).
 
 - Docker is the NixOS `virtualisation.docker.rootless` unit. The socket is
   `$XDG_RUNTIME_DIR/docker.sock`, and `DOCKER_HOST` points at it in omer's
@@ -844,6 +846,36 @@ Internet -> Cloudflare (threadsift.risoluto.dev) -> tunnel
   -> http://threadsift:8080 (container threadsift, also on 127.0.0.1:8088)
 ```
 
+- **Run user.** `machines/devbox/threadsift.nix` declares the user `threadsift`
+  (uid 1100), which holds none of omer's credentials. Nothing runs as this user
+  yet; `threadsift.service` is still omer's. The user has its own group, a home with mode 700,
+  no `extraGroups`, the subordinate id range 200000-265535 for rootless Podman,
+  and `linger`. omer may run any command as `threadsift` without a password,
+  such as `sudo -u threadsift -i`; `threadsift` cannot run `sudo`. Its Home
+  Manager profile masks the rootless Docker unit with an empty
+  `~/.config/systemd/user/docker.service`, because that unit starts for every
+  user but root. `linger-users.service` wants and starts after
+  `home-manager-threadsift.service`, so the mask exists before the user's
+  manager first starts.
+- **Fence.** `networking.firewall.extraCommands` adds the chain
+  `threadsift-out` for packets of uid 1100 and of its subordinate ids, built the
+  way the chain of `sl-factory` is ([Factory run user](#factory-run-user)). It
+  first returns packets in the reply direction of an established connection,
+  because Podman's `rootlessport` holds the published ports under the user's
+  uid, so every answer to a client on loopback is a packet of that user. It then
+  allows the resolvers `127.0.0.53` and `127.0.0.54` on port 53 and the two
+  published ports of `threadsift/env.public` on `127.0.0.1`, which the health
+  checks of `threadsift-up.sh` call. It rejects everything else sent out of `lo`
+  and `tailscale0`, and every packet to `100.64.0.0/10`, `169.254.0.0/16`,
+  `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` and `fe80::/10`.
+  Podman's pasta opens a container's connections as host sockets of the user,
+  so the fence covers the containers too. It limits no other internet traffic
+  and no inbound connection. The drop-in `50-fence.conf` orders
+  `user@1100.service` after `firewall.service` and checks the four jumps from
+  `OUTPUT` as root before the manager starts (`ExecStartPre`), so a firewall
+  that failed to start leaves the user's manager failed instead of running
+  without the fence. The check runs at that start only; a jump deleted by hand
+  later goes unnoticed.
 - **Tunnel.** The box opens no port. The connector dials out to Cloudflare. The
   tunnel `threadsift-devbox` of the Cloudflare account `risoluto` is remotely
   managed, with the public hostname `threadsift.risoluto.dev` and the ingress
@@ -1142,6 +1174,12 @@ off to a desktop's daemon stops as `inactive` and leaves both lists empty
   fence lets `sl-factory` ask the local resolver, which forwards tailnet names
   to Tailscale as root's own process, so `sl-factory` can resolve a peer's name
   and still cannot connect to it.
+- **The fence of `threadsift`.** The boot check asserts nothing about the
+  chain `threadsift-out`, its jumps or the start check of `user@1100.service`.
+  After a deploy, `iptables -S OUTPUT` and `ip6tables -S OUTPUT` each list two
+  jumps to it, and `sudo -u threadsift curl -m 3 http://127.0.0.1:2222` is
+  refused while `sudo -u threadsift curl -m 5 https://example.com` answers. No
+  run has sent a packet to one of the rejected private ranges.
 - **MagicDNS.** The boot VM's tailscaled is logged out and pushes no DNS
   configuration. After a deploy, `tailscale debug prefs | jq .CorpDNS` prints
   `true`, `resolvectl status tailscale0` lists the tailnet's suffix, and
