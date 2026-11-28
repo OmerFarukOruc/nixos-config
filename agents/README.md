@@ -16,7 +16,7 @@ This folder holds the configuration of Omer's agent CLIs: Claude Code, Codex and
 | `claude/hooks/` | `~/.claude/hooks` | Claude Code hooks: `bash-guard.py` with its modules, `guard-main-edit.py`, `agent-left-open.py`, `bash-env.sh`, `stop-sound.sh` and its sounds, and `herdr-agent-state.sh`, which `herdr integration install claude` writes and `.gitignore` keeps out of git |
 | `claude/statusline.sh` | `~/.claude/statusline.sh` | the status line |
 | `claude/agents/` | `~/.claude/agents` | the `code-reviewer` and `comment-sicko` agents |
-| `opencode/agents/` | `~/.config/opencode/agents` | the opencode agents `build` (the default, pinned to GLM-5.3 with the ZCode spec), `plain` (the same build role without the spec, for models whose safeguards flag it), `opencode-review` (read-only with no shell) and `opencode-implement` (model and permissions pinned) ([herdr.md](reference/headless-clis/herdr.md), Starting an opencode agent) |
+| `opencode/agents/` | `~/.config/opencode/agents` | the opencode agents `build`, the default with only the GLM-5.3 pin over OpenCode's own prompt, `zcode`, GLM-5.3 with the ZCode harness and operating spec, `opencode-review`, read-only with no shell, and `opencode-implement`, which sets its model and permissions; a running service picks up edits only after /reload or `opencode service restart` ([herdr.md](reference/headless-clis/herdr.md), Starting an opencode agent) |
 | `claude/mods/<name>/` | `CLAUDE_CODE_PLUGIN_DIRS`, which names `claude/mods/` | Claude Code mods, each loaded at session start ([Mods](#mods)) |
 | `claude/settings.json` | `~/.claude/settings.json` | Claude Code's settings |
 | `codex/codex.md` | `~/.codex/AGENTS.md` | the Codex-only rules |
