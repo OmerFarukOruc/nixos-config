@@ -351,7 +351,16 @@ deploy. The task's exit code is the deploy's exit code; a command after the
 block would replace it with its own.
 The log's last line is `exit <code>` however the deploy ends, so
 `wait-exit <log> <seconds>` ends on it. On success, the line before it
-is `Deployment completed from release <release>.`.
+is `Deployment completed from release <release>.`
+
+A shell that runs with the kernel's no-new-privileges flag set, such as an
+OpenCode sandboxed agent session, cannot run this deploy: the flag blocks the
+`sudo` call that arms the rollback timer, and the deploy exits 71 after the
+build with nothing activated and the candidate release left for inspection.
+Run the block from the user's systemd manager instead, which starts the
+process without the flag: write the block into a script file, then wrap the
+call as `systemd-run --user --unit=deploy-<short-sha> --wait --quiet <script> <log>`,
+with a unit name unique per run.
 
 The deploy ships everything on that commit, including other sessions' pushed
 changes. Deploy a commit at or after the one that runs on the host. The running
