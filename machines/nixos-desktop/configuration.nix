@@ -19,6 +19,7 @@
 
   boot.loader.limine.style.interface.branding = "NixOS on desktop";
   services.zapret2.firewall.interfaces = [ "enp14s0" ];
+  networking.hosts."146.75.121.91" = [ "cache.nixos.org" ];
   boot.loader.limine.extraEntries = ''
     /Windows
         protocol: efi_boot_entry
