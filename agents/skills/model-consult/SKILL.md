@@ -24,7 +24,7 @@ Lane notes:
 - **Grok**: the default model is the build-fast variant; pass `-m grok-4.7` for the general model. `grok models` may print `not authenticated` while `-p` runs still work — trust a probe. A review-shaped consult can take `--agent code-reviewer`; plain runs need no agent.
 - **Codex**: `codex-ask` wraps `codex exec`, backgrounds it, and prints the `wait-exit` invocation to use; the unwrapped form is `codex exec --skip-git-repo-check -s read-only -m gpt-6.2-astra "<brief>"`. Reasoning effort defaults to `low`; pass `-c model_reasoning_effort=high` (up to `ultra`) for a hard question. The token-usage footer in the output is normal.
 - **Gemini (agy)**: put `--model` before `-p`, or agy reads the model flag as the prompt. Gate before routing — `timeout 20 agy models` must list models; a sign-in prompt or a timeout means the lane waits on Omer's interactive `agy` sign-in. Neon is the workhorse; carbon is new and unrated; argon is retired (operator decision 2026-11-28) even though the catalog still lists it; hydrogen only for trivial lookups. The catalog also mirrors `claude-opus-5-5-*`, `claude-sonnet-5-5-*` and `gemini-3.8-flash-*`, useful for a cross-family check without a second login.
-- **Oracle** (ChatGPT Pro through the browser) is a sixth lane Omer starts himself with `/oracle`; the skill of that name holds its procedure. It spends his ChatGPT Pro allowance, so never fire it on your own.
+- **Oracle** (ChatGPT Pro through the browser) is a lane Omer starts himself with `/oracle`; the skill of that name holds its procedure. It spends his ChatGPT Pro allowance, so never fire it on your own.
 
 ## The brief
 
