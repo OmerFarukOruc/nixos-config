@@ -25,8 +25,9 @@ system. Besides each host's unit files and the theme checks, it builds the
 repository patches and applies its patches, and builds each package whose
 overlay edits it after the build (GE-Proton's `proton` script), so a move
 after which a patch or edit no longer applies stays out. Any other move that evaluates but fails to build
-reaches the hosts, which keep their system, show "Update failed" and open a
-GitHub issue ([Failures and notifications](workstations.md#failures-and-notifications)).
+reaches the hosts, which keep their system, try it once more at the next
+hourly run, then show "Update failed" and open a GitHub issue
+([Failures and notifications](workstations.md#failures-and-notifications)).
 Each host tries the new `main` at its next hourly run.
 
 `move-inputs.sh` and `update-release-tags.sh` run `nix flake update`, and

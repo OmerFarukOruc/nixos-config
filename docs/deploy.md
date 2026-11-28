@@ -85,11 +85,11 @@ changed writer script with `scripts/build.sh` before it lands, as
 [AGENTS.md](../AGENTS.md) says. Each host builds only its own system, when it
 installs `main` by itself every hour
 ([Upgrade a host to main](#upgrade-a-host-to-main)), so a commit that does not
-build for a host fails that host's next hourly install. The host keeps its
-system, records that `main` as failed and skips it in the hourly runs until
-`main` moves, a host with a desktop shows "Update failed", and nixos-desktop,
-nixos-rog and devbox open a GitHub issue that an agent can fix from
-([Failures and notifications](workstations.md#failures-and-notifications)).
+build for a host fails that host's next hourly install and the one after it.
+The host keeps its system, records that `main` as failed and skips it in the
+hourly runs until `main` moves, a host with a desktop shows "Update failed",
+and nixos-desktop, nixos-rog and devbox open a GitHub issue that an agent can
+fix from ([Failures and notifications](workstations.md#failures-and-notifications)).
 `upgrade` tries that `main` again. `devenv tasks run ci` builds every host's
 system before a push.
 
@@ -481,8 +481,9 @@ host. [recovery.md](recovery.md#devbox) has the console path and when it may be 
 **Who sees a failure.** devbox has no desktop, so a failed run shows no popup.
 It leaves `nixos-upgrade.service` failed, which `systemctl --failed` lists, and
 starts `nixos-upgrade-failed.service`, which records the revision in
-`/var/lib/nixos-upgrade/failed`. devbox exports only metrics, so the unit's
-lines stay in its journal (`journalctl -u nixos-upgrade`).
+`/var/lib/nixos-upgrade/failed` when it fails a second time. devbox exports
+only metrics, so the unit's lines stay in its journal
+(`journalctl -u nixos-upgrade`).
 
 **The session check.** SSH can still answer while a switch broke the desktop.
 The deploy user's running services form the session check of step 11 below,

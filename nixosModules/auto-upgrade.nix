@@ -44,6 +44,14 @@ let
     ];
     text = builtins.readFile ../scripts/install-report.sh;
   };
+  failed = pkgs.writeShellApplication {
+    name = "nixos-upgrade-failed";
+    runtimeInputs = with pkgs; [
+      coreutils
+      dbus
+    ];
+    text = builtins.readFile ../scripts/upgrade-failed.sh;
+  };
   runReport = mode: ''
     ${pkgs.coreutils}/bin/timeout 120 ${lib.getExe report} ${mode} || echo "install-report: no answer from GitHub within 120 s"
   '';
@@ -61,7 +69,7 @@ in
   options.oruc.autoUpgrade = {
     enable = lib.mkEnableOption "the hourly install of the newest main with system.autoUpgrade";
     reboot = lib.mkEnableOption "a night reboot when the new main changes the kernel, the initrd or the kernel modules (docs/deploy.md, Deploy to a server)";
-    issueReports = lib.mkEnableOption "a GitHub issue for each failed install, posted as the GitHub App nixos-config-hosts (docs/workstations.md, Failures and notifications); nixosModules/install-reports.nix sets it with the App's secrets";
+    issueReports = lib.mkEnableOption "a GitHub issue for each revision of main that fails to install twice, posted as the GitHub App nixos-config-hosts (docs/workstations.md, Failures and notifications); nixosModules/install-reports.nix sets it with the App's secrets";
   };
 
   config = lib.mkIf cfg.enable {
@@ -120,7 +128,7 @@ in
           + lib.optionalString cfg.issueReports (runReport "installed")
           + ''
             fi
-            ${pkgs.coreutils}/bin/rm -f ${state}/failed
+            ${pkgs.coreutils}/bin/rm -f ${state}/failed ${state}/retry
           ''
         );
       };
@@ -131,23 +139,12 @@ in
       serviceConfig.Type = "oneshot";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      environment = lib.optionalAttrs cfg.issueReports reportEnvironment;
-      script = ''
-        if [[ ''${MONITOR_SERVICE_RESULT:-} == signal ]]; then
-          echo "nixos-upgrade was stopped by a signal, so main is not recorded as failed"
-          exit 0
-        fi
-        if [[ -f ${state}/candidate ]]; then
-          cp ${state}/candidate ${state}/failed
-        fi
-      ''
-      + lib.optionalString (sessions.hasAnyDesktop config.oruc.machine) ''
-        ${pkgs.dbus}/bin/dbus-send --system / net.nuetzlich.SystemNotifications.Notify \
-          "string:Update failed" \
-          "string:${config.networking.hostName} could not install main at $(cut -c1-12 ${state}/candidate) and keeps its system until main moves. See: journalctl -u nixos-upgrade" \
-          || echo "The Update failed popup could not be sent"
-      ''
-      + lib.optionalString cfg.issueReports (runReport "failed");
+      environment =
+        lib.optionalAttrs cfg.issueReports (reportEnvironment // { INSTALL_REPORT = lib.getExe report; })
+        // lib.optionalAttrs (sessions.hasAnyDesktop config.oruc.machine) {
+          POPUP_HOST = config.networking.hostName;
+        };
+      script = lib.getExe failed;
     };
   };
 }

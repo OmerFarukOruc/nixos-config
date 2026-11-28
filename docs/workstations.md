@@ -47,7 +47,7 @@ The service skips a run, without a failure, when:
 - the host runs a `test` deploy, a deploy from a dirty tree, or a commit that
   `main` lacks, such as a branch deployed for a proof, so the hour does not
   undo it;
-- installing this `main` failed before; the next `main` runs again;
+- this `main` is marked as failed (below); the next `main` runs again;
 - MemAvailable is below 10 GiB, because an evaluation of `main` took 6.9 GiB
   (journal, 2026-10-23) and two at once filled swap on 2026-10-31.
 
@@ -107,21 +107,28 @@ an update changes its derivation.
 ## Failures and notifications
 
 A run that fails, such as a build that fails on this host, leaves the host on
-the system it runs. `nixos-upgrade-failed.service` records that `main` in
-`/var/lib/nixos-upgrade/failed`, so the hourly runs skip it until `main` moves,
-and shows a critical "Update failed" popup through systembus-notify, which
-`nixosModules/monitoring.nix` turns on. The first `error:` line is in
-`journalctl -u nixos-upgrade`. `upgrade` tries that `main` again. A run that a
-signal stopped, such as a shutdown, records nothing. On nixos-desktop a run
-also fails when it cannot sign Limine for Secure Boot;
+the system it runs, and `nixos-upgrade-failed.service`
+(`scripts/upgrade-failed.sh`) handles the failure. A build can fail from load
+alone, such as a test that waits 5 seconds for its daemon while the host swaps
+(nixos-desktop's `power-profiles-daemon` build in `journalctl -u nixos-upgrade`
+on 2026-11-28, which built on the idle host). So the first failure of a `main`
+only records it in `/var/lib/nixos-upgrade/retry`, and the next hourly run
+tries it again. When that `main` fails a second time, the service marks it as
+failed in `/var/lib/nixos-upgrade/failed`, so the hourly runs skip it until
+`main` moves, and shows a critical "Update failed" popup through
+systembus-notify, which `nixosModules/monitoring.nix` turns on. The first
+`error:` line is in `journalctl -u nixos-upgrade`. `upgrade` tries that `main`
+again, and a failure of that run reports at once. A run that a signal stopped,
+such as a shutdown, or that failed before it chose a `main`, records nothing.
+On nixos-desktop a run also fails when it cannot sign Limine for Secure Boot;
 [Secure Boot](recovery.md#secure-boot) says what that leaves on `/boot`.
 
 On a host that imports `nixosModules/install-reports.nix` (nixos-desktop,
 nixos-rog and devbox), which sets `oruc.autoUpgrade.issueReports` and
 decrypts the App's secrets, the same service also runs `install-report failed`
-(`scripts/install-report.sh`). It keeps one open GitHub issue per host, with
-the labels `install-failed` and `host:<host>`, posted by the GitHub App
-`nixos-config-hosts`, so GitHub notifies Omer; it never notifies a person of
+(`scripts/install-report.sh`) after that second failure. It keeps one open
+GitHub issue per host, with the labels `install-failed` and `host:<host>`,
+posted by the GitHub App `nixos-config-hosts`, so GitHub notifies Omer; it never notifies a person of
 their own activity. The App can write only issues of this repository. A later
 failure comments on the open issue. The issue holds what an agent needs to fix
 the failure without asking: the failed step (build or switch), the failed

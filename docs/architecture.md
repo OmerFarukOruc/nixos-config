@@ -760,9 +760,10 @@ as `fans.nix` does for `case-fans` and `via-devbox.nix` for
 `tailscaled-via-devbox`. No check finds a service that is missing from both
 lists, so a new service needs that line by hand.
 
-- `nixos-upgrade` has its own handler, `nixos-upgrade-failed`, which records the
-  failed revision, shows an "Update failed" popup with its own text and opens a
-  GitHub issue (`nixosModules/auto-upgrade.nix`).
+- `nixos-upgrade` has its own handler, `nixos-upgrade-failed`, which lets the
+  next hourly run try a failed revision once more, then records it, shows an
+  "Update failed" popup with its own text and opens a GitHub issue
+  (`nixosModules/auto-upgrade.nix`).
 - `openrgb-boot` is a oneshot that sets the case lights at boot and runs again
   at the next boot.
 - `oruc-theme-root` is a oneshot that reports a failed step in its own journal

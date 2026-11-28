@@ -5,6 +5,7 @@ state=/var/lib/nixos-upgrade
 repo=$state/repo.git
 home=${DEPLOY_HOME:?}
 deploy_state=$home/.local/state/nixos-config-deploy
+rm -f -- "$state/candidate"
 now=false
 if [[ -e $state/now ]]; then
   now=true
@@ -41,7 +42,7 @@ if ! $now && cause=$(install_skip_cause "$repo" main "$revision" "$dirty" "$acti
 fi
 
 if ! $now && [[ -f $state/failed && $(<"$state/failed") == "$main" ]]; then
-  skip "Installing main at ${main:0:12} failed before, so this run skips until main moves. Run upgrade to try again."
+  skip "Installing main at ${main:0:12} is marked as failed, so this run skips until main moves. Run upgrade to try again."
 fi
 available=$(awk '$1 == "MemAvailable:" { print $2 }' /proc/meminfo)
 if ! $now && ((available < 10485760)); then
