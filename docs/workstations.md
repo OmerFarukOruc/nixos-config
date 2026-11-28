@@ -55,8 +55,10 @@ The service skips a run, without a failure, when:
 
 To install `main` now, run `upgrade` on the host (`nixosModules/upgrade.nix`,
 a command every host has). It starts `nixos-upgrade.service`, prints its log
-while it runs and exits with the run's status, or 1 when the run skipped. Its
-run ignores the last three skip reasons above. From nixos-desktop:
+while it runs and exits with the run's status, or 1 when the run skipped. A
+switch that re-executes systemd makes `systemctl start` print "D-Bus
+connection terminated while waiting for jobs."; `upgrade` then takes the run's
+result from the journal. Its run ignores the last three skip reasons above. From nixos-desktop:
 
 ```sh
 ssh -t nixos-rog upgrade

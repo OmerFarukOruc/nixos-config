@@ -10,6 +10,8 @@ let
   runUpdater = pkgs.writeShellApplication {
     name = "upgrade";
     runtimeInputs = with pkgs; [
+      coreutils
+      gnugrep
       gnused
       jq
     ];
@@ -30,13 +32,37 @@ let
       journalctl --follow --after-cursor "$cursor" --output cat \
         _SYSTEMD_UNIT="$unit" SYSLOG_IDENTIFIER="$identifier" + _PID=1 UNIT="$unit" &
       follow=$!
-      trap 'kill "$follow" 2>/dev/null' EXIT
+      err=$(mktemp)
+      trap 'kill "$follow" 2>/dev/null; rm -f -- "$err"' EXIT
       status=0
       # A oneshot start returns when the run ends, and joins a run the timer
       # already started. With a terminal on stdin, sudo runs the command in a
       # new pseudo-terminal and puts this terminal in raw mode, so each log
       # line printed meanwhile starts where the previous one ended.
-      sudo systemctl start "$unit" </dev/null || status=$?
+      sudo systemctl start "$unit" </dev/null 2>"$err" || status=$?
+      cat "$err" >&2
+      job_result() {
+        journalctl --after-cursor "$cursor" --output json --no-pager \
+          _PID=1 UNIT="$unit" JOB_TYPE=start | jq -r 'select(.JOB_RESULT) | .JOB_RESULT' | tail -n 1
+      }
+      # A switch that re-executes systemd cuts systemctl's D-Bus connection
+      # while the run goes on, so the start job's result in the journal decides.
+      if ((status != 0)) && grep -q 'D-Bus connection terminated' "$err"; then
+        result=""
+        waits=0
+        until result=$(job_result) && [[ -n $result ]]; do
+          if state=$(systemctl show "$unit" -p ActiveState --value 2>/dev/null) && [[ $state == activating ]]; then
+            waits=0
+          elif ((++waits > 12)); then
+            echo "upgrade lost its connection to systemd and found no result of the run within a minute; journalctl -u $unit shows it." >&2
+            break
+          fi
+          sleep 5
+        done
+        if [[ $result == "done" ]]; then
+          status=0
+        fi
+      fi
       ${lib.optionalString (nowFile != null) "sudo rm -f ${lib.escapeShellArg nowFile}"}
       sleep 1
       skipped=$(journalctl --after-cursor "$cursor" --output json --no-pager \
