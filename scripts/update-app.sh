@@ -9,10 +9,11 @@
 #                         there: the script rewrites its package.json and
 #                         lockfile and sets npmDepsHash instead of hash.
 #   passthru.githubRepo   OWNER/REPO, at its newest release tagged v and
-#                         digits. The script sets the source hash and, when
-#                         the file has one, the hash of its locked
-#                         dependencies: a cargoHash or vendorHash line, or
-#                         the outputHash line of a fixed-output derivation.
+#                         digits. The script sets the source hash and the
+#                         hash of each set of locked dependencies the file
+#                         names in a cargoHash, vendorHash or outputHash
+#                         line, at any indentation, from one build that
+#                         gives each of those lines its own placeholder.
 #                         With a passthru.depsBun line that outputHash also
 #                         changes with nixpkgs' bun, so the script learns it
 #                         again when bun is not that version.
@@ -170,28 +171,34 @@ if ! grep -qxF "  version = \"$latest\";" "$edited" || ! grep -qxF "    hash = \
   echo "could not set version $latest and its hash${build:+ and build ID} in $file" >&2
   exit 1
 fi
-deps_line='^(    outputHash|  cargoHash|  vendorHash) = "'
+deps_line='^[[:blank:]]*(outputHash|cargoHash|vendorHash) = "'
 if [[ -n $github ]] && grep -qE "$deps_line" "$edited"; then
-  key=$(grep -m 1 -oE "$deps_line" "$edited" | sed 's/ = "$//')
-  sed -i "s|^$key = \".*\";|$key = \"sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\";|" "$edited"
+  placeholders=()
+  while IFS=: read -r line _; do
+    placeholder=$(nix hash convert --hash-algo sha256 --to sri "$(printf '%064x' $((${#placeholders[@]} + 1)))")
+    sed -i -E "${line}s|= \"[^\"]*\";|= \"$placeholder\";|" "$edited"
+    placeholders+=("$placeholder")
+  done < <(grep -nE "$deps_line" "$edited")
   probe=$(dirname "$file")/.$name.probe.nix
   probelog=$(mktemp)
   trap 'rm -f -- "$edited" "$probe" "$probelog"' EXIT
   cp "$edited" "$probe"
-  nix build --no-link --impure --expr \
+  nix build --no-link --keep-going --impure --expr \
     "(builtins.getFlake \"path:$root\").inputs.nixpkgs.legacyPackages.\${builtins.currentSystem}.callPackage $probe { }" \
     >/dev/null 2>"$probelog" || true
-  deps=$(sed -n 's/^ *got: *//p' "$probelog" | head -n 1)
-  if [[ -z $deps ]]; then
-    cat "$probelog" >&2
-    echo "could not learn the dependencies' hash of $name $latest: $(grep -m 1 'error:' "$probelog" | sed 's/^ *//')" >&2
-    exit 1
-  fi
-  sed -i "s|^$key = \".*\";|$key = \"$deps\";|" "$edited"
-  grep -qxF "$key = \"$deps\";" "$edited" || {
-    echo "could not set the dependencies' hash in $file" >&2
-    exit 1
-  }
+  for placeholder in "${placeholders[@]}"; do
+    deps=$(awk -v p="$placeholder" '$1 == "specified:" { mine = $2 == p } mine && $1 == "got:" { print $2; exit }' "$probelog")
+    if [[ -z $deps ]]; then
+      cat "$probelog" >&2
+      echo "could not learn the dependencies' hash of $name $latest: $(grep -m 1 'error:' "$probelog" | sed 's/^ *//')" >&2
+      exit 1
+    fi
+    sed -i "s|= \"$placeholder\";|= \"$deps\";|" "$edited"
+    ! grep -qF "\"$placeholder\"" "$edited" || {
+      echo "could not set the dependencies' hash in $file" >&2
+      exit 1
+    }
+  done
 fi
 if [[ -n $depsbun ]]; then
   sed -i "s|^  passthru.depsBun = \".*\";|  passthru.depsBun = \"$bunv\";|" "$edited"
