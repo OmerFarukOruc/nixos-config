@@ -6,16 +6,16 @@
 # go.mod requires Go 1.27.3.
 buildGoLatestModule (finalAttrs: {
   pname = "linctl";
-  version = "0.28.0";
+  version = "0.28.1";
 
   src = fetchFromGitHub {
     owner = "KyaniteHQ";
     repo = "linctl";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-k+m/tuj/br6hKXU0w/FMtT5LisBvPGuZqTD3ujD7vn8=";
+    hash = "sha256-8WMlOrRd7O5YEpsrzfecQtjjezRy2vBvZfv3Rq+dsI0=";
   };
 
-  vendorHash = "sha256-gsk000V/rEPGpkcPV9I0ky2vV4ummnEAFcCS6e4EKWs=";
+  vendorHash = "sha256-3uCsXZnV2bOQVykF6q3wbjd260gcfakWPsqYSGgEzhY=";
 
   subPackages = [ "cmd/linctl" ];
 
